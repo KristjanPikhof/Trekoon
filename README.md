@@ -21,10 +21,11 @@ Trekoon is a Bun-powered CLI focused on execution workflows where AI agents and 
 3. Keep branch/worktree-aware state so parallel execution can be coordinated safely.
 4. Stay minimal in code size while preserving robustness and clear boundaries.
 
-## Planned command surface
+## Command surface
 
 - `trekoon init`
 - `trekoon quickstart`
+- `trekoon help [command]`
 - `trekoon epic <create|list|show|update|delete|complete>`
 - `trekoon task <create|list|show|update|delete>`
 - `trekoon subtask <create|list|update|delete>`
@@ -35,6 +36,15 @@ Trekoon is a Bun-powered CLI focused on execution workflows where AI agents and 
 Global output mode:
 
 - `--toon` for structured AI output
+- `--help` for root and command help
+- `--version` for CLI version
+
+Global options can be used before or after the command:
+
+```bash
+trekoon --toon quickstart
+trekoon quickstart --toon
+```
 
 ## Quickstart
 
@@ -45,6 +55,7 @@ Git does not merge this DB file; Trekoon sync commands merge tracker state.
 
 ```bash
 trekoon init
+trekoon --version
 ```
 
 ### 2) Create epic → task → subtask
