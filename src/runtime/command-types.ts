@@ -1,4 +1,4 @@
-export type OutputMode = "human" | "toon";
+export type OutputMode = "human" | "json" | "toon";
 
 export interface CliContext {
   readonly mode: OutputMode;
