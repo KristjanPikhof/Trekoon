@@ -55,6 +55,29 @@ export interface EpicTree {
   }>;
 }
 
+export interface TaskTreeDetailed {
+  readonly id: string;
+  readonly epicId: string;
+  readonly title: string;
+  readonly description: string;
+  readonly status: string;
+  readonly subtasks: ReadonlyArray<{
+    readonly id: string;
+    readonly taskId: string;
+    readonly title: string;
+    readonly description: string;
+    readonly status: string;
+  }>;
+}
+
+export interface EpicTreeDetailed {
+  readonly id: string;
+  readonly title: string;
+  readonly description: string;
+  readonly status: string;
+  readonly tasks: ReadonlyArray<TaskTreeDetailed>;
+}
+
 export interface DomainErrorShape {
   readonly code: string;
   readonly message: string;
