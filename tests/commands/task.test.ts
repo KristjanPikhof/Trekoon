@@ -153,4 +153,25 @@ describe("task command", (): void => {
     expect(shown.error?.code).toBe("wrong_entity_type");
     expect(shown.human).toContain("trekoon epic show");
   });
+
+  test("task show --all exposes zero subtask count", async (): Promise<void> => {
+    const cwd = createWorkspace();
+    const epicCreated = await runEpic({
+      cwd,
+      mode: "human",
+      args: ["create", "--title", "Roadmap", "--description", "desc"],
+    });
+    const epicId = (epicCreated.data as { epic: { id: string } }).epic.id;
+
+    const createdTask = await runTask({
+      cwd,
+      mode: "human",
+      args: ["create", "--epic", epicId, "--title", "Implement", "--description", "build it"],
+    });
+    const taskId = (createdTask.data as { task: { id: string } }).task.id;
+
+    const shown = await runTask({ cwd, mode: "toon", args: ["show", taskId, "--all"] });
+    expect(shown.ok).toBeTrue();
+    expect((shown.data as { subtasksCount: number }).subtasksCount).toBe(0);
+  });
 });
