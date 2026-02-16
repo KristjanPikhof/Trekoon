@@ -45,6 +45,8 @@ trekoon --toon quickstart
 trekoon quickstart --toon
 ```
 
+Trekoon currently accepts long option form (`--option`).
+
 ## Quickstart
 
 Trekoon is local-first: each worktree uses its own `.trekoon/trekoon.db`.
@@ -60,9 +62,9 @@ trekoon --version
 ### 2) Create epic → task → subtask
 
 ```bash
-trekoon epic create -t "Agent backlog stabilization"
-trekoon task create -t "Implement sync status" -e <epic-id>
-trekoon subtask create <task-id> -t "Add cursor model"
+trekoon epic create --title "Agent backlog stabilization" --description "Track stabilization work" --status todo
+trekoon task create --title "Implement sync status" --description "Add status reporting" --epic <epic-id> --status todo
+trekoon subtask create --task <task-id> --title "Add cursor model" --status todo
 ```
 
 ### 3) Add dependencies
