@@ -8,7 +8,8 @@ const ROOT_HELP = [
   "  trekoon [global-options] <command> [command-options]",
   "",
   "Global options:",
-  "  --toon       Emit stable machine-readable output",
+  "  --json       Emit stable JSON machine output",
+  "  --toon       Emit true TOON-encoded output",
   "  --help       Show root or command help",
   "  --version    Print CLI version",
   "",
@@ -24,15 +25,15 @@ const ROOT_HELP = [
 ].join("\n");
 
 const COMMAND_HELP: Record<string, string> = {
-  init: "Usage: trekoon init [--toon]",
-  quickstart: "Usage: trekoon quickstart [--toon]",
-  wipe: "Usage: trekoon wipe --yes [--toon]",
+  init: "Usage: trekoon init [--json|--toon]",
+  quickstart: "Usage: trekoon quickstart [--json|--toon]",
+  wipe: "Usage: trekoon wipe --yes [--json|--toon]",
   epic: "Usage: trekoon epic <subcommand> [options] (show supports --all)",
   task: "Usage: trekoon task <subcommand> [options] (show supports --all)",
   subtask: "Usage: trekoon subtask <subcommand> [options]",
   dep: "Usage: trekoon dep <subcommand> [options]",
   sync: "Usage: trekoon sync <subcommand> [options]",
-  help: "Usage: trekoon help [command] [--toon]",
+  help: "Usage: trekoon help [command] [--json|--toon]",
 };
 
 export function resolveHelpText(topic: string | null): string {
