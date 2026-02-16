@@ -15,7 +15,7 @@ const QUICKSTART_TEXT = [
   "- Run sync status again before opening or merging a PR.",
   "",
   "3) Task details and description",
-  "- Human list view defaults to table format.",
+  "- Human list and show views default to table format.",
   "- Alternate list view: add --view compact.",
   "- Full tree + descriptions: trekoon epic show <epic-id> --all --json",
   "- For full task payload (including description), use --json:",
