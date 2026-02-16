@@ -1,3 +1,4 @@
+import { encode } from "@toon-format/toon";
 import { type CliResult, type OutputMode, type ToonEnvelope, type ToonError } from "../runtime/command-types";
 
 export interface ResultInput {
@@ -55,8 +56,14 @@ export function toToonEnvelope(result: CliResult): ToonEnvelope {
 }
 
 export function renderResult(result: CliResult, mode: OutputMode): string {
+  const envelope: ToonEnvelope = toToonEnvelope(result);
+
+  if (mode === "json") {
+    return JSON.stringify(envelope);
+  }
+
   if (mode === "toon") {
-    return JSON.stringify(toToonEnvelope(result));
+    return encode(envelope);
   }
 
   return result.human;
