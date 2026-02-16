@@ -57,6 +57,15 @@ Human view options:
 - Use `--view compact` to restore compact pipe output.
 - `epic show` and `task show` support `--view table|compact|tree|detail`.
 
+List defaults and filters (`epic list`, `task list`):
+
+- Default scope: open work only (`in_progress`, `in-progress`, `todo`)
+- Default limit: `10`
+- Status filter: `--status in_progress,todo` (CSV)
+- Custom limit: `--limit <n>`
+- All rows and statuses: `--all`
+- `--all` is mutually exclusive with `--status` and `--limit`
+
 ## Quickstart
 
 Trekoon is local-first: each worktree uses its own `.trekoon/trekoon.db`.
@@ -75,8 +84,10 @@ trekoon --version
 trekoon epic create --title "Agent backlog stabilization" --description "Track stabilization work" --status todo
 trekoon task create --title "Implement sync status" --description "Add status reporting" --epic <epic-id> --status todo
 trekoon subtask create --task <task-id> --title "Add cursor model" --status todo
-trekoon task list --view table
-trekoon task list --view compact
+trekoon task list
+trekoon task list --status done
+trekoon task list --limit 25
+trekoon task list --all --view compact
 ```
 
 ### 3) Add dependencies
