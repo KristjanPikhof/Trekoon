@@ -76,13 +76,25 @@ describe("epic command", (): void => {
       args: ["create", "--task", taskId, "--title", "Write tests"],
     });
 
-    const show = await runEpic({ cwd, mode: "toon", args: ["show", epicId] });
+    const show = await runEpic({ cwd, mode: "toon", args: ["show", epicId, "--all"] });
 
     expect(show.ok).toBeTrue();
-    const tree = (show.data as { tree: { id: string; status: string; tasks: Array<{ subtasks: unknown[] }> } }).tree;
+    const tree = (
+      show.data as {
+        tree: {
+          id: string;
+          status: string;
+          description: string;
+          tasks: Array<{ description: string; subtasks: Array<{ description: string }> }>;
+        };
+      }
+    ).tree;
     expect(tree.id).toBe(epicId);
     expect(tree.status).toBe("backlog");
+    expect(tree.description).toBe("Top-level work");
     expect(tree.tasks.length).toBe(1);
     expect(tree.tasks[0]?.subtasks.length).toBe(1);
+    expect(tree.tasks[0]?.description).toBe("Task desc");
+    expect(tree.tasks[0]?.subtasks[0]?.description).toBe("");
   });
 });
