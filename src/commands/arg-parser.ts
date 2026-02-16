@@ -54,3 +54,16 @@ export function readOption(options: ReadonlyMap<string, string>, ...keys: string
 export function hasFlag(flags: ReadonlySet<string>, ...keys: string[]): boolean {
   return keys.some((key) => flags.has(key));
 }
+
+export function readEnumOption<const T extends readonly string[]>(
+  options: ReadonlyMap<string, string>,
+  allowed: T,
+  ...keys: string[]
+): T[number] | undefined {
+  const value: string | undefined = readOption(options, ...keys);
+  if (value === undefined) {
+    return undefined;
+  }
+
+  return allowed.includes(value) ? value : undefined;
+}
