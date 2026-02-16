@@ -10,9 +10,10 @@ Trekoon is a Bun-powered CLI focused on execution workflows where AI agents and 
 - Structured hierarchy: **epic → task → subtask**
 - UUID-based references for durable linking across branches/worktrees
 - Dependency-aware planning and execution
-- Dual output modes:
+- Output modes:
   - **Human mode** for terminal users
-  - **TOON mode** for low-context agent parsing
+  - **JSON mode** for stable machine parsing
+  - **TOON mode** for true TOON-encoded payloads
 
 ## What Trekoon aims to accomplish
 
@@ -32,9 +33,10 @@ Trekoon is a Bun-powered CLI focused on execution workflows where AI agents and 
 - `trekoon sync <status|pull|resolve>`
 - `trekoon wipe --yes`
 
-Global output mode:
+Global output modes:
 
-- `--toon` for structured AI output
+- `--json` for structured JSON output
+- `--toon` for true TOON-encoded output
 - `--help` for root and command help
 - `--version` for CLI version
 
@@ -43,6 +45,8 @@ Global options can be used before or after the command:
 ```bash
 trekoon --toon quickstart
 trekoon quickstart --toon
+trekoon --json quickstart
+trekoon quickstart --json
 ```
 
 Trekoon currently accepts long option form (`--option`).
@@ -74,9 +78,11 @@ trekoon dep add <task-id> <depends-on-id>
 trekoon dep list <task-id>
 ```
 
-### 4) Use TOON output for AI agents
+### 4) Use JSON or TOON output for agents
 
 ```bash
+trekoon --json epic show <epic-id>
+trekoon --json task show <task-id>
 trekoon --toon epic show <epic-id>
 trekoon --toon task show <task-id>
 ```
@@ -98,11 +104,11 @@ trekoon sync resolve <conflict-id> --use ours
 - [ ] `trekoon sync status` shows no unresolved conflicts
 - [ ] done tasks/subtasks are marked completed
 - [ ] dependency graph has no stale blockers
-- [ ] final AI check: `trekoon --toon epic show <epic-id>`
+- [ ] final AI check: `trekoon --json epic show <epic-id>`
 
 ## Implementation principles
 
 - Minimal, composable modules
 - Strict validation at command boundaries
-- Stable TOON envelope for automation
+- Stable automation envelope for JSON/TOON modes
 - No unnecessary feature sprawl
