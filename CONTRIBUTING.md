@@ -15,3 +15,4 @@ reference-only.
 - [ ] Changes were reviewed for suspiciously identical blocks/comments versus
       `trekker/` reference code.
 - [ ] Sync-related writes preserve git context (`branch`, `head`, `worktree`).
+- [ ] README command/flag examples match actual implemented CLI behavior.
