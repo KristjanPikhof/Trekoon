@@ -1,6 +1,6 @@
 ---
 name: trekoon
-description: Use Trekoon as a local-first issue tracker CLI for planning and execution in any repository/worktree. This skill defines exact agent workflows, command usage, and decision rules.
+description: Use Trekoon to create issues/tasks, plan backlog and sprints, create epics, update status, track progress, and manage dependencies/sync across repository workflows.
 ---
 
 # Trekoon Skill
