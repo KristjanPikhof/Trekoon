@@ -97,4 +97,24 @@ describe("epic command", (): void => {
     expect(tree.tasks[0]?.description).toBe("Task desc");
     expect(tree.tasks[0]?.subtasks[0]?.description).toBe("");
   });
+
+  test("list defaults to table and supports compact view", async (): Promise<void> => {
+    const cwd = createWorkspace();
+    await runEpic({
+      cwd,
+      mode: "human",
+      args: ["create", "--title", "Roadmap", "--description", "Top-level work"],
+    });
+
+    const listedDefault = await runEpic({ cwd, mode: "human", args: ["list"] });
+    expect(listedDefault.ok).toBeTrue();
+    expect(listedDefault.human).toContain("ID");
+    expect(listedDefault.human).toContain("TITLE");
+    expect(listedDefault.human).toContain("STATUS");
+
+    const listedCompact = await runEpic({ cwd, mode: "human", args: ["list", "--view", "compact"] });
+    expect(listedCompact.ok).toBeTrue();
+    expect(listedCompact.human).not.toContain("ID | TITLE | STATUS");
+    expect(listedCompact.human).toContain("Roadmap");
+  });
 });
