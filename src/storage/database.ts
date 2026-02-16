@@ -18,6 +18,7 @@ export function openTrekoonDatabase(workingDirectory: string = process.cwd()): T
 
   const db: Database = new Database(paths.databaseFile, { create: true });
 
+  db.exec("PRAGMA busy_timeout = 5000;");
   db.exec("PRAGMA journal_mode = WAL;");
   db.exec("PRAGMA foreign_keys = ON;");
 
@@ -27,7 +28,6 @@ export function openTrekoonDatabase(workingDirectory: string = process.cwd()): T
     db,
     paths,
     close(): void {
-      db.exec("PRAGMA wal_checkpoint(FULL);");
       db.close(false);
     },
   };
