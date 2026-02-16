@@ -31,20 +31,25 @@ export interface ParsedInvocation {
   readonly wantsVersion: boolean;
 }
 
-export function parseInvocation(argv: readonly string[]): ParsedInvocation {
-  let mode: OutputMode = "human";
+export interface ParseInvocationOptions {
+  readonly stdoutIsTTY?: boolean;
+}
+
+export function parseInvocation(argv: readonly string[], options: ParseInvocationOptions = {}): ParsedInvocation {
+  const stdoutIsTTY: boolean = options.stdoutIsTTY ?? Boolean(process.stdout.isTTY);
+  let explicitMode: OutputMode | null = null;
   let wantsHelp = false;
   let wantsVersion = false;
   const positionals: string[] = [];
 
   for (const token of argv) {
     if (token === "--json") {
-      mode = "json";
+      explicitMode = "json";
       continue;
     }
 
     if (token === "--toon") {
-      mode = "toon";
+      explicitMode = "toon";
       continue;
     }
 
@@ -62,7 +67,7 @@ export function parseInvocation(argv: readonly string[]): ParsedInvocation {
   }
 
   return {
-    mode,
+    mode: explicitMode ?? (stdoutIsTTY ? "human" : "json"),
     command: positionals[0] ?? null,
     args: positionals.slice(1),
     wantsHelp,
