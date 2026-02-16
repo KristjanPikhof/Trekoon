@@ -16,11 +16,11 @@ const ROOT_HELP = [
   "  init         Initialize .trekoon storage and local DB",
   "  quickstart   Show local-first and sync workflow guidance",
   "  wipe         Remove local Trekoon state (requires --yes)",
-  "  epic         Epic commands (scaffolded)",
-  "  task         Task commands (scaffolded)",
-  "  subtask      Subtask commands (scaffolded)",
-  "  dep          Dependency commands (scaffolded)",
-  "  sync         Sync commands (scaffolded)",
+  "  epic         Epic lifecycle commands",
+  "  task         Task lifecycle commands",
+  "  subtask      Subtask lifecycle commands",
+  "  dep          Dependency graph commands",
+  "  sync         Cross-branch sync commands",
 ].join("\n");
 
 const COMMAND_HELP: Record<string, string> = {
