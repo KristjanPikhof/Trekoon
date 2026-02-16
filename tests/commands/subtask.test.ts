@@ -76,4 +76,31 @@ describe("subtask command", (): void => {
     const removed = await runSubtask({ cwd, mode: "human", args: ["delete", subtaskId] });
     expect(removed.ok).toBeTrue();
   });
+
+  test("list defaults to table and supports compact view", async (): Promise<void> => {
+    const cwd = createWorkspace();
+    const epicCreated = await runEpic({
+      cwd,
+      mode: "human",
+      args: ["create", "--title", "Roadmap", "--description", "desc"],
+    });
+    const epicId = (epicCreated.data as { epic: { id: string } }).epic.id;
+    const taskCreated = await runTask({
+      cwd,
+      mode: "human",
+      args: ["create", "--epic", epicId, "--title", "Implement", "--description", "task desc"],
+    });
+    const taskId = (taskCreated.data as { task: { id: string } }).task.id;
+
+    await runSubtask({ cwd, mode: "human", args: ["create", "--task", taskId, "--title", "A subtask"] });
+
+    const listedDefault = await runSubtask({ cwd, mode: "human", args: ["list", "--task", taskId] });
+    expect(listedDefault.ok).toBeTrue();
+    expect(listedDefault.human).toContain("ID");
+    expect(listedDefault.human).toContain("TASK");
+
+    const listedCompact = await runSubtask({ cwd, mode: "human", args: ["list", "--task", taskId, "--view", "compact"] });
+    expect(listedCompact.ok).toBeTrue();
+    expect(listedCompact.human).toContain("task=");
+  });
 });
