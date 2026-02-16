@@ -16,6 +16,25 @@ function createWorkspace(): string {
   return workspace;
 }
 
+async function createEpic(
+  cwd: string,
+  input: { title: string; description: string; status?: string },
+): Promise<{ id: string; status: string; title: string }> {
+  const args = ["create", "--title", input.title, "--description", input.description];
+  if (input.status !== undefined) {
+    args.push("--status", input.status);
+  }
+
+  const result = await runEpic({
+    cwd,
+    mode: "human",
+    args,
+  });
+
+  expect(result.ok).toBeTrue();
+  return (result.data as { epic: { id: string; status: string; title: string } }).epic;
+}
+
 afterEach((): void => {
   while (tempDirs.length > 0) {
     const next = tempDirs.pop();
@@ -175,6 +194,121 @@ describe("epic command", (): void => {
       mode: "human",
       args: ["update", "--all", "--title", "Renamed", "--append", "follow policy"],
     });
+
+    expect(result.ok).toBeFalse();
+    expect(result.error?.code).toBe("invalid_input");
+  });
+
+  test("default list includes only open statuses and max 10", async (): Promise<void> => {
+    const cwd = createWorkspace();
+
+    for (let index = 0; index < 7; index += 1) {
+      await createEpic(cwd, {
+        title: `In progress ${index}`,
+        description: "Top-level work",
+        status: "in_progress",
+      });
+    }
+
+    for (let index = 0; index < 7; index += 1) {
+      await createEpic(cwd, {
+        title: `Done ${index}`,
+        description: "Top-level work",
+        status: "done",
+      });
+    }
+
+    const listed = await runEpic({ cwd, mode: "human", args: ["list"] });
+    expect(listed.ok).toBeTrue();
+
+    const epics = (listed.data as { epics: Array<{ status: string }> }).epics;
+    expect(epics.length).toBe(7);
+    expect(epics.every((epic) => ["in_progress", "in-progress", "todo"].includes(epic.status))).toBeTrue();
+
+    for (let index = 0; index < 5; index += 1) {
+      await createEpic(cwd, {
+        title: `Todo ${index}`,
+        description: "Top-level work",
+        status: "todo",
+      });
+    }
+
+    const listedLimited = await runEpic({ cwd, mode: "human", args: ["list"] });
+    expect(listedLimited.ok).toBeTrue();
+    const limitedEpics = (listedLimited.data as { epics: Array<{ status: string }> }).epics;
+    expect(limitedEpics.length).toBe(10);
+    expect(limitedEpics.every((epic) => ["in_progress", "in-progress", "todo"].includes(epic.status))).toBeTrue();
+  });
+
+  test("default ordering puts in-progress before todo", async (): Promise<void> => {
+    const cwd = createWorkspace();
+    await createEpic(cwd, { title: "Todo", description: "Top-level work", status: "todo" });
+    await createEpic(cwd, { title: "In progress hyphen", description: "Top-level work", status: "in-progress" });
+    await createEpic(cwd, { title: "In progress underscore", description: "Top-level work", status: "in_progress" });
+
+    const listed = await runEpic({ cwd, mode: "human", args: ["list"] });
+    expect(listed.ok).toBeTrue();
+
+    const statuses = (listed.data as { epics: Array<{ status: string }> }).epics.map((epic) => epic.status);
+    const todoIndex = statuses.indexOf("todo");
+    const inProgressIndex = statuses.findIndex((status) => status === "in_progress" || status === "in-progress");
+
+    expect(inProgressIndex).toBeGreaterThanOrEqual(0);
+    expect(todoIndex).toBeGreaterThanOrEqual(0);
+    expect(inProgressIndex).toBeLessThan(todoIndex);
+  });
+
+  test("--status done returns only done", async (): Promise<void> => {
+    const cwd = createWorkspace();
+    await createEpic(cwd, { title: "Done", description: "Top-level work", status: "done" });
+    await createEpic(cwd, { title: "Todo", description: "Top-level work", status: "todo" });
+
+    const listed = await runEpic({ cwd, mode: "human", args: ["list", "--status", "done"] });
+    expect(listed.ok).toBeTrue();
+
+    const epics = (listed.data as { epics: Array<{ status: string }> }).epics;
+    expect(epics.length).toBe(1);
+    expect(epics[0]?.status).toBe("done");
+  });
+
+  test("--all includes done and bypasses limit", async (): Promise<void> => {
+    const cwd = createWorkspace();
+
+    for (let index = 0; index < 12; index += 1) {
+      await createEpic(cwd, {
+        title: `Done ${index}`,
+        description: "Top-level work",
+        status: "done",
+      });
+    }
+
+    const listed = await runEpic({ cwd, mode: "human", args: ["list", "--all"] });
+    expect(listed.ok).toBeTrue();
+
+    const epics = (listed.data as { epics: Array<{ status: string }> }).epics;
+    expect(epics.length).toBe(12);
+    expect(epics.some((epic) => epic.status === "done")).toBeTrue();
+  });
+
+  test("rejects --all with --status", async (): Promise<void> => {
+    const cwd = createWorkspace();
+    const result = await runEpic({ cwd, mode: "human", args: ["list", "--all", "--status", "done"] });
+
+    expect(result.ok).toBeFalse();
+    expect(result.error?.code).toBe("invalid_input");
+  });
+
+  test("rejects --all with --limit", async (): Promise<void> => {
+    const cwd = createWorkspace();
+    const result = await runEpic({ cwd, mode: "human", args: ["list", "--all", "--limit", "5"] });
+
+    expect(result.ok).toBeFalse();
+    expect(result.error?.code).toBe("invalid_input");
+  });
+
+  test("rejects invalid --limit", async (): Promise<void> => {
+    const cwd = createWorkspace();
+    const result = await runEpic({ cwd, mode: "human", args: ["list", "--limit", "0"] });
 
     expect(result.ok).toBeFalse();
     expect(result.error?.code).toBe("invalid_input");
