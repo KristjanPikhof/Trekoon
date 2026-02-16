@@ -35,7 +35,7 @@ export function openBranchDatabaseSnapshot(branch: string, cwd: string): BranchD
 
   writeFileSync(tempDbPath, show.stdout);
 
-  const db: Database = new Database(tempDbPath, { readonly: true, create: false });
+  const db: Database = new Database(tempDbPath);
 
   return {
     branch,
