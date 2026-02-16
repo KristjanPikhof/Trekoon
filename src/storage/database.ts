@@ -28,6 +28,7 @@ export function openTrekoonDatabase(workingDirectory: string = process.cwd()): T
     db,
     paths,
     close(): void {
+      db.exec("PRAGMA wal_checkpoint(PASSIVE);");
       db.close(false);
     },
   };
