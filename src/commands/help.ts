@@ -28,8 +28,10 @@ const COMMAND_HELP: Record<string, string> = {
   init: "Usage: trekoon init [--json|--toon]",
   quickstart: "Usage: trekoon quickstart [--json|--toon]",
   wipe: "Usage: trekoon wipe --yes [--json|--toon]",
-  epic: "Usage: trekoon epic <subcommand> [options] (list/show default to table in human mode; show supports --all and --view table|compact|tree|detail)",
-  task: "Usage: trekoon task <subcommand> [options] (list/show default to table in human mode; show supports --all and --view table|compact|tree|detail)",
+  epic:
+    "Usage: trekoon epic <subcommand> [options] (list defaults: open statuses + limit 10; list flags: --status <csv> | --limit <n> | --all; show supports --all and --view table|compact|tree|detail)",
+  task:
+    "Usage: trekoon task <subcommand> [options] (list defaults: open statuses + limit 10; list flags: --status <csv> | --limit <n> | --all; show supports --all and --view table|compact|tree|detail)",
   subtask: "Usage: trekoon subtask <subcommand> [options] (list supports --view table|compact)",
   dep: "Usage: trekoon dep <subcommand> [options]",
   sync: "Usage: trekoon sync <subcommand> [options]",
