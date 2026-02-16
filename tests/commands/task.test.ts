@@ -174,4 +174,66 @@ describe("task command", (): void => {
     expect(shown.ok).toBeTrue();
     expect((shown.data as { subtasksCount: number }).subtasksCount).toBe(0);
   });
+
+  test("bulk update supports --ids with --append and --status", async (): Promise<void> => {
+    const cwd = createWorkspace();
+    const epicCreated = await runEpic({
+      cwd,
+      mode: "human",
+      args: ["create", "--title", "Roadmap", "--description", "desc"],
+    });
+    const epicId = (epicCreated.data as { epic: { id: string } }).epic.id;
+
+    const first = await runTask({
+      cwd,
+      mode: "human",
+      args: ["create", "--epic", epicId, "--title", "Implement A", "--description", "build it"],
+    });
+    const second = await runTask({
+      cwd,
+      mode: "human",
+      args: ["create", "--epic", epicId, "--title", "Implement B", "--description", "ship it"],
+    });
+    const firstId = (first.data as { task: { id: string } }).task.id;
+    const secondId = (second.data as { task: { id: string } }).task.id;
+
+    const updated = await runTask({
+      cwd,
+      mode: "human",
+      args: ["update", "--ids", `${firstId},${secondId}`, "--append", "follow policy", "--status", "blocked"],
+    });
+
+    expect(updated.ok).toBeTrue();
+    expect((updated.data as { ids: string[] }).ids).toEqual([firstId, secondId]);
+    const tasks = (updated.data as { tasks: Array<{ description: string; status: string }> }).tasks;
+    expect(tasks[0]?.description).toContain("follow policy");
+    expect(tasks[1]?.description).toContain("follow policy");
+    expect(tasks[0]?.status).toBe("blocked");
+    expect(tasks[1]?.status).toBe("blocked");
+  });
+
+  test("bulk update rejects --all with --ids", async (): Promise<void> => {
+    const cwd = createWorkspace();
+    const epicCreated = await runEpic({
+      cwd,
+      mode: "human",
+      args: ["create", "--title", "Roadmap", "--description", "desc"],
+    });
+    const epicId = (epicCreated.data as { epic: { id: string } }).epic.id;
+    const created = await runTask({
+      cwd,
+      mode: "human",
+      args: ["create", "--epic", epicId, "--title", "Implement", "--description", "build it"],
+    });
+    const taskId = (created.data as { task: { id: string } }).task.id;
+
+    const result = await runTask({
+      cwd,
+      mode: "human",
+      args: ["update", "--all", "--ids", taskId, "--append", "follow policy"],
+    });
+
+    expect(result.ok).toBeFalse();
+    expect(result.error?.code).toBe("invalid_input");
+  });
 });
