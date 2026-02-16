@@ -153,6 +153,40 @@ describe("epic command", (): void => {
     expect(shown.human).toContain("No tasks found.");
   });
 
+  test("show compact and tree views are distinct", async (): Promise<void> => {
+    const cwd = createWorkspace();
+    const createdEpic = await runEpic({
+      cwd,
+      mode: "human",
+      args: ["create", "--title", "Roadmap", "--description", "Top-level work"],
+    });
+    const epicId = (createdEpic.data as { epic: { id: string } }).epic.id;
+
+    const createdTask = await runTask({
+      cwd,
+      mode: "human",
+      args: ["create", "--epic", epicId, "--title", "Implement", "--description", "Task desc"],
+    });
+    const taskId = (createdTask.data as { task: { id: string } }).task.id;
+
+    await runSubtask({
+      cwd,
+      mode: "human",
+      args: ["create", "--task", taskId, "--title", "Write tests"],
+    });
+
+    const compact = await runEpic({ cwd, mode: "human", args: ["show", epicId, "--view", "compact"] });
+    const tree = await runEpic({ cwd, mode: "human", args: ["show", epicId, "--view", "tree"] });
+
+    expect(compact.ok).toBeTrue();
+    expect(tree.ok).toBeTrue();
+    expect(compact.human).toContain("Roadmap");
+    expect(compact.human).not.toContain("task ");
+    expect(tree.human).toContain("Roadmap");
+    expect(tree.human).toContain("task ");
+    expect(tree.human).not.toBe(compact.human);
+  });
+
   test("bulk update supports --all with --append and --status", async (): Promise<void> => {
     const cwd = createWorkspace();
     await runEpic({
@@ -312,5 +346,38 @@ describe("epic command", (): void => {
 
     expect(result.ok).toBeFalse();
     expect(result.error?.code).toBe("invalid_input");
+  });
+
+  test("rejects strict edge-case --limit values", async (): Promise<void> => {
+    const cwd = createWorkspace();
+    const leadingZero = await runEpic({ cwd, mode: "human", args: ["list", "--limit", "01"] });
+
+    expect(leadingZero.ok).toBeFalse();
+    expect(leadingZero.error?.code).toBe("invalid_input");
+  });
+
+  test("errors when value-required epic options are missing values", async (): Promise<void> => {
+    const cwd = createWorkspace();
+    const createdEpic = await runEpic({
+      cwd,
+      mode: "human",
+      args: ["create", "--title", "Roadmap", "--description", "Top-level work"],
+    });
+    const epicId = (createdEpic.data as { epic: { id: string } }).epic.id;
+
+    const missingStatus = await runEpic({ cwd, mode: "human", args: ["list", "--status"] });
+    expect(missingStatus.ok).toBeFalse();
+    expect(missingStatus.error?.code).toBe("invalid_input");
+    expect((missingStatus.data as { option: string }).option).toBe("status");
+
+    const missingView = await runEpic({ cwd, mode: "human", args: ["show", epicId, "--view"] });
+    expect(missingView.ok).toBeFalse();
+    expect(missingView.error?.code).toBe("invalid_input");
+    expect((missingView.data as { option: string }).option).toBe("view");
+
+    const missingAppend = await runEpic({ cwd, mode: "human", args: ["update", epicId, "--append"] });
+    expect(missingAppend.ok).toBeFalse();
+    expect(missingAppend.error?.code).toBe("invalid_input");
+    expect((missingAppend.data as { option: string }).option).toBe("append");
   });
 });
