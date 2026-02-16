@@ -1,4 +1,4 @@
-import { parseArgs, readOption } from "./arg-parser";
+import { parseArgs, readEnumOption, readOption } from "./arg-parser";
 
 import { DomainError, type SubtaskRecord } from "../domain/types";
 import { TrackerDomain } from "../domain/tracker-domain";
@@ -8,6 +8,28 @@ import { openTrekoonDatabase } from "../storage/database";
 
 function formatSubtask(subtask: SubtaskRecord): string {
   return `${subtask.id} | task=${subtask.taskId} | ${subtask.title} | ${subtask.status}`;
+}
+
+const VIEW_MODES = ["table", "compact"] as const;
+
+function formatTable(headers: readonly string[], rows: readonly (readonly string[])[]): string {
+  const widths: number[] = headers.map((header, index) => {
+    const rowMax = rows.reduce((max, row) => Math.max(max, (row[index] ?? "").length), 0);
+    return Math.max(header.length, rowMax);
+  });
+
+  const formatRow = (row: readonly string[]): string =>
+    row.map((cell, index) => (cell ?? "").padEnd(widths[index] ?? 0)).join(" | ");
+
+  const divider = widths.map((width) => "-".repeat(width)).join("-+-");
+  return [formatRow(headers), divider, ...rows.map(formatRow)].join("\n");
+}
+
+function formatSubtaskListTable(subtasks: readonly SubtaskRecord[]): string {
+  return formatTable(
+    ["ID", "TASK", "TITLE", "STATUS"],
+    subtasks.map((subtask) => [subtask.id, subtask.taskId, subtask.title, subtask.status]),
+  );
 }
 
 function failFromError(error: unknown): CliResult {
@@ -65,9 +87,29 @@ export async function runSubtask(context: CliContext): Promise<CliResult> {
         });
       }
       case "list": {
+        const rawView: string | undefined = readOption(parsed.options, "view");
+        const view = readEnumOption(parsed.options, VIEW_MODES, "view");
+        if (rawView !== undefined && view === undefined) {
+          return failResult({
+            command: "subtask.list",
+            human: "Invalid --view value. Use: table, compact",
+            data: { view: rawView, allowedViews: VIEW_MODES },
+            error: {
+              code: "invalid_input",
+              message: "Invalid --view value",
+            },
+          });
+        }
+
         const taskId: string | undefined = readOption(parsed.options, "task", "t") ?? parsed.positional[1];
         const subtasks = domain.listSubtasks(taskId);
-        const human = subtasks.length === 0 ? "No subtasks found." : subtasks.map(formatSubtask).join("\n");
+        const listView = view ?? "table";
+        const human =
+          subtasks.length === 0
+            ? "No subtasks found."
+            : listView === "compact"
+              ? subtasks.map(formatSubtask).join("\n")
+              : formatSubtaskListTable(subtasks);
 
         return okResult({
           command: "subtask.list",
