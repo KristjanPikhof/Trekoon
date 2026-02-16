@@ -1,4 +1,4 @@
-import { hasFlag, parseArgs, readEnumOption, readOption } from "./arg-parser";
+import { hasFlag, parseArgs, parseStrictPositiveInt, readEnumOption, readMissingOptionValue, readOption } from "./arg-parser";
 
 import { DomainError, type TaskRecord } from "../domain/types";
 import { TrackerDomain } from "../domain/tracker-domain";
@@ -36,19 +36,6 @@ function parseStatusCsv(rawStatuses: string | undefined): string[] | undefined {
     .split(",")
     .map((value) => value.trim())
     .filter((value) => value.length > 0);
-}
-
-function parseLimitOption(rawLimit: string | undefined): number | undefined {
-  if (rawLimit === undefined) {
-    return undefined;
-  }
-
-  const parsedLimit = Number.parseInt(rawLimit, 10);
-  if (!Number.isInteger(parsedLimit) || parsedLimit < 1 || `${parsedLimit}` !== rawLimit.trim()) {
-    return Number.NaN;
-  }
-
-  return parsedLimit;
 }
 
 function taskStatusPriority(status: string): number {
@@ -183,6 +170,21 @@ function failFromError(error: unknown): CliResult {
   });
 }
 
+function failMissingOptionValue(command: string, option: string): CliResult {
+  return failResult({
+    command,
+    human: `Option --${option} requires a value.`,
+    data: {
+      code: "invalid_input",
+      option,
+    },
+    error: {
+      code: "invalid_input",
+      message: `Option --${option} requires a value`,
+    },
+  });
+}
+
 export async function runTask(context: CliContext): Promise<CliResult> {
   const database = openTrekoonDatabase(context.cwd);
 
@@ -193,6 +195,14 @@ export async function runTask(context: CliContext): Promise<CliResult> {
 
     switch (subcommand) {
       case "create": {
+        const missingCreateOption =
+          readMissingOptionValue(parsed.missingOptionValues, "epic", "e") ??
+          readMissingOptionValue(parsed.missingOptionValues, "description", "d") ??
+          readMissingOptionValue(parsed.missingOptionValues, "status", "s");
+        if (missingCreateOption !== undefined) {
+          return failMissingOptionValue("task.create", missingCreateOption);
+        }
+
         const epicId: string | undefined = readOption(parsed.options, "epic", "e");
         const title: string | undefined = readOption(parsed.options, "title", "t");
         const description: string | undefined = readOption(parsed.options, "description", "d");
@@ -211,6 +221,15 @@ export async function runTask(context: CliContext): Promise<CliResult> {
         });
       }
       case "list": {
+        const missingListOption =
+          readMissingOptionValue(parsed.missingOptionValues, "view") ??
+          readMissingOptionValue(parsed.missingOptionValues, "status", "s") ??
+          readMissingOptionValue(parsed.missingOptionValues, "limit", "l") ??
+          readMissingOptionValue(parsed.missingOptionValues, "epic", "e");
+        if (missingListOption !== undefined) {
+          return failMissingOptionValue("task.list", missingListOption);
+        }
+
         const rawView: string | undefined = readOption(parsed.options, "view");
         const view = readEnumOption(parsed.options, VIEW_MODES, "view");
         const includeAll = hasFlag(parsed.flags, "all");
@@ -278,7 +297,7 @@ export async function runTask(context: CliContext): Promise<CliResult> {
           });
         }
 
-        const parsedLimit = parseLimitOption(rawLimit);
+        const parsedLimit = parseStrictPositiveInt(rawLimit);
         if (Number.isNaN(parsedLimit)) {
           return failResult({
             command: "task.list",
@@ -309,6 +328,11 @@ export async function runTask(context: CliContext): Promise<CliResult> {
         });
       }
       case "show": {
+        const missingShowOption = readMissingOptionValue(parsed.missingOptionValues, "view");
+        if (missingShowOption !== undefined) {
+          return failMissingOptionValue("task.show", missingShowOption);
+        }
+
         const taskId: string = parsed.positional[1] ?? "";
         const includeAll: boolean = hasFlag(parsed.flags, "all");
         const rawView: string | undefined = readOption(parsed.options, "view");
@@ -347,7 +371,7 @@ export async function runTask(context: CliContext): Promise<CliResult> {
           }
         }
 
-        const effectiveView = view ?? (context.mode === "human" ? "table" : includeAll ? "detail" : "compact");
+        const effectiveView = view ?? (context.mode === "human" ? "table" : includeAll ? "detail" : "tree");
 
         if (effectiveView === "compact") {
           const task = existingTask ?? domain.getTaskOrThrow(taskId);
@@ -376,6 +400,15 @@ export async function runTask(context: CliContext): Promise<CliResult> {
         });
       }
       case "update": {
+        const missingUpdateOption =
+          readMissingOptionValue(parsed.missingOptionValues, "ids") ??
+          readMissingOptionValue(parsed.missingOptionValues, "append") ??
+          readMissingOptionValue(parsed.missingOptionValues, "description", "d") ??
+          readMissingOptionValue(parsed.missingOptionValues, "status", "s");
+        if (missingUpdateOption !== undefined) {
+          return failMissingOptionValue("task.update", missingUpdateOption);
+        }
+
         const taskId: string = parsed.positional[1] ?? "";
         const updateAll: boolean = hasFlag(parsed.flags, "all");
         const rawIds: string | undefined = readOption(parsed.options, "ids");
