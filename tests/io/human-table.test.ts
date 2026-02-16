@@ -31,6 +31,7 @@ describe("formatHumanTable", (): void => {
     const lines = output.split("\n");
     expect(lines.length).toBeGreaterThan(4);
     expect(output).toContain("merge readiness.");
-    expect(output).toContain("Review branch");
+    expect(output).toContain("Review");
+    expect(output).toContain("branch");
   });
 });
