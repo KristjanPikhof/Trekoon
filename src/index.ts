@@ -4,7 +4,7 @@ import { executeShell, parseInvocation, renderShellResult } from "./runtime/cli-
 
 export async function run(argv: readonly string[] = process.argv.slice(2)): Promise<void> {
   const parsed = parseInvocation(argv);
-  const result = executeShell(argv);
+  const result = await executeShell(parsed);
   const rendered: string = renderShellResult(result, parsed.mode);
 
   if (result.ok) {
