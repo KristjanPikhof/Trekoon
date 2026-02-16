@@ -1,4 +1,11 @@
-import { type CliResult, type OutputMode } from "./command-types";
+import { runHelp } from "../commands/help";
+import { runInit } from "../commands/init";
+import { runQuickstart } from "../commands/quickstart";
+import { runWipe } from "../commands/wipe";
+import { failResult, okResult, renderResult } from "../io/output";
+import { type CliContext, type CliResult, type OutputMode } from "./command-types";
+
+const CLI_VERSION = "0.1.0";
 
 const SUPPORTED_ROOT_COMMANDS: readonly string[] = [
   "init",
@@ -15,51 +22,132 @@ export interface ParsedInvocation {
   readonly mode: OutputMode;
   readonly command: string | null;
   readonly args: readonly string[];
+  readonly wantsHelp: boolean;
+  readonly wantsVersion: boolean;
 }
 
 export function parseInvocation(argv: readonly string[]): ParsedInvocation {
-  if (argv[0] === "--toon") {
-    return {
-      mode: "toon",
-      command: argv[1] ?? null,
-      args: argv.slice(2),
-    };
+  let mode: OutputMode = "human";
+  let wantsHelp = false;
+  let wantsVersion = false;
+  const positionals: string[] = [];
+
+  for (const token of argv) {
+    if (token === "--toon") {
+      mode = "toon";
+      continue;
+    }
+
+    if (token === "--help" || token === "-h") {
+      wantsHelp = true;
+      continue;
+    }
+
+    if (token === "--version" || token === "-v") {
+      wantsVersion = true;
+      continue;
+    }
+
+    positionals.push(token);
   }
 
   return {
-    mode: "human",
-    command: argv[0] ?? null,
-    args: argv.slice(1),
+    mode,
+    command: positionals[0] ?? null,
+    args: positionals.slice(1),
+    wantsHelp,
+    wantsVersion,
   };
 }
 
 export function renderShellResult(result: CliResult, mode: OutputMode): string {
-  if (mode === "toon") {
-    return JSON.stringify({ ok: result.ok, command: "shell", data: result.message });
-  }
-
-  return result.message;
+  return renderResult(result, mode);
 }
 
-export function executeShell(argv: readonly string[]): CliResult {
-  const parsed: ParsedInvocation = parseInvocation(argv);
+function notImplementedCommand(command: string): CliResult {
+  return failResult({
+    command,
+    human: `Command '${command}' is scaffolded but not implemented yet.`,
+    data: { command },
+    error: {
+      code: "not_implemented",
+      message: `${command} is not implemented yet`,
+    },
+  });
+}
+
+export async function executeShell(parsed: ParsedInvocation, cwd: string = process.cwd()): Promise<CliResult> {
+  if (parsed.wantsVersion) {
+    return okResult({
+      command: "version",
+      human: CLI_VERSION,
+      data: { version: CLI_VERSION },
+    });
+  }
+
+  if (parsed.wantsHelp) {
+    const helpContext: CliContext = {
+      mode: parsed.mode,
+      cwd,
+      args: parsed.command ? [parsed.command] : [],
+    };
+
+    return runHelp(helpContext);
+  }
 
   if (!parsed.command) {
-    return {
-      ok: true,
-      message: `Trekoon scaffold ready. Commands: ${SUPPORTED_ROOT_COMMANDS.join(", ")}`,
-    };
+    return runHelp({
+      mode: parsed.mode,
+      args: [],
+      cwd,
+    });
   }
 
   if (!SUPPORTED_ROOT_COMMANDS.includes(parsed.command)) {
-    return {
-      ok: false,
-      message: `Unknown command: ${parsed.command}`,
-    };
+    return failResult({
+      command: "shell",
+      human: `Unknown command: ${parsed.command}\nRun 'trekoon --help' for usage.`,
+      data: {
+        command: parsed.command,
+        supportedCommands: SUPPORTED_ROOT_COMMANDS,
+      },
+      error: {
+        code: "unknown_command",
+        message: `Unknown command '${parsed.command}'`,
+      },
+    });
   }
 
-  return {
-    ok: true,
-    message: `Registered command '${parsed.command}' is scaffolded.`,
+  const context: CliContext = {
+    mode: parsed.mode,
+    args: parsed.args,
+    cwd,
   };
+
+  switch (parsed.command) {
+    case "init":
+      return runInit(context);
+    case "quickstart":
+      return runQuickstart(context);
+    case "wipe":
+      return runWipe(context);
+    case "help":
+      return runHelp(context);
+    case "epic":
+    case "task":
+    case "subtask":
+    case "dep":
+    case "sync":
+      return notImplementedCommand(parsed.command);
+    default:
+      return failResult({
+        command: "shell",
+        human: `Unhandled command: ${parsed.command}`,
+        data: { command: parsed.command },
+        error: {
+          code: "unhandled_command",
+          message: `No shell handler for '${parsed.command}'`,
+        },
+      });
+  }
 }
