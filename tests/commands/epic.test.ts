@@ -133,4 +133,50 @@ describe("epic command", (): void => {
     expect(shown.human).toContain("TASKS");
     expect(shown.human).toContain("No tasks found.");
   });
+
+  test("bulk update supports --all with --append and --status", async (): Promise<void> => {
+    const cwd = createWorkspace();
+    await runEpic({
+      cwd,
+      mode: "human",
+      args: ["create", "--title", "Roadmap", "--description", "Top-level work"],
+    });
+    await runEpic({
+      cwd,
+      mode: "human",
+      args: ["create", "--title", "Release", "--description", "Ship candidate"],
+    });
+
+    const updated = await runEpic({
+      cwd,
+      mode: "human",
+      args: ["update", "--all", "--append", "follow policy", "--status", "in-progress"],
+    });
+
+    expect(updated.ok).toBeTrue();
+    const epics = (updated.data as { epics: Array<{ description: string; status: string }> }).epics;
+    expect(epics.length).toBe(2);
+    expect(epics[0]?.description).toContain("follow policy");
+    expect(epics[1]?.description).toContain("follow policy");
+    expect(epics[0]?.status).toBe("in-progress");
+    expect(epics[1]?.status).toBe("in-progress");
+  });
+
+  test("bulk update rejects title field", async (): Promise<void> => {
+    const cwd = createWorkspace();
+    await runEpic({
+      cwd,
+      mode: "human",
+      args: ["create", "--title", "Roadmap", "--description", "Top-level work"],
+    });
+
+    const result = await runEpic({
+      cwd,
+      mode: "human",
+      args: ["update", "--all", "--title", "Renamed", "--append", "follow policy"],
+    });
+
+    expect(result.ok).toBeFalse();
+    expect(result.error?.code).toBe("invalid_input");
+  });
 });
