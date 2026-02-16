@@ -8,23 +8,39 @@ export interface ResultInput {
 }
 
 export function okResult(input: ResultInput): CliResult {
-  return {
+  const base: CliResult = {
     ok: true,
     command: input.command,
     data: input.data,
     human: input.human,
-    ...(input.meta ? { meta: input.meta } : {}),
+  };
+
+  if (!input.meta) {
+    return base;
+  }
+
+  return {
+    ...base,
+    meta: input.meta,
   };
 }
 
 export function failResult(input: ResultInput & { readonly error: ToonError }): CliResult {
-  return {
+  const base: CliResult = {
     ok: false,
     command: input.command,
     data: input.data,
     human: input.human,
     error: input.error,
-    ...(input.meta ? { meta: input.meta } : {}),
+  };
+
+  if (!input.meta) {
+    return base;
+  }
+
+  return {
+    ...base,
+    meta: input.meta,
   };
 }
 
