@@ -13,6 +13,78 @@ function formatEpic(epic: EpicRecord): string {
 
 const VIEW_MODES = ["table", "compact", "tree", "detail"] as const;
 const LIST_VIEW_MODES = ["table", "compact"] as const;
+const DEFAULT_LIST_LIMIT = 10;
+const DEFAULT_OPEN_STATUSES = ["in_progress", "in-progress", "todo"] as const;
+
+function parseStatusCsv(rawStatuses: string | undefined): string[] | undefined {
+  if (rawStatuses === undefined) {
+    return undefined;
+  }
+
+  return rawStatuses
+    .split(",")
+    .map((value) => value.trim())
+    .filter((value) => value.length > 0);
+}
+
+function parseLimit(rawLimit: string | undefined): number | undefined {
+  if (rawLimit === undefined) {
+    return undefined;
+  }
+
+  if (!/^\d+$/.test(rawLimit)) {
+    return undefined;
+  }
+
+  const parsed = Number(rawLimit);
+  if (!Number.isInteger(parsed) || parsed < 1) {
+    return undefined;
+  }
+
+  return parsed;
+}
+
+function getStatusPriority(status: string): number {
+  if (status === "in_progress" || status === "in-progress") {
+    return 0;
+  }
+
+  if (status === "todo") {
+    return 1;
+  }
+
+  return 2;
+}
+
+function sortByStatusPriority(epics: readonly EpicRecord[]): EpicRecord[] {
+  return [...epics].sort((left, right) => getStatusPriority(left.status) - getStatusPriority(right.status));
+}
+
+function filterSortAndLimitEpics(epics: readonly EpicRecord[], options: { includeAll: boolean; statuses: readonly string[] | undefined; limit: number | undefined }): EpicRecord[] {
+  const { includeAll, statuses, limit } = options;
+  const selectedStatuses = includeAll ? undefined : (statuses ?? DEFAULT_OPEN_STATUSES);
+  const selectedEpics = selectedStatuses === undefined ? [...epics] : epics.filter((epic) => selectedStatuses.includes(epic.status));
+  const sortedEpics = sortByStatusPriority(selectedEpics);
+
+  if (includeAll) {
+    return sortedEpics;
+  }
+
+  const effectiveLimit = limit ?? DEFAULT_LIST_LIMIT;
+  return sortedEpics.slice(0, effectiveLimit);
+}
+
+function invalidEpicListInput(human: string, message: string, data: Record<string, unknown>): CliResult {
+  return failResult({
+    command: "epic.list",
+    human,
+    data,
+    error: {
+      code: "invalid_input",
+      message,
+    },
+  });
+}
 
 function parseIdsOption(rawIds: string | undefined): string[] {
   if (rawIds === undefined) {
@@ -184,33 +256,60 @@ export async function runEpic(context: CliContext): Promise<CliResult> {
         });
       }
       case "list": {
+        const includeAll: boolean = hasFlag(parsed.flags, "all");
+        const rawStatuses: string | undefined = readOption(parsed.options, "status");
+        const rawLimit: string | undefined = readOption(parsed.options, "limit");
         const rawView: string | undefined = readOption(parsed.options, "view");
         const view = readEnumOption(parsed.options, VIEW_MODES, "view");
         if (rawView !== undefined && view === undefined) {
-          return failResult({
-            command: "epic.list",
-            human: "Invalid --view value. Use: table, compact",
-            data: { view: rawView, allowedViews: LIST_VIEW_MODES },
-            error: {
-              code: "invalid_input",
-              message: "Invalid --view value",
-            },
+          return invalidEpicListInput("Invalid --view value. Use: table, compact", "Invalid --view value", {
+            view: rawView,
+            allowedViews: LIST_VIEW_MODES,
           });
         }
 
         if (view !== undefined && view !== "table" && view !== "compact") {
-          return failResult({
-            command: "epic.list",
-            human: "Invalid --view for epic list. Use: table, compact",
-            data: { view, allowedViews: LIST_VIEW_MODES },
-            error: {
-              code: "invalid_input",
-              message: "Invalid --view for epic list",
-            },
+          return invalidEpicListInput("Invalid --view for epic list. Use: table, compact", "Invalid --view for epic list", {
+            view,
+            allowedViews: LIST_VIEW_MODES,
           });
         }
 
-        const epics = domain.listEpics();
+        if (includeAll && rawStatuses !== undefined) {
+          return invalidEpicListInput("Use either --all or --status, not both.", "--all and --status are mutually exclusive", {
+            code: "invalid_input",
+            flags: ["all", "status"],
+          });
+        }
+
+        if (includeAll && rawLimit !== undefined) {
+          return invalidEpicListInput("Use either --all or --limit, not both.", "--all and --limit are mutually exclusive", {
+            code: "invalid_input",
+            flags: ["all", "limit"],
+          });
+        }
+
+        const statuses = parseStatusCsv(rawStatuses);
+        if (rawStatuses !== undefined && statuses !== undefined && statuses.length === 0) {
+          return invalidEpicListInput("Invalid --status value. Provide at least one status.", "Invalid --status value", {
+            code: "invalid_input",
+            status: rawStatuses,
+          });
+        }
+
+        const limit = parseLimit(rawLimit);
+        if (rawLimit !== undefined && limit === undefined) {
+          return invalidEpicListInput("Invalid --limit value. Use an integer >= 1.", "Invalid --limit value", {
+            code: "invalid_input",
+            limit: rawLimit,
+          });
+        }
+
+        const epics = filterSortAndLimitEpics(domain.listEpics(), {
+          includeAll,
+          statuses,
+          limit,
+        });
         const listView = view ?? "table";
         const human = epics.length === 0 ? "No epics found." : listView === "compact" ? epics.map(formatEpic).join("\n") : formatEpicListTable(epics);
 
