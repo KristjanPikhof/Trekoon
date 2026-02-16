@@ -16,12 +16,14 @@ const QUICKSTART_TEXT = [
   "",
   "3) Task details and description",
   "- Human view is compact: id | epic | title | status.",
+  "- Full tree + descriptions: trekoon epic show <epic-id> --all --toon",
   "- For full task payload (including description), use --toon:",
-  "  trekoon task show <task-id> --toon",
+  "  trekoon task show <task-id> --all --toon",
   "",
   "4) TOON output examples",
   "- trekoon quickstart --toon",
-  "- trekoon task show <task-id> --toon",
+  "- trekoon task show <task-id> --all --toon",
+  "- trekoon epic show <epic-id> --all --toon",
   "- trekoon sync status --toon",
 ].join("\n");
 
@@ -43,7 +45,8 @@ export async function runQuickstart(_: CliContext): Promise<CliResult> {
       ],
       toonExamples: [
         "trekoon quickstart --toon",
-        "trekoon task show <task-id> --toon",
+        "trekoon task show <task-id> --all --toon",
+        "trekoon epic show <epic-id> --all --toon",
         "trekoon sync status --toon",
       ],
     },
