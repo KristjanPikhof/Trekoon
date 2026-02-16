@@ -1,4 +1,4 @@
-import { hasFlag, parseArgs, readOption } from "./arg-parser";
+import { hasFlag, parseArgs, readEnumOption, readOption } from "./arg-parser";
 
 import { DomainError, type TaskRecord } from "../domain/types";
 import { TrackerDomain } from "../domain/tracker-domain";
@@ -8,6 +8,85 @@ import { openTrekoonDatabase } from "../storage/database";
 
 function formatTask(task: TaskRecord): string {
   return `${task.id} | epic=${task.epicId} | ${task.title} | ${task.status}`;
+}
+
+const VIEW_MODES = ["table", "compact", "tree", "detail"] as const;
+const LIST_VIEW_MODES = ["table", "compact"] as const;
+
+function formatTable(headers: readonly string[], rows: readonly (readonly string[])[]): string {
+  const widths: number[] = headers.map((header, index) => {
+    const rowMax = rows.reduce((max, row) => Math.max(max, (row[index] ?? "").length), 0);
+    return Math.max(header.length, rowMax);
+  });
+
+  const formatRow = (row: readonly string[]): string =>
+    row.map((cell, index) => (cell ?? "").padEnd(widths[index] ?? 0)).join(" | ");
+
+  const divider = widths.map((width) => "-".repeat(width)).join("-+-");
+  return [formatRow(headers), divider, ...rows.map(formatRow)].join("\n");
+}
+
+function formatTaskListTable(tasks: readonly TaskRecord[]): string {
+  const rows = tasks.map((task) => [task.id, task.epicId, task.title, task.status]);
+  return formatTable(["ID", "EPIC", "TITLE", "STATUS"], rows);
+}
+
+function formatTaskShowDetail(taskTree: {
+  id: string;
+  epicId: string;
+  title: string;
+  description: string;
+  status: string;
+  subtasks: ReadonlyArray<{ id: string; title: string; description: string; status: string }>;
+}): string {
+  const humanLines: string[] = [
+    `${taskTree.id} | epic=${taskTree.epicId} | ${taskTree.title} | ${taskTree.status} | desc=${taskTree.description}`,
+  ];
+
+  for (const subtask of taskTree.subtasks) {
+    humanLines.push(`  subtask ${subtask.id} | ${subtask.title} | ${subtask.status} | desc=${subtask.description}`);
+  }
+
+  return humanLines.join("\n");
+}
+
+function formatTaskShowTree(taskTree: {
+  id: string;
+  epicId: string;
+  title: string;
+  status: string;
+  subtasks: ReadonlyArray<{ id: string; title: string; status: string }>;
+}): string {
+  const humanLines: string[] = [`${taskTree.id} | epic=${taskTree.epicId} | ${taskTree.title} | ${taskTree.status}`];
+  for (const subtask of taskTree.subtasks) {
+    humanLines.push(`  subtask ${subtask.id} | ${subtask.title} | ${subtask.status}`);
+  }
+
+  return humanLines.join("\n");
+}
+
+function formatTaskShowTable(taskTree: {
+  id: string;
+  epicId: string;
+  title: string;
+  description: string;
+  status: string;
+  subtasks: ReadonlyArray<{ id: string; title: string; status: string }>;
+}): string {
+  const sections: string[] = [];
+  sections.push("TASK");
+  sections.push(
+    formatTable(["ID", "EPIC", "TITLE", "STATUS", "DESCRIPTION"], [[taskTree.id, taskTree.epicId, taskTree.title, taskTree.status, taskTree.description]]),
+  );
+
+  if (taskTree.subtasks.length === 0) {
+    sections.push("\nSUBTASKS\nNo subtasks found.");
+    return sections.join("\n");
+  }
+
+  sections.push("\nSUBTASKS");
+  sections.push(formatTable(["ID", "TITLE", "STATUS"], taskTree.subtasks.map((subtask) => [subtask.id, subtask.title, subtask.status])));
+  return sections.join("\n");
 }
 
 function failFromError(error: unknown): CliResult {
@@ -65,9 +144,36 @@ export async function runTask(context: CliContext): Promise<CliResult> {
         });
       }
       case "list": {
+        const rawView: string | undefined = readOption(parsed.options, "view");
+        const view = readEnumOption(parsed.options, VIEW_MODES, "view");
+        if (rawView !== undefined && view === undefined) {
+          return failResult({
+            command: "task.list",
+            human: "Invalid --view value. Use: table, compact",
+            data: { view: rawView, allowedViews: LIST_VIEW_MODES },
+            error: {
+              code: "invalid_input",
+              message: "Invalid --view value",
+            },
+          });
+        }
+
+        if (view !== undefined && view !== "table" && view !== "compact") {
+          return failResult({
+            command: "task.list",
+            human: "Invalid --view for task list. Use: table, compact",
+            data: { view, allowedViews: LIST_VIEW_MODES },
+            error: {
+              code: "invalid_input",
+              message: "Invalid --view for task list",
+            },
+          });
+        }
+
         const epicId: string | undefined = readOption(parsed.options, "epic", "e");
         const tasks = domain.listTasks(epicId);
-        const human = tasks.length === 0 ? "No tasks found." : tasks.map(formatTask).join("\n");
+        const listView = view ?? "table";
+        const human = tasks.length === 0 ? "No tasks found." : listView === "compact" ? tasks.map(formatTask).join("\n") : formatTaskListTable(tasks);
 
         return okResult({
           command: "task.list",
@@ -78,8 +184,23 @@ export async function runTask(context: CliContext): Promise<CliResult> {
       case "show": {
         const taskId: string = parsed.positional[1] ?? "";
         const includeAll: boolean = hasFlag(parsed.flags, "all");
+        const rawView: string | undefined = readOption(parsed.options, "view");
+        const view = readEnumOption(parsed.options, VIEW_MODES, "view");
+        if (rawView !== undefined && view === undefined) {
+          return failResult({
+            command: "task.show",
+            human: "Invalid --view value. Use: table, compact, tree, detail",
+            data: { view: rawView, allowedViews: VIEW_MODES },
+            error: {
+              code: "invalid_input",
+              message: "Invalid --view value",
+            },
+          });
+        }
 
-        if (!includeAll) {
+        const effectiveView = view ?? (includeAll ? "detail" : "compact");
+
+        if (effectiveView === "compact") {
           const task = domain.getTaskOrThrow(taskId);
 
           return okResult({
@@ -90,19 +211,18 @@ export async function runTask(context: CliContext): Promise<CliResult> {
         }
 
         const taskTree = domain.buildTaskTreeDetailed(taskId);
-        const humanLines: string[] = [
-          `${taskTree.id} | epic=${taskTree.epicId} | ${taskTree.title} | ${taskTree.status} | desc=${taskTree.description}`,
-        ];
 
-        for (const subtask of taskTree.subtasks) {
-          humanLines.push(
-            `  subtask ${subtask.id} | ${subtask.title} | ${subtask.status} | desc=${subtask.description}`,
-          );
+        if (effectiveView === "tree") {
+          return okResult({
+            command: "task.show",
+            human: formatTaskShowTree(taskTree),
+            data: { task: taskTree, includeAll: true },
+          });
         }
 
         return okResult({
           command: "task.show",
-          human: humanLines.join("\n"),
+          human: effectiveView === "table" ? formatTaskShowTable(taskTree) : formatTaskShowDetail(taskTree),
           data: { task: taskTree, includeAll: true },
         });
       }
