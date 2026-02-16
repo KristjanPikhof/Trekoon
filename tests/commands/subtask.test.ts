@@ -103,4 +103,30 @@ describe("subtask command", (): void => {
     expect(listedCompact.ok).toBeTrue();
     expect(listedCompact.human).toContain("task=");
   });
+
+  test("errors when value-required subtask options are missing values", async (): Promise<void> => {
+    const cwd = createWorkspace();
+    const epicCreated = await runEpic({
+      cwd,
+      mode: "human",
+      args: ["create", "--title", "Roadmap", "--description", "desc"],
+    });
+    const epicId = (epicCreated.data as { epic: { id: string } }).epic.id;
+    const taskCreated = await runTask({
+      cwd,
+      mode: "human",
+      args: ["create", "--epic", epicId, "--title", "Implement", "--description", "task desc"],
+    });
+    const taskId = (taskCreated.data as { task: { id: string } }).task.id;
+
+    const missingTask = await runSubtask({ cwd, mode: "human", args: ["create", "--task", "--title", "A subtask"] });
+    expect(missingTask.ok).toBeFalse();
+    expect(missingTask.error?.code).toBe("invalid_input");
+    expect((missingTask.data as { option: string }).option).toBe("task");
+
+    const missingView = await runSubtask({ cwd, mode: "human", args: ["list", "--task", taskId, "--view"] });
+    expect(missingView.ok).toBeFalse();
+    expect(missingView.error?.code).toBe("invalid_input");
+    expect((missingView.data as { option: string }).option).toBe("view");
+  });
 });
