@@ -5,18 +5,23 @@ import { okResult, renderResult, toToonEnvelope } from "../../src/io/output";
 import { parseInvocation } from "../../src/runtime/cli-shell";
 
 describe("output mode parsing", (): void => {
-  test("parses --json mode", (): void => {
-    const parsed = parseInvocation(["quickstart", "--json"]);
+  test("TTY default => human", (): void => {
+    const parsed = parseInvocation(["quickstart"], { stdoutIsTTY: true });
+    expect(parsed.mode).toBe("human");
+  });
+
+  test("non-TTY default => json", (): void => {
+    const parsed = parseInvocation(["quickstart"], { stdoutIsTTY: false });
     expect(parsed.mode).toBe("json");
   });
 
-  test("parses --toon mode", (): void => {
-    const parsed = parseInvocation(["--toon", "quickstart"]);
+  test("explicit --toon wins", (): void => {
+    const parsed = parseInvocation(["quickstart", "--toon"], { stdoutIsTTY: false });
     expect(parsed.mode).toBe("toon");
   });
 
-  test("uses last global output flag", (): void => {
-    const parsed = parseInvocation(["--toon", "quickstart", "--json"]);
+  test("explicit --json wins", (): void => {
+    const parsed = parseInvocation(["quickstart", "--json"], { stdoutIsTTY: true });
     expect(parsed.mode).toBe("json");
   });
 });
