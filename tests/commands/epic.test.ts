@@ -117,4 +117,20 @@ describe("epic command", (): void => {
     expect(listedCompact.human).not.toContain("ID | TITLE | STATUS");
     expect(listedCompact.human).toContain("Roadmap");
   });
+
+  test("show defaults to table and handles empty task tree", async (): Promise<void> => {
+    const cwd = createWorkspace();
+    const createdEpic = await runEpic({
+      cwd,
+      mode: "human",
+      args: ["create", "--title", "Roadmap", "--description", "Top-level work"],
+    });
+    const epicId = (createdEpic.data as { epic: { id: string } }).epic.id;
+
+    const shown = await runEpic({ cwd, mode: "human", args: ["show", epicId] });
+    expect(shown.ok).toBeTrue();
+    expect(shown.human).toContain("EPIC");
+    expect(shown.human).toContain("TASKS");
+    expect(shown.human).toContain("No tasks found.");
+  });
 });
