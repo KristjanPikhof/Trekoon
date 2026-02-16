@@ -1,6 +1,11 @@
 import { runHelp } from "../commands/help";
+import { runDep } from "../commands/dep";
+import { runEpic } from "../commands/epic";
 import { runInit } from "../commands/init";
 import { runQuickstart } from "../commands/quickstart";
+import { runSubtask } from "../commands/subtask";
+import { runSync } from "../commands/sync";
+import { runTask } from "../commands/task";
 import { runWipe } from "../commands/wipe";
 import { failResult, okResult, renderResult } from "../io/output";
 import { type CliContext, type CliResult, type OutputMode } from "./command-types";
@@ -64,18 +69,6 @@ export function renderShellResult(result: CliResult, mode: OutputMode): string {
   return renderResult(result, mode);
 }
 
-function notImplementedCommand(command: string): CliResult {
-  return failResult({
-    command,
-    human: `Command '${command}' is scaffolded but not implemented yet.`,
-    data: { command },
-    error: {
-      code: "not_implemented",
-      message: `${command} is not implemented yet`,
-    },
-  });
-}
-
 export async function executeShell(parsed: ParsedInvocation, cwd: string = process.cwd()): Promise<CliResult> {
   if (parsed.wantsVersion) {
     return okResult({
@@ -131,14 +124,16 @@ export async function executeShell(parsed: ParsedInvocation, cwd: string = proce
       return runQuickstart(context);
     case "wipe":
       return runWipe(context);
-    case "help":
-      return runHelp(context);
     case "epic":
+      return runEpic(context);
     case "task":
+      return runTask(context);
     case "subtask":
+      return runSubtask(context);
     case "dep":
+      return runDep(context);
     case "sync":
-      return notImplementedCommand(parsed.command);
+      return runSync(context);
     default:
       return failResult({
         command: "shell",
