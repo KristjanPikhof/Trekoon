@@ -14,10 +14,25 @@ Use long flags (`--status`, `--description`, etc.) and ALWAYS prefer `--toon` fo
 Before creating or changing anything, inspect current context:
 
 ```bash
+trekoon epic list --toon
+trekoon task list --toon
 trekoon epic show <id> --all --toon
 trekoon task show <id> --all --toon
 ```
 
+- `epic list` / `task list` defaults:
+  - open work only (`in_progress`, `in-progress`, `todo`)
+  - prioritized as `in_progress`/`in-progress` first, then `todo`
+  - default limit `10`
+- Filter list explicitly when needed:
+
+```bash
+trekoon task list --status in_progress,todo --limit 20 --toon
+trekoon epic list --status done --toon
+trekoon task list --all --toon
+```
+
+- `--all` cannot be combined with `--status` or `--limit`.
 - `epic show <id> --all --toon`: full epic tree (tasks + subtasks)
 - `task show <id> --all --toon`: task plus its subtasks
 
