@@ -139,6 +139,173 @@ describe("task command", (): void => {
     expect(shown.human).toContain("DESCRIPTION");
   });
 
+  test("default list returns only open statuses and max 10", async (): Promise<void> => {
+    const cwd = createWorkspace();
+    const epicCreated = await runEpic({
+      cwd,
+      mode: "human",
+      args: ["create", "--title", "Roadmap", "--description", "desc"],
+    });
+    const epicId = (epicCreated.data as { epic: { id: string } }).epic.id;
+
+    for (let index = 0; index < 9; index += 1) {
+      await runTask({
+        cwd,
+        mode: "human",
+        args: ["create", "--epic", epicId, "--title", `Todo ${index}`, "--description", "todo", "--status", "todo"],
+      });
+    }
+
+    await runTask({
+      cwd,
+      mode: "human",
+      args: ["create", "--epic", epicId, "--title", "In progress", "--description", "active", "--status", "in_progress"],
+    });
+
+    await runTask({
+      cwd,
+      mode: "human",
+      args: ["create", "--epic", epicId, "--title", "In-progress", "--description", "active", "--status", "in-progress"],
+    });
+
+    for (let index = 0; index < 5; index += 1) {
+      await runTask({
+        cwd,
+        mode: "human",
+        args: ["create", "--epic", epicId, "--title", `Done ${index}`, "--description", "done", "--status", "done"],
+      });
+    }
+
+    const listed = await runTask({ cwd, mode: "human", args: ["list"] });
+    expect(listed.ok).toBeTrue();
+
+    const tasks = (listed.data as { tasks: Array<{ status: string }> }).tasks;
+    expect(tasks.length).toBe(10);
+    expect(tasks.every((task) => task.status === "in_progress" || task.status === "in-progress" || task.status === "todo")).toBeTrue();
+  });
+
+  test("default ordering puts in_progress and in-progress before todo", async (): Promise<void> => {
+    const cwd = createWorkspace();
+    const epicCreated = await runEpic({
+      cwd,
+      mode: "human",
+      args: ["create", "--title", "Roadmap", "--description", "desc"],
+    });
+    const epicId = (epicCreated.data as { epic: { id: string } }).epic.id;
+
+    await runTask({
+      cwd,
+      mode: "human",
+      args: ["create", "--epic", epicId, "--title", "Todo", "--description", "todo", "--status", "todo"],
+    });
+    await runTask({
+      cwd,
+      mode: "human",
+      args: ["create", "--epic", epicId, "--title", "In-progress", "--description", "active", "--status", "in-progress"],
+    });
+    await runTask({
+      cwd,
+      mode: "human",
+      args: ["create", "--epic", epicId, "--title", "In progress", "--description", "active", "--status", "in_progress"],
+    });
+
+    const listed = await runTask({ cwd, mode: "human", args: ["list"] });
+    expect(listed.ok).toBeTrue();
+
+    const statuses = (listed.data as { tasks: Array<{ status: string }> }).tasks.map((task) => task.status);
+    expect(statuses).toEqual(["in-progress", "in_progress", "todo"]);
+  });
+
+  test("list --status done returns done items", async (): Promise<void> => {
+    const cwd = createWorkspace();
+    const epicCreated = await runEpic({
+      cwd,
+      mode: "human",
+      args: ["create", "--title", "Roadmap", "--description", "desc"],
+    });
+    const epicId = (epicCreated.data as { epic: { id: string } }).epic.id;
+
+    await runTask({
+      cwd,
+      mode: "human",
+      args: ["create", "--epic", epicId, "--title", "Done", "--description", "done", "--status", "done"],
+    });
+    await runTask({
+      cwd,
+      mode: "human",
+      args: ["create", "--epic", epicId, "--title", "Todo", "--description", "todo", "--status", "todo"],
+    });
+
+    const listed = await runTask({ cwd, mode: "human", args: ["list", "--status", "done"] });
+    expect(listed.ok).toBeTrue();
+
+    const statuses = (listed.data as { tasks: Array<{ status: string }> }).tasks.map((task) => task.status);
+    expect(statuses).toEqual(["done"]);
+  });
+
+  test("list --all includes done items and bypasses default limit", async (): Promise<void> => {
+    const cwd = createWorkspace();
+    const epicCreated = await runEpic({
+      cwd,
+      mode: "human",
+      args: ["create", "--title", "Roadmap", "--description", "desc"],
+    });
+    const epicId = (epicCreated.data as { epic: { id: string } }).epic.id;
+
+    for (let index = 0; index < 12; index += 1) {
+      await runTask({
+        cwd,
+        mode: "human",
+        args: [
+          "create",
+          "--epic",
+          epicId,
+          "--title",
+          `Task ${index}`,
+          "--description",
+          "desc",
+          "--status",
+          index % 2 === 0 ? "done" : "todo",
+        ],
+      });
+    }
+
+    const listed = await runTask({ cwd, mode: "human", args: ["list", "--all"] });
+    expect(listed.ok).toBeTrue();
+
+    const tasks = (listed.data as { tasks: Array<{ status: string }> }).tasks;
+    expect(tasks.length).toBe(12);
+    expect(tasks.some((task) => task.status === "done")).toBeTrue();
+  });
+
+  test("list rejects --all with --status", async (): Promise<void> => {
+    const cwd = createWorkspace();
+    const result = await runTask({ cwd, mode: "human", args: ["list", "--all", "--status", "done"] });
+
+    expect(result.ok).toBeFalse();
+    expect(result.error?.code).toBe("invalid_input");
+  });
+
+  test("list rejects --all with --limit", async (): Promise<void> => {
+    const cwd = createWorkspace();
+    const result = await runTask({ cwd, mode: "human", args: ["list", "--all", "--limit", "5"] });
+
+    expect(result.ok).toBeFalse();
+    expect(result.error?.code).toBe("invalid_input");
+  });
+
+  test("list rejects invalid --limit values", async (): Promise<void> => {
+    const cwd = createWorkspace();
+
+    const zeroLimit = await runTask({ cwd, mode: "human", args: ["list", "--limit", "0"] });
+    expect(zeroLimit.ok).toBeFalse();
+    expect(zeroLimit.error?.code).toBe("invalid_input");
+
+    const nonNumericLimit = await runTask({ cwd, mode: "human", args: ["list", "--limit", "abc"] });
+    expect(nonNumericLimit.ok).toBeFalse();
+    expect(nonNumericLimit.error?.code).toBe("invalid_input");
+  });
+
   test("show returns helpful error when id is an epic", async (): Promise<void> => {
     const cwd = createWorkspace();
     const epicCreated = await runEpic({
