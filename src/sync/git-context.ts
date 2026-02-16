@@ -59,9 +59,9 @@ export function persistGitContext(db: Database, git: GitContextSnapshot): void {
       version = git_context.version + 1;
     `,
   ).run({
-    worktreePath: git.worktreePath,
-    branchName: git.branchName,
-    headSha: git.headSha,
-    now,
+    "@worktreePath": git.worktreePath,
+    "@branchName": git.branchName,
+    "@headSha": git.headSha,
+    "@now": now,
   });
 }

@@ -126,10 +126,10 @@ function saveCursor(db: Database, sourceBranch: string, cursorToken: string, las
       version = sync_cursors.version + 1;
     `,
   ).run({
-    sourceBranch,
-    cursorToken,
-    lastEventAt,
-    now,
+    "@sourceBranch": sourceBranch,
+    "@cursorToken": cursorToken,
+    "@lastEventAt": lastEventAt,
+    "@now": now,
   });
 }
 
@@ -147,8 +147,8 @@ function queryNewEvents(remoteDb: Database, cursorToken: string): StoredEvent[] 
       `,
     )
     .all({
-      createdAt: cursor.createdAt,
-      id: cursor.id ?? "",
+      "@createdAt": cursor.createdAt,
+      "@id": cursor.id ?? "",
     }) as StoredEvent[];
 }
 
@@ -172,8 +172,8 @@ function countBehind(remoteDb: Database, cursorToken: string): number {
       `,
     )
     .get({
-      createdAt: cursor.createdAt,
-      id: cursor.id ?? "",
+      "@createdAt": cursor.createdAt,
+      "@id": cursor.id ?? "",
     }) as { count: number } | null;
 
   return row?.count ?? 0;
@@ -302,11 +302,11 @@ function applyEntityFields(db: Database, event: StoredEvent, fields: Record<stri
         version = epics.version + 1;
       `,
     ).run({
-      id: event.entity_id,
-      title: typeof fields.title === "string" ? fields.title : "Untitled epic",
-      description: typeof fields.description === "string" ? fields.description : "",
-      status: typeof fields.status === "string" ? fields.status : "open",
-      now,
+      "@id": event.entity_id,
+      "@title": typeof fields.title === "string" ? fields.title : "Untitled epic",
+      "@description": typeof fields.description === "string" ? fields.description : "",
+      "@status": typeof fields.status === "string" ? fields.status : "open",
+      "@now": now,
     });
 
     return true;
@@ -326,12 +326,12 @@ function applyEntityFields(db: Database, event: StoredEvent, fields: Record<stri
         version = tasks.version + 1;
       `,
     ).run({
-      id: event.entity_id,
-      epicId: typeof fields.epic_id === "string" ? fields.epic_id : "missing-epic",
-      title: typeof fields.title === "string" ? fields.title : "Untitled task",
-      description: typeof fields.description === "string" ? fields.description : "",
-      status: typeof fields.status === "string" ? fields.status : "open",
-      now,
+      "@id": event.entity_id,
+      "@epicId": typeof fields.epic_id === "string" ? fields.epic_id : "missing-epic",
+      "@title": typeof fields.title === "string" ? fields.title : "Untitled task",
+      "@description": typeof fields.description === "string" ? fields.description : "",
+      "@status": typeof fields.status === "string" ? fields.status : "open",
+      "@now": now,
     });
 
     return true;
@@ -351,12 +351,12 @@ function applyEntityFields(db: Database, event: StoredEvent, fields: Record<stri
         version = subtasks.version + 1;
       `,
     ).run({
-      id: event.entity_id,
-      taskId: typeof fields.task_id === "string" ? fields.task_id : "missing-task",
-      title: typeof fields.title === "string" ? fields.title : "Untitled subtask",
-      description: typeof fields.description === "string" ? fields.description : "",
-      status: typeof fields.status === "string" ? fields.status : "open",
-      now,
+      "@id": event.entity_id,
+      "@taskId": typeof fields.task_id === "string" ? fields.task_id : "missing-task",
+      "@title": typeof fields.title === "string" ? fields.title : "Untitled subtask",
+      "@description": typeof fields.description === "string" ? fields.description : "",
+      "@status": typeof fields.status === "string" ? fields.status : "open",
+      "@now": now,
     });
 
     return true;
@@ -384,12 +384,12 @@ function applyEntityFields(db: Database, event: StoredEvent, fields: Record<stri
       version = dependencies.version + 1;
     `,
   ).run({
-    id: event.entity_id,
-    sourceId: typeof fields.source_id === "string" ? fields.source_id : "",
-    sourceKind: typeof fields.source_kind === "string" ? fields.source_kind : "task",
-    dependsOnId: typeof fields.depends_on_id === "string" ? fields.depends_on_id : "",
-    dependsOnKind: typeof fields.depends_on_kind === "string" ? fields.depends_on_kind : "task",
-    now,
+    "@id": event.entity_id,
+    "@sourceId": typeof fields.source_id === "string" ? fields.source_id : "",
+    "@sourceKind": typeof fields.source_kind === "string" ? fields.source_kind : "task",
+    "@dependsOnId": typeof fields.depends_on_id === "string" ? fields.depends_on_id : "",
+    "@dependsOnKind": typeof fields.depends_on_kind === "string" ? fields.depends_on_kind : "task",
+    "@now": now,
   });
 
   return true;
@@ -541,7 +541,7 @@ function updateSingleField(db: Database, entityKind: string, entityId: string, f
     dependencies: ["source_id", "source_kind", "depends_on_id", "depends_on_kind"],
   };
 
-  const validFields: readonly string[] = allowedFields[tableName];
+  const validFields: readonly string[] = allowedFields[tableName] ?? [];
   if (!validFields.includes(fieldName)) {
     return;
   }
