@@ -13,7 +13,7 @@ export function okResult(input: ResultInput): CliResult {
     command: input.command,
     data: input.data,
     human: input.human,
-    meta: input.meta,
+    ...(input.meta ? { meta: input.meta } : {}),
   };
 }
 
@@ -24,7 +24,7 @@ export function failResult(input: ResultInput & { readonly error: ToonError }): 
     data: input.data,
     human: input.human,
     error: input.error,
-    meta: input.meta,
+    ...(input.meta ? { meta: input.meta } : {}),
   };
 }
 
