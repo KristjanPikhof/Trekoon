@@ -53,7 +53,7 @@ Trekoon currently accepts long option form (`--option`).
 
 Human view options:
 
-- List commands default to table output.
+- List and show commands default to table output in human mode.
 - Use `--view compact` to restore compact pipe output.
 - `epic show` and `task show` support `--view table|compact|tree|detail`.
 
