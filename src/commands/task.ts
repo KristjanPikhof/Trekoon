@@ -14,6 +14,21 @@ function formatTask(task: TaskRecord): string {
 const VIEW_MODES = ["table", "compact", "tree", "detail"] as const;
 const LIST_VIEW_MODES = ["table", "compact"] as const;
 
+function parseIdsOption(rawIds: string | undefined): string[] {
+  if (rawIds === undefined) {
+    return [];
+  }
+
+  return rawIds
+    .split(",")
+    .map((value) => value.trim())
+    .filter((value) => value.length > 0);
+}
+
+function appendLine(existing: string, line: string): string {
+  return existing.length > 0 ? `${existing}\n${line}` : line;
+}
+
 function formatTaskListTable(tasks: readonly TaskRecord[]): string {
   const rows = tasks.map((task) => [task.id, task.epicId, task.title, task.status]);
   return formatHumanTable(["ID", "EPIC", "TITLE", "STATUS"], rows, { wrapColumns: [2] });
@@ -248,10 +263,112 @@ export async function runTask(context: CliContext): Promise<CliResult> {
       }
       case "update": {
         const taskId: string = parsed.positional[1] ?? "";
+        const updateAll: boolean = hasFlag(parsed.flags, "all");
+        const rawIds: string | undefined = readOption(parsed.options, "ids");
+        const ids = parseIdsOption(rawIds);
         const title: string | undefined = readOption(parsed.options, "title", "t");
         const description: string | undefined = readOption(parsed.options, "description", "d");
+        const append: string | undefined = readOption(parsed.options, "append");
         const status: string | undefined = readOption(parsed.options, "status", "s");
-        const task = domain.updateTask(taskId, { title, description, status });
+
+        if (updateAll && ids.length > 0) {
+          return failResult({
+            command: "task.update",
+            human: "Use either --all or --ids, not both.",
+            data: { code: "invalid_input", target: ["all", "ids"] },
+            error: {
+              code: "invalid_input",
+              message: "--all and --ids are mutually exclusive",
+            },
+          });
+        }
+
+        if (append !== undefined && description !== undefined) {
+          return failResult({
+            command: "task.update",
+            human: "Use either --append or --description, not both.",
+            data: { code: "invalid_input", fields: ["append", "description"] },
+            error: {
+              code: "invalid_input",
+              message: "--append and --description are mutually exclusive",
+            },
+          });
+        }
+
+        const hasBulkTarget = updateAll || ids.length > 0;
+        if (hasBulkTarget) {
+          if (taskId.length > 0) {
+            return failResult({
+              command: "task.update",
+              human: "Do not pass a task id when using --all or --ids.",
+              data: { code: "invalid_input", id: taskId },
+              error: {
+                code: "invalid_input",
+                message: "Positional id is not allowed with --all/--ids",
+              },
+            });
+          }
+
+          if (title !== undefined || description !== undefined) {
+            return failResult({
+              command: "task.update",
+              human: "Bulk update supports only --append and/or --status.",
+              data: { code: "invalid_input" },
+              error: {
+                code: "invalid_input",
+                message: "Bulk update supports only --append and --status",
+              },
+            });
+          }
+
+          if (append === undefined && status === undefined) {
+            return failResult({
+              command: "task.update",
+              human: "Bulk update requires --append and/or --status.",
+              data: { code: "invalid_input" },
+              error: {
+                code: "invalid_input",
+                message: "Missing bulk update fields",
+              },
+            });
+          }
+
+          const targets = updateAll ? [...domain.listTasks()] : ids.map((id) => domain.getTaskOrThrow(id));
+          const tasks = targets.map((target) =>
+            domain.updateTask(target.id, {
+              status,
+              description: append === undefined ? undefined : appendLine(target.description, append),
+            }),
+          );
+
+          return okResult({
+            command: "task.update",
+            human: `Updated ${tasks.length} task(s)`,
+            data: {
+              tasks,
+              target: updateAll ? "all" : "ids",
+              ids: tasks.map((task) => task.id),
+            },
+          });
+        }
+
+        if (taskId.length === 0) {
+          return failResult({
+            command: "task.update",
+            human: "Provide a task id, or use --all/--ids for bulk update.",
+            data: { code: "invalid_input" },
+            error: {
+              code: "invalid_input",
+              message: "Missing task id",
+            },
+          });
+        }
+
+        const nextDescription =
+          append === undefined
+            ? description
+            : appendLine(domain.getTaskOrThrow(taskId).description, append);
+        const task = domain.updateTask(taskId, { title, description: nextDescription, status });
 
         return okResult({
           command: "task.update",
