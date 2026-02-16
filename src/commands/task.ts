@@ -1,4 +1,4 @@
-import { parseArgs, readOption } from "./arg-parser";
+import { hasFlag, parseArgs, readOption } from "./arg-parser";
 
 import { DomainError, type TaskRecord } from "../domain/types";
 import { TrackerDomain } from "../domain/tracker-domain";
@@ -77,12 +77,33 @@ export async function runTask(context: CliContext): Promise<CliResult> {
       }
       case "show": {
         const taskId: string = parsed.positional[1] ?? "";
-        const task = domain.getTaskOrThrow(taskId);
+        const includeAll: boolean = hasFlag(parsed.flags, "all");
+
+        if (!includeAll) {
+          const task = domain.getTaskOrThrow(taskId);
+
+          return okResult({
+            command: "task.show",
+            human: formatTask(task),
+            data: { task, includeAll: false },
+          });
+        }
+
+        const taskTree = domain.buildTaskTreeDetailed(taskId);
+        const humanLines: string[] = [
+          `${taskTree.id} | epic=${taskTree.epicId} | ${taskTree.title} | ${taskTree.status} | desc=${taskTree.description}`,
+        ];
+
+        for (const subtask of taskTree.subtasks) {
+          humanLines.push(
+            `  subtask ${subtask.id} | ${subtask.title} | ${subtask.status} | desc=${subtask.description}`,
+          );
+        }
 
         return okResult({
           command: "task.show",
-          human: formatTask(task),
-          data: { task },
+          human: humanLines.join("\n"),
+          data: { task: taskTree, includeAll: true },
         });
       }
       case "update": {
