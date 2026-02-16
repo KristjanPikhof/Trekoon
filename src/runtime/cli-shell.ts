@@ -38,6 +38,11 @@ export function parseInvocation(argv: readonly string[]): ParsedInvocation {
   const positionals: string[] = [];
 
   for (const token of argv) {
+    if (token === "--json") {
+      mode = "json";
+      continue;
+    }
+
     if (token === "--toon") {
       mode = "toon";
       continue;
