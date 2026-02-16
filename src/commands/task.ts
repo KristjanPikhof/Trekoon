@@ -13,6 +13,8 @@ function formatTask(task: TaskRecord): string {
 
 const VIEW_MODES = ["table", "compact", "tree", "detail"] as const;
 const LIST_VIEW_MODES = ["table", "compact"] as const;
+const DEFAULT_TASK_LIST_LIMIT = 10;
+const DEFAULT_OPEN_TASK_STATUSES = ["in_progress", "in-progress", "todo"] as const;
 
 function parseIdsOption(rawIds: string | undefined): string[] {
   if (rawIds === undefined) {
@@ -23,6 +25,58 @@ function parseIdsOption(rawIds: string | undefined): string[] {
     .split(",")
     .map((value) => value.trim())
     .filter((value) => value.length > 0);
+}
+
+function parseStatusCsv(rawStatuses: string | undefined): string[] | undefined {
+  if (rawStatuses === undefined) {
+    return undefined;
+  }
+
+  return rawStatuses
+    .split(",")
+    .map((value) => value.trim())
+    .filter((value) => value.length > 0);
+}
+
+function parseLimitOption(rawLimit: string | undefined): number | undefined {
+  if (rawLimit === undefined) {
+    return undefined;
+  }
+
+  const parsedLimit = Number.parseInt(rawLimit, 10);
+  if (!Number.isInteger(parsedLimit) || parsedLimit < 1 || `${parsedLimit}` !== rawLimit.trim()) {
+    return Number.NaN;
+  }
+
+  return parsedLimit;
+}
+
+function taskStatusPriority(status: string): number {
+  if (status === "in_progress" || status === "in-progress") {
+    return 0;
+  }
+
+  if (status === "todo") {
+    return 1;
+  }
+
+  return 2;
+}
+
+function filterSortAndLimitTasks(
+  tasks: readonly TaskRecord[],
+  statuses: readonly string[] | undefined,
+  limit: number | undefined,
+): TaskRecord[] {
+  const allowedStatuses = statuses === undefined ? undefined : new Set(statuses);
+  const filtered = allowedStatuses === undefined ? [...tasks] : tasks.filter((task) => allowedStatuses.has(task.status));
+  const sorted = [...filtered].sort((left, right) => taskStatusPriority(left.status) - taskStatusPriority(right.status));
+
+  if (limit === undefined) {
+    return sorted;
+  }
+
+  return sorted.slice(0, limit);
 }
 
 function appendLine(existing: string, line: string): string {
@@ -159,6 +213,10 @@ export async function runTask(context: CliContext): Promise<CliResult> {
       case "list": {
         const rawView: string | undefined = readOption(parsed.options, "view");
         const view = readEnumOption(parsed.options, VIEW_MODES, "view");
+        const includeAll = hasFlag(parsed.flags, "all");
+        const rawStatuses = readOption(parsed.options, "status", "s");
+        const rawLimit = readOption(parsed.options, "limit", "l");
+
         if (rawView !== undefined && view === undefined) {
           return failResult({
             command: "task.list",
@@ -183,8 +241,64 @@ export async function runTask(context: CliContext): Promise<CliResult> {
           });
         }
 
+        if (includeAll && rawStatuses !== undefined) {
+          return failResult({
+            command: "task.list",
+            human: "Use either --all or --status, not both.",
+            data: { code: "invalid_input", flags: ["all", "status"] },
+            error: {
+              code: "invalid_input",
+              message: "--all and --status are mutually exclusive",
+            },
+          });
+        }
+
+        if (includeAll && rawLimit !== undefined) {
+          return failResult({
+            command: "task.list",
+            human: "Use either --all or --limit, not both.",
+            data: { code: "invalid_input", flags: ["all", "limit"] },
+            error: {
+              code: "invalid_input",
+              message: "--all and --limit are mutually exclusive",
+            },
+          });
+        }
+
+        const statuses = parseStatusCsv(rawStatuses);
+        if (rawStatuses !== undefined && statuses !== undefined && statuses.length === 0) {
+          return failResult({
+            command: "task.list",
+            human: "Provide at least one status with --status.",
+            data: { code: "invalid_input", status: rawStatuses },
+            error: {
+              code: "invalid_input",
+              message: "Invalid --status value",
+            },
+          });
+        }
+
+        const parsedLimit = parseLimitOption(rawLimit);
+        if (Number.isNaN(parsedLimit)) {
+          return failResult({
+            command: "task.list",
+            human: "Invalid --limit value. Use an integer >= 1.",
+            data: { code: "invalid_input", limit: rawLimit },
+            error: {
+              code: "invalid_input",
+              message: "Invalid --limit value",
+            },
+          });
+        }
+
         const epicId: string | undefined = readOption(parsed.options, "epic", "e");
-        const tasks = domain.listTasks(epicId);
+        const selectedStatuses = includeAll
+          ? undefined
+          : statuses ?? [...DEFAULT_OPEN_TASK_STATUSES];
+        const selectedLimit = includeAll
+          ? undefined
+          : parsedLimit ?? DEFAULT_TASK_LIST_LIMIT;
+        const tasks = filterSortAndLimitTasks(domain.listTasks(epicId), selectedStatuses, selectedLimit);
         const listView = view ?? "table";
         const human = tasks.length === 0 ? "No tasks found." : listView === "compact" ? tasks.map(formatTask).join("\n") : formatTaskListTable(tasks);
 
