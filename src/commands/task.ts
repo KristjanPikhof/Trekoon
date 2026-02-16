@@ -71,7 +71,7 @@ function formatTaskShowTable(taskTree: {
   title: string;
   description: string;
   status: string;
-  subtasks: ReadonlyArray<{ id: string; title: string; status: string }>;
+  subtasks: ReadonlyArray<{ id: string; title: string; description: string; status: string }>;
 }): string {
   const sections: string[] = [];
   sections.push("TASK");
@@ -85,7 +85,12 @@ function formatTaskShowTable(taskTree: {
   }
 
   sections.push("\nSUBTASKS");
-  sections.push(formatTable(["ID", "TITLE", "STATUS"], taskTree.subtasks.map((subtask) => [subtask.id, subtask.title, subtask.status])));
+  sections.push(
+    formatTable(
+      ["ID", "TITLE", "STATUS", "DESCRIPTION"],
+      taskTree.subtasks.map((subtask) => [subtask.id, subtask.title, subtask.status, subtask.description]),
+    ),
+  );
   return sections.join("\n");
 }
 
@@ -198,10 +203,32 @@ export async function runTask(context: CliContext): Promise<CliResult> {
           });
         }
 
-        const effectiveView = view ?? (includeAll ? "detail" : "compact");
+        const existingTask = domain.getTask(taskId);
+        if (!existingTask) {
+          const matchingEpic = domain.getEpic(taskId);
+          if (matchingEpic) {
+            return failResult({
+              command: "task.show",
+              human: `ID belongs to an epic. Use: trekoon epic show ${taskId}`,
+              data: {
+                code: "wrong_entity_type",
+                id: taskId,
+                expected: "task",
+                actual: "epic",
+                hint: `trekoon epic show ${taskId}`,
+              },
+              error: {
+                code: "wrong_entity_type",
+                message: `ID belongs to epic '${taskId}', not a task`,
+              },
+            });
+          }
+        }
+
+        const effectiveView = view ?? (context.mode === "human" ? "table" : includeAll ? "detail" : "compact");
 
         if (effectiveView === "compact") {
-          const task = domain.getTaskOrThrow(taskId);
+          const task = existingTask ?? domain.getTaskOrThrow(taskId);
 
           return okResult({
             command: "task.show",
@@ -216,14 +243,14 @@ export async function runTask(context: CliContext): Promise<CliResult> {
           return okResult({
             command: "task.show",
             human: formatTaskShowTree(taskTree),
-            data: { task: taskTree, includeAll: true },
+            data: { task: taskTree, includeAll: true, subtasksCount: taskTree.subtasks.length },
           });
         }
 
         return okResult({
           command: "task.show",
           human: effectiveView === "table" ? formatTaskShowTable(taskTree) : formatTaskShowDetail(taskTree),
-          data: { task: taskTree, includeAll: true },
+          data: { task: taskTree, includeAll: true, subtasksCount: taskTree.subtasks.length },
         });
       }
       case "update": {
