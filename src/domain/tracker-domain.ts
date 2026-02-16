@@ -5,10 +5,12 @@ import { Database } from "bun:sqlite";
 import {
   type DependencyRecord,
   DomainError,
+  type EpicTreeDetailed,
   type EpicRecord,
   type EpicTree,
   type NodeKind,
   type SubtaskRecord,
+  type TaskTreeDetailed,
   type TaskRecord,
 } from "./types";
 
@@ -379,6 +381,39 @@ export class TrackerDomain {
           status: subtask.status,
         })),
       })),
+    };
+  }
+
+  buildTaskTreeDetailed(taskId: string): TaskTreeDetailed {
+    const task: TaskRecord = this.getTaskOrThrow(taskId);
+    const subtasks: readonly SubtaskRecord[] = this.listSubtasks(task.id);
+
+    return {
+      id: task.id,
+      epicId: task.epicId,
+      title: task.title,
+      description: task.description,
+      status: task.status,
+      subtasks: subtasks.map((subtask) => ({
+        id: subtask.id,
+        taskId: subtask.taskId,
+        title: subtask.title,
+        description: subtask.description,
+        status: subtask.status,
+      })),
+    };
+  }
+
+  buildEpicTreeDetailed(epicId: string): EpicTreeDetailed {
+    const epic: EpicRecord = this.getEpicOrThrow(epicId);
+    const tasks: readonly TaskRecord[] = this.listTasks(epic.id);
+
+    return {
+      id: epic.id,
+      title: epic.title,
+      description: epic.description,
+      status: epic.status,
+      tasks: tasks.map((task) => this.buildTaskTreeDetailed(task.id)),
     };
   }
 
