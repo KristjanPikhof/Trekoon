@@ -2,6 +2,7 @@ import { parseArgs, readEnumOption, readOption } from "./arg-parser";
 
 import { DomainError, type SubtaskRecord } from "../domain/types";
 import { TrackerDomain } from "../domain/tracker-domain";
+import { formatHumanTable } from "../io/human-table";
 import { failResult, okResult } from "../io/output";
 import { type CliContext, type CliResult } from "../runtime/command-types";
 import { openTrekoonDatabase } from "../storage/database";
@@ -12,23 +13,11 @@ function formatSubtask(subtask: SubtaskRecord): string {
 
 const VIEW_MODES = ["table", "compact"] as const;
 
-function formatTable(headers: readonly string[], rows: readonly (readonly string[])[]): string {
-  const widths: number[] = headers.map((header, index) => {
-    const rowMax = rows.reduce((max, row) => Math.max(max, (row[index] ?? "").length), 0);
-    return Math.max(header.length, rowMax);
-  });
-
-  const formatRow = (row: readonly string[]): string =>
-    row.map((cell, index) => (cell ?? "").padEnd(widths[index] ?? 0)).join(" | ");
-
-  const divider = widths.map((width) => "-".repeat(width)).join("-+-");
-  return [formatRow(headers), divider, ...rows.map(formatRow)].join("\n");
-}
-
 function formatSubtaskListTable(subtasks: readonly SubtaskRecord[]): string {
-  return formatTable(
+  return formatHumanTable(
     ["ID", "TASK", "TITLE", "STATUS"],
     subtasks.map((subtask) => [subtask.id, subtask.taskId, subtask.title, subtask.status]),
+    { wrapColumns: [2] },
   );
 }
 
