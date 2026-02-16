@@ -5,6 +5,7 @@ import { join } from "node:path";
 import { afterEach, describe, expect, test } from "bun:test";
 
 import { runEpic } from "../../src/commands/epic";
+import { runSubtask } from "../../src/commands/subtask";
 import { runTask } from "../../src/commands/task";
 
 const tempDirs: string[] = [];
@@ -75,5 +76,36 @@ describe("task command", (): void => {
     const afterDelete = await runTask({ cwd, mode: "human", args: ["show", taskId] });
     expect(afterDelete.ok).toBeFalse();
     expect(afterDelete.error?.code).toBe("not_found");
+  });
+
+  test("task show --all returns subtasks with descriptions", async (): Promise<void> => {
+    const cwd = createWorkspace();
+    const epicCreated = await runEpic({
+      cwd,
+      mode: "human",
+      args: ["create", "--title", "Roadmap", "--description", "desc"],
+    });
+    const epicId = (epicCreated.data as { epic: { id: string } }).epic.id;
+
+    const createdTask = await runTask({
+      cwd,
+      mode: "human",
+      args: ["create", "--epic", epicId, "--title", "Implement", "--description", "build it"],
+    });
+    const taskId = (createdTask.data as { task: { id: string } }).task.id;
+
+    await runSubtask({
+      cwd,
+      mode: "human",
+      args: ["create", "--task", taskId, "--title", "Do part A", "--description", "subtask details"],
+    });
+
+    const shown = await runTask({ cwd, mode: "toon", args: ["show", taskId, "--all"] });
+    expect(shown.ok).toBeTrue();
+
+    const task = (shown.data as { task: { description: string; subtasks: Array<{ description: string }> } }).task;
+    expect(task.description).toBe("build it");
+    expect(task.subtasks.length).toBe(1);
+    expect(task.subtasks[0]?.description).toBe("subtask details");
   });
 });
