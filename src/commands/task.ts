@@ -2,6 +2,7 @@ import { hasFlag, parseArgs, readEnumOption, readOption } from "./arg-parser";
 
 import { DomainError, type TaskRecord } from "../domain/types";
 import { TrackerDomain } from "../domain/tracker-domain";
+import { formatHumanTable } from "../io/human-table";
 import { failResult, okResult } from "../io/output";
 import { type CliContext, type CliResult } from "../runtime/command-types";
 import { openTrekoonDatabase } from "../storage/database";
@@ -13,22 +14,9 @@ function formatTask(task: TaskRecord): string {
 const VIEW_MODES = ["table", "compact", "tree", "detail"] as const;
 const LIST_VIEW_MODES = ["table", "compact"] as const;
 
-function formatTable(headers: readonly string[], rows: readonly (readonly string[])[]): string {
-  const widths: number[] = headers.map((header, index) => {
-    const rowMax = rows.reduce((max, row) => Math.max(max, (row[index] ?? "").length), 0);
-    return Math.max(header.length, rowMax);
-  });
-
-  const formatRow = (row: readonly string[]): string =>
-    row.map((cell, index) => (cell ?? "").padEnd(widths[index] ?? 0)).join(" | ");
-
-  const divider = widths.map((width) => "-".repeat(width)).join("-+-");
-  return [formatRow(headers), divider, ...rows.map(formatRow)].join("\n");
-}
-
 function formatTaskListTable(tasks: readonly TaskRecord[]): string {
   const rows = tasks.map((task) => [task.id, task.epicId, task.title, task.status]);
-  return formatTable(["ID", "EPIC", "TITLE", "STATUS"], rows);
+  return formatHumanTable(["ID", "EPIC", "TITLE", "STATUS"], rows, { wrapColumns: [2] });
 }
 
 function formatTaskShowDetail(taskTree: {
@@ -76,7 +64,11 @@ function formatTaskShowTable(taskTree: {
   const sections: string[] = [];
   sections.push("TASK");
   sections.push(
-    formatTable(["ID", "EPIC", "TITLE", "STATUS", "DESCRIPTION"], [[taskTree.id, taskTree.epicId, taskTree.title, taskTree.status, taskTree.description]]),
+    formatHumanTable(
+      ["ID", "EPIC", "TITLE", "STATUS", "DESCRIPTION"],
+      [[taskTree.id, taskTree.epicId, taskTree.title, taskTree.status, taskTree.description]],
+      { wrapColumns: [2, 4] },
+    ),
   );
 
   if (taskTree.subtasks.length === 0) {
@@ -86,9 +78,10 @@ function formatTaskShowTable(taskTree: {
 
   sections.push("\nSUBTASKS");
   sections.push(
-    formatTable(
+    formatHumanTable(
       ["ID", "TITLE", "STATUS", "DESCRIPTION"],
       taskTree.subtasks.map((subtask) => [subtask.id, subtask.title, subtask.status, subtask.description]),
+      { wrapColumns: [1, 3] },
     ),
   );
   return sections.join("\n");
