@@ -31,7 +31,7 @@ Activate when user needs to:
 
 1. Always run in the user’s target repo/worktree directory.
 2. Initialize first if `.trekoon/trekoon.db` is missing.
-3. Use `--toon` whenever parsing IDs/fields programmatically.
+3. Use `--json` or `--toon` whenever parsing IDs/fields programmatically.
 4. Never edit `.trekoon/trekoon.db` directly.
 5. Never run `trekoon wipe --yes` unless user explicitly asks.
 6. Prefer explicit fields (`--title`, `--description`, etc.).
@@ -44,9 +44,17 @@ Activate when user needs to:
 - If it is an implementation step for one task → **Subtask**
 - If one task/subtask must happen first → **Dependency**
 
-## Output Contract (`--toon`)
+## Output Modes
 
-Trekoon outputs machine-readable JSON envelope:
+Trekoon supports three output modes:
+
+- Human (default): table-first output for list/show commands
+- `--json`: JSON envelope (best for script parsing)
+- `--toon`: TOON-encoded machine output
+
+### JSON contract (`--json`)
+
+Trekoon JSON output uses this envelope:
 
 ```json
 {
@@ -66,6 +74,7 @@ Trekoon outputs machine-readable JSON envelope:
 
 - `trekoon --help`
 - `trekoon --version`
+- `trekoon <command> ... --json`
 - `trekoon <command> ... --toon`
 
 ### Lifecycle
@@ -77,9 +86,11 @@ Trekoon outputs machine-readable JSON envelope:
 ### Epic
 
 - `trekoon epic create --title <title> --description <description> [--status <status>]`
-- `trekoon epic list`
-- `trekoon epic show <epic-id> [--all]`
+- `trekoon epic list [--view table|compact]`
+- `trekoon epic show <epic-id> [--all] [--view table|compact|tree|detail]`
 - `trekoon epic update <epic-id> [--title <title>] [--description <description>] [--status <status>]`
+- `trekoon epic update --all [--append <line>] [--status <status>]`
+- `trekoon epic update --ids <id1,id2,...> [--append <line>] [--status <status>]`
 - `trekoon epic delete <epic-id>`
 
 Notes:
@@ -88,19 +99,29 @@ Notes:
 - `description` required on create.
 - `status` defaults to `todo`.
 - `epic show --all --toon` returns full tree with descriptions.
+- Bulk update rules:
+  - `--all` and `--ids` are mutually exclusive.
+  - Bulk mode supports `--append` and/or `--status`.
+  - Do not pass positional `<epic-id>` in bulk mode.
 
 ### Task
 
 - `trekoon task create --epic <epic-id> --title <title> --description <description> [--status <status>]`
-- `trekoon task list [--epic <epic-id>]`
-- `trekoon task show <task-id> [--all]`
+- `trekoon task list [--epic <epic-id>] [--view table|compact]`
+- `trekoon task show <task-id> [--all] [--view table|compact|tree|detail]`
 - `trekoon task update <task-id> [--title <title>] [--description <description>] [--status <status>]`
+- `trekoon task update --all [--append <line>] [--status <status>]`
+- `trekoon task update --ids <id1,id2,...> [--append <line>] [--status <status>]`
 - `trekoon task delete <task-id>`
 
 Notes:
 
 - `task show --all --toon` returns task + subtasks with descriptions.
-- Human `task show` is intentionally compact.
+- `task show <epic-id>` returns `wrong_entity_type` with a hint.
+- Bulk update rules:
+  - `--all` and `--ids` are mutually exclusive.
+  - Bulk mode supports `--append` and/or `--status`.
+  - Do not pass positional `<task-id>` in bulk mode.
 
 ### Subtask
 
@@ -179,5 +200,5 @@ trekoon epic show <epic-id> --all --toon
 
 - Do not assume branch switch auto-merges tracker state.
 - Do not perform destructive wipe without explicit approval.
-- Do not parse human output when `--toon` is available.
+- Do not parse human output when `--json`/`--toon` are available.
 - Do not rely on undocumented subcommands.
