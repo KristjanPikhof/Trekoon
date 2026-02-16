@@ -92,6 +92,7 @@ function shrinkWidths(
   separatorWidth: number,
 ): void {
   const totalWidth = (): number => widths.reduce((sum, width) => sum + width, 0) + separatorWidth;
+  const hardMinimumWidth = 4;
 
   while (totalWidth() > maxWidth) {
     let changed = false;
@@ -117,9 +118,12 @@ function shrinkWidths(
     }
 
     for (let index = 0; index < widths.length; index += 1) {
-      const minWidth = minimumWidths[index] ?? 4;
+      if (!wrapColumns.has(index)) {
+        continue;
+      }
+
       const currentWidth = widths[index];
-      if (currentWidth !== undefined && currentWidth > minWidth) {
+      if (currentWidth !== undefined && currentWidth > hardMinimumWidth) {
         widths[index] = currentWidth - 1;
         changed = true;
         if (totalWidth() <= maxWidth) {
@@ -168,7 +172,13 @@ export function formatHumanTable(
 
   const renderedRows: string[] = [];
   for (const row of rows) {
-    const wrappedCells = row.map((cell, index) => wrapCell(cell ?? "", widths[index] ?? 1));
+    const wrappedCells = row.map((cell, index) => {
+      if (!wrapColumns.has(index)) {
+        return [cell ?? ""];
+      }
+
+      return wrapCell(cell ?? "", widths[index] ?? 1);
+    });
     const height = wrappedCells.reduce((max, cellLines) => Math.max(max, cellLines.length), 1);
 
     for (let lineIndex = 0; lineIndex < height; lineIndex += 1) {
