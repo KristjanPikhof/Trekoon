@@ -110,6 +110,34 @@ describe("task command", (): void => {
     expect((shown.data as { subtasksCount: number }).subtasksCount).toBe(1);
   });
 
+  test("show defaults to tree in machine mode", async (): Promise<void> => {
+    const cwd = createWorkspace();
+    const epicCreated = await runEpic({
+      cwd,
+      mode: "human",
+      args: ["create", "--title", "Roadmap", "--description", "desc"],
+    });
+    const epicId = (epicCreated.data as { epic: { id: string } }).epic.id;
+
+    const createdTask = await runTask({
+      cwd,
+      mode: "human",
+      args: ["create", "--epic", epicId, "--title", "Implement", "--description", "build it"],
+    });
+    const taskId = (createdTask.data as { task: { id: string } }).task.id;
+
+    await runSubtask({
+      cwd,
+      mode: "human",
+      args: ["create", "--task", taskId, "--title", "Do part A", "--description", "subtask details"],
+    });
+
+    const shown = await runTask({ cwd, mode: "toon", args: ["show", taskId] });
+    expect(shown.ok).toBeTrue();
+    expect(shown.human).toContain("subtask");
+    expect(shown.human).not.toContain("desc=");
+  });
+
   test("list defaults to table and show supports table view", async (): Promise<void> => {
     const cwd = createWorkspace();
     const epicCreated = await runEpic({
@@ -304,6 +332,46 @@ describe("task command", (): void => {
     const nonNumericLimit = await runTask({ cwd, mode: "human", args: ["list", "--limit", "abc"] });
     expect(nonNumericLimit.ok).toBeFalse();
     expect(nonNumericLimit.error?.code).toBe("invalid_input");
+
+    const leadingZeroLimit = await runTask({ cwd, mode: "human", args: ["list", "--limit", "01"] });
+    expect(leadingZeroLimit.ok).toBeFalse();
+    expect(leadingZeroLimit.error?.code).toBe("invalid_input");
+  });
+
+  test("errors when value-required task options are missing values", async (): Promise<void> => {
+    const cwd = createWorkspace();
+    const epicCreated = await runEpic({
+      cwd,
+      mode: "human",
+      args: ["create", "--title", "Roadmap", "--description", "desc"],
+    });
+    const epicId = (epicCreated.data as { epic: { id: string } }).epic.id;
+    const taskCreated = await runTask({
+      cwd,
+      mode: "human",
+      args: ["create", "--epic", epicId, "--title", "Implement", "--description", "build it"],
+    });
+    const taskId = (taskCreated.data as { task: { id: string } }).task.id;
+
+    const missingEpic = await runTask({ cwd, mode: "human", args: ["create", "--epic", "--title", "Implement", "--description", "x"] });
+    expect(missingEpic.ok).toBeFalse();
+    expect(missingEpic.error?.code).toBe("invalid_input");
+    expect((missingEpic.data as { option: string }).option).toBe("epic");
+
+    const missingLimit = await runTask({ cwd, mode: "human", args: ["list", "--limit"] });
+    expect(missingLimit.ok).toBeFalse();
+    expect(missingLimit.error?.code).toBe("invalid_input");
+    expect((missingLimit.data as { option: string }).option).toBe("limit");
+
+    const missingView = await runTask({ cwd, mode: "human", args: ["show", taskId, "--view"] });
+    expect(missingView.ok).toBeFalse();
+    expect(missingView.error?.code).toBe("invalid_input");
+    expect((missingView.data as { option: string }).option).toBe("view");
+
+    const missingIds = await runTask({ cwd, mode: "human", args: ["update", "--ids", "--append", "note"] });
+    expect(missingIds.ok).toBeFalse();
+    expect(missingIds.error?.code).toBe("invalid_input");
+    expect((missingIds.data as { option: string }).option).toBe("ids");
   });
 
   test("show returns helpful error when id is an epic", async (): Promise<void> => {
