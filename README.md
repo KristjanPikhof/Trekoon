@@ -36,7 +36,7 @@ Trekoon is a Bun-powered CLI focused on execution workflows where AI agents and 
 Global output modes:
 
 - `--json` for structured JSON output
-- `--toon` for true TOON-encoded output
+- `--toon` for true TOON-encoded output (not JSON text)
 - `--help` for root and command help
 - `--version` for CLI version
 
@@ -55,6 +55,7 @@ Human view options:
 
 - List and show commands default to table output in human mode.
 - Use `--view compact` to restore compact pipe output.
+- `epic list` and `task list` support `--view table|compact`.
 - `epic show` and `task show` support `--view table|compact|tree|detail`.
 
 List defaults and filters (`epic list`, `task list`):
@@ -65,6 +66,23 @@ List defaults and filters (`epic list`, `task list`):
 - Custom limit: `--limit <n>`
 - All rows and statuses: `--all`
 - `--all` is mutually exclusive with `--status` and `--limit`
+
+Bulk updates (`epic update`, `task update`):
+
+- Target all rows: `--all`
+- Target specific rows: `--ids <id1,id2,...>`
+- Bulk updates support only `--append <text>` and/or `--status <status>`
+- In bulk mode, do not pass a positional id
+- `--all` and `--ids` are mutually exclusive
+- `--append` and `--description` are mutually exclusive
+
+Examples:
+
+```bash
+trekoon task update --all --status in_progress
+trekoon task update --ids <task-1>,<task-2> --append "\nFollow-up note"
+trekoon epic update --ids <epic-1>,<epic-2> --status done
+```
 
 ## Quickstart
 

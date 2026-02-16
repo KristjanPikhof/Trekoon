@@ -29,9 +29,9 @@ const COMMAND_HELP: Record<string, string> = {
   quickstart: "Usage: trekoon quickstart [--json|--toon]",
   wipe: "Usage: trekoon wipe --yes [--json|--toon]",
   epic:
-    "Usage: trekoon epic <subcommand> [options] (list defaults: open statuses + limit 10; list flags: --status <csv> | --limit <n> | --all; show supports --all and --view table|compact|tree|detail)",
+    "Usage: trekoon epic <subcommand> [options] (list defaults: open statuses + limit 10; list flags: --status <csv> | --limit <n> | --all | --view table|compact; show supports --all and --view table|compact|tree|detail; update bulk flags: --all | --ids <csv> with --append <text> and/or --status <status>)",
   task:
-    "Usage: trekoon task <subcommand> [options] (list defaults: open statuses + limit 10; list flags: --status <csv> | --limit <n> | --all; show supports --all and --view table|compact|tree|detail)",
+    "Usage: trekoon task <subcommand> [options] (list defaults: open statuses + limit 10; list flags: --status <csv> | --limit <n> | --all | --view table|compact; show supports --all and --view table|compact|tree|detail; update bulk flags: --all | --ids <csv> with --append <text> and/or --status <status>)",
   subtask: "Usage: trekoon subtask <subcommand> [options] (list supports --view table|compact)",
   dep: "Usage: trekoon dep <subcommand> [options]",
   sync: "Usage: trekoon sync <subcommand> [options]",

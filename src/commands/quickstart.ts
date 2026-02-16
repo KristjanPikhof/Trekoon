@@ -21,6 +21,8 @@ const QUICKSTART_TEXT = [
   "- Filter list by status: --status in_progress,todo (CSV).",
   "- Change page size: --limit <n>. Show all statuses and all rows with --all.",
   "- --all cannot be combined with --status or --limit.",
+  "- Bulk update: use --all or --ids <csv> with --append and/or --status.",
+  "- Bulk update rejects positional id, and --all/--ids cannot be combined.",
   "- Full tree + descriptions: trekoon epic show <epic-id> --all --json",
   "- For full task payload (including description), use --json:",
   "  trekoon task show <task-id> --all --json",
