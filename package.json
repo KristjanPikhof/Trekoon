@@ -2,6 +2,7 @@
   "name": "trekoon",
   "version": "0.1.0",
   "description": "AI-first local issue tracker CLI.",
+  "license": "MIT",
   "type": "module",
   "bin": {
     "trekoon": "./bin/trekoon"
