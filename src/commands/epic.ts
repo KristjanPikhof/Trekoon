@@ -2,6 +2,7 @@ import { hasFlag, parseArgs, readEnumOption, readOption } from "./arg-parser";
 
 import { DomainError, type EpicRecord } from "../domain/types";
 import { TrackerDomain } from "../domain/tracker-domain";
+import { formatHumanTable } from "../io/human-table";
 import { failResult, okResult } from "../io/output";
 import { type CliContext, type CliResult } from "../runtime/command-types";
 import { openTrekoonDatabase } from "../storage/database";
@@ -13,22 +14,9 @@ function formatEpic(epic: EpicRecord): string {
 const VIEW_MODES = ["table", "compact", "tree", "detail"] as const;
 const LIST_VIEW_MODES = ["table", "compact"] as const;
 
-function formatTable(headers: readonly string[], rows: readonly (readonly string[])[]): string {
-  const widths: number[] = headers.map((header, index) => {
-    const rowMax = rows.reduce((max, row) => Math.max(max, (row[index] ?? "").length), 0);
-    return Math.max(header.length, rowMax);
-  });
-
-  const formatRow = (row: readonly string[]): string =>
-    row.map((cell, index) => (cell ?? "").padEnd(widths[index] ?? 0)).join(" | ");
-
-  const divider = widths.map((width) => "-".repeat(width)).join("-+-");
-  return [formatRow(headers), divider, ...rows.map(formatRow)].join("\n");
-}
-
 function formatEpicListTable(epics: readonly EpicRecord[]): string {
   const rows = epics.map((epic) => [epic.id, epic.title, epic.status]);
-  return formatTable(["ID", "TITLE", "STATUS"], rows);
+  return formatHumanTable(["ID", "TITLE", "STATUS"], rows, { wrapColumns: [1] });
 }
 
 function formatEpicShowCompact(tree: {
@@ -94,7 +82,11 @@ function formatEpicShowTable(tree: {
 }): string {
   const sections: string[] = [];
   sections.push("EPIC");
-  sections.push(formatTable(["ID", "TITLE", "STATUS", "DESCRIPTION"], [[tree.id, tree.title, tree.status, tree.description]]));
+  sections.push(
+    formatHumanTable(["ID", "TITLE", "STATUS", "DESCRIPTION"], [[tree.id, tree.title, tree.status, tree.description]], {
+      wrapColumns: [1, 3],
+    }),
+  );
 
   if (tree.tasks.length === 0) {
     sections.push("\nTASKS\nNo tasks found.");
@@ -104,9 +96,10 @@ function formatEpicShowTable(tree: {
 
   sections.push("\nTASKS");
   sections.push(
-    formatTable(
+    formatHumanTable(
       ["ID", "TITLE", "STATUS", "DESCRIPTION"],
       tree.tasks.map((task) => [task.id, task.title, task.status, task.description]),
+      { wrapColumns: [1, 3] },
     ),
   );
 
@@ -119,7 +112,7 @@ function formatEpicShowTable(tree: {
   }
 
   sections.push("\nSUBTASKS");
-  sections.push(formatTable(["ID", "TASK", "TITLE", "STATUS", "DESCRIPTION"], subtaskRows));
+  sections.push(formatHumanTable(["ID", "TASK", "TITLE", "STATUS", "DESCRIPTION"], subtaskRows, { wrapColumns: [2, 4] }));
   return sections.join("\n");
 }
 
