@@ -1,4 +1,4 @@
-import { parseArgs, readEnumOption, readOption } from "./arg-parser";
+import { parseArgs, readEnumOption, readMissingOptionValue, readOption } from "./arg-parser";
 
 import { DomainError, type SubtaskRecord } from "../domain/types";
 import { TrackerDomain } from "../domain/tracker-domain";
@@ -48,6 +48,21 @@ function failFromError(error: unknown): CliResult {
   });
 }
 
+function failMissingOptionValue(command: string, option: string): CliResult {
+  return failResult({
+    command,
+    human: `Option --${option} requires a value.`,
+    data: {
+      code: "invalid_input",
+      option,
+    },
+    error: {
+      code: "invalid_input",
+      message: `Option --${option} requires a value`,
+    },
+  });
+}
+
 export async function runSubtask(context: CliContext): Promise<CliResult> {
   const database = openTrekoonDatabase(context.cwd);
 
@@ -58,6 +73,14 @@ export async function runSubtask(context: CliContext): Promise<CliResult> {
 
     switch (subcommand) {
       case "create": {
+        const missingCreateOption =
+          readMissingOptionValue(parsed.missingOptionValues, "task", "t") ??
+          readMissingOptionValue(parsed.missingOptionValues, "description", "d") ??
+          readMissingOptionValue(parsed.missingOptionValues, "status", "s");
+        if (missingCreateOption !== undefined) {
+          return failMissingOptionValue("subtask.create", missingCreateOption);
+        }
+
         const taskId: string | undefined = readOption(parsed.options, "task", "t") ?? parsed.positional[1];
         const title: string | undefined = readOption(parsed.options, "title") ?? parsed.positional[2];
         const description: string | undefined = readOption(parsed.options, "description", "d");
@@ -76,6 +99,13 @@ export async function runSubtask(context: CliContext): Promise<CliResult> {
         });
       }
       case "list": {
+        const missingListOption =
+          readMissingOptionValue(parsed.missingOptionValues, "view") ??
+          readMissingOptionValue(parsed.missingOptionValues, "task", "t");
+        if (missingListOption !== undefined) {
+          return failMissingOptionValue("subtask.list", missingListOption);
+        }
+
         const rawView: string | undefined = readOption(parsed.options, "view");
         const view = readEnumOption(parsed.options, VIEW_MODES, "view");
         if (rawView !== undefined && view === undefined) {
@@ -107,6 +137,13 @@ export async function runSubtask(context: CliContext): Promise<CliResult> {
         });
       }
       case "update": {
+        const missingUpdateOption =
+          readMissingOptionValue(parsed.missingOptionValues, "description", "d") ??
+          readMissingOptionValue(parsed.missingOptionValues, "status", "s");
+        if (missingUpdateOption !== undefined) {
+          return failMissingOptionValue("subtask.update", missingUpdateOption);
+        }
+
         const subtaskId: string = parsed.positional[1] ?? "";
         const title: string | undefined = readOption(parsed.options, "title");
         const description: string | undefined = readOption(parsed.options, "description", "d");
