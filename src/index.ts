@@ -16,4 +16,6 @@ export async function run(argv: readonly string[] = process.argv.slice(2)): Prom
   process.exitCode = 1;
 }
 
-await run();
+if (import.meta.main) {
+  await run();
+}
