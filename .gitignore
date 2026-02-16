@@ -1,2 +1,10 @@
 # Project related
 /plans/
+
+# Bun/TypeScript
+/node_modules/
+/dist/
+/bun.lockb
+
+# Trekoon local state
+/.trekoon/
