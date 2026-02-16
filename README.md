@@ -4,6 +4,27 @@ AI-first issue tracking for humans and agents.
 
 Trekoon is a Bun-powered CLI focused on execution workflows where AI agents and humans share the same task graph.
 
+## Installation
+
+Recommended (global install with Bun):
+
+```bash
+bun add -g trekoon
+```
+
+Then verify:
+
+```bash
+trekoon --version
+trekoon --help
+```
+
+Alternative (npm global install):
+
+```bash
+npm i -g trekoon
+```
+
 ## What Trekoon is
 
 - Local-first CLI issue tracker
