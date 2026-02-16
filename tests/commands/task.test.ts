@@ -108,4 +108,32 @@ describe("task command", (): void => {
     expect(task.subtasks.length).toBe(1);
     expect(task.subtasks[0]?.description).toBe("subtask details");
   });
+
+  test("list defaults to table and show supports table view", async (): Promise<void> => {
+    const cwd = createWorkspace();
+    const epicCreated = await runEpic({
+      cwd,
+      mode: "human",
+      args: ["create", "--title", "Roadmap", "--description", "desc"],
+    });
+    const epicId = (epicCreated.data as { epic: { id: string } }).epic.id;
+
+    const created = await runTask({
+      cwd,
+      mode: "human",
+      args: ["create", "--epic", epicId, "--title", "Implement", "--description", "build it"],
+    });
+    const taskId = (created.data as { task: { id: string } }).task.id;
+
+    const listed = await runTask({ cwd, mode: "human", args: ["list"] });
+    expect(listed.ok).toBeTrue();
+    expect(listed.human).toContain("ID");
+    expect(listed.human).toContain("EPIC");
+    expect(listed.human).toContain("TITLE");
+
+    const shown = await runTask({ cwd, mode: "human", args: ["show", taskId, "--view", "table"] });
+    expect(shown.ok).toBeTrue();
+    expect(shown.human).toContain("TASK");
+    expect(shown.human).toContain("SUBTASKS");
+  });
 });
