@@ -110,14 +110,16 @@ function formatEpicShowTable(tree: {
     ),
   );
 
-  const subtaskRows = tree.tasks.flatMap((task) => task.subtasks.map((subtask) => [subtask.id, task.id, subtask.title, subtask.status]));
+  const subtaskRows = tree.tasks.flatMap((task) =>
+    task.subtasks.map((subtask) => [subtask.id, task.id, subtask.title, subtask.status, subtask.description]),
+  );
   if (subtaskRows.length === 0) {
     sections.push("\nSUBTASKS\nNo subtasks found.");
     return sections.join("\n");
   }
 
   sections.push("\nSUBTASKS");
-  sections.push(formatTable(["ID", "TASK", "TITLE", "STATUS"], subtaskRows));
+  sections.push(formatTable(["ID", "TASK", "TITLE", "STATUS", "DESCRIPTION"], subtaskRows));
   return sections.join("\n");
 }
 
@@ -227,7 +229,7 @@ export async function runEpic(context: CliContext): Promise<CliResult> {
           });
         }
 
-        const effectiveView = view ?? (includeAll ? "detail" : "tree");
+        const effectiveView = view ?? (context.mode === "human" ? "table" : includeAll ? "detail" : "tree");
 
         if (effectiveView === "compact" || effectiveView === "tree") {
           const tree = domain.buildEpicTree(epicId);
