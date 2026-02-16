@@ -14,7 +14,7 @@ const ROOT_HELP = [
   "",
   "Commands:",
   "  init         Initialize .trekoon storage and local DB",
-  "  quickstart   Show local-first and sync workflow guidance",
+  "  quickstart   Show workflow + where to see task descriptions",
   "  wipe         Remove local Trekoon state (requires --yes)",
   "  epic         Epic lifecycle commands",
   "  task         Task lifecycle commands",
