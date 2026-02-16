@@ -15,8 +15,8 @@ bun add -g trekoon
 Then verify:
 
 ```bash
-trekoon --version
 trekoon --help
+trekoon quickstart
 ```
 
 Alternative (npm global install):
