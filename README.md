@@ -51,6 +51,12 @@ trekoon quickstart --json
 
 Trekoon currently accepts long option form (`--option`).
 
+Human view options:
+
+- List commands default to table output.
+- Use `--view compact` to restore compact pipe output.
+- `epic show` and `task show` support `--view table|compact|tree|detail`.
+
 ## Quickstart
 
 Trekoon is local-first: each worktree uses its own `.trekoon/trekoon.db`.
@@ -69,6 +75,8 @@ trekoon --version
 trekoon epic create --title "Agent backlog stabilization" --description "Track stabilization work" --status todo
 trekoon task create --title "Implement sync status" --description "Add status reporting" --epic <epic-id> --status todo
 trekoon subtask create --task <task-id> --title "Add cursor model" --status todo
+trekoon task list --view table
+trekoon task list --view compact
 ```
 
 ### 3) Add dependencies
