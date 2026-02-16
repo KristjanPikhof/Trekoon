@@ -25,8 +25,7 @@ Trekoon is a Bun-powered CLI focused on execution workflows where AI agents and 
 
 - `trekoon init`
 - `trekoon quickstart`
-- `trekoon help [command]`
-- `trekoon epic <create|list|show|update|delete|complete>`
+- `trekoon epic <create|list|show|update|delete>`
 - `trekoon task <create|list|show|update|delete>`
 - `trekoon subtask <create|list|update|delete>`
 - `trekoon dep <add|remove|list>`
