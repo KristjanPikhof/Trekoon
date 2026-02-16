@@ -1,4 +1,4 @@
-import { parseArgs, readOption } from "./arg-parser";
+import { hasFlag, parseArgs, readOption } from "./arg-parser";
 
 import { DomainError, type EpicRecord } from "../domain/types";
 import { TrackerDomain } from "../domain/tracker-domain";
@@ -74,20 +74,42 @@ export async function runEpic(context: CliContext): Promise<CliResult> {
       }
       case "show": {
         const epicId: string = parsed.positional[1] ?? "";
-        const tree = domain.buildEpicTree(epicId);
-        const humanLines: string[] = [`${tree.id} | ${tree.title} | ${tree.status}`];
+        const includeAll: boolean = hasFlag(parsed.flags, "all");
+
+        if (!includeAll) {
+          const tree = domain.buildEpicTree(epicId);
+          const humanLines: string[] = [`${tree.id} | ${tree.title} | ${tree.status}`];
+
+          for (const task of tree.tasks) {
+            humanLines.push(`  task ${task.id} | ${task.title} | ${task.status}`);
+            for (const subtask of task.subtasks) {
+              humanLines.push(`    subtask ${subtask.id} | ${subtask.title} | ${subtask.status}`);
+            }
+          }
+
+          return okResult({
+            command: "epic.show",
+            human: humanLines.join("\n"),
+            data: { tree, includeAll: false },
+          });
+        }
+
+        const tree = domain.buildEpicTreeDetailed(epicId);
+        const humanLines: string[] = [`${tree.id} | ${tree.title} | ${tree.status} | desc=${tree.description}`];
 
         for (const task of tree.tasks) {
-          humanLines.push(`  task ${task.id} | ${task.title} | ${task.status}`);
+          humanLines.push(`  task ${task.id} | ${task.title} | ${task.status} | desc=${task.description}`);
           for (const subtask of task.subtasks) {
-            humanLines.push(`    subtask ${subtask.id} | ${subtask.title} | ${subtask.status}`);
+            humanLines.push(
+              `    subtask ${subtask.id} | ${subtask.title} | ${subtask.status} | desc=${subtask.description}`,
+            );
           }
         }
 
         return okResult({
           command: "epic.show",
           human: humanLines.join("\n"),
-          data: { tree },
+          data: { tree, includeAll: true },
         });
       }
       case "update": {
