@@ -1,4 +1,4 @@
-import { hasFlag, parseArgs, readEnumOption, readOption } from "./arg-parser";
+import { hasFlag, parseArgs, parseStrictPositiveInt, readEnumOption, readMissingOptionValue, readOption } from "./arg-parser";
 
 import { DomainError, type EpicRecord } from "../domain/types";
 import { TrackerDomain } from "../domain/tracker-domain";
@@ -25,23 +25,6 @@ function parseStatusCsv(rawStatuses: string | undefined): string[] | undefined {
     .split(",")
     .map((value) => value.trim())
     .filter((value) => value.length > 0);
-}
-
-function parseLimit(rawLimit: string | undefined): number | undefined {
-  if (rawLimit === undefined) {
-    return undefined;
-  }
-
-  if (!/^\d+$/.test(rawLimit)) {
-    return undefined;
-  }
-
-  const parsed = Number(rawLimit);
-  if (!Number.isInteger(parsed) || parsed < 1) {
-    return undefined;
-  }
-
-  return parsed;
 }
 
 function getStatusPriority(status: string): number {
@@ -82,6 +65,21 @@ function invalidEpicListInput(human: string, message: string, data: Record<strin
     error: {
       code: "invalid_input",
       message,
+    },
+  });
+}
+
+function failMissingOptionValue(command: string, option: string): CliResult {
+  return failResult({
+    command,
+    human: `Option --${option} requires a value.`,
+    data: {
+      code: "invalid_input",
+      option,
+    },
+    error: {
+      code: "invalid_input",
+      message: `Option --${option} requires a value`,
     },
   });
 }
@@ -240,6 +238,13 @@ export async function runEpic(context: CliContext): Promise<CliResult> {
 
     switch (subcommand) {
       case "create": {
+        const missingCreateOption =
+          readMissingOptionValue(parsed.missingOptionValues, "status", "s") ??
+          readMissingOptionValue(parsed.missingOptionValues, "description", "d");
+        if (missingCreateOption !== undefined) {
+          return failMissingOptionValue("epic.create", missingCreateOption);
+        }
+
         const title: string | undefined = readOption(parsed.options, "title", "t");
         const description: string | undefined = readOption(parsed.options, "description", "d");
         const status: string | undefined = readOption(parsed.options, "status", "s");
@@ -256,6 +261,14 @@ export async function runEpic(context: CliContext): Promise<CliResult> {
         });
       }
       case "list": {
+        const missingListOption =
+          readMissingOptionValue(parsed.missingOptionValues, "status", "s") ??
+          readMissingOptionValue(parsed.missingOptionValues, "limit", "l") ??
+          readMissingOptionValue(parsed.missingOptionValues, "view");
+        if (missingListOption !== undefined) {
+          return failMissingOptionValue("epic.list", missingListOption);
+        }
+
         const includeAll: boolean = hasFlag(parsed.flags, "all");
         const rawStatuses: string | undefined = readOption(parsed.options, "status");
         const rawLimit: string | undefined = readOption(parsed.options, "limit");
@@ -297,8 +310,8 @@ export async function runEpic(context: CliContext): Promise<CliResult> {
           });
         }
 
-        const limit = parseLimit(rawLimit);
-        if (rawLimit !== undefined && limit === undefined) {
+        const limit = parseStrictPositiveInt(rawLimit);
+        if (Number.isNaN(limit)) {
           return invalidEpicListInput("Invalid --limit value. Use an integer >= 1.", "Invalid --limit value", {
             code: "invalid_input",
             limit: rawLimit,
@@ -320,6 +333,11 @@ export async function runEpic(context: CliContext): Promise<CliResult> {
         });
       }
       case "show": {
+        const missingShowOption = readMissingOptionValue(parsed.missingOptionValues, "view");
+        if (missingShowOption !== undefined) {
+          return failMissingOptionValue("epic.show", missingShowOption);
+        }
+
         const epicId: string = parsed.positional[1] ?? "";
         const includeAll: boolean = hasFlag(parsed.flags, "all");
         const rawView: string | undefined = readOption(parsed.options, "view");
@@ -338,7 +356,17 @@ export async function runEpic(context: CliContext): Promise<CliResult> {
 
         const effectiveView = view ?? (context.mode === "human" ? "table" : includeAll ? "detail" : "tree");
 
-        if (effectiveView === "compact" || effectiveView === "tree") {
+        if (effectiveView === "compact") {
+          const epic = domain.getEpicOrThrow(epicId);
+
+          return okResult({
+            command: "epic.show",
+            human: formatEpic(epic),
+            data: { epic, includeAll: false },
+          });
+        }
+
+        if (effectiveView === "tree") {
           const tree = domain.buildEpicTree(epicId);
 
           return okResult({
@@ -357,6 +385,15 @@ export async function runEpic(context: CliContext): Promise<CliResult> {
         });
       }
       case "update": {
+        const missingUpdateOption =
+          readMissingOptionValue(parsed.missingOptionValues, "ids") ??
+          readMissingOptionValue(parsed.missingOptionValues, "append") ??
+          readMissingOptionValue(parsed.missingOptionValues, "description", "d") ??
+          readMissingOptionValue(parsed.missingOptionValues, "status", "s");
+        if (missingUpdateOption !== undefined) {
+          return failMissingOptionValue("epic.update", missingUpdateOption);
+        }
+
         const epicId: string = parsed.positional[1] ?? "";
         const updateAll: boolean = hasFlag(parsed.flags, "all");
         const rawIds: string | undefined = readOption(parsed.options, "ids");
