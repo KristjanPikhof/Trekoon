@@ -14,6 +14,21 @@ function formatEpic(epic: EpicRecord): string {
 const VIEW_MODES = ["table", "compact", "tree", "detail"] as const;
 const LIST_VIEW_MODES = ["table", "compact"] as const;
 
+function parseIdsOption(rawIds: string | undefined): string[] {
+  if (rawIds === undefined) {
+    return [];
+  }
+
+  return rawIds
+    .split(",")
+    .map((value) => value.trim())
+    .filter((value) => value.length > 0);
+}
+
+function appendLine(existing: string, line: string): string {
+  return existing.length > 0 ? `${existing}\n${line}` : line;
+}
+
 function formatEpicListTable(epics: readonly EpicRecord[]): string {
   const rows = epics.map((epic) => [epic.id, epic.title, epic.status]);
   return formatHumanTable(["ID", "TITLE", "STATUS"], rows, { wrapColumns: [1] });
@@ -244,10 +259,112 @@ export async function runEpic(context: CliContext): Promise<CliResult> {
       }
       case "update": {
         const epicId: string = parsed.positional[1] ?? "";
+        const updateAll: boolean = hasFlag(parsed.flags, "all");
+        const rawIds: string | undefined = readOption(parsed.options, "ids");
+        const ids = parseIdsOption(rawIds);
         const title: string | undefined = readOption(parsed.options, "title", "t");
         const description: string | undefined = readOption(parsed.options, "description", "d");
+        const append: string | undefined = readOption(parsed.options, "append");
         const status: string | undefined = readOption(parsed.options, "status", "s");
-        const epic = domain.updateEpic(epicId, { title, description, status });
+
+        if (updateAll && ids.length > 0) {
+          return failResult({
+            command: "epic.update",
+            human: "Use either --all or --ids, not both.",
+            data: { code: "invalid_input", target: ["all", "ids"] },
+            error: {
+              code: "invalid_input",
+              message: "--all and --ids are mutually exclusive",
+            },
+          });
+        }
+
+        if (append !== undefined && description !== undefined) {
+          return failResult({
+            command: "epic.update",
+            human: "Use either --append or --description, not both.",
+            data: { code: "invalid_input", fields: ["append", "description"] },
+            error: {
+              code: "invalid_input",
+              message: "--append and --description are mutually exclusive",
+            },
+          });
+        }
+
+        const hasBulkTarget = updateAll || ids.length > 0;
+        if (hasBulkTarget) {
+          if (epicId.length > 0) {
+            return failResult({
+              command: "epic.update",
+              human: "Do not pass an epic id when using --all or --ids.",
+              data: { code: "invalid_input", id: epicId },
+              error: {
+                code: "invalid_input",
+                message: "Positional id is not allowed with --all/--ids",
+              },
+            });
+          }
+
+          if (title !== undefined || description !== undefined) {
+            return failResult({
+              command: "epic.update",
+              human: "Bulk update supports only --append and/or --status.",
+              data: { code: "invalid_input" },
+              error: {
+                code: "invalid_input",
+                message: "Bulk update supports only --append and --status",
+              },
+            });
+          }
+
+          if (append === undefined && status === undefined) {
+            return failResult({
+              command: "epic.update",
+              human: "Bulk update requires --append and/or --status.",
+              data: { code: "invalid_input" },
+              error: {
+                code: "invalid_input",
+                message: "Missing bulk update fields",
+              },
+            });
+          }
+
+          const targets = updateAll ? [...domain.listEpics()] : ids.map((id) => domain.getEpicOrThrow(id));
+          const epics = targets.map((target) =>
+            domain.updateEpic(target.id, {
+              status,
+              description: append === undefined ? undefined : appendLine(target.description, append),
+            }),
+          );
+
+          return okResult({
+            command: "epic.update",
+            human: `Updated ${epics.length} epic(s)`,
+            data: {
+              epics,
+              target: updateAll ? "all" : "ids",
+              ids: epics.map((epic) => epic.id),
+            },
+          });
+        }
+
+        if (epicId.length === 0) {
+          return failResult({
+            command: "epic.update",
+            human: "Provide an epic id, or use --all/--ids for bulk update.",
+            data: { code: "invalid_input" },
+            error: {
+              code: "invalid_input",
+              message: "Missing epic id",
+            },
+          });
+        }
+
+        const nextDescription =
+          append === undefined
+            ? description
+            : appendLine(domain.getEpicOrThrow(epicId).description, append);
+        const epic = domain.updateEpic(epicId, { title, description: nextDescription, status });
 
         return okResult({
           command: "epic.update",
