@@ -14,6 +14,7 @@ import { type CliContext, type CliResult, type OutputMode } from "./command-type
 const CLI_VERSION = "0.1.0";
 
 const SUPPORTED_ROOT_COMMANDS: readonly string[] = [
+  "help",
   "init",
   "quickstart",
   "epic",
@@ -130,6 +131,8 @@ export async function executeShell(parsed: ParsedInvocation, cwd: string = proce
   };
 
   switch (parsed.command) {
+    case "help":
+      return runHelp(context);
     case "init":
       return runInit(context);
     case "quickstart":
