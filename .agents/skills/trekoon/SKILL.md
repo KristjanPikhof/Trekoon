@@ -7,7 +7,57 @@ description: Use Trekoon to create issues/tasks, plan backlog and sprints, creat
 
 Trekoon is a local-first issue tracker for epics, tasks, and subtasks.
 
-Use long flags (`--status`, `--description`, etc.) and ALWAYS prefer `--toon` for machine-readable output.
+## CRITICAL: Always Use --toon Flag
+
+**Every trekoon command MUST include `--toon` for machine-readable output.**
+
+The `--toon` flag outputs structured YAML-like data that is easy to parse. Never run trekoon commands without it.
+
+### TOON Output Format
+
+All `--toon` output follows this structure:
+
+```yaml
+ok: true
+command: task.list
+data:
+  tasks[0]:
+    id: abc-123
+    epicId: epic-456
+    title: Implement feature X
+    status: todo
+    createdAt: 1700000000000
+    updatedAt: 1700000000000
+  tasks[1]:
+    id: def-789
+    epicId: epic-456
+    title: Write tests
+    status: in_progress
+    createdAt: 1700000001000
+    updatedAt: 1700000001000
+```
+
+On error:
+
+```yaml
+ok: false
+command: task.show
+data: {}
+error:
+  code: not_found
+  message: task not found: invalid-id
+```
+
+### Key Fields
+
+| Field | Meaning |
+|-------|---------|
+| `ok` | `true` if command succeeded, `false` on error |
+| `command` | The command that was executed (e.g., `task.list`, `epic.create`) |
+| `data` | The response payload (tasks, epics, dependencies, etc.) |
+| `error` | Present only on failure, contains `code` and `message` |
+
+Use long flags (`--status`, `--description`, etc.) and ALWAYS append `--toon` to every command.
 
 ## 1) Status Management
 
@@ -60,7 +110,7 @@ Before starting any task, always check its dependencies:
 trekoon dep list <task-id> --toon
 ```
 
-The response includes `dependencies` array. Each entry shows:
+The response `data.dependencies` array contains entries with:
 - `sourceId`: the task you're checking
 - `dependsOnId`: what must be done first
 - `dependsOnKind`: "task" or "subtask"
