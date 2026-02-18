@@ -3,6 +3,7 @@ import { runDep } from "../commands/dep";
 import { runEpic } from "../commands/epic";
 import { runInit } from "../commands/init";
 import { runQuickstart } from "../commands/quickstart";
+import { runSkills } from "../commands/skills";
 import { runSubtask } from "../commands/subtask";
 import { runSync } from "../commands/sync";
 import { runTask } from "../commands/task";
@@ -20,6 +21,7 @@ const SUPPORTED_ROOT_COMMANDS: readonly string[] = [
   "subtask",
   "dep",
   "sync",
+  "skills",
   "wipe",
 ];
 
@@ -144,6 +146,8 @@ export async function executeShell(parsed: ParsedInvocation, cwd: string = proce
       return runDep(context);
     case "sync":
       return runSync(context);
+    case "skills":
+      return runSkills(context);
     default:
       return failResult({
         command: "shell",
