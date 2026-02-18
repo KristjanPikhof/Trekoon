@@ -22,6 +22,7 @@ const ROOT_HELP = [
   "  subtask      Subtask lifecycle commands",
   "  dep          Dependency graph commands",
   "  sync         Cross-branch sync commands",
+  "  skills       Project-local skill install/link commands",
 ].join("\n");
 
 const COMMAND_HELP: Record<string, string> = {
@@ -35,6 +36,7 @@ const COMMAND_HELP: Record<string, string> = {
   subtask: "Usage: trekoon subtask <subcommand> [options] (list supports --view table|compact)",
   dep: "Usage: trekoon dep <subcommand> [options]",
   sync: "Usage: trekoon sync <subcommand> [options]",
+  skills: "Usage: trekoon skills install [--link --editor opencode|claude] [--to <path>]",
   help: "Usage: trekoon help [command] [--json|--toon]",
 };
 
