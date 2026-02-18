@@ -179,10 +179,32 @@ Path behavior:
 - Default opencode link path: `.opencode/skills/trekoon`
 - Default claude link path: `.claude/skills/trekoon`
 - `--to <path>` overrides the editor root for link creation only.
+- `--to` does **not** move or copy `SKILL.md` to that path.
 - Re-running install is idempotent: it refreshes `SKILL.md` and reuses/replaces
   the same symlink target.
 - If the link destination exists as a non-link path, install fails with an
   actionable conflict error.
+
+How `--to` works (step-by-step):
+
+1. Trekoon always installs/copies to:
+   - `<repo>/.agents/skills/trekoon/SKILL.md`
+2. If `--link` is present, Trekoon creates a `trekoon` symlink directory entry.
+3. `--to <path>` sets the symlink root directory.
+4. Final link path is:
+   - `<resolved-to-path>/trekoon -> <repo>/.agents/skills/trekoon`
+
+Example:
+
+```bash
+trekoon skills install --link --editor opencode --to ./.custom-editor/skills
+```
+
+This produces:
+
+- `<repo>/.agents/skills/trekoon/SKILL.md` (copied file)
+- `<repo>/.custom-editor/skills/trekoon` (symlink)
+- symlink target: `<repo>/.agents/skills/trekoon`
 
 Trekoon does not mutate global editor config directories.
 
