@@ -36,7 +36,8 @@ const COMMAND_HELP: Record<string, string> = {
   subtask: "Usage: trekoon subtask <subcommand> [options] (list supports --view table|compact)",
   dep: "Usage: trekoon dep <subcommand> [options]",
   sync: "Usage: trekoon sync <subcommand> [options]",
-  skills: "Usage: trekoon skills install [--link --editor opencode|claude] [--to <path>]",
+  skills:
+    "Usage: trekoon skills install [--link --editor opencode|claude] [--to <path>] (--to sets symlink root for --link only; install path always <cwd>/.agents/skills/trekoon/SKILL.md)",
   help: "Usage: trekoon help [command] [--json|--toon]",
 };
 
