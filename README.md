@@ -52,6 +52,7 @@ npm i -g trekoon
 - `trekoon subtask <create|list|update|delete>`
 - `trekoon dep <add|remove|list>`
 - `trekoon sync <status|pull|resolve>`
+- `trekoon skills install [--link --editor opencode|claude] [--to <path>]`
 - `trekoon wipe --yes`
 
 Global output modes:
@@ -157,7 +158,35 @@ trekoon sync pull --from main
 trekoon sync resolve <conflict-id> --use ours
 ```
 
-### 6) Pre-merge checklist
+### 6) Install project-local Trekoon skill for agents
+
+`trekoon skills install` always writes the bundled skill file into the current
+repository at:
+
+- `.agents/skills/trekoon/SKILL.md`
+
+You can also create a project-local editor link:
+
+```bash
+trekoon skills install
+trekoon skills install --link --editor opencode
+trekoon skills install --link --editor claude
+trekoon skills install --link --editor opencode --to ./.custom-editor/skills
+```
+
+Path behavior:
+
+- Default opencode link path: `.opencode/skills/trekoon`
+- Default claude link path: `.claude/skills/trekoon`
+- `--to <path>` overrides the editor root for link creation only.
+- Re-running install is idempotent: it refreshes `SKILL.md` and reuses/replaces
+  the same symlink target.
+- If the link destination exists as a non-link path, install fails with an
+  actionable conflict error.
+
+Trekoon does not mutate global editor config directories.
+
+### 7) Pre-merge checklist
 
 - [ ] `trekoon sync status` shows no unresolved conflicts
 - [ ] done tasks/subtasks are marked completed
