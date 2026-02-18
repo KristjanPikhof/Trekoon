@@ -7,6 +7,13 @@
   "bin": {
     "trekoon": "./bin/trekoon"
   },
+  "files": [
+    "bin",
+    "src",
+    ".agents/skills/trekoon/SKILL.md",
+    "README.md",
+    "LICENSE"
+  ],
   "scripts": {
     "run": "bun run ./src/index.ts",
     "build": "bun build ./src/index.ts --outdir ./dist --target bun",
