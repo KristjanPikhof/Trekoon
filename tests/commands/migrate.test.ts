@@ -73,7 +73,7 @@ describe("migrate command", (): void => {
     expect(summary.rolledBack).toBeGreaterThan(0);
 
     const databasePath: string = resolveStoragePaths(workspace).databaseFile;
-    const db = new Database(databasePath, { create: false });
+    const db = new Database(databasePath, { readonly: true });
 
     try {
       const epicsTable = db
