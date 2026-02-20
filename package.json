@@ -1,6 +1,6 @@
 {
   "name": "trekoon",
-  "version": "0.1.2",
+  "version": "0.1.3",
   "description": "AI-first local issue tracker CLI.",
   "license": "MIT",
   "type": "module",
@@ -17,7 +17,8 @@
   "scripts": {
     "run": "bun run ./src/index.ts",
     "build": "bun build ./src/index.ts --outdir ./dist --target bun",
-    "test": "bun test ./tests"
+    "test": "bun test ./tests",
+    "lint": "bunx tsc --noEmit"
   },
   "devDependencies": {
     "@types/bun": "^1.3.9",
