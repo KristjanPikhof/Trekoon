@@ -113,5 +113,10 @@ export const BASE_SCHEMA_STATEMENTS: readonly string[] = [
   `CREATE INDEX IF NOT EXISTS idx_tasks_epic_id ON tasks(epic_id);`,
   `CREATE INDEX IF NOT EXISTS idx_subtasks_task_id ON subtasks(task_id);`,
   `CREATE INDEX IF NOT EXISTS idx_events_entity ON events(entity_kind, entity_id);`,
+  `CREATE INDEX IF NOT EXISTS idx_events_created_at ON events(created_at);`,
+  `CREATE INDEX IF NOT EXISTS idx_events_git_branch ON events(git_branch);`,
+  `CREATE INDEX IF NOT EXISTS idx_events_created_at_id ON events(created_at, id);`,
+  `CREATE INDEX IF NOT EXISTS idx_dependencies_source ON dependencies(source_id);`,
+  `CREATE INDEX IF NOT EXISTS idx_dependencies_depends_on ON dependencies(depends_on_id);`,
   `CREATE INDEX IF NOT EXISTS idx_conflicts_resolution ON sync_conflicts(resolution);`,
 ];
