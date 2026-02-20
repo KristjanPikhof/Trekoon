@@ -41,11 +41,19 @@ interface EventPayload {
   readonly fields?: Record<string, unknown>;
 }
 
+function isObjectRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
 function parsePayload(rawPayload: string): EventPayload {
   try {
     const parsed: unknown = JSON.parse(rawPayload);
 
-    if (typeof parsed === "object" && parsed !== null) {
+    if (isObjectRecord(parsed)) {
+      if ("fields" in parsed && !isObjectRecord(parsed.fields)) {
+        return {};
+      }
+
       return parsed as EventPayload;
     }
   } catch {
