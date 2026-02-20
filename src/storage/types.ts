@@ -6,6 +6,7 @@ export interface MutableRow {
 
 export interface MigrationRecord {
   readonly id: number;
+  readonly version: number;
   readonly name: string;
   readonly applied_at: number;
 }
