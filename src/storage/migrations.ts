@@ -16,6 +16,22 @@ const BASE_ROLLBACK_STATEMENTS: readonly string[] = [
   "DROP TABLE IF EXISTS epics;",
 ];
 
+const INDEX_MIGRATION_UP_STATEMENTS: readonly string[] = [
+  "CREATE INDEX IF NOT EXISTS idx_events_created_at ON events(created_at);",
+  "CREATE INDEX IF NOT EXISTS idx_events_git_branch ON events(git_branch);",
+  "CREATE INDEX IF NOT EXISTS idx_events_created_at_id ON events(created_at, id);",
+  "CREATE INDEX IF NOT EXISTS idx_dependencies_source ON dependencies(source_id);",
+  "CREATE INDEX IF NOT EXISTS idx_dependencies_depends_on ON dependencies(depends_on_id);",
+];
+
+const INDEX_MIGRATION_DOWN_STATEMENTS: readonly string[] = [
+  "DROP INDEX IF EXISTS idx_events_created_at;",
+  "DROP INDEX IF EXISTS idx_events_git_branch;",
+  "DROP INDEX IF EXISTS idx_events_created_at_id;",
+  "DROP INDEX IF EXISTS idx_dependencies_source;",
+  "DROP INDEX IF EXISTS idx_dependencies_depends_on;",
+];
+
 interface Migration {
   readonly version: number;
   readonly name: string;
@@ -60,6 +76,20 @@ const MIGRATIONS: readonly Migration[] = [
     },
     down(db: Database): void {
       for (const statement of BASE_ROLLBACK_STATEMENTS) {
+        db.exec(statement);
+      }
+    },
+  },
+  {
+    version: 2,
+    name: "0002_sync_dependency_indexes",
+    up(db: Database): void {
+      for (const statement of INDEX_MIGRATION_UP_STATEMENTS) {
+        db.exec(statement);
+      }
+    },
+    down(db: Database): void {
+      for (const statement of INDEX_MIGRATION_DOWN_STATEMENTS) {
         db.exec(statement);
       }
     },
