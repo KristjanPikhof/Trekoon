@@ -32,6 +32,29 @@ const INDEX_MIGRATION_DOWN_STATEMENTS: readonly string[] = [
   "DROP INDEX IF EXISTS idx_dependencies_depends_on;",
 ];
 
+const EVENT_ARCHIVE_MIGRATION_UP_STATEMENTS: readonly string[] = [
+  `
+  CREATE TABLE IF NOT EXISTS event_archive (
+    id TEXT PRIMARY KEY,
+    entity_kind TEXT NOT NULL,
+    entity_id TEXT NOT NULL,
+    operation TEXT NOT NULL,
+    payload TEXT NOT NULL,
+    git_branch TEXT,
+    git_head TEXT,
+    created_at INTEGER NOT NULL,
+    updated_at INTEGER NOT NULL,
+    version INTEGER NOT NULL DEFAULT 1
+  );
+  `,
+  "CREATE INDEX IF NOT EXISTS idx_event_archive_created_at ON event_archive(created_at);",
+];
+
+const EVENT_ARCHIVE_MIGRATION_DOWN_STATEMENTS: readonly string[] = [
+  "DROP INDEX IF EXISTS idx_event_archive_created_at;",
+  "DROP TABLE IF EXISTS event_archive;",
+];
+
 interface Migration {
   readonly version: number;
   readonly name: string;
@@ -90,6 +113,20 @@ const MIGRATIONS: readonly Migration[] = [
     },
     down(db: Database): void {
       for (const statement of INDEX_MIGRATION_DOWN_STATEMENTS) {
+        db.exec(statement);
+      }
+    },
+  },
+  {
+    version: 3,
+    name: "0003_event_archive_retention",
+    up(db: Database): void {
+      for (const statement of EVENT_ARCHIVE_MIGRATION_UP_STATEMENTS) {
+        db.exec(statement);
+      }
+    },
+    down(db: Database): void {
+      for (const statement of EVENT_ARCHIVE_MIGRATION_DOWN_STATEMENTS) {
         db.exec(statement);
       }
     },
