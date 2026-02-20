@@ -21,6 +21,7 @@ const ROOT_HELP = [
   "  task         Task lifecycle commands",
   "  subtask      Subtask lifecycle commands",
   "  dep          Dependency graph commands",
+  "  migrate      Migration status and rollback commands",
   "  sync         Cross-branch sync commands",
   "  skills       Project-local skill install/link commands",
 ].join("\n");
@@ -35,6 +36,7 @@ const COMMAND_HELP: Record<string, string> = {
     "Usage: trekoon task <subcommand> [options] (list defaults: open statuses + limit 10; list flags: --status <csv> | --limit <n> | --all | --view table|compact; show: compact=task summary, tree=hierarchy, detail=descriptions, and --all defaults to detail in machine modes; update bulk flags: --all | --ids <csv> with --append <text> and/or --status <status>)",
   subtask: "Usage: trekoon subtask <subcommand> [options] (list supports --view table|compact)",
   dep: "Usage: trekoon dep <subcommand> [options]",
+  migrate: "Usage: trekoon migrate <status|rollback> [--to-version <n>]",
   sync: "Usage: trekoon sync <subcommand> [options]",
   skills:
     "Usage: trekoon skills install [--link --editor opencode|claude] [--to <path>] (--to sets symlink root for --link only; install path always <cwd>/.agents/skills/trekoon/SKILL.md)",
