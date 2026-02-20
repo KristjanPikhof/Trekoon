@@ -74,4 +74,16 @@ describe("cli shell dispatch", (): void => {
     expect(typeof data.currentVersion).toBe("number");
     expect(typeof data.latestVersion).toBe("number");
   });
+
+  test("dispatches events prune command", async (): Promise<void> => {
+    const workspace = createWorkspace();
+    const parsed = parseInvocation(["events", "prune", "--dry-run"], { stdoutIsTTY: false });
+
+    const result = await executeShell(parsed, workspace);
+
+    expect(result.ok).toBeTrue();
+    expect(result.command).toBe("events.prune");
+    const data = result.data as { dryRun: boolean };
+    expect(data.dryRun).toBeTrue();
+  });
 });
