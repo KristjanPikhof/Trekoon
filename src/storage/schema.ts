@@ -74,6 +74,20 @@ export const BASE_SCHEMA_STATEMENTS: readonly string[] = [
   );
   `,
   `
+  CREATE TABLE IF NOT EXISTS event_archive (
+    id TEXT PRIMARY KEY,
+    entity_kind TEXT NOT NULL,
+    entity_id TEXT NOT NULL,
+    operation TEXT NOT NULL,
+    payload TEXT NOT NULL,
+    git_branch TEXT,
+    git_head TEXT,
+    created_at INTEGER NOT NULL,
+    updated_at INTEGER NOT NULL,
+    version INTEGER NOT NULL DEFAULT 1
+  );
+  `,
+  `
   CREATE TABLE IF NOT EXISTS git_context (
     id TEXT PRIMARY KEY,
     worktree_path TEXT NOT NULL,
@@ -116,6 +130,7 @@ export const BASE_SCHEMA_STATEMENTS: readonly string[] = [
   `CREATE INDEX IF NOT EXISTS idx_events_created_at ON events(created_at);`,
   `CREATE INDEX IF NOT EXISTS idx_events_git_branch ON events(git_branch);`,
   `CREATE INDEX IF NOT EXISTS idx_events_created_at_id ON events(created_at, id);`,
+  `CREATE INDEX IF NOT EXISTS idx_event_archive_created_at ON event_archive(created_at);`,
   `CREATE INDEX IF NOT EXISTS idx_dependencies_source ON dependencies(source_id);`,
   `CREATE INDEX IF NOT EXISTS idx_dependencies_depends_on ON dependencies(depends_on_id);`,
   `CREATE INDEX IF NOT EXISTS idx_conflicts_resolution ON sync_conflicts(resolution);`,
