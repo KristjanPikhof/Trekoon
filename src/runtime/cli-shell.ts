@@ -1,6 +1,7 @@
 import { runHelp } from "../commands/help";
 import { runDep } from "../commands/dep";
 import { runEpic } from "../commands/epic";
+import { runEvents } from "../commands/events";
 import { runInit } from "../commands/init";
 import { runMigrate } from "../commands/migrate";
 import { runQuickstart } from "../commands/quickstart";
@@ -22,6 +23,7 @@ const SUPPORTED_ROOT_COMMANDS: readonly string[] = [
   "task",
   "subtask",
   "dep",
+  "events",
   "migrate",
   "sync",
   "skills",
@@ -149,6 +151,8 @@ export async function executeShell(parsed: ParsedInvocation, cwd: string = proce
       return runSubtask(context);
     case "dep":
       return runDep(context);
+    case "events":
+      return runEvents(context);
     case "migrate":
       return runMigrate(context);
     case "sync":
