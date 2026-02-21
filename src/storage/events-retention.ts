@@ -81,7 +81,7 @@ export function pruneEvents(db: Database, options: EventPruneOptions = {}): Even
       const archived = db
         .query(
           `
-          INSERT OR IGNORE INTO event_archive (
+          INSERT INTO event_archive (
             id,
             entity_kind,
             entity_id,
@@ -105,7 +105,17 @@ export function pruneEvents(db: Database, options: EventPruneOptions = {}): Even
             updated_at,
             version
           FROM events
-          WHERE created_at < ?;
+          WHERE created_at < ?
+          ON CONFLICT(id) DO UPDATE SET
+            entity_kind = excluded.entity_kind,
+            entity_id = excluded.entity_id,
+            operation = excluded.operation,
+            payload = excluded.payload,
+            git_branch = excluded.git_branch,
+            git_head = excluded.git_head,
+            created_at = excluded.created_at,
+            updated_at = excluded.updated_at,
+            version = excluded.version;
           `,
         )
         .run(cutoffTimestamp);
