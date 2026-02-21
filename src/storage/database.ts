@@ -11,7 +11,14 @@ export interface TrekoonDatabase {
   close(): void;
 }
 
-export function openTrekoonDatabase(workingDirectory: string = process.cwd()): TrekoonDatabase {
+export interface OpenTrekoonDatabaseOptions {
+  readonly autoMigrate?: boolean;
+}
+
+export function openTrekoonDatabase(
+  workingDirectory: string = process.cwd(),
+  options: OpenTrekoonDatabaseOptions = {},
+): TrekoonDatabase {
   const paths: StoragePaths = resolveStoragePaths(workingDirectory);
 
   mkdirSync(paths.storageDir, { recursive: true });
@@ -22,7 +29,9 @@ export function openTrekoonDatabase(workingDirectory: string = process.cwd()): T
   db.exec("PRAGMA journal_mode = WAL;");
   db.exec("PRAGMA foreign_keys = ON;");
 
-  migrateDatabase(db);
+  if (options.autoMigrate ?? true) {
+    migrateDatabase(db);
+  }
 
   return {
     db,
