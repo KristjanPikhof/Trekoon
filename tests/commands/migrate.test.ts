@@ -136,4 +136,79 @@ describe("migrate command", (): void => {
     expect(result.ok).toBeFalse();
     expect(result.error?.code).toBe("invalid_input");
   });
+
+  test("fails status when legacy migration row cannot be inferred", async (): Promise<void> => {
+    const workspace: string = createWorkspace();
+    const storage = openTrekoonDatabase(workspace, { autoMigrate: false });
+    storage.close();
+
+    const databasePath: string = resolveStoragePaths(workspace).databaseFile;
+    const db = new Database(databasePath);
+
+    try {
+      db.exec(`
+        CREATE TABLE schema_migrations (
+          id INTEGER PRIMARY KEY AUTOINCREMENT,
+          name TEXT NOT NULL UNIQUE,
+          applied_at INTEGER NOT NULL
+        );
+      `);
+      db.query("INSERT INTO schema_migrations (name, applied_at) VALUES (?, ?);").run(
+        "9999_totally_unknown_legacy",
+        Date.now(),
+      );
+    } finally {
+      db.close(false);
+    }
+
+    const status = await runMigrate({
+      args: ["status"],
+      cwd: workspace,
+      mode: "toon",
+    });
+
+    expect(status.ok).toBeFalse();
+    expect(status.error?.code).toBe("migrate_failed");
+    expect(`${status.error?.message ?? ""}\n${status.human ?? ""}`).toMatch(/infer|manual/i);
+  });
+
+  test("maps known legacy base migration names during status", async (): Promise<void> => {
+    const workspace: string = createWorkspace();
+    const storage = openTrekoonDatabase(workspace, { autoMigrate: false });
+    storage.close();
+
+    const databasePath: string = resolveStoragePaths(workspace).databaseFile;
+    const db = new Database(databasePath);
+
+    try {
+      db.exec(`
+        CREATE TABLE schema_migrations (
+          id INTEGER PRIMARY KEY AUTOINCREMENT,
+          name TEXT NOT NULL UNIQUE,
+          applied_at INTEGER NOT NULL
+        );
+      `);
+      db.query("INSERT INTO schema_migrations (name, applied_at) VALUES (?, ?);").run(
+        "0001_base_schema_v999",
+        Date.now(),
+      );
+    } finally {
+      db.close(false);
+    }
+
+    const status = await runMigrate({
+      args: ["status"],
+      cwd: workspace,
+      mode: "toon",
+    });
+
+    expect(status.ok).toBeTrue();
+    expect(status.command).toBe("migrate.status");
+
+    const data = status.data as {
+      currentVersion: number;
+    };
+
+    expect(data.currentVersion).toBeGreaterThanOrEqual(1);
+  });
 });
