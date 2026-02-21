@@ -54,7 +54,7 @@ export async function runMigrate(context: CliContext): Promise<CliResult> {
     });
   }
 
-  const storage = openTrekoonDatabase(context.cwd);
+  const storage = openTrekoonDatabase(context.cwd, { autoMigrate: false });
 
   try {
     if (subcommand === "status") {
