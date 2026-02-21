@@ -7,6 +7,7 @@ import { afterEach, describe, expect, test } from "bun:test";
 
 import { runMigrate } from "../../src/commands/migrate";
 import { resolveStoragePaths } from "../../src/storage/path";
+import { openTrekoonDatabase } from "../../src/storage/database";
 
 const tempDirs: string[] = [];
 
@@ -28,6 +29,8 @@ afterEach((): void => {
 describe("migrate command", (): void => {
   test("returns migration status for initialized workspace", async (): Promise<void> => {
     const workspace: string = createWorkspace();
+    const storage = openTrekoonDatabase(workspace);
+    storage.close();
 
     const result = await runMigrate({
       args: ["status"],
@@ -53,6 +56,8 @@ describe("migrate command", (): void => {
 
   test("rolls back to version 0 with explicit flag", async (): Promise<void> => {
     const workspace: string = createWorkspace();
+    const storage = openTrekoonDatabase(workspace);
+    storage.close();
 
     const rollback = await runMigrate({
       args: ["rollback", "--to-version", "0"],
@@ -83,6 +88,40 @@ describe("migrate command", (): void => {
     } finally {
       db.close(false);
     }
+  });
+
+  test("status does not auto-upgrade partially migrated database", async (): Promise<void> => {
+    const workspace: string = createWorkspace();
+    const storage = openTrekoonDatabase(workspace);
+    storage.close();
+
+    const rollback = await runMigrate({
+      args: ["rollback", "--to-version", "1"],
+      cwd: workspace,
+      mode: "toon",
+    });
+
+    expect(rollback.ok).toBeTrue();
+
+    const status = await runMigrate({
+      args: ["status"],
+      cwd: workspace,
+      mode: "toon",
+    });
+
+    expect(status.ok).toBeTrue();
+    expect(status.command).toBe("migrate.status");
+
+    const data = status.data as {
+      currentVersion: number;
+      latestVersion: number;
+      pending: unknown[];
+      applied: unknown[];
+    };
+
+    expect(data.currentVersion).toBe(1);
+    expect(data.latestVersion).toBeGreaterThan(1);
+    expect(data.pending.length).toBeGreaterThan(0);
   });
 
   test("returns invalid input for non-numeric target version", async (): Promise<void> => {
