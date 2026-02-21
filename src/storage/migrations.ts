@@ -4,6 +4,9 @@ import { BASE_SCHEMA_STATEMENTS, SCHEMA_VERSION } from "./schema";
 
 const BASE_MIGRATION_VERSION = 1;
 const BASE_MIGRATION_NAME = `0001_base_schema_v${SCHEMA_VERSION}`;
+const LEGACY_BASE_MIGRATION_NAME_PATTERNS: readonly string[] = [
+  "0001_base_schema_v*",
+];
 
 const BASE_ROLLBACK_STATEMENTS: readonly string[] = [
   "DROP TABLE IF EXISTS sync_conflicts;",
@@ -169,11 +172,32 @@ function ensureMigrationVersionColumn(db: Database): void {
   }
 
   db.exec("ALTER TABLE schema_migrations ADD COLUMN version INTEGER;");
-  db.query("UPDATE schema_migrations SET version = ? WHERE version IS NULL AND name = ?;").run(
-    BASE_MIGRATION_VERSION,
-    BASE_MIGRATION_NAME,
-  );
+  db.query("UPDATE schema_migrations SET version = ? WHERE version IS NULL AND name = ?;").run(BASE_MIGRATION_VERSION, BASE_MIGRATION_NAME);
+
+  for (const legacyPattern of LEGACY_BASE_MIGRATION_NAME_PATTERNS) {
+    db.query("UPDATE schema_migrations SET version = ? WHERE version IS NULL AND name GLOB ?;").run(
+      BASE_MIGRATION_VERSION,
+      legacyPattern,
+    );
+  }
+
   db.exec("CREATE UNIQUE INDEX IF NOT EXISTS idx_schema_migrations_version ON schema_migrations(version);");
+
+  const unresolvedRow = db
+    .query(
+      `
+      SELECT COUNT(*) AS count
+      FROM schema_migrations
+      WHERE version IS NULL;
+      `,
+    )
+    .get() as { count: number } | null;
+
+  if ((unresolvedRow?.count ?? 0) > 0) {
+    throw new Error(
+      "Unable to infer one or more schema_migrations.version values during legacy upgrade. Repair schema_migrations entries manually so every row has a valid version, then rerun migrations.",
+    );
+  }
 }
 
 function validateMigrationPlan(): void {
