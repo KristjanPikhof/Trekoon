@@ -13,6 +13,21 @@ function formatSubtask(subtask: SubtaskRecord): string {
 
 const VIEW_MODES = ["table", "compact"] as const;
 
+function parseIdsOption(rawIds: string | undefined): string[] {
+  if (rawIds === undefined) {
+    return [];
+  }
+
+  return rawIds
+    .split(",")
+    .map((value) => value.trim())
+    .filter((value) => value.length > 0);
+}
+
+function appendLine(existing: string, line: string): string {
+  return existing.length > 0 ? `${existing}\n${line}` : line;
+}
+
 function formatSubtaskListTable(subtasks: readonly SubtaskRecord[]): string {
   return formatHumanTable(
     ["ID", "TASK", "TITLE", "STATUS"],
