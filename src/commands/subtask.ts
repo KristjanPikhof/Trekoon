@@ -1,4 +1,4 @@
-import { parseArgs, readEnumOption, readMissingOptionValue, readOption } from "./arg-parser";
+import { hasFlag, parseArgs, readEnumOption, readMissingOptionValue, readOption } from "./arg-parser";
 
 import { DomainError, type SubtaskRecord } from "../domain/types";
 import { TrackerDomain } from "../domain/tracker-domain";
