@@ -11,6 +11,7 @@
     "forceConsistentCasingInFileNames": true,
     "allowSyntheticDefaultImports": true,
     "types": ["bun"],
+    "skipLibCheck": true,
     "outDir": "dist",
     "rootDir": "."
   },
