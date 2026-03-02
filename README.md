@@ -103,6 +103,8 @@ Examples:
 ```bash
 trekoon task update --all --status in_progress
 trekoon task update --ids <task-1>,<task-2> --append "\nFollow-up note"
+trekoon subtask update --all --status done
+trekoon subtask update --ids <subtask-1>,<subtask-2> --append "\nFollow-up note"
 trekoon epic update --ids <epic-1>,<epic-2> --status done
 ```
 
