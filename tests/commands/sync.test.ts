@@ -196,4 +196,47 @@ describe("sync command", (): void => {
     expect(badResolution.ok).toBe(false);
     expect(badResolution.error?.code).toBe("invalid_args");
   });
+
+  test("ignores malformed payload fields during pull", async (): Promise<void> => {
+    const workspace: string = createWorkspace();
+    initializeRepository(workspace);
+
+    const epicId: string = randomUUID();
+    const eventId: string = randomUUID();
+    const now: number = Date.now();
+
+    {
+      const storage = openTrekoonDatabase(workspace);
+      try {
+        storage.db
+          .query(
+            "INSERT INTO events (id, entity_kind, entity_id, operation, payload, git_branch, git_head, created_at, updated_at, version) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 1);",
+          )
+          .run(eventId, "epic", epicId, "upsert", '{"fields":"invalid"}', "main", null, now, now);
+      } finally {
+        storage.close();
+      }
+    }
+
+    commitDatabase(workspace, "seed malformed payload event");
+    runGit(workspace, ["checkout", "-b", "feature/malformed-payload"]);
+
+    const pullResult = await runSync({
+      args: ["pull", "--from", "main"],
+      cwd: workspace,
+      mode: "toon",
+    });
+
+    expect(pullResult.ok).toBe(true);
+    expect((pullResult.data as { scannedEvents: number }).scannedEvents).toBeGreaterThanOrEqual(1);
+    expect((pullResult.data as { appliedEvents: number }).appliedEvents).toBe(0);
+
+    const storage = openTrekoonDatabase(workspace);
+    try {
+      const epic = storage.db.query("SELECT id FROM epics WHERE id = ?;").get(epicId) as { id: string } | null;
+      expect(epic).toBeNull();
+    } finally {
+      storage.close();
+    }
+  });
 });

@@ -522,44 +522,25 @@ export class TrackerDomain {
   }
 
   private wouldCreateCycle(sourceId: string, dependsOnId: string): boolean {
-    const adjacency = new Map<string, string[]>();
-    const rows = this.#db.query("SELECT source_id, depends_on_id FROM dependencies;").all() as Array<{
-      source_id: string;
-      depends_on_id: string;
-    }>;
+    const row = this.#db
+      .query(
+        `
+        WITH RECURSIVE reachable(id) AS (
+          SELECT ?
+          UNION
+          SELECT d.depends_on_id
+          FROM dependencies d
+          INNER JOIN reachable r ON d.source_id = r.id
+        )
+        SELECT 1 AS has_cycle
+        FROM reachable
+        WHERE id = ?
+        LIMIT 1;
+        `,
+      )
+      .get(dependsOnId, sourceId) as { has_cycle: number } | null;
 
-    for (const row of rows) {
-      const existing = adjacency.get(row.source_id) ?? [];
-      existing.push(row.depends_on_id);
-      adjacency.set(row.source_id, existing);
-    }
-
-    const newEdges = adjacency.get(sourceId) ?? [];
-    newEdges.push(dependsOnId);
-    adjacency.set(sourceId, newEdges);
-
-    const visited = new Set<string>();
-    const queue: string[] = [dependsOnId];
-
-    while (queue.length > 0) {
-      const next = queue.shift();
-      if (!next) {
-        continue;
-      }
-      if (next === sourceId) {
-        return true;
-      }
-      if (visited.has(next)) {
-        continue;
-      }
-      visited.add(next);
-      const outgoing = adjacency.get(next) ?? [];
-      for (const neighbor of outgoing) {
-        queue.push(neighbor);
-      }
-    }
-
-    return false;
+    return row !== null;
   }
 }
 

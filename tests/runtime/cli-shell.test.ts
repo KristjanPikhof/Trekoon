@@ -61,4 +61,29 @@ describe("cli shell dispatch", (): void => {
     expect(result.error?.code).toBe("invalid_args");
     expect(result.command).toBe("skills");
   });
+
+  test("dispatches migrate status command", async (): Promise<void> => {
+    const workspace = createWorkspace();
+    const parsed = parseInvocation(["migrate", "status"], { stdoutIsTTY: false });
+
+    const result = await executeShell(parsed, workspace);
+
+    expect(result.ok).toBeTrue();
+    expect(result.command).toBe("migrate.status");
+    const data = result.data as { currentVersion: number; latestVersion: number };
+    expect(typeof data.currentVersion).toBe("number");
+    expect(typeof data.latestVersion).toBe("number");
+  });
+
+  test("dispatches events prune command", async (): Promise<void> => {
+    const workspace = createWorkspace();
+    const parsed = parseInvocation(["events", "prune", "--dry-run"], { stdoutIsTTY: false });
+
+    const result = await executeShell(parsed, workspace);
+
+    expect(result.ok).toBeTrue();
+    expect(result.command).toBe("events.prune");
+    const data = result.data as { dryRun: boolean };
+    expect(data.dryRun).toBeTrue();
+  });
 });

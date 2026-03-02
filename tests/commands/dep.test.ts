@@ -98,4 +98,19 @@ describe("dep command", (): void => {
     expect(cycle.ok).toBeFalse();
     expect(cycle.error?.code).toBe("invalid_dependency");
   });
+
+  test("detects transitive cycles across task and subtask", async (): Promise<void> => {
+    const cwd = createWorkspace();
+    const nodes = await createTaskGraph(cwd);
+
+    const first = await runDep({ cwd, mode: "human", args: ["add", nodes.taskA, nodes.taskB] });
+    expect(first.ok).toBeTrue();
+
+    const second = await runDep({ cwd, mode: "human", args: ["add", nodes.taskB, nodes.subtask] });
+    expect(second.ok).toBeTrue();
+
+    const cycle = await runDep({ cwd, mode: "human", args: ["add", nodes.subtask, nodes.taskA] });
+    expect(cycle.ok).toBeFalse();
+    expect(cycle.error?.code).toBe("invalid_dependency");
+  });
 });

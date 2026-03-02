@@ -89,7 +89,7 @@ List defaults and filters (`epic list`, `task list`):
 - All rows and statuses: `--all`
 - `--all` is mutually exclusive with `--status` and `--limit`
 
-Bulk updates (`epic update`, `task update`):
+Bulk updates (`epic update`, `task update`, `subtask update`):
 
 - Target all rows: `--all`
 - Target specific rows: `--ids <id1,id2,...>`
@@ -103,6 +103,8 @@ Examples:
 ```bash
 trekoon task update --all --status in_progress
 trekoon task update --ids <task-1>,<task-2> --append "\nFollow-up note"
+trekoon subtask update --all --status done
+trekoon subtask update --ids <subtask-1>,<subtask-2> --append "\nFollow-up note"
 trekoon epic update --ids <epic-1>,<epic-2> --status done
 ```
 

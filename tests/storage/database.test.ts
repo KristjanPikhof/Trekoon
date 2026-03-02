@@ -28,6 +28,14 @@ function tableColumns(db: ReturnType<typeof openTrekoonDatabase>["db"], tableNam
   return rows.map((row) => row.name);
 }
 
+function indexNames(db: ReturnType<typeof openTrekoonDatabase>["db"]): string[] {
+  const rows = db
+    .query("SELECT name FROM sqlite_master WHERE type='index' AND name NOT LIKE 'sqlite_%';")
+    .all() as Array<{ name: string }>;
+
+  return rows.map((row) => row.name);
+}
+
 describe("storage lifecycle", (): void => {
   test("creates .trekoon database in current workspace", (): void => {
     const workspace: string = createWorkspace();
@@ -84,6 +92,23 @@ describe("storage lifecycle", (): void => {
         expect(columns).toContain("updated_at");
         expect(columns).toContain("version");
       }
+    } finally {
+      storage.close();
+    }
+  });
+
+  test("creates required indexes for sync and dependencies", (): void => {
+    const workspace: string = createWorkspace();
+    const storage = openTrekoonDatabase(workspace);
+
+    try {
+      const indexes: string[] = indexNames(storage.db);
+
+      expect(indexes).toContain("idx_events_created_at");
+      expect(indexes).toContain("idx_events_git_branch");
+      expect(indexes).toContain("idx_events_created_at_id");
+      expect(indexes).toContain("idx_dependencies_source");
+      expect(indexes).toContain("idx_dependencies_depends_on");
     } finally {
       storage.close();
     }

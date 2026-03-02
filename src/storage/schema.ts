@@ -5,6 +5,7 @@ export const BASE_SCHEMA_STATEMENTS: readonly string[] = [
   `
   CREATE TABLE IF NOT EXISTS schema_migrations (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
+    version INTEGER NOT NULL UNIQUE,
     name TEXT NOT NULL UNIQUE,
     applied_at INTEGER NOT NULL
   );
