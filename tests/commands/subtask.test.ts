@@ -104,7 +104,8 @@ describe("subtask command", (): void => {
     expect(listedCompact.human).toContain("task=");
   });
 
-  test("errors when value-required subtask options are missing values", async (): Promise<void> => {    const cwd = createWorkspace();
+  test("errors when value-required subtask options are missing values", async (): Promise<void> => {
+    const cwd = createWorkspace();
     const epicCreated = await runEpic({
       cwd,
       mode: "human",
@@ -127,5 +128,73 @@ describe("subtask command", (): void => {
     expect(missingView.ok).toBeFalse();
     expect(missingView.error?.code).toBe("invalid_input");
     expect((missingView.data as { option: string }).option).toBe("view");
+
+    const missingIds = await runSubtask({ cwd, mode: "human", args: ["update", "--ids", "--append", "note"] });
+    expect(missingIds.ok).toBeFalse();
+    expect(missingIds.error?.code).toBe("invalid_input");
+    expect((missingIds.data as { option: string }).option).toBe("ids");
+  });
+
+  test("bulk update supports --ids with --append and --status", async (): Promise<void> => {
+    const cwd = createWorkspace();
+    const epicCreated = await runEpic({
+      cwd,
+      mode: "human",
+      args: ["create", "--title", "Roadmap", "--description", "desc"],
+    });
+    const epicId = (epicCreated.data as { epic: { id: string } }).epic.id;
+    const taskCreated = await runTask({
+      cwd,
+      mode: "human",
+      args: ["create", "--epic", epicId, "--title", "Implement", "--description", "task desc"],
+    });
+    const taskId = (taskCreated.data as { task: { id: string } }).task.id;
+
+    const first = await runSubtask({ cwd, mode: "human", args: ["create", "--task", taskId, "--title", "A subtask"] });
+    const second = await runSubtask({ cwd, mode: "human", args: ["create", "--task", taskId, "--title", "B subtask"] });
+    const firstId = (first.data as { subtask: { id: string } }).subtask.id;
+    const secondId = (second.data as { subtask: { id: string } }).subtask.id;
+
+    const updated = await runSubtask({
+      cwd,
+      mode: "human",
+      args: ["update", "--ids", `${firstId},${secondId}`, "--append", "follow policy", "--status", "blocked"],
+    });
+
+    expect(updated.ok).toBeTrue();
+    expect((updated.data as { ids: string[] }).ids).toEqual([firstId, secondId]);
+    const subtasks = (updated.data as { subtasks: Array<{ description: string; status: string }> }).subtasks;
+    expect(subtasks[0]?.description).toContain("follow policy");
+    expect(subtasks[1]?.description).toContain("follow policy");
+    expect(subtasks[0]?.status).toBe("blocked");
+    expect(subtasks[1]?.status).toBe("blocked");
+  });
+
+  test("bulk update rejects --all with --ids", async (): Promise<void> => {
+    const cwd = createWorkspace();
+    const epicCreated = await runEpic({
+      cwd,
+      mode: "human",
+      args: ["create", "--title", "Roadmap", "--description", "desc"],
+    });
+    const epicId = (epicCreated.data as { epic: { id: string } }).epic.id;
+    const taskCreated = await runTask({
+      cwd,
+      mode: "human",
+      args: ["create", "--epic", epicId, "--title", "Implement", "--description", "task desc"],
+    });
+    const taskId = (taskCreated.data as { task: { id: string } }).task.id;
+
+    const created = await runSubtask({ cwd, mode: "human", args: ["create", "--task", taskId, "--title", "A subtask"] });
+    const subtaskId = (created.data as { subtask: { id: string } }).subtask.id;
+
+    const result = await runSubtask({
+      cwd,
+      mode: "human",
+      args: ["update", "--all", "--ids", subtaskId, "--append", "follow policy"],
+    });
+
+    expect(result.ok).toBeFalse();
+    expect(result.error?.code).toBe("invalid_input");
   });
 });
