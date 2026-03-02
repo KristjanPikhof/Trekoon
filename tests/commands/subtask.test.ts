@@ -104,8 +104,7 @@ describe("subtask command", (): void => {
     expect(listedCompact.human).toContain("task=");
   });
 
-  test("errors when value-required subtask options are missing values", async (): Promise<void> => {
-    const cwd = createWorkspace();
+  test("errors when value-required subtask options are missing values", async (): Promise<void> => {    const cwd = createWorkspace();
     const epicCreated = await runEpic({
       cwd,
       mode: "human",
