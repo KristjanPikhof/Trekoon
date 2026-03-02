@@ -89,7 +89,7 @@ List defaults and filters (`epic list`, `task list`):
 - All rows and statuses: `--all`
 - `--all` is mutually exclusive with `--status` and `--limit`
 
-Bulk updates (`epic update`, `task update`):
+Bulk updates (`epic update`, `task update`, `subtask update`):
 
 - Target all rows: `--all`
 - Target specific rows: `--ids <id1,id2,...>`
