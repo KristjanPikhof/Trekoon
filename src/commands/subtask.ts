@@ -153,6 +153,8 @@ export async function runSubtask(context: CliContext): Promise<CliResult> {
       }
       case "update": {
         const missingUpdateOption =
+          readMissingOptionValue(parsed.missingOptionValues, "ids") ??
+          readMissingOptionValue(parsed.missingOptionValues, "append") ??
           readMissingOptionValue(parsed.missingOptionValues, "description", "d") ??
           readMissingOptionValue(parsed.missingOptionValues, "status", "s");
         if (missingUpdateOption !== undefined) {
@@ -160,10 +162,112 @@ export async function runSubtask(context: CliContext): Promise<CliResult> {
         }
 
         const subtaskId: string = parsed.positional[1] ?? "";
+        const updateAll: boolean = hasFlag(parsed.flags, "all");
+        const rawIds: string | undefined = readOption(parsed.options, "ids");
+        const ids = parseIdsOption(rawIds);
         const title: string | undefined = readOption(parsed.options, "title");
         const description: string | undefined = readOption(parsed.options, "description", "d");
+        const append: string | undefined = readOption(parsed.options, "append");
         const status: string | undefined = readOption(parsed.options, "status", "s");
-        const subtask = domain.updateSubtask(subtaskId, { title, description, status });
+
+        if (updateAll && ids.length > 0) {
+          return failResult({
+            command: "subtask.update",
+            human: "Use either --all or --ids, not both.",
+            data: { code: "invalid_input", target: ["all", "ids"] },
+            error: {
+              code: "invalid_input",
+              message: "--all and --ids are mutually exclusive",
+            },
+          });
+        }
+
+        if (append !== undefined && description !== undefined) {
+          return failResult({
+            command: "subtask.update",
+            human: "Use either --append or --description, not both.",
+            data: { code: "invalid_input", fields: ["append", "description"] },
+            error: {
+              code: "invalid_input",
+              message: "--append and --description are mutually exclusive",
+            },
+          });
+        }
+
+        const hasBulkTarget = updateAll || ids.length > 0;
+        if (hasBulkTarget) {
+          if (subtaskId.length > 0) {
+            return failResult({
+              command: "subtask.update",
+              human: "Do not pass a subtask id when using --all or --ids.",
+              data: { code: "invalid_input", id: subtaskId },
+              error: {
+                code: "invalid_input",
+                message: "Positional id is not allowed with --all/--ids",
+              },
+            });
+          }
+
+          if (title !== undefined || description !== undefined) {
+            return failResult({
+              command: "subtask.update",
+              human: "Bulk update supports only --append and/or --status.",
+              data: { code: "invalid_input" },
+              error: {
+                code: "invalid_input",
+                message: "Bulk update supports only --append and --status",
+              },
+            });
+          }
+
+          if (append === undefined && status === undefined) {
+            return failResult({
+              command: "subtask.update",
+              human: "Bulk update requires --append and/or --status.",
+              data: { code: "invalid_input" },
+              error: {
+                code: "invalid_input",
+                message: "Missing bulk update fields",
+              },
+            });
+          }
+
+          const targets = updateAll ? [...domain.listSubtasks()] : ids.map((id) => domain.getSubtaskOrThrow(id));
+          const subtasks = targets.map((target) =>
+            domain.updateSubtask(target.id, {
+              status,
+              description: append === undefined ? undefined : appendLine(target.description, append),
+            }),
+          );
+
+          return okResult({
+            command: "subtask.update",
+            human: `Updated ${subtasks.length} subtask(s)`,
+            data: {
+              subtasks,
+              target: updateAll ? "all" : "ids",
+              ids: subtasks.map((subtask) => subtask.id),
+            },
+          });
+        }
+
+        if (subtaskId.length === 0) {
+          return failResult({
+            command: "subtask.update",
+            human: "Provide a subtask id, or use --all/--ids for bulk update.",
+            data: { code: "invalid_input" },
+            error: {
+              code: "invalid_input",
+              message: "Missing subtask id",
+            },
+          });
+        }
+
+        const nextDescription =
+          append === undefined
+            ? description
+            : appendLine(domain.getSubtaskOrThrow(subtaskId).description, append);
+        const subtask = domain.updateSubtask(subtaskId, { title, description: nextDescription, status });
 
         return okResult({
           command: "subtask.update",
