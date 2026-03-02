@@ -35,7 +35,8 @@ const COMMAND_HELP: Record<string, string> = {
     "Usage: trekoon epic <subcommand> [options] (list defaults: open statuses + limit 10; list flags: --status <csv> | --limit <n> | --all | --view table|compact; show: compact=epic summary, tree=hierarchy, detail=descriptions, and --all defaults to detail in machine modes; update bulk flags: --all | --ids <csv> with --append <text> and/or --status <status>)",
   task:
     "Usage: trekoon task <subcommand> [options] (list defaults: open statuses + limit 10; list flags: --status <csv> | --limit <n> | --all | --view table|compact; show: compact=task summary, tree=hierarchy, detail=descriptions, and --all defaults to detail in machine modes; update bulk flags: --all | --ids <csv> with --append <text> and/or --status <status>)",
-  subtask: "Usage: trekoon subtask <subcommand> [options] (list supports --view table|compact)",
+  subtask:
+    "Usage: trekoon subtask <subcommand> [options] (list supports --view table|compact; update bulk flags: --all | --ids <csv> with --append <text> and/or --status <status>)",
   dep: "Usage: trekoon dep <subcommand> [options]",
   events: "Usage: trekoon events prune [--dry-run] [--archive] [--retention-days <n>]",
   migrate: "Usage: trekoon migrate <status|rollback> [--to-version <n>]",
