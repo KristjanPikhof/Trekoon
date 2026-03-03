@@ -157,6 +157,8 @@ export async function runSubtask(context: CliContext): Promise<CliResult> {
       case "list": {
         const missingListOption =
           readMissingOptionValue(parsed.missingOptionValues, "view") ??
+          readMissingOptionValue(parsed.missingOptionValues, "status", "s") ??
+          readMissingOptionValue(parsed.missingOptionValues, "limit", "l") ??
           readMissingOptionValue(parsed.missingOptionValues, "task", "t");
         if (missingListOption !== undefined) {
           return failMissingOptionValue("subtask.list", missingListOption);
@@ -164,6 +166,10 @@ export async function runSubtask(context: CliContext): Promise<CliResult> {
 
         const rawView: string | undefined = readOption(parsed.options, "view");
         const view = readEnumOption(parsed.options, VIEW_MODES, "view");
+        const includeAll = hasFlag(parsed.flags, "all");
+        const rawStatuses = readOption(parsed.options, "status", "s");
+        const rawLimit = readOption(parsed.options, "limit", "l");
+
         if (rawView !== undefined && view === undefined) {
           return failResult({
             command: "subtask.list",
@@ -176,8 +182,64 @@ export async function runSubtask(context: CliContext): Promise<CliResult> {
           });
         }
 
+        if (includeAll && rawStatuses !== undefined) {
+          return failResult({
+            command: "subtask.list",
+            human: "Use either --all or --status, not both.",
+            data: { code: "invalid_input", flags: ["all", "status"] },
+            error: {
+              code: "invalid_input",
+              message: "--all and --status are mutually exclusive",
+            },
+          });
+        }
+
+        if (includeAll && rawLimit !== undefined) {
+          return failResult({
+            command: "subtask.list",
+            human: "Use either --all or --limit, not both.",
+            data: { code: "invalid_input", flags: ["all", "limit"] },
+            error: {
+              code: "invalid_input",
+              message: "--all and --limit are mutually exclusive",
+            },
+          });
+        }
+
+        const statuses = parseStatusCsv(rawStatuses);
+        if (rawStatuses !== undefined && statuses !== undefined && statuses.length === 0) {
+          return failResult({
+            command: "subtask.list",
+            human: "Provide at least one status with --status.",
+            data: { code: "invalid_input", status: rawStatuses },
+            error: {
+              code: "invalid_input",
+              message: "Invalid --status value",
+            },
+          });
+        }
+
+        const parsedLimit = parseStrictPositiveInt(rawLimit);
+        if (Number.isNaN(parsedLimit)) {
+          return failResult({
+            command: "subtask.list",
+            human: "Invalid --limit value. Use an integer >= 1.",
+            data: { code: "invalid_input", limit: rawLimit },
+            error: {
+              code: "invalid_input",
+              message: "Invalid --limit value",
+            },
+          });
+        }
+
         const taskId: string | undefined = readOption(parsed.options, "task", "t") ?? parsed.positional[1];
-        const subtasks = domain.listSubtasks(taskId);
+        const selectedStatuses = includeAll
+          ? undefined
+          : statuses ?? [...DEFAULT_OPEN_SUBTASK_STATUSES];
+        const selectedLimit = includeAll
+          ? undefined
+          : parsedLimit ?? DEFAULT_SUBTASK_LIST_LIMIT;
+        const subtasks = filterSortAndLimitSubtasks(domain.listSubtasks(taskId), selectedStatuses, selectedLimit);
         const listView = view ?? "table";
         const human =
           subtasks.length === 0
