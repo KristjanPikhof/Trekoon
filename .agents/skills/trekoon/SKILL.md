@@ -169,7 +169,7 @@ trekoon epic show <id> --all --toon
 trekoon task show <id> --all --toon
 ```
 
-- `epic list` / `task list` defaults:
+- `epic list` / `task list` / `subtask list` defaults:
   - open work only (`in_progress`, `in-progress`, `todo`)
   - prioritized as `in_progress`/`in-progress` first, then `todo`
   - default limit `10`
