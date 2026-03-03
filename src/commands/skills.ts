@@ -7,8 +7,8 @@ import { hasFlag, parseArgs, readMissingOptionValue, readOption } from "./arg-pa
 import { failResult, okResult } from "../io/output";
 import { type CliContext, type CliResult } from "../runtime/command-types";
 
-const SKILLS_USAGE = "Usage: trekoon skills install [--link --editor opencode|claude] [--to <path>]";
-const EDITOR_NAMES = ["opencode", "claude"] as const;
+const SKILLS_USAGE = "Usage: trekoon skills install [--link --editor opencode|claude|pi] [--to <path>]";
+const EDITOR_NAMES = ["opencode", "claude", "pi"] as const;
 
 type EditorName = (typeof EDITOR_NAMES)[number];
 
