@@ -61,7 +61,11 @@ Use long flags (`--status`, `--description`, etc.) and ALWAYS append `--toon` to
 
 ## 1) Status Management
 
-### Valid Statuses
+### Status values
+
+Trekoon accepts any non-empty status string.
+
+Recommended statuses for consistent workflows:
 
 | Status | Meaning |
 |--------|---------|
@@ -69,7 +73,7 @@ Use long flags (`--status`, `--description`, etc.) and ALWAYS append `--toon` to
 | `in_progress` | Actively being worked on |
 | `done` | Completed successfully |
 
-Note: `in-progress` (hyphenated) is equivalent to `in_progress`.
+Note: `in-progress` (hyphenated) is treated the same as `in_progress` for default list ordering/filtering.
 
 ### When to Change Status
 
