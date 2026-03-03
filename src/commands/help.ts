@@ -42,7 +42,7 @@ const COMMAND_HELP: Record<string, string> = {
   migrate: "Usage: trekoon migrate <status|rollback> [--to-version <n>]",
   sync: "Usage: trekoon sync <subcommand> [options]",
   skills:
-    "Usage: trekoon skills install [--link --editor opencode|claude] [--to <path>] (--to sets symlink root for --link only; install path always <cwd>/.agents/skills/trekoon/SKILL.md)",
+    "Usage: trekoon skills install [--link --editor opencode|claude|pi] [--to <path>] | trekoon skills update (--to sets symlink root for --link only; install path always <cwd>/.agents/skills/trekoon/SKILL.md; update refreshes canonical SKILL and reports default link states)",
   help: "Usage: trekoon help [command] [--json|--toon]",
 };
 
