@@ -68,7 +68,11 @@ function resolveLinkRoot(cwd: string, editor: EditorName, toOverride: string | u
     return join(cwd, ".opencode", "skills");
   }
 
-  return join(cwd, ".claude", "skills");
+  if (editor === "claude") {
+    return join(cwd, ".claude", "skills");
+  }
+
+  return join(cwd, ".pi", "skills");
 }
 
 function replaceOrCreateSymlink(linkPath: string, targetPath: string): CliResult | null {
