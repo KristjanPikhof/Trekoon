@@ -188,9 +188,14 @@ describe("skills command", (): void => {
     });
     expect(unknownEditor.ok).toBeFalse();
     expect(unknownEditor.error?.code).toBe("invalid_input");
-    const unknownEditorData = unknownEditor.data as { code: string; editor: string };
+    const unknownEditorData = unknownEditor.data as {
+      code: string;
+      editor: string;
+      allowedEditors: string[];
+    };
     expect(unknownEditorData.code).toBe("invalid_input");
     expect(unknownEditorData.editor).toBe("unknown");
+    expect(unknownEditorData.allowedEditors).toEqual(["opencode", "claude", "pi"]);
 
     const editorWithoutLink = await runSkills({
       cwd,
