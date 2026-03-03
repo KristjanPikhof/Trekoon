@@ -26,6 +26,45 @@ function parseIdsOption(rawIds: string | undefined): string[] {
     .filter((value) => value.length > 0);
 }
 
+function parseStatusCsv(rawStatuses: string | undefined): string[] | undefined {
+  if (rawStatuses === undefined) {
+    return undefined;
+  }
+
+  return rawStatuses
+    .split(",")
+    .map((value) => value.trim())
+    .filter((value) => value.length > 0);
+}
+
+function subtaskStatusPriority(status: string): number {
+  if (status === "in_progress" || status === "in-progress") {
+    return 0;
+  }
+
+  if (status === "todo") {
+    return 1;
+  }
+
+  return 2;
+}
+
+function filterSortAndLimitSubtasks(
+  subtasks: readonly SubtaskRecord[],
+  statuses: readonly string[] | undefined,
+  limit: number | undefined,
+): SubtaskRecord[] {
+  const allowedStatuses = statuses === undefined ? undefined : new Set(statuses);
+  const filtered = allowedStatuses === undefined ? [...subtasks] : subtasks.filter((subtask) => allowedStatuses.has(subtask.status));
+  const sorted = [...filtered].sort((left, right) => subtaskStatusPriority(left.status) - subtaskStatusPriority(right.status));
+
+  if (limit === undefined) {
+    return sorted;
+  }
+
+  return sorted.slice(0, limit);
+}
+
 function appendLine(existing: string, line: string): string {
   return existing.length > 0 ? `${existing}\n${line}` : line;
 }
