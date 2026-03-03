@@ -77,7 +77,7 @@ Human view options:
 
 - List and show commands default to table output in human mode.
 - Use `--view compact` to restore compact pipe output.
-- `epic list` and `task list` support `--view table|compact`.
+- `epic list`, `task list`, and `subtask list` support `--view table|compact`.
 - `epic show` and `task show` support `--view table|compact|tree|detail`.
 
 List defaults and filters (`epic list`, `task list`, `subtask list`):
