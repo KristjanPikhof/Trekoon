@@ -183,10 +183,16 @@ Path behavior:
 
 - Default opencode link path: `.opencode/skills/trekoon`
 - Default claude link path: `.claude/skills/trekoon`
+- Default pi link path: `.pi/skills/trekoon`
 - `--to <path>` overrides the editor root for link creation only.
 - `--to` does **not** move or copy `SKILL.md` to that path.
 - Re-running install is idempotent: it refreshes `SKILL.md` and reuses/replaces
   the same symlink target.
+- `trekoon skills update` is idempotent: it refreshes canonical
+  `.agents/skills/trekoon/SKILL.md` and reports default link states for
+  opencode/claude/pi as `missing`, `valid`, or `conflict`.
+- Update does not mutate default links; conflicts are reported with actionable
+  path context.
 - If the link destination exists as a non-link path, install fails with an
   actionable conflict error.
 
