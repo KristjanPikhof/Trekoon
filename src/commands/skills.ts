@@ -7,10 +7,15 @@ import { hasFlag, parseArgs, readMissingOptionValue, readOption } from "./arg-pa
 import { failResult, okResult } from "../io/output";
 import { type CliContext, type CliResult } from "../runtime/command-types";
 
-const SKILLS_USAGE = "Usage: trekoon skills install [--link --editor opencode|claude|pi] [--to <path>]";
+const SKILLS_USAGE = [
+  "Usage:",
+  "  trekoon skills install [--link --editor opencode|claude|pi] [--to <path>]",
+  "  trekoon skills update",
+].join("\n");
 const EDITOR_NAMES = ["opencode", "claude", "pi"] as const;
 
 type EditorName = (typeof EDITOR_NAMES)[number];
+type LinkStateStatus = "missing" | "valid" | "conflict";
 
 interface InstallOutcome {
   readonly sourcePath: string;
@@ -18,6 +23,22 @@ interface InstallOutcome {
   readonly installedDir: string;
   readonly linkPath: string | null;
   readonly linkTarget: string | null;
+}
+
+interface LinkState {
+  readonly editor: EditorName;
+  readonly linkPath: string;
+  readonly expectedTarget: string;
+  readonly status: LinkStateStatus;
+  readonly existingTarget: string | null;
+  readonly conflictCode: "non_link" | "wrong_target" | null;
+}
+
+interface UpdateOutcome {
+  readonly sourcePath: string;
+  readonly installedPath: string;
+  readonly installedDir: string;
+  readonly links: readonly LinkState[];
 }
 
 function invalidArgs(message: string): CliResult {
@@ -75,6 +96,56 @@ function resolveLinkRoot(cwd: string, editor: EditorName, toOverride: string | u
   return join(cwd, ".pi", "skills");
 }
 
+function resolveDefaultLinkPath(cwd: string, editor: EditorName): string {
+  return join(resolveLinkRoot(cwd, editor, undefined), "trekoon");
+}
+
+function installCanonicalSkill(cwd: string): CliResult | { sourcePath: string; installedPath: string; installedDir: string } {
+  const sourcePath: string = resolveBundledSkillFilePath();
+  if (!existsSync(sourcePath)) {
+    return failResult({
+      command: "skills.install",
+      human: `Bundled skill asset not found at ${sourcePath}`,
+      data: {
+        code: "missing_asset",
+        sourcePath,
+      },
+      error: {
+        code: "missing_asset",
+        message: "Bundled skill asset not found",
+      },
+    });
+  }
+
+  const installedPath: string = join(cwd, ".agents", "skills", "trekoon", "SKILL.md");
+  const installedDir: string = dirname(installedPath);
+
+  try {
+    mkdirSync(installedDir, { recursive: true });
+    copyFileSync(sourcePath, installedPath);
+  } catch (error: unknown) {
+    const message = error instanceof Error ? error.message : "Unknown skills install failure";
+    return failResult({
+      command: "skills.install",
+      human: `Failed to install skill: ${message}`,
+      data: {
+        code: "install_failed",
+        message,
+      },
+      error: {
+        code: "install_failed",
+        message,
+      },
+    });
+  }
+
+  return {
+    sourcePath,
+    installedPath,
+    installedDir,
+  };
+}
+
 function replaceOrCreateSymlink(linkPath: string, targetPath: string): CliResult | null {
   if (!existsSync(linkPath)) {
     mkdirSync(dirname(linkPath), { recursive: true });
@@ -124,6 +195,56 @@ function replaceOrCreateSymlink(linkPath: string, targetPath: string): CliResult
   return null;
 }
 
+function inspectDefaultLink(cwd: string, editor: EditorName, installedDir: string): LinkState {
+  const linkPath: string = resolveDefaultLinkPath(cwd, editor);
+  const expectedTarget: string = resolve(installedDir);
+
+  if (!existsSync(linkPath)) {
+    return {
+      editor,
+      linkPath,
+      expectedTarget,
+      status: "missing",
+      existingTarget: null,
+      conflictCode: null,
+    };
+  }
+
+  const entry = lstatSync(linkPath);
+  if (!entry.isSymbolicLink()) {
+    return {
+      editor,
+      linkPath,
+      expectedTarget,
+      status: "conflict",
+      existingTarget: null,
+      conflictCode: "non_link",
+    };
+  }
+
+  const existingRawTarget: string = readlinkSync(linkPath);
+  const existingTarget: string = toAbsolutePath(dirname(linkPath), existingRawTarget);
+  if (existingTarget !== expectedTarget) {
+    return {
+      editor,
+      linkPath,
+      expectedTarget,
+      status: "conflict",
+      existingTarget,
+      conflictCode: "wrong_target",
+    };
+  }
+
+  return {
+    editor,
+    linkPath,
+    expectedTarget,
+    status: "valid",
+    existingTarget,
+    conflictCode: null,
+  };
+}
+
 function runSkillsInstall(context: CliContext): CliResult {
   const parsed = parseArgs(context.args);
   const missingValue = readMissingOptionValue(parsed.missingOptionValues, "editor", "to");
@@ -154,11 +275,11 @@ function runSkillsInstall(context: CliContext): CliResult {
   }
 
   if (wantsLink && rawEditor === undefined) {
-    return invalidArgs("skills install --link requires --editor opencode|claude.");
+    return invalidArgs("skills install --link requires --editor opencode|claude|pi.");
   }
 
   if (rawEditor !== undefined && !EDITOR_NAMES.includes(rawEditor as EditorName)) {
-    return invalidInput("skills.install", "Invalid --editor value. Use: opencode, claude", {
+    return invalidInput("skills.install", "Invalid --editor value. Use: opencode, claude, pi", {
       editor: rawEditor,
       allowedEditors: EDITOR_NAMES,
     });
@@ -166,38 +287,21 @@ function runSkillsInstall(context: CliContext): CliResult {
 
   const editor: EditorName | undefined = rawEditor as EditorName | undefined;
 
-  const sourcePath: string = resolveBundledSkillFilePath();
-  if (!existsSync(sourcePath)) {
-    return failResult({
-      command: "skills.install",
-      human: `Bundled skill asset not found at ${sourcePath}`,
-      data: {
-        code: "missing_asset",
-        sourcePath,
-      },
-      error: {
-        code: "missing_asset",
-        message: "Bundled skill asset not found",
-      },
-    });
+  const installResult = installCanonicalSkill(context.cwd);
+  if ("ok" in installResult) {
+    return installResult;
   }
-
-  const installPath = join(context.cwd, ".agents", "skills", "trekoon", "SKILL.md");
-  const installDir = dirname(installPath);
 
   let outcome: InstallOutcome;
 
   try {
-    mkdirSync(installDir, { recursive: true });
-    copyFileSync(sourcePath, installPath);
-
     let linkPath: string | null = null;
     let linkTarget: string | null = null;
 
     if (wantsLink && editor !== undefined) {
       const linkRoot: string = resolveLinkRoot(context.cwd, editor, rawTo);
       linkPath = join(linkRoot, "trekoon");
-      linkTarget = installDir;
+      linkTarget = installResult.installedDir;
       const linkFailure = replaceOrCreateSymlink(linkPath, linkTarget);
       if (linkFailure) {
         return linkFailure;
@@ -205,9 +309,9 @@ function runSkillsInstall(context: CliContext): CliResult {
     }
 
     outcome = {
-      sourcePath,
-      installedPath: installPath,
-      installedDir: installDir,
+      sourcePath: installResult.sourcePath,
+      installedPath: installResult.installedPath,
+      installedDir: installResult.installedDir,
       linkPath,
       linkTarget,
     };
@@ -253,6 +357,73 @@ function runSkillsInstall(context: CliContext): CliResult {
   });
 }
 
+function runSkillsUpdate(context: CliContext): CliResult {
+  const parsed = parseArgs(context.args);
+  if (parsed.positional.length > 1) {
+    return invalidArgs("Unexpected positional arguments for skills update.");
+  }
+
+  if (parsed.flags.size > 0 || parsed.options.size > 0) {
+    return invalidArgs("skills update takes no options.");
+  }
+
+  const installResult = installCanonicalSkill(context.cwd);
+  if ("ok" in installResult) {
+    return failResult({
+      command: "skills.update",
+      human: installResult.human,
+      data: installResult.data,
+      error: installResult.error,
+    });
+  }
+
+  const links: readonly LinkState[] = EDITOR_NAMES.map((editor) =>
+    inspectDefaultLink(context.cwd, editor, installResult.installedDir),
+  );
+
+  const outcome: UpdateOutcome = {
+    sourcePath: installResult.sourcePath,
+    installedPath: installResult.installedPath,
+    installedDir: installResult.installedDir,
+    links,
+  };
+
+  const linkSummary: string = outcome.links
+    .map((entry) => {
+      if (entry.status === "missing") {
+        return `- ${entry.editor}: missing (${entry.linkPath})`;
+      }
+
+      if (entry.status === "valid") {
+        return `- ${entry.editor}: valid (${entry.linkPath} -> ${entry.expectedTarget})`;
+      }
+
+      if (entry.conflictCode === "non_link") {
+        return `- ${entry.editor}: conflict (non-link path at ${entry.linkPath})`;
+      }
+
+      return `- ${entry.editor}: conflict (points to ${entry.existingTarget})`;
+    })
+    .join("\n");
+
+  return okResult({
+    command: "skills.update",
+    human: [
+      "Updated Trekoon skill in canonical path.",
+      `Source: ${outcome.sourcePath}`,
+      `Installed file: ${outcome.installedPath}`,
+      "Default link states:",
+      linkSummary,
+    ].join("\n"),
+    data: {
+      sourcePath: outcome.sourcePath,
+      installedPath: outcome.installedPath,
+      installedDir: outcome.installedDir,
+      links: outcome.links,
+    },
+  });
+}
+
 export async function runSkills(context: CliContext): Promise<CliResult> {
   const parsed = parseArgs(context.args);
   const subcommand: string | undefined = parsed.positional[0];
@@ -263,6 +434,8 @@ export async function runSkills(context: CliContext): Promise<CliResult> {
   switch (subcommand) {
     case "install":
       return runSkillsInstall(context);
+    case "update":
+      return runSkillsUpdate(context);
     default:
       return invalidArgs(`Unknown skills subcommand '${subcommand}'.`);
   }
