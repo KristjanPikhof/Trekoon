@@ -52,6 +52,20 @@ describe("cli shell dispatch", (): void => {
     expect(existsSync(data.installedPath)).toBeTrue();
   });
 
+  test("dispatches skills update and refreshes canonical artifact", async (): Promise<void> => {
+    const workspace = createWorkspace();
+    const parsed = parseInvocation(["skills", "update"], { stdoutIsTTY: false });
+
+    const result = await executeShell(parsed, workspace);
+
+    expect(result.ok).toBeTrue();
+    expect(result.command).toBe("skills.update");
+
+    const data = result.data as { installedPath: string; links: Array<{ editor: string }> };
+    expect(existsSync(data.installedPath)).toBeTrue();
+    expect(data.links.map((entry) => entry.editor)).toEqual(["opencode", "claude", "pi"]);
+  });
+
   test("returns deterministic error for invalid skills invocation", async (): Promise<void> => {
     const workspace = createWorkspace();
     const parsed = parseInvocation(["skills"], { stdoutIsTTY: false });
