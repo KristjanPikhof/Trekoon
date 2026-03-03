@@ -174,7 +174,9 @@ You can also create a project-local editor link:
 trekoon skills install
 trekoon skills install --link --editor opencode
 trekoon skills install --link --editor claude
+trekoon skills install --link --editor pi
 trekoon skills install --link --editor opencode --to ./.custom-editor/skills
+trekoon skills update
 ```
 
 Path behavior:
