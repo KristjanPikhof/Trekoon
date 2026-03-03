@@ -67,7 +67,7 @@ describe("skills command", (): void => {
     expect(readFileSync(secondData.installedPath, "utf8")).toBe(sourceContents);
   });
 
-  test("install --link supports opencode and claude destinations", async (): Promise<void> => {
+  test("install --link supports opencode, claude, and pi destinations", async (): Promise<void> => {
     const cwd = createWorkspace();
 
     const opencodeResult = await runSkills({
