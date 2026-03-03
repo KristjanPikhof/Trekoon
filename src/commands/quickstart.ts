@@ -17,7 +17,7 @@ const QUICKSTART_TEXT = [
   "3) Task details and description",
   "- Human list and show views default to table format.",
   "- Alternate list view: add --view compact.",
-  "- task/epic list defaults: open work only (in_progress/in-progress, todo), max 10.",
+  "- task/epic/subtask list defaults: open work only (in_progress/in-progress, todo), max 10.",
   "- Filter list by status: --status in_progress,todo (CSV).",
   "- Change page size: --limit <n>. Show all statuses and all rows with --all.",
   "- --all cannot be combined with --status or --limit.",
