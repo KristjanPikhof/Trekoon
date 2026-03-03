@@ -373,7 +373,11 @@ function runSkillsUpdate(context: CliContext): CliResult {
       command: "skills.update",
       human: installResult.human,
       data: installResult.data,
-      error: installResult.error,
+      error:
+        installResult.error ?? {
+          code: "install_failed",
+          message: "Failed to refresh canonical skill",
+        },
     });
   }
 
