@@ -297,5 +297,13 @@ describe("skills command", (): void => {
     const missingToData = missingToValue.data as { code: string; option: string };
     expect(missingToData.code).toBe("invalid_input");
     expect(missingToData.option).toBe("to");
+
+    const updateWithUnexpectedOption = await runSkills({
+      cwd,
+      mode: "json",
+      args: ["update", "--editor", "opencode"],
+    });
+    expect(updateWithUnexpectedOption.ok).toBeFalse();
+    expect(updateWithUnexpectedOption.error?.code).toBe("invalid_args");
   });
 });
