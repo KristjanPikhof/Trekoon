@@ -104,6 +104,153 @@ describe("subtask command", (): void => {
     expect(listedCompact.human).toContain("task=");
   });
 
+  test("default list returns only open statuses and max 10", async (): Promise<void> => {
+    const cwd = createWorkspace();
+    const epicCreated = await runEpic({
+      cwd,
+      mode: "human",
+      args: ["create", "--title", "Roadmap", "--description", "desc"],
+    });
+    const epicId = (epicCreated.data as { epic: { id: string } }).epic.id;
+    const taskCreated = await runTask({
+      cwd,
+      mode: "human",
+      args: ["create", "--epic", epicId, "--title", "Implement", "--description", "task desc"],
+    });
+    const taskId = (taskCreated.data as { task: { id: string } }).task.id;
+
+    for (let index = 0; index < 9; index += 1) {
+      await runSubtask({
+        cwd,
+        mode: "human",
+        args: ["create", "--task", taskId, "--title", `Todo ${index}`, "--status", "todo"],
+      });
+    }
+
+    await runSubtask({
+      cwd,
+      mode: "human",
+      args: ["create", "--task", taskId, "--title", "In progress", "--status", "in_progress"],
+    });
+
+    await runSubtask({
+      cwd,
+      mode: "human",
+      args: ["create", "--task", taskId, "--title", "In-progress", "--status", "in-progress"],
+    });
+
+    for (let index = 0; index < 5; index += 1) {
+      await runSubtask({
+        cwd,
+        mode: "human",
+        args: ["create", "--task", taskId, "--title", `Done ${index}`, "--status", "done"],
+      });
+    }
+
+    const listed = await runSubtask({ cwd, mode: "human", args: ["list", "--task", taskId] });
+    expect(listed.ok).toBeTrue();
++
+    const subtasks = (listed.data as { subtasks: Array<{ status: string }> }).subtasks;
+    expect(subtasks.length).toBe(10);
+    expect(subtasks.every((subtask) => subtask.status === "in_progress" || subtask.status === "in-progress" || subtask.status === "todo")).toBeTrue();
+  });
+
+  test("list --status done returns done items", async (): Promise<void> => {
+    const cwd = createWorkspace();
+    const epicCreated = await runEpic({
+      cwd,
+      mode: "human",
+      args: ["create", "--title", "Roadmap", "--description", "desc"],
+    });
+    const epicId = (epicCreated.data as { epic: { id: string } }).epic.id;
+    const taskCreated = await runTask({
+      cwd,
+      mode: "human",
+      args: ["create", "--epic", epicId, "--title", "Implement", "--description", "task desc"],
+    });
+    const taskId = (taskCreated.data as { task: { id: string } }).task.id;
+
+    await runSubtask({
+      cwd,
+      mode: "human",
+      args: ["create", "--task", taskId, "--title", "Done", "--status", "done"],
+    });
+    await runSubtask({
+      cwd,
+      mode: "human",
+      args: ["create", "--task", taskId, "--title", "Todo", "--status", "todo"],
+    });
+
+    const listed = await runSubtask({ cwd, mode: "human", args: ["list", "--task", taskId, "--status", "done"] });
+    expect(listed.ok).toBeTrue();
+
+    const statuses = (listed.data as { subtasks: Array<{ status: string }> }).subtasks.map((subtask) => subtask.status);
+    expect(statuses).toEqual(["done"]);
+  });
+
+  test("list --all includes done items and bypasses default limit", async (): Promise<void> => {
+    const cwd = createWorkspace();
+    const epicCreated = await runEpic({
+      cwd,
+      mode: "human",
+      args: ["create", "--title", "Roadmap", "--description", "desc"],
+    });
+    const epicId = (epicCreated.data as { epic: { id: string } }).epic.id;
+    const taskCreated = await runTask({
+      cwd,
+      mode: "human",
+      args: ["create", "--epic", epicId, "--title", "Implement", "--description", "task desc"],
+    });
+    const taskId = (taskCreated.data as { task: { id: string } }).task.id;
+
+    for (let index = 0; index < 12; index += 1) {
+      await runSubtask({
+        cwd,
+        mode: "human",
+        args: ["create", "--task", taskId, "--title", `Subtask ${index}`, "--status", index % 2 === 0 ? "done" : "todo"],
+      });
+    }
+
+    const listed = await runSubtask({ cwd, mode: "human", args: ["list", "--task", taskId, "--all"] });
+    expect(listed.ok).toBeTrue();
+
+    const subtasks = (listed.data as { subtasks: Array<{ status: string }> }).subtasks;
+    expect(subtasks.length).toBe(12);
+    expect(subtasks.some((subtask) => subtask.status === "done")).toBeTrue();
+  });
+
+  test("list rejects --all with --status", async (): Promise<void> => {
+    const cwd = createWorkspace();
+    const result = await runSubtask({ cwd, mode: "human", args: ["list", "--all", "--status", "done"] });
+
+    expect(result.ok).toBeFalse();
+    expect(result.error?.code).toBe("invalid_input");
+  });
+
+  test("list rejects --all with --limit", async (): Promise<void> => {
+    const cwd = createWorkspace();
+    const result = await runSubtask({ cwd, mode: "human", args: ["list", "--all", "--limit", "5"] });
+
+    expect(result.ok).toBeFalse();
+    expect(result.error?.code).toBe("invalid_input");
+  });
+
+  test("list rejects invalid --limit values", async (): Promise<void> => {
+    const cwd = createWorkspace();
+
+    const zeroLimit = await runSubtask({ cwd, mode: "human", args: ["list", "--limit", "0"] });
+    expect(zeroLimit.ok).toBeFalse();
+    expect(zeroLimit.error?.code).toBe("invalid_input");
+
+    const nonNumericLimit = await runSubtask({ cwd, mode: "human", args: ["list", "--limit", "abc"] });
+    expect(nonNumericLimit.ok).toBeFalse();
+    expect(nonNumericLimit.error?.code).toBe("invalid_input");
+
+    const leadingZeroLimit = await runSubtask({ cwd, mode: "human", args: ["list", "--limit", "01"] });
+    expect(leadingZeroLimit.ok).toBeFalse();
+    expect(leadingZeroLimit.error?.code).toBe("invalid_input");
+  });
+
   test("errors when value-required subtask options are missing values", async (): Promise<void> => {
     const cwd = createWorkspace();
     const epicCreated = await runEpic({
