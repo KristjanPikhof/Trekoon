@@ -80,7 +80,7 @@ Human view options:
 - `epic list` and `task list` support `--view table|compact`.
 - `epic show` and `task show` support `--view table|compact|tree|detail`.
 
-List defaults and filters (`epic list`, `task list`):
+List defaults and filters (`epic list`, `task list`, `subtask list`):
 
 - Default scope: open work only (`in_progress`, `in-progress`, `todo`)
 - Default limit: `10`
