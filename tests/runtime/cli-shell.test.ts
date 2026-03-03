@@ -35,6 +35,7 @@ describe("cli shell dispatch", (): void => {
     const data = result.data as { topic: string; text: string };
     expect(data.topic).toBe("skills");
     expect(data.text).toContain("trekoon skills install");
+    expect(data.text).toContain("trekoon skills update");
   });
 
   test("dispatches skills install and creates project-local artifact", async (): Promise<void> => {
