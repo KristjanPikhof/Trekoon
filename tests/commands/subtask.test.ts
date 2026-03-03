@@ -149,7 +149,7 @@ describe("subtask command", (): void => {
 
     const listed = await runSubtask({ cwd, mode: "human", args: ["list", "--task", taskId] });
     expect(listed.ok).toBeTrue();
-+
+
     const subtasks = (listed.data as { subtasks: Array<{ status: string }> }).subtasks;
     expect(subtasks.length).toBe(10);
     expect(subtasks.every((subtask) => subtask.status === "in_progress" || subtask.status === "in-progress" || subtask.status === "todo")).toBeTrue();
