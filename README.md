@@ -52,7 +52,8 @@ npm i -g trekoon
 - `trekoon subtask <create|list|update|delete>`
 - `trekoon dep <add|remove|list>`
 - `trekoon sync <status|pull|resolve>`
-- `trekoon skills install [--link --editor opencode|claude] [--to <path>]`
+- `trekoon skills install [--link --editor opencode|claude|pi] [--to <path>]`
+- `trekoon skills update`
 - `trekoon wipe --yes`
 
 Global output modes:
