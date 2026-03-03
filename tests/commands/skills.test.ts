@@ -166,6 +166,77 @@ describe("skills command", (): void => {
     expect(conflictData.linkPath).toBe(conflictPath);
   });
 
+  test("skills update refreshes canonical skill and reports link states", async (): Promise<void> => {
+    const cwd = createWorkspace();
+
+    const installForTargets = await runSkills({
+      cwd,
+      mode: "json",
+      args: ["install", "--link", "--editor", "opencode"],
+    });
+    expect(installForTargets.ok).toBeTrue();
+    const installData = installForTargets.data as { installedPath: string; installedDir: string };
+
+    rmSync(join(cwd, ".claude", "skills", "trekoon"), { recursive: true, force: true });
+    const piLinkPath = join(cwd, ".pi", "skills", "trekoon");
+    mkdirSync(dirname(piLinkPath), { recursive: true });
+    writeFileSync(piLinkPath, "not a symlink", "utf8");
+
+    writeFileSync(installData.installedPath, "stale content\n", "utf8");
+
+    const updated = await runSkills({
+      cwd,
+      mode: "json",
+      args: ["update"],
+    });
+
+    expect(updated.ok).toBeTrue();
+    expect(updated.command).toBe("skills.update");
+    const updatedData = updated.data as {
+      sourcePath: string;
+      installedPath: string;
+      installedDir: string;
+      links: Array<{
+        editor: string;
+        status: string;
+        linkPath: string;
+        expectedTarget: string;
+        existingTarget: string | null;
+        conflictCode: string | null;
+      }>;
+    };
+
+    expect(updatedData.installedPath).toBe(installData.installedPath);
+    expect(readFileSync(updatedData.installedPath, "utf8")).toBe(readFileSync(updatedData.sourcePath, "utf8"));
+
+    const opencodeState = updatedData.links.find((entry) => entry.editor === "opencode");
+    const claudeState = updatedData.links.find((entry) => entry.editor === "claude");
+    const piState = updatedData.links.find((entry) => entry.editor === "pi");
+
+    expect(opencodeState).toBeDefined();
+    expect(opencodeState?.status).toBe("valid");
+    expect(opencodeState?.existingTarget).toBe(updatedData.installedDir);
+
+    expect(claudeState).toBeDefined();
+    expect(claudeState?.status).toBe("missing");
+    expect(claudeState?.existingTarget).toBeNull();
+
+    expect(piState).toBeDefined();
+    expect(piState?.status).toBe("conflict");
+    expect(piState?.conflictCode).toBe("non_link");
+    expect(piState?.existingTarget).toBeNull();
+
+    const secondUpdate = await runSkills({
+      cwd,
+      mode: "json",
+      args: ["update"],
+    });
+
+    expect(secondUpdate.ok).toBeTrue();
+    const secondData = secondUpdate.data as { installedPath: string; sourcePath: string };
+    expect(readFileSync(secondData.installedPath, "utf8")).toBe(readFileSync(secondData.sourcePath, "utf8"));
+  });
+
   test("returns deterministic machine errors for invalid args", async (): Promise<void> => {
     const cwd = createWorkspace();
 
