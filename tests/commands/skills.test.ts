@@ -107,6 +107,25 @@ describe("skills command", (): void => {
     expect(claudeData.linkTarget).toBe(claudeData.installedDir);
     expect(lstatSync(claudeData.linkPath).isSymbolicLink()).toBeTrue();
     expect(resolve(dirname(claudeData.linkPath), readlinkSync(claudeData.linkPath))).toBe(claudeData.installedDir);
+
+    const piResult = await runSkills({
+      cwd,
+      mode: "json",
+      args: ["install", "--link", "--editor", "pi"],
+    });
+
+    expect(piResult.ok).toBeTrue();
+    const piData = piResult.data as {
+      installedDir: string;
+      linked: boolean;
+      linkPath: string;
+      linkTarget: string;
+    };
+    expect(piData.linked).toBeTrue();
+    expect(piData.linkPath).toBe(join(cwd, ".pi", "skills", "trekoon"));
+    expect(piData.linkTarget).toBe(piData.installedDir);
+    expect(lstatSync(piData.linkPath).isSymbolicLink()).toBeTrue();
+    expect(resolve(dirname(piData.linkPath), readlinkSync(piData.linkPath))).toBe(piData.installedDir);
   });
 
   test("install --link supports --to override and detects non-link conflicts", async (): Promise<void> => {
