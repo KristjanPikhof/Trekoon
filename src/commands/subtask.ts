@@ -12,6 +12,8 @@ function formatSubtask(subtask: SubtaskRecord): string {
 }
 
 const VIEW_MODES = ["table", "compact"] as const;
+const DEFAULT_SUBTASK_LIST_LIMIT = 10;
+const DEFAULT_OPEN_SUBTASK_STATUSES = ["in_progress", "in-progress", "todo"] as const;
 
 function parseIdsOption(rawIds: string | undefined): string[] {
   if (rawIds === undefined) {
