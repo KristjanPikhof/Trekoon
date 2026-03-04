@@ -4,6 +4,7 @@ import { join } from "node:path";
 
 import { afterEach, describe, expect, test } from "bun:test";
 
+import { runDep } from "../../src/commands/dep";
 import { runEpic } from "../../src/commands/epic";
 import { runSubtask } from "../../src/commands/subtask";
 import { runTask } from "../../src/commands/task";
@@ -429,5 +430,88 @@ describe("subtask command", (): void => {
 
     expect(result.ok).toBeFalse();
     expect(result.error?.code).toBe("invalid_input");
+  });
+
+  test("update blocks in_progress/done when dependencies unresolved", async (): Promise<void> => {
+    const cwd = createWorkspace();
+    const epicCreated = await runEpic({
+      cwd,
+      mode: "human",
+      args: ["create", "--title", "Roadmap", "--description", "desc"],
+    });
+    const epicId = (epicCreated.data as { epic: { id: string } }).epic.id;
+    const taskCreated = await runTask({
+      cwd,
+      mode: "human",
+      args: ["create", "--epic", epicId, "--title", "Implement", "--description", "task desc"],
+    });
+    const taskId = (taskCreated.data as { task: { id: string } }).task.id;
+
+    const blockedSubtask = await runSubtask({
+      cwd,
+      mode: "human",
+      args: ["create", "--task", taskId, "--title", "Blocked subtask", "--status", "todo"],
+    });
+    const blockerSubtask = await runSubtask({
+      cwd,
+      mode: "human",
+      args: ["create", "--task", taskId, "--title", "Blocker subtask", "--status", "todo"],
+    });
+    const blockedSubtaskId = (blockedSubtask.data as { subtask: { id: string } }).subtask.id;
+    const blockerSubtaskId = (blockerSubtask.data as { subtask: { id: string } }).subtask.id;
+
+    await runDep({ cwd, mode: "human", args: ["add", blockedSubtaskId, blockerSubtaskId] });
+
+    const inProgress = await runSubtask({
+      cwd,
+      mode: "toon",
+      args: ["update", blockedSubtaskId, "--status", "in_progress"],
+    });
+    expect(inProgress.ok).toBeFalse();
+    expect(inProgress.error?.code).toBe("dependency_blocked");
+    expect((inProgress.data as { unresolvedDependencyCount: number }).unresolvedDependencyCount).toBe(1);
+    expect((inProgress.data as { unresolvedDependencyIds: string[] }).unresolvedDependencyIds).toEqual([blockerSubtaskId]);
+
+    const done = await runSubtask({ cwd, mode: "toon", args: ["update", blockedSubtaskId, "--status", "done"] });
+    expect(done.ok).toBeFalse();
+    expect(done.error?.code).toBe("dependency_blocked");
+    expect((done.data as { unresolvedDependencyCount: number }).unresolvedDependencyCount).toBe(1);
+    expect((done.data as { unresolvedDependencyIds: string[] }).unresolvedDependencyIds).toEqual([blockerSubtaskId]);
+  });
+
+  test("update allows done once dependencies are done", async (): Promise<void> => {
+    const cwd = createWorkspace();
+    const epicCreated = await runEpic({
+      cwd,
+      mode: "human",
+      args: ["create", "--title", "Roadmap", "--description", "desc"],
+    });
+    const epicId = (epicCreated.data as { epic: { id: string } }).epic.id;
+    const taskCreated = await runTask({
+      cwd,
+      mode: "human",
+      args: ["create", "--epic", epicId, "--title", "Implement", "--description", "task desc"],
+    });
+    const taskId = (taskCreated.data as { task: { id: string } }).task.id;
+
+    const blockedSubtask = await runSubtask({
+      cwd,
+      mode: "human",
+      args: ["create", "--task", taskId, "--title", "Blocked subtask", "--status", "todo"],
+    });
+    const blockerSubtask = await runSubtask({
+      cwd,
+      mode: "human",
+      args: ["create", "--task", taskId, "--title", "Blocker subtask", "--status", "todo"],
+    });
+    const blockedSubtaskId = (blockedSubtask.data as { subtask: { id: string } }).subtask.id;
+    const blockerSubtaskId = (blockerSubtask.data as { subtask: { id: string } }).subtask.id;
+
+    await runDep({ cwd, mode: "human", args: ["add", blockedSubtaskId, blockerSubtaskId] });
+    await runSubtask({ cwd, mode: "human", args: ["update", blockerSubtaskId, "--status", "done"] });
+
+    const updated = await runSubtask({ cwd, mode: "toon", args: ["update", blockedSubtaskId, "--status", "done"] });
+    expect(updated.ok).toBeTrue();
+    expect((updated.data as { subtask: { status: string } }).subtask.status).toBe("done");
   });
 });

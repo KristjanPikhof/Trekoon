@@ -543,6 +543,73 @@ describe("task command", (): void => {
     expect(result.error?.code).toBe("invalid_input");
   });
 
+  test("update blocks in_progress/done when dependencies unresolved", async (): Promise<void> => {
+    const cwd = createWorkspace();
+    const epicCreated = await runEpic({
+      cwd,
+      mode: "human",
+      args: ["create", "--title", "Roadmap", "--description", "desc"],
+    });
+    const epicId = (epicCreated.data as { epic: { id: string } }).epic.id;
+
+    const blockedTask = await runTask({
+      cwd,
+      mode: "human",
+      args: ["create", "--epic", epicId, "--title", "Blocked", "--description", "desc", "--status", "todo"],
+    });
+    const blockerTask = await runTask({
+      cwd,
+      mode: "human",
+      args: ["create", "--epic", epicId, "--title", "Blocker", "--description", "desc", "--status", "todo"],
+    });
+    const blockedTaskId = (blockedTask.data as { task: { id: string } }).task.id;
+    const blockerTaskId = (blockerTask.data as { task: { id: string } }).task.id;
+
+    await runDep({ cwd, mode: "human", args: ["add", blockedTaskId, blockerTaskId] });
+
+    const inProgress = await runTask({ cwd, mode: "toon", args: ["update", blockedTaskId, "--status", "in_progress"] });
+    expect(inProgress.ok).toBeFalse();
+    expect(inProgress.error?.code).toBe("dependency_blocked");
+    expect((inProgress.data as { unresolvedDependencyCount: number }).unresolvedDependencyCount).toBe(1);
+    expect((inProgress.data as { unresolvedDependencyIds: string[] }).unresolvedDependencyIds).toEqual([blockerTaskId]);
+
+    const done = await runTask({ cwd, mode: "toon", args: ["update", blockedTaskId, "--status", "done"] });
+    expect(done.ok).toBeFalse();
+    expect(done.error?.code).toBe("dependency_blocked");
+    expect((done.data as { unresolvedDependencyCount: number }).unresolvedDependencyCount).toBe(1);
+    expect((done.data as { unresolvedDependencyIds: string[] }).unresolvedDependencyIds).toEqual([blockerTaskId]);
+  });
+
+  test("update allows in_progress once dependencies are done", async (): Promise<void> => {
+    const cwd = createWorkspace();
+    const epicCreated = await runEpic({
+      cwd,
+      mode: "human",
+      args: ["create", "--title", "Roadmap", "--description", "desc"],
+    });
+    const epicId = (epicCreated.data as { epic: { id: string } }).epic.id;
+
+    const blockedTask = await runTask({
+      cwd,
+      mode: "human",
+      args: ["create", "--epic", epicId, "--title", "Blocked", "--description", "desc", "--status", "todo"],
+    });
+    const blockerTask = await runTask({
+      cwd,
+      mode: "human",
+      args: ["create", "--epic", epicId, "--title", "Blocker", "--description", "desc", "--status", "todo"],
+    });
+    const blockedTaskId = (blockedTask.data as { task: { id: string } }).task.id;
+    const blockerTaskId = (blockerTask.data as { task: { id: string } }).task.id;
+
+    await runDep({ cwd, mode: "human", args: ["add", blockedTaskId, blockerTaskId] });
+    await runTask({ cwd, mode: "human", args: ["update", blockerTaskId, "--status", "done"] });
+
+    const updated = await runTask({ cwd, mode: "toon", args: ["update", blockedTaskId, "--status", "in_progress"] });
+    expect(updated.ok).toBeTrue();
+    expect((updated.data as { task: { status: string } }).task.status).toBe("in_progress");
+  });
+
   test("ready returns unblocked candidates with blocker summary", async (): Promise<void> => {
     const cwd = createWorkspace();
     const epicCreated = await runEpic({
