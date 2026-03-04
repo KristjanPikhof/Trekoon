@@ -86,10 +86,29 @@ export async function runDep(context: CliContext): Promise<CliResult> {
           },
         });
       }
+      case "reverse": {
+        const targetKind = domain.resolveNodeKind(sourceId);
+        const blockedNodes = domain.listReverseDependencies(sourceId);
+
+        return okResult({
+          command: "dep.reverse",
+          human:
+            blockedNodes.length === 0
+              ? `No downstream blockers for ${sourceId}`
+              : blockedNodes
+                  .map((item) => `${item.id} (${item.kind}, distance=${item.distance})`)
+                  .join("\n"),
+          data: {
+            targetId: sourceId,
+            targetKind,
+            blockedNodes,
+          },
+        });
+      }
       default:
         return failResult({
           command: "dep",
-          human: "Usage: trekoon dep <add|remove|list>",
+          human: "Usage: trekoon dep <add|remove|list|reverse>",
           data: {
             args: context.args,
           },
