@@ -87,8 +87,9 @@ List defaults and filters (`epic list`, `task list`, `subtask list`):
 - Default limit: `10`
 - Status filter: `--status in_progress,todo` (CSV)
 - Custom limit: `--limit <n>`
+- Cursor pagination: `--cursor <n>` (offset-like start index for next page)
 - All rows and statuses: `--all`
-- `--all` is mutually exclusive with `--status` and `--limit`
+- `--all` is mutually exclusive with `--status`, `--limit`, and `--cursor`
 
 Bulk updates (`epic update`, `task update`, `subtask update`):
 
@@ -147,6 +148,7 @@ Run this loop each session to pick next work deterministically:
 ```bash
 trekoon --toon sync status
 trekoon --toon task ready --limit 5
+trekoon --toon task next
 trekoon --toon dep reverse <task-or-subtask-id>
 trekoon --toon task update <task-id> --status in_progress
 ```
@@ -158,13 +160,18 @@ trekoon --toon task update <task-id> --append "Completed implementation and chec
 trekoon --toon task update <task-id> --append "Blocked by <reason>" --status blocked
 ```
 
-### 5) Use JSON or TOON output for agents
+### 5) Use TOON output for agent workflows
+
+```bash
+trekoon --toon epic show <epic-id>
+trekoon --toon task show <task-id>
+```
+
+Optional alternative for integrations that explicitly require JSON:
 
 ```bash
 trekoon --json epic show <epic-id>
 trekoon --json task show <task-id>
-trekoon --toon epic show <epic-id>
-trekoon --toon task show <task-id>
 ```
 
 ### 6) Sync workflow for worktrees
@@ -306,6 +313,14 @@ data:
 trekoon --toon task list --status todo --limit 2
 trekoon --toon task list --status todo --limit 2 --cursor 2
 ```
+
+Cursor semantics:
+
+- `--cursor <n>` is offset-like pagination for list endpoints (`epic list`,
+  `task list`, `subtask list`).
+- Do not combine `--all` with `--cursor`.
+- Machine consumers should page using `meta.pagination.hasMore` and
+  `meta.pagination.nextCursor`.
 
 Payload fields:
 
