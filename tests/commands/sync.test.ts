@@ -146,7 +146,7 @@ describe("sync command", (): void => {
         mode: "toon",
       });
       expect(listResult.ok).toBe(true);
-      expect((listResult.data as { conflicts: Array<{ id: string }> }).conflicts[0]?.id).toBe(pendingConflict?.id);
+      expect((listResult.data as { conflicts: Array<{ id: string }> }).conflicts[0]?.id).toBe(pendingConflict!.id);
 
       const showResult = await runSync({
         args: ["conflicts", "show", pendingConflict!.id],
