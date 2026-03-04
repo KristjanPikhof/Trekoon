@@ -662,7 +662,14 @@ describe("task command", (): void => {
         task: { id: string };
         blockerSummary: { blockedByCount: number; blockedBy: Array<{ id: string; kind: string; status: string }> };
       }>;
-      summary: { totalOpenTasks: number; readyCount: number; blockedCount: number; unresolvedDependencyCount: number };
+      summary: {
+        totalOpenTasks: number;
+        readyCount: number;
+        returnedCount: number;
+        appliedLimit: number | null;
+        blockedCount: number;
+        unresolvedDependencyCount: number;
+      };
     };
 
     expect(data.candidates.map((item) => item.task.id)).toEqual([inProgressTaskId, todoTaskId]);
@@ -673,6 +680,8 @@ describe("task command", (): void => {
     expect(data.summary).toEqual({
       totalOpenTasks: 3,
       readyCount: 2,
+      returnedCount: 2,
+      appliedLimit: null,
       blockedCount: 1,
       unresolvedDependencyCount: 1,
     });
@@ -718,6 +727,45 @@ describe("task command", (): void => {
 
     const ids = (ready.data as { candidates: Array<{ task: { id: string } }> }).candidates.map((item) => item.task.id);
     expect(ids).toEqual([...ids].sort());
+  });
+
+  test("ready keeps total readyCount when --limit slices candidates", async (): Promise<void> => {
+    const cwd = createWorkspace();
+    const epicCreated = await runEpic({
+      cwd,
+      mode: "human",
+      args: ["create", "--title", "Roadmap", "--description", "desc"],
+    });
+    const epicId = (epicCreated.data as { epic: { id: string } }).epic.id;
+
+    await runTask({
+      cwd,
+      mode: "human",
+      args: ["create", "--epic", epicId, "--title", "A", "--description", "desc", "--status", "in_progress"],
+    });
+    await runTask({
+      cwd,
+      mode: "human",
+      args: ["create", "--epic", epicId, "--title", "B", "--description", "desc", "--status", "todo"],
+    });
+
+    const ready = await runTask({ cwd, mode: "toon", args: ["ready", "--limit", "1"] });
+    expect(ready.ok).toBeTrue();
+
+    const summary = (ready.data as {
+      summary: {
+        readyCount: number;
+        returnedCount: number;
+        appliedLimit: number | null;
+      };
+      candidates: Array<{ task: { id: string } }>;
+    }).summary;
+    const candidates = (ready.data as { candidates: Array<{ task: { id: string } }> }).candidates;
+
+    expect(candidates.length).toBe(1);
+    expect(summary.readyCount).toBe(2);
+    expect(summary.returnedCount).toBe(1);
+    expect(summary.appliedLimit).toBe(1);
   });
 
   test("next returns top candidate and null when none are ready", async (): Promise<void> => {

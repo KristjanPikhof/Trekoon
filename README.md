@@ -287,7 +287,14 @@ data:
     blockerSummary: { blockedByCount, totalDependencies, blockedBy[] }
     ranking: { rank, blockerCount, statusPriority }
   blocked[]: (same shape, non-ready items)
-  summary: { totalOpenTasks, readyCount, blockedCount, unresolvedDependencyCount }
+  summary: {
+    totalOpenTasks,
+    readyCount,
+    returnedCount,
+    appliedLimit,
+    blockedCount,
+    unresolvedDependencyCount,
+  }
 ```
 
 ### Reverse dependency walk (blocker impact)
