@@ -34,7 +34,7 @@ const COMMAND_HELP: Record<string, string> = {
   epic:
     "Usage: trekoon epic <subcommand> [options] (list defaults: open statuses + limit 10; list flags: --status <csv> | --limit <n> | --all | --view table|compact; show: compact=epic summary, tree=hierarchy, detail=descriptions, and --all defaults to detail in machine modes; update bulk flags: --all | --ids <csv> with --append <text> and/or --status <status>)",
   task:
-    "Usage: trekoon task <subcommand> [options] (list defaults: open statuses + limit 10; list flags: --status <csv> | --limit <n> | --all | --view table|compact; show: compact=task summary, tree=hierarchy, detail=descriptions, and --all defaults to detail in machine modes; update bulk flags: --all | --ids <csv> with --append <text> and/or --status <status>)",
+    "Usage: trekoon task <subcommand> [options] (list defaults: open statuses + limit 10; list flags: --status <csv> | --limit <n> | --all | --view table|compact; show: compact=task summary, tree=hierarchy, detail=descriptions, and --all defaults to detail in machine modes; ready: deterministic unblocked candidates sorted by status, blockers, createdAt, id with --limit <n> and --epic <id>; next: top ready candidate with --epic <id>; update bulk flags: --all | --ids <csv> with --append <text> and/or --status <status>)",
   subtask:
     "Usage: trekoon subtask <subcommand> [options] (list defaults: open statuses + limit 10; list flags: --task <id> | --status <csv> | --limit <n> | --all | --view table|compact; update bulk flags: --all | --ids <csv> with --append <text> and/or --status <status>)",
   dep: "Usage: trekoon dep <add|remove|list|reverse> [options]",
