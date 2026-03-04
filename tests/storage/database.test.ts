@@ -2,9 +2,12 @@ import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
+import { Database } from "bun:sqlite";
 import { afterEach, describe, expect, test } from "bun:test";
 
 import { openTrekoonDatabase } from "../../src/storage/database";
+import { migrateDatabase, rollbackDatabase } from "../../src/storage/migrations";
+import { resolveStoragePaths } from "../../src/storage/path";
 
 const tempDirs: string[] = [];
 
@@ -111,6 +114,55 @@ describe("storage lifecycle", (): void => {
       expect(indexes).toContain("idx_dependencies_depends_on");
     } finally {
       storage.close();
+    }
+  });
+
+  test("skips exclusive migration lock when schema is current", (): void => {
+    const workspace: string = createWorkspace();
+    const storage = openTrekoonDatabase(workspace);
+    storage.close();
+
+    const databasePath: string = resolveStoragePaths(workspace).databaseFile;
+    const lockHolder = new Database(databasePath);
+    const migrator = new Database(databasePath);
+
+    try {
+      migrator.exec("PRAGMA busy_timeout = 1;");
+
+      lockHolder.exec("BEGIN IMMEDIATE;");
+
+      expect((): void => migrateDatabase(migrator)).not.toThrow();
+    } finally {
+      lockHolder.exec("ROLLBACK;");
+      lockHolder.close(false);
+      migrator.close(false);
+    }
+  });
+
+  test("uses transactional migration path when schema is not current", (): void => {
+    const workspace: string = createWorkspace();
+    const storage = openTrekoonDatabase(workspace);
+
+    try {
+      rollbackDatabase(storage.db, 1);
+    } finally {
+      storage.close();
+    }
+
+    const databasePath: string = resolveStoragePaths(workspace).databaseFile;
+    const lockHolder = new Database(databasePath);
+    const migrator = new Database(databasePath);
+
+    try {
+      migrator.exec("PRAGMA busy_timeout = 1;");
+
+      lockHolder.exec("BEGIN IMMEDIATE;");
+
+      expect((): void => migrateDatabase(migrator)).toThrow(/locked/i);
+    } finally {
+      lockHolder.exec("ROLLBACK;");
+      lockHolder.close(false);
+      migrator.close(false);
     }
   });
 });

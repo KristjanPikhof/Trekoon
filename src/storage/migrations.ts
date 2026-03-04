@@ -278,11 +278,58 @@ function recordMigration(db: Database, migration: Migration): void {
   );
 }
 
+function isSchemaCurrentFastPath(db: Database, latestVersion: number): boolean {
+  if (latestVersion === 0 || !migrationTableExists(db) || !hasMigrationVersionColumn(db)) {
+    return false;
+  }
+
+  const row = db
+    .query(
+      `
+      SELECT
+        COALESCE(MIN(version), 0) AS min_version,
+        COALESCE(MAX(version), 0) AS max_version,
+        COUNT(DISTINCT version) AS distinct_versions,
+        SUM(CASE WHEN version IS NULL THEN 1 ELSE 0 END) AS null_versions
+      FROM schema_migrations;
+      `,
+    )
+    .get() as
+    | {
+        min_version: number;
+        max_version: number;
+        distinct_versions: number;
+        null_versions: number;
+      }
+    | null;
+
+  if (!row) {
+    return false;
+  }
+
+  return (
+    row.null_versions === 0 &&
+    row.min_version === 1 &&
+    row.max_version === latestVersion &&
+    row.distinct_versions === latestVersion
+  );
+}
+
 export function migrateDatabase(db: Database): void {
+  validateMigrationPlan();
+
+  const latestVersion: number = MIGRATIONS[MIGRATIONS.length - 1]?.version ?? 0;
+
+  // Fast path: avoid BEGIN EXCLUSIVE when schema is already current.
+  // This reduces startup lock contention while keeping the explicit
+  // transactional migration path for non-current/legacy schemas.
+  if (isSchemaCurrentFastPath(db, latestVersion)) {
+    return;
+  }
+
   runExclusive(db, (): void => {
     ensureMigrationTable(db);
     ensureMigrationVersionColumn(db);
-    validateMigrationPlan();
 
     const version: number = currentVersion(db);
 
