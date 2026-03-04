@@ -1,8 +1,8 @@
 import { failResult, okResult } from "../io/output";
 import { type CliContext, type CliResult } from "../runtime/command-types";
 import { MissingBranchDatabaseError } from "../sync/branch-db";
-import { syncPull, syncResolve, syncStatus } from "../sync/service";
-import { type SyncResolution } from "../sync/types";
+import { getSyncConflict, listSyncConflicts, syncPull, syncResolve, syncStatus } from "../sync/service";
+import { type SyncConflictMode, type SyncResolution } from "../sync/types";
 
 function parseOption(args: readonly string[], option: string): string | null {
   const index: number = args.indexOf(option);
@@ -17,7 +17,7 @@ function parseOption(args: readonly string[], option: string): string | null {
 function usage(message: string): CliResult {
   return failResult({
     command: "sync",
-    human: `${message}\nUsage: trekoon sync <status|pull|resolve> [options]`,
+    human: `${message}\nUsage: trekoon sync <status|pull|resolve|conflicts> [options]`,
     data: { message },
     error: {
       code: "invalid_args",
@@ -33,6 +33,41 @@ function statusMessage(sourceBranch: string, ahead: number, behind: number, conf
     `Behind: ${behind}`,
     `Pending conflicts: ${conflicts}`,
   ].join("\n");
+}
+
+function formatConflictList(
+  conflicts: ReadonlyArray<{
+    id: string;
+    entity_kind: string;
+    entity_id: string;
+    field_name: string;
+    resolution: string;
+  }>,
+): string {
+  if (conflicts.length === 0) {
+    return "No conflicts found.";
+  }
+
+  return conflicts
+    .map((conflict) =>
+      [
+        conflict.id,
+        conflict.entity_kind,
+        conflict.entity_id,
+        conflict.field_name,
+        conflict.resolution,
+      ].join(" | "),
+    )
+    .join("\n");
+}
+
+function parseConflictMode(args: readonly string[]): SyncConflictMode {
+  const explicitMode = parseOption(args, "--mode");
+  if (explicitMode === "all") {
+    return "all";
+  }
+
+  return "pending";
 }
 
 export async function runSync(context: CliContext): Promise<CliResult> {
@@ -93,6 +128,53 @@ export async function runSync(context: CliContext): Promise<CliResult> {
         human: `Resolved ${summary.conflictId} using ${summary.resolution}.`,
         data: summary,
       });
+    }
+
+    if (subcommand === "conflicts") {
+      const conflictsCommand: string | undefined = context.args[1];
+      if (!conflictsCommand) {
+        return usage("sync conflicts requires list|show.");
+      }
+
+      if (conflictsCommand === "list") {
+        const mode = parseConflictMode(context.args);
+        const conflicts = listSyncConflicts(context.cwd, mode);
+
+        return okResult({
+          command: "sync conflicts list",
+          human: formatConflictList(conflicts),
+          data: {
+            mode,
+            conflicts,
+          },
+        });
+      }
+
+      if (conflictsCommand === "show") {
+        const conflictId: string | undefined = context.args[2];
+        if (!conflictId) {
+          return usage("sync conflicts show requires <conflict-id>.");
+        }
+
+        const conflict = getSyncConflict(context.cwd, conflictId);
+
+        return okResult({
+          command: "sync conflicts show",
+          human: [
+            `Conflict: ${conflict.id}`,
+            `Entity: ${conflict.entityKind} ${conflict.entityId}`,
+            `Field: ${conflict.fieldName}`,
+            `Resolution: ${conflict.resolution}`,
+            `Ours: ${JSON.stringify(conflict.oursValue)}`,
+            `Theirs: ${JSON.stringify(conflict.theirsValue)}`,
+          ].join("\n"),
+          data: {
+            conflict,
+          },
+        });
+      }
+
+      return usage(`Unknown sync conflicts subcommand '${conflictsCommand}'.`);
     }
 
     return usage(`Unknown sync subcommand '${subcommand}'.`);
