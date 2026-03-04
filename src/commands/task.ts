@@ -209,7 +209,7 @@ export async function runTask(context: CliContext): Promise<CliResult> {
         const title: string | undefined = readOption(parsed.options, "title", "t");
         const description: string | undefined = readOption(parsed.options, "description", "d");
         const status: string | undefined = readOption(parsed.options, "status", "s");
-        const task = domain.createTask({
+        const task = mutations.createTask({
           epicId: epicId ?? "",
           title: title ?? "",
           description: description ?? "",
