@@ -358,4 +358,60 @@ describe("sync command", (): void => {
     expect(result.ok).toBe(false);
     expect(result.error?.code).toBe("invalid_args");
   });
+
+  test("rejects missing sync conflict mode value", async (): Promise<void> => {
+    const workspace: string = createWorkspace();
+    initializeRepository(workspace);
+
+    const result = await runSync({
+      args: ["conflicts", "list", "--mode"],
+      cwd: workspace,
+      mode: "toon",
+    });
+
+    expect(result.ok).toBe(false);
+    expect(result.error?.code).toBe("invalid_args");
+  });
+
+  test("delete replay does not create invalid conflicts", async (): Promise<void> => {
+    const workspace: string = createWorkspace();
+    initializeRepository(workspace);
+
+    const epicId = randomUUID();
+    const now = Date.now();
+
+    {
+      const storage = openTrekoonDatabase(workspace);
+      try {
+        storage.db
+          .query(
+            "INSERT INTO events (id, entity_kind, entity_id, operation, payload, git_branch, git_head, created_at, updated_at, version) VALUES (?, 'epic', ?, 'epic.deleted', '{\"fields\":{}}', 'main', NULL, ?, ?, 1);",
+          )
+          .run(randomUUID(), epicId, now, now);
+      } finally {
+        storage.close();
+      }
+    }
+
+    commitDatabase(workspace, "seed epic delete replay event");
+    runGit(workspace, ["checkout", "-b", "feature/delete-idempotent"]);
+
+    const pullResult = await runSync({
+      args: ["pull", "--from", "main"],
+      cwd: workspace,
+      mode: "toon",
+    });
+
+    expect(pullResult.ok).toBe(true);
+
+    const storage = openTrekoonDatabase(workspace);
+    try {
+      const invalidConflict = storage.db
+        .query("SELECT id FROM sync_conflicts WHERE field_name = '__apply__' LIMIT 1;")
+        .get() as { id: string } | null;
+      expect(invalidConflict).toBeNull();
+    } finally {
+      storage.close();
+    }
+  });
 });
