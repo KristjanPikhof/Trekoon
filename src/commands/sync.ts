@@ -61,13 +61,17 @@ function formatConflictList(
     .join("\n");
 }
 
-function parseConflictMode(args: readonly string[]): SyncConflictMode {
+function parseConflictMode(args: readonly string[]): SyncConflictMode | null {
   const explicitMode = parseOption(args, "--mode");
-  if (explicitMode === "all") {
-    return "all";
+  if (!explicitMode) {
+    return "pending";
   }
 
-  return "pending";
+  if (explicitMode === "pending" || explicitMode === "all") {
+    return explicitMode;
+  }
+
+  return null;
 }
 
 export async function runSync(context: CliContext): Promise<CliResult> {
