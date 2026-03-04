@@ -56,7 +56,7 @@ export async function runDep(context: CliContext): Promise<CliResult> {
         });
       }
       case "remove": {
-        const removed: number = domain.removeDependency(sourceId, dependsOnId);
+        const removed: number = mutations.removeDependency(sourceId, dependsOnId);
 
         return okResult({
           command: "dep.remove",
