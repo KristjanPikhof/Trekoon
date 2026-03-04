@@ -21,6 +21,15 @@ export interface PullSummary {
   readonly appliedEvents: number;
   readonly createdConflicts: number;
   readonly cursorToken: string | null;
+  readonly diagnostics: SyncPullDiagnostics;
+}
+
+export interface SyncPullDiagnostics {
+  readonly malformedPayloadEvents: number;
+  readonly applyRejectedEvents: number;
+  readonly quarantinedEvents: number;
+  readonly conflictEvents: number;
+  readonly errorHints: readonly string[];
 }
 
 export interface ResolveSummary {

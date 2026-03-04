@@ -113,6 +113,10 @@ export async function runSync(context: CliContext): Promise<CliResult> {
           `Scanned events: ${summary.scannedEvents}`,
           `Applied events: ${summary.appliedEvents}`,
           `Created conflicts: ${summary.createdConflicts}`,
+          `Malformed payloads: ${summary.diagnostics.malformedPayloadEvents}`,
+          `Quarantined events: ${summary.diagnostics.quarantinedEvents}`,
+          `Conflict events: ${summary.diagnostics.conflictEvents}`,
+          ...summary.diagnostics.errorHints,
         ].join("\n"),
         data: summary,
       });

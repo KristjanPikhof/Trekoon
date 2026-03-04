@@ -120,8 +120,8 @@ describe("sync command", (): void => {
     });
 
     expect(statusBefore.ok).toBe(true);
-    expect((statusBefore.data as { behind: number }).behind).toBeGreaterThan(0);
-    expect((statusBefore.data as { ahead: number }).ahead).toBeGreaterThan(0);
+    expect((statusBefore.data as { behind: number }).behind).toBe(1);
+    expect((statusBefore.data as { ahead: number }).ahead).toBe(1);
 
     const pullResult = await runSync({
       args: ["pull", "--from", "main"],
@@ -131,6 +131,8 @@ describe("sync command", (): void => {
 
     expect(pullResult.ok).toBe(true);
     expect((pullResult.data as { createdConflicts: number }).createdConflicts).toBe(1);
+    expect((pullResult.data as { diagnostics: { conflictEvents: number } }).diagnostics.conflictEvents).toBe(1);
+    expect((pullResult.data as { diagnostics: { quarantinedEvents: number } }).diagnostics.quarantinedEvents).toBe(0);
 
     const storage = openTrekoonDatabase(workspace);
     try {
@@ -229,6 +231,15 @@ describe("sync command", (): void => {
     expect(pullResult.ok).toBe(true);
     expect((pullResult.data as { scannedEvents: number }).scannedEvents).toBeGreaterThanOrEqual(1);
     expect((pullResult.data as { appliedEvents: number }).appliedEvents).toBe(0);
+    expect((pullResult.data as { diagnostics: { malformedPayloadEvents: number } }).diagnostics.malformedPayloadEvents).toBe(1);
+    expect((pullResult.data as { diagnostics: { applyRejectedEvents: number } }).diagnostics.applyRejectedEvents).toBe(0);
+    expect((pullResult.data as { diagnostics: { quarantinedEvents: number } }).diagnostics.quarantinedEvents).toBe(1);
+    expect((pullResult.data as { diagnostics: { errorHints: string[] } }).diagnostics.errorHints).toContain(
+      "Malformed event payloads were quarantined; inspect sync conflicts with field '__payload__'.",
+    );
+    expect((pullResult.data as { diagnostics: { errorHints: string[] } }).diagnostics.errorHints).not.toContain(
+      "Some events were quarantined as invalid; inspect sync conflicts with field '__apply__'.",
+    );
 
     const storage = openTrekoonDatabase(workspace);
     try {

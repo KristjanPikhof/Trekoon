@@ -225,17 +225,55 @@ function countBehind(remoteDb: Database, cursorToken: string): number {
   return row?.count ?? 0;
 }
 
-function listRemoteEventIds(remoteDb: Database): Set<string> {
-  const rows = remoteDb.query("SELECT id FROM events;").all() as Array<{ id: string }>;
-  return new Set(rows.map((row) => row.id));
+function countAhead(localDb: Database, currentBranch: string | null, remoteDbPath: string): number {
+  if (!currentBranch) {
+    return 0;
+  }
+
+  localDb.query("ATTACH DATABASE ? AS sync_remote;").run(remoteDbPath);
+
+  try {
+    const row = localDb
+      .query(
+        `
+        SELECT COUNT(*) AS count
+        FROM events AS local_events
+        WHERE local_events.git_branch = @branch
+          AND NOT EXISTS (
+            SELECT 1
+            FROM sync_remote.events AS remote_events
+            WHERE remote_events.id = local_events.id
+          );
+        `,
+      )
+      .get({ "@branch": currentBranch }) as { count: number } | null;
+
+    return row?.count ?? 0;
+  } finally {
+    localDb.query("DETACH DATABASE sync_remote;").run();
+  }
 }
 
-function countAhead(localDb: Database, currentBranch: string | null, remoteEventIds: Set<string>): number {
-  const rows = localDb
-    .query("SELECT id, git_branch FROM events WHERE git_branch = ?;")
-    .all(currentBranch) as Array<{ id: string; git_branch: string | null }>;
+function buildSyncErrorHints(diagnostics: {
+  malformedPayloadEvents: number;
+  applyRejectedEvents: number;
+  conflictEvents: number;
+}): string[] {
+  const hints: string[] = [];
 
-  return rows.filter((row) => !remoteEventIds.has(row.id)).length;
+  if (diagnostics.malformedPayloadEvents > 0) {
+    hints.push("Malformed event payloads were quarantined; inspect sync conflicts with field '__payload__'.");
+  }
+
+  if (diagnostics.applyRejectedEvents > 0) {
+    hints.push("Some events were quarantined as invalid; inspect sync conflicts with field '__apply__'.");
+  }
+
+  if (diagnostics.conflictEvents > 0) {
+    hints.push("Field-level conflicts detected; run 'trekoon sync conflicts list' and resolve pending entries.");
+  }
+
+  return hints;
 }
 
 function readFieldValue(payload: EventPayload, field: string): unknown {
@@ -631,7 +669,7 @@ export function syncStatus(cwd: string, sourceBranch: string): SyncStatusSummary
     try {
       return {
         sourceBranch,
-        ahead: countAhead(storage.db, git.branchName, listRemoteEventIds(remote.db)),
+        ahead: countAhead(storage.db, git.branchName, remote.path),
         behind: countBehind(remote.db, cursorToken),
         pendingConflicts: countPendingConflicts(storage.db),
         git,
@@ -658,6 +696,10 @@ export function syncPull(cwd: string, sourceBranch: string): PullSummary {
 
     let appliedEvents = 0;
     let createdConflicts = 0;
+    let malformedPayloadEvents = 0;
+    let applyRejectedEvents = 0;
+    let quarantinedEvents = 0;
+    let conflictEvents = 0;
     let lastToken: string | null = null;
     let lastEventAt: number | null = cursor?.last_event_at ?? null;
 
@@ -666,6 +708,8 @@ export function syncPull(cwd: string, sourceBranch: string): PullSummary {
         const payloadValidation = parsePayload(incoming.payload);
 
         if (!payloadValidation.ok) {
+          malformedPayloadEvents += 1;
+          quarantinedEvents += 1;
           createConflict(
             storage.db,
             incoming,
@@ -688,6 +732,7 @@ export function syncPull(cwd: string, sourceBranch: string): PullSummary {
           const conflict = entityFieldConflict(storage.db, sourceBranch, incoming, fieldName, value);
 
           if (conflict) {
+            conflictEvents += 1;
             createConflict(storage.db, incoming, fieldName, conflict.oursValue, conflict.theirsValue);
             createdConflicts += 1;
             continue;
@@ -699,6 +744,8 @@ export function syncPull(cwd: string, sourceBranch: string): PullSummary {
         if (applyEntityFields(storage.db, incoming, fieldsToApply)) {
           appliedEvents += 1;
         } else if (incoming.operation !== "resolve_conflict") {
+          applyRejectedEvents += 1;
+          quarantinedEvents += 1;
           createConflict(
             storage.db,
             incoming,
@@ -726,6 +773,17 @@ export function syncPull(cwd: string, sourceBranch: string): PullSummary {
       appliedEvents,
       createdConflicts,
       cursorToken: lastToken,
+      diagnostics: {
+        malformedPayloadEvents,
+        applyRejectedEvents,
+        quarantinedEvents,
+        conflictEvents,
+        errorHints: buildSyncErrorHints({
+          malformedPayloadEvents,
+          applyRejectedEvents,
+          conflictEvents,
+        }),
+      },
     };
   } finally {
     remote.close();
