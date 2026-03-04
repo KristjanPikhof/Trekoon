@@ -384,7 +384,17 @@ function applyCreate(db: Database, event: StoredEvent, fields: Record<string, un
 
     const description = typeof fields.description === "string" ? fields.description : "";
     db.query(
-      "INSERT INTO tasks (id, epic_id, title, description, status, created_at, updated_at, version) VALUES (?, ?, ?, ?, ?, ?, ?, 1);",
+      `
+      INSERT INTO tasks (id, epic_id, title, description, status, created_at, updated_at, version)
+      VALUES (?, ?, ?, ?, ?, ?, ?, 1)
+      ON CONFLICT(id) DO UPDATE SET
+        epic_id = excluded.epic_id,
+        title = excluded.title,
+        description = excluded.description,
+        status = excluded.status,
+        updated_at = excluded.updated_at,
+        version = tasks.version + 1;
+      `,
     ).run(event.entity_id, epicId, title, description, status, now, now);
 
     return true;
