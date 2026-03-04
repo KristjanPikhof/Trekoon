@@ -1,4 +1,5 @@
 export type SyncResolution = "ours" | "theirs";
+export type SyncConflictMode = "pending" | "all";
 
 export interface GitContextSnapshot {
   readonly worktreePath: string;
@@ -28,4 +29,38 @@ export interface ResolveSummary {
   readonly entityKind: string;
   readonly entityId: string;
   readonly fieldName: string;
+}
+
+export interface SyncConflictListItem {
+  readonly id: string;
+  readonly event_id: string;
+  readonly entity_kind: string;
+  readonly entity_id: string;
+  readonly field_name: string;
+  readonly ours_value: string | null;
+  readonly theirs_value: string | null;
+  readonly resolution: string;
+  readonly created_at: number;
+  readonly updated_at: number;
+}
+
+export interface SyncConflictDetail {
+  readonly id: string;
+  readonly eventId: string;
+  readonly entityKind: string;
+  readonly entityId: string;
+  readonly fieldName: string;
+  readonly oursValue: unknown;
+  readonly theirsValue: unknown;
+  readonly resolution: string;
+  readonly createdAt: number;
+  readonly updatedAt: number;
+  readonly event: {
+    readonly id: string;
+    readonly operation: string;
+    readonly payload: string;
+    readonly git_branch: string | null;
+    readonly git_head: string | null;
+    readonly created_at: number;
+  } | null;
 }
