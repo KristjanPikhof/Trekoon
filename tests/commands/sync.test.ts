@@ -243,4 +243,119 @@ describe("sync command", (): void => {
       storage.close();
     }
   });
+
+  test("sync pull is idempotent when create events are replayed", async (): Promise<void> => {
+    const workspace: string = createWorkspace();
+    initializeRepository(workspace);
+
+    const now = Date.now();
+    const epicId = randomUUID();
+    {
+      const storage = openTrekoonDatabase(workspace);
+      try {
+        storage.db
+          .query("INSERT INTO epics (id, title, description, status, created_at, updated_at, version) VALUES (?, ?, ?, ?, ?, ?, 1);")
+          .run(epicId, "Replay epic", "seed", "todo", now, now);
+
+        storage.db
+          .query(
+            "INSERT INTO events (id, entity_kind, entity_id, operation, payload, git_branch, git_head, created_at, updated_at, version) VALUES (?, 'epic', ?, 'epic.created', ?, 'main', NULL, ?, ?, 1);",
+          )
+          .run(randomUUID(), epicId, JSON.stringify({ fields: { title: "Replay epic", description: "seed", status: "todo" } }), now + 1, now + 1);
+      } finally {
+        storage.close();
+      }
+    }
+
+    commitDatabase(workspace, "seed replay create event");
+    runGit(workspace, ["checkout", "-b", "feature/replay-idempotent"]);
+
+    const pullResult = await runSync({
+      args: ["pull", "--from", "main"],
+      cwd: workspace,
+      mode: "toon",
+    });
+
+    expect(pullResult.ok).toBe(true);
+    expect((pullResult.data as { appliedEvents: number }).appliedEvents).toBeGreaterThanOrEqual(1);
+  });
+
+  test("applies dependency.removed events by edge identity", async (): Promise<void> => {
+    const workspace: string = createWorkspace();
+    initializeRepository(workspace);
+
+    const sourceId = randomUUID();
+    const dependsOnId = randomUUID();
+    const depId = randomUUID();
+    const now = Date.now();
+
+    {
+      const storage = openTrekoonDatabase(workspace);
+      try {
+        storage.db
+          .query("INSERT INTO epics (id, title, description, status, created_at, updated_at, version) VALUES (?, ?, ?, ?, ?, ?, 1);")
+          .run("epic-a", "Epic", "seed", "todo", now, now);
+
+        storage.db
+          .query("INSERT INTO tasks (id, epic_id, title, description, status, created_at, updated_at, version) VALUES (?, 'epic-a', ?, ?, ?, ?, ?, 1);")
+          .run(sourceId, "Task A", "seed", "todo", now, now);
+        storage.db
+          .query("INSERT INTO tasks (id, epic_id, title, description, status, created_at, updated_at, version) VALUES (?, 'epic-a', ?, ?, ?, ?, ?, 1);")
+          .run(dependsOnId, "Task B", "seed", "todo", now, now);
+
+        storage.db
+          .query("INSERT INTO dependencies (id, source_id, source_kind, depends_on_id, depends_on_kind, created_at, updated_at, version) VALUES (?, ?, 'task', ?, 'task', ?, ?, 1);")
+          .run(depId, sourceId, dependsOnId, now, now);
+
+        storage.db
+          .query(
+            "INSERT INTO events (id, entity_kind, entity_id, operation, payload, git_branch, git_head, created_at, updated_at, version) VALUES (?, 'dependency', ?, 'dependency.removed', ?, 'main', NULL, ?, ?, 1);",
+          )
+          .run(
+            randomUUID(),
+            `${sourceId}->${dependsOnId}`,
+            JSON.stringify({ fields: { source_id: sourceId, depends_on_id: dependsOnId } }),
+            now + 1,
+            now + 1,
+          );
+      } finally {
+        storage.close();
+      }
+    }
+
+    commitDatabase(workspace, "seed dependency removal event");
+    runGit(workspace, ["checkout", "-b", "feature/dep-removal"]);
+
+    const pullResult = await runSync({
+      args: ["pull", "--from", "main"],
+      cwd: workspace,
+      mode: "toon",
+    });
+
+    expect(pullResult.ok).toBe(true);
+
+    const storage = openTrekoonDatabase(workspace);
+    try {
+      const remaining = storage.db
+        .query("SELECT id FROM dependencies WHERE source_id = ? AND depends_on_id = ? LIMIT 1;")
+        .get(sourceId, dependsOnId) as { id: string } | null;
+      expect(remaining).toBeNull();
+    } finally {
+      storage.close();
+    }
+  });
+
+  test("rejects unsupported sync conflict list modes", async (): Promise<void> => {
+    const workspace: string = createWorkspace();
+    initializeRepository(workspace);
+
+    const result = await runSync({
+      args: ["conflicts", "list", "--mode", "invalid"],
+      cwd: workspace,
+      mode: "toon",
+    });
+
+    expect(result.ok).toBe(false);
+    expect(result.error?.code).toBe("invalid_args");
+  });
 });
