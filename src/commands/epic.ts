@@ -250,7 +250,7 @@ export async function runEpic(context: CliContext): Promise<CliResult> {
         const title: string | undefined = readOption(parsed.options, "title", "t");
         const description: string | undefined = readOption(parsed.options, "description", "d");
         const status: string | undefined = readOption(parsed.options, "status", "s");
-        const epic = domain.createEpic({
+        const epic = mutations.createEpic({
           title: title ?? "",
           description: description ?? "",
           status,
