@@ -527,7 +527,7 @@ export async function runTask(context: CliContext): Promise<CliResult> {
       }
       case "delete": {
         const taskId: string = parsed.positional[1] ?? "";
-        domain.deleteTask(taskId);
+        mutations.deleteTask(taskId);
 
         return okResult({
           command: "task.delete",
