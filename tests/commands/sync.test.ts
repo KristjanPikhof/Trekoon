@@ -414,4 +414,67 @@ describe("sync command", (): void => {
       storage.close();
     }
   });
+
+  test("does not create conflict when current value already matches", async (): Promise<void> => {
+    const workspace: string = createWorkspace();
+    initializeRepository(workspace);
+
+    const epicId = randomUUID();
+    const now = Date.now();
+
+    {
+      const storage = openTrekoonDatabase(workspace);
+      try {
+        storage.db
+          .query("INSERT INTO epics (id, title, description, status, created_at, updated_at, version) VALUES (?, ?, ?, ?, ?, ?, 1);")
+          .run(epicId, "Remote title", "seed", "todo", now, now);
+
+        storage.db
+          .query(
+            "INSERT INTO events (id, entity_kind, entity_id, operation, payload, git_branch, git_head, created_at, updated_at, version) VALUES (?, 'epic', ?, 'upsert', ?, 'main', NULL, ?, ?, 1);",
+          )
+          .run(
+            randomUUID(),
+            epicId,
+            JSON.stringify({ fields: { title: "Remote title", description: "seed", status: "todo" } }),
+            now + 1,
+            now + 1,
+          );
+      } finally {
+        storage.close();
+      }
+    }
+
+    commitDatabase(workspace, "seed main remote title event");
+    runGit(workspace, ["checkout", "-b", "feature/current-value-match"]);
+
+    {
+      const storage = openTrekoonDatabase(workspace);
+      try {
+        appendEventWithGitContext(storage.db, workspace, {
+          entityKind: "epic",
+          entityId: epicId,
+          operation: "upsert",
+          fields: {
+            title: "Stale local title",
+          },
+        });
+
+        storage.db
+          .query("UPDATE epics SET title = ?, updated_at = ?, version = version + 1 WHERE id = ?;")
+          .run("Remote title", now + 2, epicId);
+      } finally {
+        storage.close();
+      }
+    }
+
+    const pullResult = await runSync({
+      args: ["pull", "--from", "main"],
+      cwd: workspace,
+      mode: "toon",
+    });
+
+    expect(pullResult.ok).toBe(true);
+    expect((pullResult.data as { createdConflicts: number }).createdConflicts).toBe(0);
+  });
 });
