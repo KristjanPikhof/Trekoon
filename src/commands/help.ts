@@ -30,14 +30,14 @@ const ROOT_HELP = [
 const COMMAND_HELP: Record<string, string> = {
   init: "Usage: trekoon init [--json|--toon]",
   quickstart:
-    "Usage: trekoon quickstart [--json|--toon] (AI loop: sync status -> task ready -> dep reverse -> task update)",
+    "Usage: trekoon quickstart [--json|--toon] (canonical AI loop: --toon sync status -> --toon task ready/task next -> --toon dep reverse -> --toon status updates)",
   wipe: "Usage: trekoon wipe --yes [--json|--toon]",
   epic:
-    "Usage: trekoon epic <subcommand> [options] (list defaults: open statuses + limit 10; list flags: --status <csv> | --limit <n> | --all | --view table|compact; show: compact=epic summary, tree=hierarchy, detail=descriptions, and --all defaults to detail in machine modes; update bulk flags: --all | --ids <csv> with --append <text> and/or --status <status>)",
+    "Usage: trekoon epic <subcommand> [options] (list defaults: open statuses + limit 10; list flags: --status <csv> | --limit <n> | --cursor <n> | --all | --view table|compact; --cursor is offset-like and machine pagination uses meta.pagination.hasMore/nextCursor; --all is mutually exclusive with --status/--limit/--cursor; show: compact=epic summary, tree=hierarchy, detail=descriptions, and --all defaults to detail in machine modes; update bulk flags: --all | --ids <csv> with --append <text> and/or --status <status>)",
   task:
-    "Usage: trekoon task <subcommand> [options] (list defaults: open statuses + limit 10; list flags: --status <csv> | --limit <n> | --all | --view table|compact; show: compact=task summary, tree=hierarchy, detail=descriptions, and --all defaults to detail in machine modes; ready: deterministic unblocked candidates sorted by status, blockers, createdAt, id with --limit <n> and --epic <id>; next: top ready candidate with --epic <id>; update bulk flags: --all | --ids <csv> with --append <text> and/or --status <status>)",
+    "Usage: trekoon task <subcommand> [options] (list defaults: open statuses + limit 10; list flags: --status <csv> | --limit <n> | --cursor <n> | --all | --view table|compact; --cursor is offset-like and machine pagination uses meta.pagination.hasMore/nextCursor; --all is mutually exclusive with --status/--limit/--cursor; show: compact=task summary, tree=hierarchy, detail=descriptions, and --all defaults to detail in machine modes; ready: deterministic unblocked candidates sorted by status, blockers, createdAt, id with --limit <n> and --epic <id>; next: top ready candidate with --epic <id>; update bulk flags: --all | --ids <csv> with --append <text> and/or --status <status>)",
   subtask:
-    "Usage: trekoon subtask <subcommand> [options] (list defaults: open statuses + limit 10; list flags: --task <id> | --status <csv> | --limit <n> | --all | --view table|compact; update bulk flags: --all | --ids <csv> with --append <text> and/or --status <status>)",
+    "Usage: trekoon subtask <subcommand> [options] (list defaults: open statuses + limit 10; list flags: --task <id> | --status <csv> | --limit <n> | --cursor <n> | --all | --view table|compact; --cursor is offset-like and machine pagination uses meta.pagination.hasMore/nextCursor; --all is mutually exclusive with --status/--limit/--cursor; update bulk flags: --all | --ids <csv> with --append <text> and/or --status <status>)",
   dep: "Usage: trekoon dep <add|remove|list|reverse> [options]",
   events: "Usage: trekoon events prune [--dry-run] [--archive] [--retention-days <n>]",
   migrate: "Usage: trekoon migrate <status|rollback> [--to-version <n>]",
