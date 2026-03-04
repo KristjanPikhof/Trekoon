@@ -47,7 +47,7 @@ export async function runDep(context: CliContext): Promise<CliResult> {
 
     switch (subcommand) {
       case "add": {
-        const dependency = domain.addDependency(sourceId, dependsOnId);
+        const dependency = mutations.addDependency(sourceId, dependsOnId);
 
         return okResult({
           command: "dep.add",
