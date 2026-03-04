@@ -359,7 +359,16 @@ function applyCreate(db: Database, event: StoredEvent, fields: Record<string, un
 
     const description = typeof fields.description === "string" ? fields.description : "";
     db.query(
-      "INSERT INTO epics (id, title, description, status, created_at, updated_at, version) VALUES (?, ?, ?, ?, ?, ?, 1);",
+      `
+      INSERT INTO epics (id, title, description, status, created_at, updated_at, version)
+      VALUES (?, ?, ?, ?, ?, ?, 1)
+      ON CONFLICT(id) DO UPDATE SET
+        title = excluded.title,
+        description = excluded.description,
+        status = excluded.status,
+        updated_at = excluded.updated_at,
+        version = epics.version + 1;
+      `,
     ).run(event.entity_id, title, description, status, now, now);
 
     return true;
