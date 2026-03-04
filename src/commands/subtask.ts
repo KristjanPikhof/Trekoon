@@ -382,7 +382,7 @@ export async function runSubtask(context: CliContext): Promise<CliResult> {
       }
       case "delete": {
         const subtaskId: string = parsed.positional[1] ?? "";
-        domain.deleteSubtask(subtaskId);
+        mutations.deleteSubtask(subtaskId);
 
         return okResult({
           command: "subtask.delete",
