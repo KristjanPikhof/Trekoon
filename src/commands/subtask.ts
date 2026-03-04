@@ -143,7 +143,7 @@ export async function runSubtask(context: CliContext): Promise<CliResult> {
         const title: string | undefined = readOption(parsed.options, "title") ?? parsed.positional[2];
         const description: string | undefined = readOption(parsed.options, "description", "d");
         const status: string | undefined = readOption(parsed.options, "status", "s");
-        const subtask = domain.createSubtask({
+        const subtask = mutations.createSubtask({
           taskId: taskId ?? "",
           title: title ?? "",
           description,
