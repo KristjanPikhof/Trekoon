@@ -250,6 +250,31 @@ function serializeValue(value: unknown): string | null {
   return JSON.stringify(value);
 }
 
+function currentEntityFieldValue(db: Database, entityKind: string, entityId: string, fieldName: string): unknown {
+  const tableName = tableForEntityKind(entityKind);
+  if (!tableName) {
+    return undefined;
+  }
+
+  const allowedFields: Record<string, readonly string[]> = {
+    epics: ["title", "description", "status"],
+    tasks: ["epic_id", "title", "description", "status"],
+    subtasks: ["task_id", "title", "description", "status"],
+    dependencies: ["source_id", "source_kind", "depends_on_id", "depends_on_kind"],
+  };
+
+  const validFields = allowedFields[tableName] ?? [];
+  if (!validFields.includes(fieldName)) {
+    return undefined;
+  }
+
+  const row = db.query(`SELECT ${fieldName} AS value FROM ${tableName} WHERE id = ? LIMIT 1;`).get(entityId) as
+    | { value: string }
+    | null;
+
+  return row?.value;
+}
+
 function entityFieldConflict(
   localDb: Database,
   sourceBranch: string,
