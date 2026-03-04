@@ -1,7 +1,8 @@
 import { parseArgs } from "./arg-parser";
 
-import { DomainError } from "../domain/types";
+import { MutationService } from "../domain/mutation-service";
 import { TrackerDomain } from "../domain/tracker-domain";
+import { DomainError } from "../domain/types";
 import { failResult, okResult } from "../io/output";
 import { type CliContext, type CliResult } from "../runtime/command-types";
 import { openTrekoonDatabase } from "../storage/database";
