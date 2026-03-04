@@ -43,6 +43,7 @@ export async function runDep(context: CliContext): Promise<CliResult> {
     const sourceId: string = parsed.positional[1] ?? "";
     const dependsOnId: string = parsed.positional[2] ?? "";
     const domain = new TrackerDomain(database.db);
+    const mutations = new MutationService(database.db, context.cwd);
 
     switch (subcommand) {
       case "add": {
