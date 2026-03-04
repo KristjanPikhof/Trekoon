@@ -475,10 +475,21 @@ function applyUpdatePatch(db: Database, event: StoredEvent, fields: Record<strin
   return true;
 }
 
-function applyDelete(db: Database, event: StoredEvent): boolean {
+function applyDelete(db: Database, event: StoredEvent, fields: Record<string, unknown>): boolean {
   const tableName = tableForEntityKind(event.entity_kind);
   if (!tableName) {
     return false;
+  }
+
+  if (event.operation === "dependency.removed") {
+    const sourceId = validateRequiredStringField(fields, "source_id");
+    const dependsOnId = validateRequiredStringField(fields, "depends_on_id");
+    if (!sourceId || !dependsOnId) {
+      return false;
+    }
+
+    const result = db.query("DELETE FROM dependencies WHERE source_id = ? AND depends_on_id = ?;").run(sourceId, dependsOnId);
+    return result.changes > 0;
   }
 
   const result = db.query(`DELETE FROM ${tableName} WHERE id = ?;`).run(event.entity_id);
@@ -487,7 +498,7 @@ function applyDelete(db: Database, event: StoredEvent): boolean {
 
 function applyEntityFields(db: Database, event: StoredEvent, fields: Record<string, unknown>): boolean {
   if (event.operation.endsWith(".deleted") || event.operation === "dependency.removed") {
-    return applyDelete(db, event);
+    return applyDelete(db, event, fields);
   }
 
   if (event.operation.endsWith(".created") || event.operation === "dependency.added") {
