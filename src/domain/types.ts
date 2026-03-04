@@ -39,6 +39,13 @@ export interface DependencyRecord {
   readonly updatedAt: number;
 }
 
+export interface ReverseDependencyNode {
+  readonly id: string;
+  readonly kind: Extract<NodeKind, "task" | "subtask">;
+  readonly distance: number;
+  readonly isDirect: boolean;
+}
+
 export interface EpicTree {
   readonly id: string;
   readonly title: string;
