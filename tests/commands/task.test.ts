@@ -4,6 +4,7 @@ import { join } from "node:path";
 
 import { afterEach, describe, expect, test } from "bun:test";
 
+import { runDep } from "../../src/commands/dep";
 import { runEpic } from "../../src/commands/epic";
 import { runSubtask } from "../../src/commands/subtask";
 import { runTask } from "../../src/commands/task";
@@ -540,5 +541,165 @@ describe("task command", (): void => {
 
     expect(result.ok).toBeFalse();
     expect(result.error?.code).toBe("invalid_input");
+  });
+
+  test("ready returns unblocked candidates with blocker summary", async (): Promise<void> => {
+    const cwd = createWorkspace();
+    const epicCreated = await runEpic({
+      cwd,
+      mode: "human",
+      args: ["create", "--title", "Roadmap", "--description", "desc"],
+    });
+    const epicId = (epicCreated.data as { epic: { id: string } }).epic.id;
+
+    const blockedTask = await runTask({
+      cwd,
+      mode: "human",
+      args: ["create", "--epic", epicId, "--title", "Blocked", "--description", "desc", "--status", "todo"],
+    });
+    const inProgressTask = await runTask({
+      cwd,
+      mode: "human",
+      args: ["create", "--epic", epicId, "--title", "Active", "--description", "desc", "--status", "in_progress"],
+    });
+    const todoTask = await runTask({
+      cwd,
+      mode: "human",
+      args: ["create", "--epic", epicId, "--title", "Todo", "--description", "desc", "--status", "todo"],
+    });
+
+    const blockedTaskId = (blockedTask.data as { task: { id: string } }).task.id;
+    const inProgressTaskId = (inProgressTask.data as { task: { id: string } }).task.id;
+    const todoTaskId = (todoTask.data as { task: { id: string } }).task.id;
+
+    const blocker = await runSubtask({
+      cwd,
+      mode: "human",
+      args: ["create", "--task", todoTaskId, "--title", "Unfinished blocker", "--description", "desc", "--status", "todo"],
+    });
+    const blockerId = (blocker.data as { subtask: { id: string } }).subtask.id;
+
+    await runDep({ cwd, mode: "human", args: ["add", blockedTaskId, blockerId] });
+
+    const ready = await runTask({ cwd, mode: "toon", args: ["ready"] });
+    expect(ready.ok).toBeTrue();
+
+    const data = ready.data as {
+      candidates: Array<{
+        task: { id: string };
+        readiness: { isReady: boolean; reason: string };
+        blockerSummary: { blockedByCount: number; totalDependencies: number };
+        ranking: { rank: number; blockerCount: number; statusPriority: number };
+      }>;
+      blocked: Array<{
+        task: { id: string };
+        blockerSummary: { blockedByCount: number; blockedBy: Array<{ id: string; kind: string; status: string }> };
+      }>;
+      summary: { totalOpenTasks: number; readyCount: number; blockedCount: number; unresolvedDependencyCount: number };
+    };
+
+    expect(data.candidates.map((item) => item.task.id)).toEqual([inProgressTaskId, todoTaskId]);
+    expect(data.candidates.every((item) => item.readiness.isReady)).toBeTrue();
+    expect(data.candidates.every((item) => item.readiness.reason === "all_dependencies_done")).toBeTrue();
+    expect(data.candidates.map((item) => item.ranking.rank)).toEqual([1, 2]);
+    expect(data.candidates.every((item) => item.ranking.blockerCount === 0)).toBeTrue();
+    expect(data.summary).toEqual({
+      totalOpenTasks: 3,
+      readyCount: 2,
+      blockedCount: 1,
+      unresolvedDependencyCount: 1,
+    });
+    expect(data.blocked.length).toBe(1);
+    expect(data.blocked[0]?.task.id).toBe(blockedTaskId);
+    expect(data.blocked[0]?.blockerSummary.blockedByCount).toBe(1);
+    expect(data.blocked[0]?.blockerSummary.blockedBy[0]).toEqual({ id: blockerId, kind: "subtask", status: "todo" });
+  });
+
+  test("ready ordering uses id tie-break for equal ranks", async (): Promise<void> => {
+    const cwd = createWorkspace();
+    const epicCreated = await runEpic({
+      cwd,
+      mode: "human",
+      args: ["create", "--title", "Roadmap", "--description", "desc"],
+    });
+    const epicId = (epicCreated.data as { epic: { id: string } }).epic.id;
+    const originalNow = Date.now;
+    Date.now = (): number => 1_700_000_000_000;
+
+    try {
+      await runTask({
+        cwd,
+        mode: "human",
+        args: ["create", "--epic", epicId, "--title", "C", "--description", "desc", "--status", "todo"],
+      });
+      await runTask({
+        cwd,
+        mode: "human",
+        args: ["create", "--epic", epicId, "--title", "A", "--description", "desc", "--status", "todo"],
+      });
+      await runTask({
+        cwd,
+        mode: "human",
+        args: ["create", "--epic", epicId, "--title", "B", "--description", "desc", "--status", "todo"],
+      });
+    } finally {
+      Date.now = originalNow;
+    }
+
+    const ready = await runTask({ cwd, mode: "toon", args: ["ready"] });
+    expect(ready.ok).toBeTrue();
+
+    const ids = (ready.data as { candidates: Array<{ task: { id: string } }> }).candidates.map((item) => item.task.id);
+    expect(ids).toEqual([...ids].sort());
+  });
+
+  test("next returns top candidate and null when none are ready", async (): Promise<void> => {
+    const cwd = createWorkspace();
+    const epicCreated = await runEpic({
+      cwd,
+      mode: "human",
+      args: ["create", "--title", "Roadmap", "--description", "desc"],
+    });
+    const epicId = (epicCreated.data as { epic: { id: string } }).epic.id;
+
+    const first = await runTask({
+      cwd,
+      mode: "human",
+      args: ["create", "--epic", epicId, "--title", "First", "--description", "desc", "--status", "in-progress"],
+    });
+    const second = await runTask({
+      cwd,
+      mode: "human",
+      args: ["create", "--epic", epicId, "--title", "Second", "--description", "desc", "--status", "todo"],
+    });
+    const firstId = (first.data as { task: { id: string } }).task.id;
+    const secondId = (second.data as { task: { id: string } }).task.id;
+
+    const next = await runTask({ cwd, mode: "toon", args: ["next"] });
+    expect(next.ok).toBeTrue();
+    const nextCandidate = (next.data as { candidate: { task: { id: string } } | null }).candidate;
+    expect(nextCandidate?.task.id).toBe(firstId);
+
+    const blockerTask = await runTask({
+      cwd,
+      mode: "human",
+      args: ["create", "--epic", epicId, "--title", "Only blocked", "--description", "desc", "--status", "todo"],
+    });
+    const blockerTaskId = (blockerTask.data as { task: { id: string } }).task.id;
+    const blockerSubtask = await runSubtask({
+      cwd,
+      mode: "human",
+      args: ["create", "--task", secondId, "--title", "Blocker", "--description", "desc", "--status", "todo"],
+    });
+    const blockerSubtaskId = (blockerSubtask.data as { subtask: { id: string } }).subtask.id;
+    await runDep({ cwd, mode: "human", args: ["add", blockerTaskId, blockerSubtaskId] });
+
+    await runTask({ cwd, mode: "human", args: ["update", firstId, "--status", "done"] });
+    await runTask({ cwd, mode: "human", args: ["update", secondId, "--status", "done"] });
+
+    const noneReady = await runTask({ cwd, mode: "toon", args: ["next"] });
+    expect(noneReady.ok).toBeTrue();
+    expect((noneReady.data as { candidate: unknown }).candidate).toBeNull();
+    expect((noneReady.data as { summary: { blockedCount: number } }).summary.blockedCount).toBe(1);
   });
 });
