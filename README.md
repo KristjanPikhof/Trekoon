@@ -48,9 +48,9 @@ npm i -g trekoon
 - `trekoon init`
 - `trekoon quickstart`
 - `trekoon epic <create|list|show|update|delete>`
-- `trekoon task <create|list|show|update|delete>`
+- `trekoon task <create|list|show|ready|next|update|delete>`
 - `trekoon subtask <create|list|update|delete>`
-- `trekoon dep <add|remove|list>`
+- `trekoon dep <add|remove|list|reverse>`
 - `trekoon sync <status|pull|resolve>`
 - `trekoon skills install [--link --editor opencode|claude|pi] [--to <path>] [--allow-outside-repo]`
 - `trekoon skills update`
@@ -140,7 +140,25 @@ trekoon dep add <task-id> <depends-on-id>
 trekoon dep list <task-id>
 ```
 
-### 4) Use JSON or TOON output for agents
+### 4) AI execution loop for agents
+
+Run this loop each session to pick next work deterministically:
+
+```bash
+trekoon --toon sync status
+trekoon --toon task ready --limit 5
+trekoon --toon dep reverse <task-or-subtask-id>
+trekoon --toon task update <task-id> --status in_progress
+```
+
+When done or blocked, append context and update final status:
+
+```bash
+trekoon --toon task update <task-id> --append "Completed implementation and checks" --status done
+trekoon --toon task update <task-id> --append "Blocked by <reason>" --status blocked
+```
+
+### 5) Use JSON or TOON output for agents
 
 ```bash
 trekoon --json epic show <epic-id>
@@ -149,7 +167,7 @@ trekoon --toon epic show <epic-id>
 trekoon --toon task show <task-id>
 ```
 
-### 5) Sync workflow for worktrees
+### 6) Sync workflow for worktrees
 
 - Run `trekoon sync status` at session start and before PR/merge.
 - Run `trekoon sync pull --from main` before merge to align tracker state.
@@ -170,7 +188,7 @@ react deterministically:
 - `diagnostics.conflictEvents`
 - `diagnostics.errorHints`
 
-### 6) Install project-local Trekoon skill for agents
+### 7) Install project-local Trekoon skill for agents
 
 `trekoon skills install` always writes the bundled skill file into the current
 repository at:
@@ -232,12 +250,73 @@ This produces:
 
 Trekoon does not mutate global editor config directories.
 
-### 7) Pre-merge checklist
+### 8) Pre-merge checklist
 
 - [ ] `trekoon sync status` shows no unresolved conflicts
 - [ ] done tasks/subtasks are marked completed
 - [ ] dependency graph has no stale blockers
 - [ ] final AI check: `trekoon --toon epic show <epic-id>`
+
+## Machine-contract recipes (--toon)
+
+Use `--toon` for production agent loops. The examples below show command +
+expected envelope fields.
+
+### Ready queue (deterministic candidates)
+
+```bash
+trekoon --toon task ready --limit 3
+```
+
+Payload fields:
+
+```text
+ok: true
+command: task.ready
+data:
+  candidates[]:
+    task: { id, epicId, title, status, ... }
+    readiness: { isReady, reason }
+    blockerSummary: { blockedByCount, totalDependencies, blockedBy[] }
+    ranking: { rank, blockerCount, statusPriority }
+  blocked[]: (same shape, non-ready items)
+  summary: { totalOpenTasks, readyCount, blockedCount, unresolvedDependencyCount }
+```
+
+### Reverse dependency walk (blocker impact)
+
+```bash
+trekoon --toon dep reverse <task-or-subtask-id>
+```
+
+Payload fields:
+
+```text
+ok: true
+command: dep.reverse
+data:
+  targetId: <id>
+  targetKind: task|subtask
+  blockedNodes[]: { id, kind, distance, isDirect }
+```
+
+### Pagination contract for machine list calls
+
+```bash
+trekoon --toon task list --status todo --limit 2
+trekoon --toon task list --status todo --limit 2 --cursor 2
+```
+
+Payload fields:
+
+```text
+ok: true
+command: task.list
+data:
+  tasks[]: ...
+meta:
+  pagination: { hasMore, nextCursor }
+```
 
 ## Implementation principles
 
