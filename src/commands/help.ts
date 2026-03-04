@@ -15,7 +15,7 @@ const ROOT_HELP = [
   "",
   "Commands:",
   "  init         Initialize .trekoon storage and local DB",
-  "  quickstart   Show workflow + where to see task descriptions",
+  "  quickstart   Show AI execution loop + task detail workflow",
   "  wipe         Remove local Trekoon state (requires --yes)",
   "  epic         Epic lifecycle commands",
   "  task         Task lifecycle commands",
@@ -29,7 +29,8 @@ const ROOT_HELP = [
 
 const COMMAND_HELP: Record<string, string> = {
   init: "Usage: trekoon init [--json|--toon]",
-  quickstart: "Usage: trekoon quickstart [--json|--toon]",
+  quickstart:
+    "Usage: trekoon quickstart [--json|--toon] (AI loop: sync status -> task ready -> dep reverse -> task update)",
   wipe: "Usage: trekoon wipe --yes [--json|--toon]",
   epic:
     "Usage: trekoon epic <subcommand> [options] (list defaults: open statuses + limit 10; list flags: --status <csv> | --limit <n> | --all | --view table|compact; show: compact=epic summary, tree=hierarchy, detail=descriptions, and --all defaults to detail in machine modes; update bulk flags: --all | --ids <csv> with --append <text> and/or --status <status>)",
