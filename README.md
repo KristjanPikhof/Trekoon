@@ -224,7 +224,7 @@ Trekoon does not mutate global editor config directories.
 - [ ] `trekoon sync status` shows no unresolved conflicts
 - [ ] done tasks/subtasks are marked completed
 - [ ] dependency graph has no stale blockers
-- [ ] final AI check: `trekoon --json epic show <epic-id>`
+- [ ] final AI check: `trekoon --toon epic show <epic-id>`
 
 ## Implementation principles
 
