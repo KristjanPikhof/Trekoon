@@ -161,6 +161,15 @@ trekoon sync pull --from main
 trekoon sync resolve <conflict-id> --use ours
 ```
 
+`sync pull` machine output includes diagnostics counters and hints so agents can
+react deterministically:
+
+- `diagnostics.malformedPayloadEvents`
+- `diagnostics.applyRejectedEvents`
+- `diagnostics.quarantinedEvents`
+- `diagnostics.conflictEvents`
+- `diagnostics.errorHints`
+
 ### 6) Install project-local Trekoon skill for agents
 
 `trekoon skills install` always writes the bundled skill file into the current
@@ -186,6 +195,10 @@ Path behavior:
 - Default pi link path: `.pi/skills/trekoon`
 - `--to <path>` overrides the editor root for link creation only.
 - `--to` does **not** move or copy `SKILL.md` to that path.
+- By default, link targets must resolve inside the repository root.
+- Use `--allow-outside-repo` only for intentional external links.
+- When override is used, install prints a warning and includes confirmation
+  fields in machine output.
 - Re-running install is idempotent: it refreshes `SKILL.md` and reuses/replaces
   the same symlink target.
 - `trekoon skills update` is idempotent: it refreshes canonical
