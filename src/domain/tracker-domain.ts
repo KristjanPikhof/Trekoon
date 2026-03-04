@@ -16,6 +16,7 @@ import {
 } from "./types";
 
 const DEFAULT_STATUS = "todo";
+const DEPENDENCY_GATED_STATUSES = new Set<string>(["in_progress", "in-progress", "done"]);
 
 interface EpicRow {
   id: string;
@@ -48,6 +49,12 @@ interface ReverseDependencyRow {
   node_id: string;
   node_kind: "task" | "subtask";
   min_distance: number;
+}
+
+interface UnresolvedDependencyBlocker {
+  readonly id: string;
+  readonly kind: "task" | "subtask";
+  readonly status: string;
 }
 
 function assertNonEmpty(field: string, value: string | undefined | null): string {
@@ -256,6 +263,7 @@ export class TrackerDomain {
     const nextDescription: string =
       input.description !== undefined ? assertNonEmpty("description", input.description) : existing.description;
     const nextStatus: string = input.status !== undefined ? assertNonEmpty("status", input.status) : existing.status;
+    this.assertNoUnresolvedDependenciesForStatusTransition(id, "task", existing.status, nextStatus);
     const now: number = Date.now();
 
     this.#db
@@ -339,6 +347,7 @@ export class TrackerDomain {
     const nextDescription: string =
       input.description !== undefined ? assertNonEmpty("description", input.description) : existing.description;
     const nextStatus: string = input.status !== undefined ? assertNonEmpty("status", input.status) : existing.status;
+    this.assertNoUnresolvedDependenciesForStatusTransition(id, "subtask", existing.status, nextStatus);
     const now: number = Date.now();
 
     this.#db
@@ -581,6 +590,63 @@ export class TrackerDomain {
       .get(dependsOnId, sourceId) as { has_cycle: number } | null;
 
     return row !== null;
+  }
+
+  private assertNoUnresolvedDependenciesForStatusTransition(
+    id: string,
+    kind: "task" | "subtask",
+    existingStatus: string,
+    nextStatus: string,
+  ): void {
+    if (existingStatus === nextStatus) {
+      return;
+    }
+
+    if (!DEPENDENCY_GATED_STATUSES.has(nextStatus)) {
+      return;
+    }
+
+    const unresolvedDependencies = this.listUnresolvedDependencyBlockers(id);
+    if (unresolvedDependencies.length === 0) {
+      return;
+    }
+
+    throw new DomainError({
+      code: "dependency_blocked",
+      message: `${kind} cannot transition to ${nextStatus} while dependencies are unresolved`,
+      details: {
+        entity: kind,
+        id,
+        status: nextStatus,
+        unresolvedDependencyCount: unresolvedDependencies.length,
+        unresolvedDependencyIds: unresolvedDependencies.map((dependency) => dependency.id),
+        unresolvedDependencies,
+      },
+    });
+  }
+
+  private listUnresolvedDependencyBlockers(sourceId: string): readonly UnresolvedDependencyBlocker[] {
+    const dependencies = this.listDependencies(sourceId);
+    const unresolved: UnresolvedDependencyBlocker[] = [];
+
+    for (const dependency of dependencies) {
+      const dependencyStatus =
+        dependency.dependsOnKind === "task"
+          ? this.getTaskOrThrow(dependency.dependsOnId).status
+          : this.getSubtaskOrThrow(dependency.dependsOnId).status;
+
+      if (dependencyStatus === "done") {
+        continue;
+      }
+
+      unresolved.push({
+        id: dependency.dependsOnId,
+        kind: dependency.dependsOnKind,
+        status: dependencyStatus,
+      });
+    }
+
+    return unresolved;
   }
 }
 
