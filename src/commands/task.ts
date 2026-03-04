@@ -517,7 +517,7 @@ export async function runTask(context: CliContext): Promise<CliResult> {
           append === undefined
             ? description
             : appendLine(domain.getTaskOrThrow(taskId).description, append);
-        const task = domain.updateTask(taskId, { title, description: nextDescription, status });
+        const task = mutations.updateTask(taskId, { title, description: nextDescription, status });
 
         return okResult({
           command: "task.update",
