@@ -446,7 +446,14 @@ function applyCreate(db: Database, event: StoredEvent, fields: Record<string, un
       created_at,
       updated_at,
       version
-    ) VALUES (?, ?, ?, ?, ?, ?, ?, 1);
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, 1)
+    ON CONFLICT(id) DO UPDATE SET
+      source_id = excluded.source_id,
+      source_kind = excluded.source_kind,
+      depends_on_id = excluded.depends_on_id,
+      depends_on_kind = excluded.depends_on_kind,
+      updated_at = excluded.updated_at,
+      version = dependencies.version + 1;
     `,
   ).run(event.entity_id, sourceId, sourceKind, dependsOnId, dependsOnKind, now, now);
 
