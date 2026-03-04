@@ -101,6 +101,7 @@ Dependencies define what must be completed before a task can start. A task/subta
 trekoon dep add <source-id> <depends-on-id> --toon
 trekoon dep list <source-id> --toon
 trekoon dep remove <source-id> <depends-on-id> --toon
+trekoon dep reverse <task-or-subtask-id> --toon
 ```
 
 - `<source-id>`: The task/subtask that has the dependency
@@ -127,16 +128,32 @@ The response `data.dependencies` array contains entries with:
 
 ## 3) Task Completion Flow
 
-### Before Starting a Task
+### Canonical dependency-aware execution loop
 
-1. Check if task has unmet dependencies:
+Run this sequence every session:
+
+1. Sync branch/worktree status:
    ```bash
-   trekoon dep list <task-id> --toon
+   trekoon sync status --toon
    ```
-
-2. If dependencies exist and are not `done`, complete those first
-
-3. Only mark `in_progress` when all dependencies are `done`
+2. Pull deterministic ready candidates (or next candidate):
+   ```bash
+   trekoon task ready --limit 5 --toon
+   trekoon task next --toon
+   ```
+3. Inspect downstream impact before changes:
+   ```bash
+   trekoon dep reverse <task-or-subtask-id> --toon
+   ```
+4. Start work with explicit status updates:
+   ```bash
+   trekoon task update <task-id> --status in_progress --toon
+   ```
+5. Finish or block with appended context + final status:
+   ```bash
+   trekoon task update <task-id> --append "Completed implementation" --status done --toon
+   trekoon task update <task-id> --append "Blocked by <reason>" --status blocked --toon
+   ```
 
 ### When Completing a Task
 
@@ -146,17 +163,19 @@ The response `data.dependencies` array contains entries with:
    ```
 
 2. To find the next task that was blocked by this one:
-   - List all tasks: `trekoon task list --all --toon`
-   - Check which tasks have dependencies on the completed task
-   - The task(s) with all dependencies now satisfied are ready to start
+   - Inspect downstream nodes: `trekoon dep reverse <task-id> --toon`
+   - Pull ready queue: `trekoon task ready --limit 5 --toon`
+   - Pick one deterministically: `trekoon task next --toon`
 
 ### Finding Next Work
 
 ```bash
-trekoon task list --status todo --limit 20 --toon
+trekoon task ready --limit 5 --toon
+trekoon task next --toon
+trekoon dep reverse <task-or-subtask-id> --toon
 ```
 
-Tasks are sorted with `in_progress` first, then `todo`. Look for tasks with no dependencies or all dependencies satisfied.
+Use `task ready` for ranked candidates and `task next` for the top deterministic pick.
 
 ## 4) Load existing work first
 
@@ -173,6 +192,7 @@ trekoon task show <id> --all --toon
   - open work only (`in_progress`, `in-progress`, `todo`)
   - prioritized as `in_progress`/`in-progress` first, then `todo`
   - default limit `10`
+  - `--cursor <n>` is offset-like pagination for list endpoints
 - Filter list explicitly when needed:
 
 ```bash
@@ -182,6 +202,9 @@ trekoon task list --all --toon
 ```
 
 - `--all` cannot be combined with `--status` or `--limit`.
+- `--all` cannot be combined with `--cursor`.
+- Machine pagination contract is in `meta.pagination.hasMore` and
+  `meta.pagination.nextCursor`.
 - `epic show <id> --all --toon`: full epic tree (tasks + subtasks)
 - `task show <id> --all --toon`: task plus its subtasks
 
@@ -236,14 +259,15 @@ Rules:
 2. In the target repository/worktree, initialize tracker state:
 
 ```bash
-trekoon init
+trekoon init --toon
 ```
 
-3. You can always run `trekoon quickstart` or `trekoon --help` to get more information.
+3. You can always run `trekoon quickstart --toon` or `trekoon --help --toon` to
+   get more information.
 
 If `.trekoon/trekoon.db` is missing, initialize before any create/update commands.
 
 ## 8) Safety
 
 - Never edit `.trekoon/trekoon.db` directly.
-- `trekoon wipe --yes` is prohibited unless the user explicitly confirms they want a destructive wipe.
+- `trekoon wipe --yes --toon` is prohibited unless the user explicitly confirms they want a destructive wipe.
