@@ -9,6 +9,7 @@ import {
   type EpicRecord,
   type EpicTree,
   type NodeKind,
+  type ReverseDependencyNode,
   type SubtaskRecord,
   type TaskTreeDetailed,
   type TaskRecord,
@@ -41,6 +42,12 @@ interface DependencyRow {
   depends_on_kind: "task" | "subtask";
   created_at: number;
   updated_at: number;
+}
+
+interface ReverseDependencyRow {
+  node_id: string;
+  node_kind: "task" | "subtask";
+  min_distance: number;
 }
 
 function assertNonEmpty(field: string, value: string | undefined | null): string {
@@ -501,6 +508,39 @@ export class TrackerDomain {
       .all(normalizedSourceId) as DependencyRow[];
 
     return rows.map(mapDependency);
+  }
+
+  listReverseDependencies(nodeId: string): readonly ReverseDependencyNode[] {
+    const normalizedNodeId: string = assertNonEmpty("nodeId", nodeId);
+    this.resolveNodeKind(normalizedNodeId);
+
+    const rows = this.#db
+      .query(
+        `
+        WITH RECURSIVE reverse_paths(node_id, node_kind, distance, visited) AS (
+          SELECT d.source_id, d.source_kind, 1, ',' || d.source_id || ','
+          FROM dependencies d
+          WHERE d.depends_on_id = ?
+          UNION ALL
+          SELECT d.source_id, d.source_kind, rp.distance + 1, rp.visited || d.source_id || ','
+          FROM dependencies d
+          INNER JOIN reverse_paths rp ON d.depends_on_id = rp.node_id
+          WHERE instr(rp.visited, ',' || d.source_id || ',') = 0
+        )
+        SELECT node_id, node_kind, MIN(distance) AS min_distance
+        FROM reverse_paths
+        GROUP BY node_id, node_kind
+        ORDER BY min_distance ASC, node_kind ASC, node_id ASC;
+        `,
+      )
+      .all(normalizedNodeId) as ReverseDependencyRow[];
+
+    return rows.map((row) => ({
+      id: row.node_id,
+      kind: row.node_kind,
+      distance: row.min_distance,
+      isDirect: row.min_distance === 1,
+    }));
   }
 
   private getDependencyOrThrow(id: string): DependencyRecord {
