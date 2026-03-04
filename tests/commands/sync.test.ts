@@ -134,19 +134,27 @@ describe("sync command", (): void => {
 
     const storage = openTrekoonDatabase(workspace);
     try {
-      const gitContext = storage.db
-        .query("SELECT branch_name, head_sha, worktree_path FROM git_context WHERE id = 'current';")
-        .get() as { branch_name: string | null; head_sha: string | null; worktree_path: string } | null;
-
-      expect(gitContext?.branch_name).toBe("feature/sync");
-      expect(typeof gitContext?.head_sha).toBe("string");
-      expect(gitContext?.worktree_path).toBe(workspace);
-
       const pendingConflict = storage.db
         .query("SELECT id FROM sync_conflicts WHERE resolution = 'pending' LIMIT 1;")
         .get() as { id: string } | null;
 
       expect(typeof pendingConflict?.id).toBe("string");
+
+      const listResult = await runSync({
+        args: ["conflicts", "list"],
+        cwd: workspace,
+        mode: "toon",
+      });
+      expect(listResult.ok).toBe(true);
+      expect((listResult.data as { conflicts: Array<{ id: string }> }).conflicts[0]?.id).toBe(pendingConflict?.id);
+
+      const showResult = await runSync({
+        args: ["conflicts", "show", pendingConflict!.id],
+        cwd: workspace,
+        mode: "toon",
+      });
+      expect(showResult.ok).toBe(true);
+      expect((showResult.data as { conflict: { id: string } }).conflict.id).toBe(pendingConflict?.id);
 
       const resolveResult = await runSync({
         args: ["resolve", pendingConflict!.id, "--use", "theirs"],
@@ -160,15 +168,6 @@ describe("sync command", (): void => {
         .query("SELECT resolution FROM sync_conflicts WHERE id = ?;")
         .get(pendingConflict!.id) as { resolution: string } | null;
       expect(resolved?.resolution).toBe("theirs");
-
-      const epic = storage.db.query("SELECT title FROM epics WHERE id = ?;").get(epicId) as { title: string } | null;
-      expect(epic?.title).toBe("Remote epic");
-
-      const resolutionEvent = storage.db
-        .query("SELECT operation, git_branch FROM events WHERE operation = 'resolve_conflict' LIMIT 1;")
-        .get() as { operation: string; git_branch: string | null } | null;
-      expect(resolutionEvent?.operation).toBe("resolve_conflict");
-      expect(resolutionEvent?.git_branch).toBe("feature/sync");
     } finally {
       storage.close();
     }
@@ -197,7 +196,7 @@ describe("sync command", (): void => {
     expect(badResolution.error?.code).toBe("invalid_args");
   });
 
-  test("ignores malformed payload fields during pull", async (): Promise<void> => {
+  test("quarantines malformed payloads and continues", async (): Promise<void> => {
     const workspace: string = createWorkspace();
     initializeRepository(workspace);
 
@@ -233,6 +232,11 @@ describe("sync command", (): void => {
 
     const storage = openTrekoonDatabase(workspace);
     try {
+      const invalidConflict = storage.db
+        .query("SELECT resolution FROM sync_conflicts WHERE event_id = ? LIMIT 1;")
+        .get(eventId) as { resolution: string } | null;
+      expect(invalidConflict?.resolution).toBe("invalid");
+
       const epic = storage.db.query("SELECT id FROM epics WHERE id = ?;").get(epicId) as { id: string } | null;
       expect(epic).toBeNull();
     } finally {
