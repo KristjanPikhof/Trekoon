@@ -5,7 +5,15 @@ import { type Database } from "bun:sqlite";
 import { openTrekoonDatabase } from "../storage/database";
 import { openBranchDatabaseSnapshot } from "./branch-db";
 import { persistGitContext, resolveGitContext } from "./git-context";
-import { type PullSummary, type ResolveSummary, type SyncResolution, type SyncStatusSummary } from "./types";
+import {
+  type PullSummary,
+  type ResolveSummary,
+  type SyncConflictDetail,
+  type SyncConflictListItem,
+  type SyncConflictMode,
+  type SyncResolution,
+  type SyncStatusSummary,
+} from "./types";
 
 interface StoredEvent {
   readonly id: string;
@@ -35,32 +43,62 @@ interface ConflictRow {
   readonly ours_value: string | null;
   readonly theirs_value: string | null;
   readonly resolution: string;
+  readonly created_at: number;
+  readonly updated_at: number;
 }
 
 interface EventPayload {
-  readonly fields?: Record<string, unknown>;
+  readonly fields: Record<string, unknown>;
+}
+
+interface PayloadValidation {
+  readonly ok: boolean;
+  readonly fields: Record<string, unknown>;
+  readonly reason?: string;
 }
 
 function isObjectRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
 }
 
-function parsePayload(rawPayload: string): EventPayload {
+function parsePayload(rawPayload: string): PayloadValidation {
   try {
     const parsed: unknown = JSON.parse(rawPayload);
 
-    if (isObjectRecord(parsed)) {
-      if ("fields" in parsed && !isObjectRecord(parsed.fields)) {
-        return {};
-      }
-
-      return parsed as EventPayload;
+    if (!isObjectRecord(parsed)) {
+      return {
+        ok: false,
+        fields: {},
+        reason: "payload must be a JSON object",
+      };
     }
-  } catch {
-    // Fall back to empty payload.
-  }
 
-  return {};
+    if (!("fields" in parsed)) {
+      return {
+        ok: true,
+        fields: {},
+      };
+    }
+
+    if (!isObjectRecord(parsed.fields)) {
+      return {
+        ok: false,
+        fields: {},
+        reason: "payload.fields must be an object",
+      };
+    }
+
+    return {
+      ok: true,
+      fields: parsed.fields,
+    };
+  } catch {
+    return {
+      ok: false,
+      fields: {},
+      reason: "payload is not valid JSON",
+    };
+  }
 }
 
 function tableForEntityKind(entityKind: string): "epics" | "tasks" | "subtasks" | "dependencies" | null {
@@ -201,12 +239,7 @@ function countAhead(localDb: Database, currentBranch: string | null, remoteEvent
 }
 
 function readFieldValue(payload: EventPayload, field: string): unknown {
-  const fields = payload.fields;
-  if (!fields) {
-    return undefined;
-  }
-
-  return fields[field];
+  return payload.fields[field];
 }
 
 function serializeValue(value: unknown): string | null {
@@ -241,7 +274,12 @@ function entityFieldConflict(
       continue;
     }
 
-    const payload = parsePayload(row.payload);
+    const payloadValidation = parsePayload(row.payload);
+    if (!payloadValidation.ok) {
+      continue;
+    }
+
+    const payload: EventPayload = { fields: payloadValidation.fields };
     const localValue: unknown = readFieldValue(payload, fieldName);
 
     if (typeof localValue === "undefined") {
@@ -268,6 +306,7 @@ function createConflict(
   fieldName: string,
   oursValue: string | null,
   theirsValue: string | null,
+  resolution: string = "pending",
 ): void {
   const now: number = Date.now();
   db.query(
@@ -284,12 +323,26 @@ function createConflict(
       created_at,
       updated_at,
       version
-    ) VALUES (?, ?, ?, ?, ?, ?, ?, 'pending', ?, ?, 1);
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1);
     `,
-  ).run(randomUUID(), event.id, event.entity_kind, event.entity_id, fieldName, oursValue, theirsValue, now, now);
+  ).run(randomUUID(), event.id, event.entity_kind, event.entity_id, fieldName, oursValue, theirsValue, resolution, now, now);
 }
 
-function applyEntityFields(db: Database, event: StoredEvent, fields: Record<string, unknown>): boolean {
+function rowExists(db: Database, tableName: string, id: string): boolean {
+  const row = db.query(`SELECT id FROM ${tableName} WHERE id = ? LIMIT 1;`).get(id) as { id: string } | null;
+  return row !== null;
+}
+
+function validateRequiredStringField(fields: Record<string, unknown>, fieldName: string): string | null {
+  const value: unknown = fields[fieldName];
+  if (typeof value !== "string" || value.length === 0) {
+    return null;
+  }
+
+  return value;
+}
+
+function applyCreate(db: Database, event: StoredEvent, fields: Record<string, unknown>): boolean {
   const tableName = tableForEntityKind(event.entity_kind);
   if (!tableName) {
     return false;
@@ -298,76 +351,59 @@ function applyEntityFields(db: Database, event: StoredEvent, fields: Record<stri
   const now: number = Date.now();
 
   if (tableName === "epics") {
+    const title = validateRequiredStringField(fields, "title");
+    const status = validateRequiredStringField(fields, "status");
+    if (!title || !status) {
+      return false;
+    }
+
+    const description = typeof fields.description === "string" ? fields.description : "";
     db.query(
-      `
-      INSERT INTO epics (id, title, description, status, created_at, updated_at, version)
-      VALUES (@id, @title, @description, @status, @now, @now, 1)
-      ON CONFLICT(id) DO UPDATE SET
-        title = excluded.title,
-        description = excluded.description,
-        status = excluded.status,
-        updated_at = excluded.updated_at,
-        version = epics.version + 1;
-      `,
-    ).run({
-      "@id": event.entity_id,
-      "@title": typeof fields.title === "string" ? fields.title : "Untitled epic",
-      "@description": typeof fields.description === "string" ? fields.description : "",
-      "@status": typeof fields.status === "string" ? fields.status : "open",
-      "@now": now,
-    });
+      "INSERT INTO epics (id, title, description, status, created_at, updated_at, version) VALUES (?, ?, ?, ?, ?, ?, 1);",
+    ).run(event.entity_id, title, description, status, now, now);
 
     return true;
   }
 
   if (tableName === "tasks") {
+    const epicId = validateRequiredStringField(fields, "epic_id");
+    const title = validateRequiredStringField(fields, "title");
+    const status = validateRequiredStringField(fields, "status");
+    if (!epicId || !title || !status || !rowExists(db, "epics", epicId)) {
+      return false;
+    }
+
+    const description = typeof fields.description === "string" ? fields.description : "";
     db.query(
-      `
-      INSERT INTO tasks (id, epic_id, title, description, status, created_at, updated_at, version)
-      VALUES (@id, @epicId, @title, @description, @status, @now, @now, 1)
-      ON CONFLICT(id) DO UPDATE SET
-        epic_id = excluded.epic_id,
-        title = excluded.title,
-        description = excluded.description,
-        status = excluded.status,
-        updated_at = excluded.updated_at,
-        version = tasks.version + 1;
-      `,
-    ).run({
-      "@id": event.entity_id,
-      "@epicId": typeof fields.epic_id === "string" ? fields.epic_id : "missing-epic",
-      "@title": typeof fields.title === "string" ? fields.title : "Untitled task",
-      "@description": typeof fields.description === "string" ? fields.description : "",
-      "@status": typeof fields.status === "string" ? fields.status : "open",
-      "@now": now,
-    });
+      "INSERT INTO tasks (id, epic_id, title, description, status, created_at, updated_at, version) VALUES (?, ?, ?, ?, ?, ?, ?, 1);",
+    ).run(event.entity_id, epicId, title, description, status, now, now);
 
     return true;
   }
 
   if (tableName === "subtasks") {
+    const taskId = validateRequiredStringField(fields, "task_id");
+    const title = validateRequiredStringField(fields, "title");
+    const status = validateRequiredStringField(fields, "status");
+    if (!taskId || !title || !status || !rowExists(db, "tasks", taskId)) {
+      return false;
+    }
+
+    const description = typeof fields.description === "string" ? fields.description : "";
     db.query(
-      `
-      INSERT INTO subtasks (id, task_id, title, description, status, created_at, updated_at, version)
-      VALUES (@id, @taskId, @title, @description, @status, @now, @now, 1)
-      ON CONFLICT(id) DO UPDATE SET
-        task_id = excluded.task_id,
-        title = excluded.title,
-        description = excluded.description,
-        status = excluded.status,
-        updated_at = excluded.updated_at,
-        version = subtasks.version + 1;
-      `,
-    ).run({
-      "@id": event.entity_id,
-      "@taskId": typeof fields.task_id === "string" ? fields.task_id : "missing-task",
-      "@title": typeof fields.title === "string" ? fields.title : "Untitled subtask",
-      "@description": typeof fields.description === "string" ? fields.description : "",
-      "@status": typeof fields.status === "string" ? fields.status : "open",
-      "@now": now,
-    });
+      "INSERT INTO subtasks (id, task_id, title, description, status, created_at, updated_at, version) VALUES (?, ?, ?, ?, ?, ?, ?, 1);",
+    ).run(event.entity_id, taskId, title, description, status, now, now);
 
     return true;
+  }
+
+  const sourceId = validateRequiredStringField(fields, "source_id");
+  const sourceKind = validateRequiredStringField(fields, "source_kind");
+  const dependsOnId = validateRequiredStringField(fields, "depends_on_id");
+  const dependsOnKind = validateRequiredStringField(fields, "depends_on_kind");
+
+  if (!sourceId || !sourceKind || !dependsOnId || !dependsOnKind) {
+    return false;
   }
 
   db.query(
@@ -381,26 +417,97 @@ function applyEntityFields(db: Database, event: StoredEvent, fields: Record<stri
       created_at,
       updated_at,
       version
-    )
-    VALUES (@id, @sourceId, @sourceKind, @dependsOnId, @dependsOnKind, @now, @now, 1)
-    ON CONFLICT(id) DO UPDATE SET
-      source_id = excluded.source_id,
-      source_kind = excluded.source_kind,
-      depends_on_id = excluded.depends_on_id,
-      depends_on_kind = excluded.depends_on_kind,
-      updated_at = excluded.updated_at,
-      version = dependencies.version + 1;
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, 1);
     `,
-  ).run({
-    "@id": event.entity_id,
-    "@sourceId": typeof fields.source_id === "string" ? fields.source_id : "",
-    "@sourceKind": typeof fields.source_kind === "string" ? fields.source_kind : "task",
-    "@dependsOnId": typeof fields.depends_on_id === "string" ? fields.depends_on_id : "",
-    "@dependsOnKind": typeof fields.depends_on_kind === "string" ? fields.depends_on_kind : "task",
-    "@now": now,
-  });
+  ).run(event.entity_id, sourceId, sourceKind, dependsOnId, dependsOnKind, now, now);
 
   return true;
+}
+
+function applyUpdatePatch(db: Database, event: StoredEvent, fields: Record<string, unknown>): boolean {
+  const tableName = tableForEntityKind(event.entity_kind);
+  if (!tableName) {
+    return false;
+  }
+
+  const allowedFields: Record<string, readonly string[]> = {
+    epics: ["title", "description", "status"],
+    tasks: ["epic_id", "title", "description", "status"],
+    subtasks: ["task_id", "title", "description", "status"],
+    dependencies: ["source_id", "source_kind", "depends_on_id", "depends_on_kind"],
+  };
+
+  if (!rowExists(db, tableName, event.entity_id)) {
+    return false;
+  }
+
+  const allowed = new Set(allowedFields[tableName] ?? []);
+  const entries = Object.entries(fields).filter(([fieldName, value]) => allowed.has(fieldName) && typeof value === "string");
+
+  if (entries.length === 0) {
+    return false;
+  }
+
+  if (tableName === "tasks") {
+    const epicIdEntry = entries.find(([field]) => field === "epic_id");
+    if (epicIdEntry && !rowExists(db, "epics", epicIdEntry[1] as string)) {
+      return false;
+    }
+  }
+
+  if (tableName === "subtasks") {
+    const taskIdEntry = entries.find(([field]) => field === "task_id");
+    if (taskIdEntry && !rowExists(db, "tasks", taskIdEntry[1] as string)) {
+      return false;
+    }
+  }
+
+  const now = Date.now();
+  const setClause = entries.map(([field]) => `${field} = ?`).join(", ");
+  const values = entries.map(([, value]) => value as string);
+
+  db.query(`UPDATE ${tableName} SET ${setClause}, updated_at = ?, version = version + 1 WHERE id = ?;`).run(
+    ...values,
+    now,
+    event.entity_id,
+  );
+
+  return true;
+}
+
+function applyDelete(db: Database, event: StoredEvent): boolean {
+  const tableName = tableForEntityKind(event.entity_kind);
+  if (!tableName) {
+    return false;
+  }
+
+  const result = db.query(`DELETE FROM ${tableName} WHERE id = ?;`).run(event.entity_id);
+  return result.changes > 0;
+}
+
+function applyEntityFields(db: Database, event: StoredEvent, fields: Record<string, unknown>): boolean {
+  if (event.operation.endsWith(".deleted") || event.operation === "dependency.removed") {
+    return applyDelete(db, event);
+  }
+
+  if (event.operation.endsWith(".created") || event.operation === "dependency.added") {
+    return applyCreate(db, event, fields);
+  }
+
+  if (event.operation.endsWith(".updated")) {
+    return applyUpdatePatch(db, event, fields);
+  }
+
+  // Backward-compatible fallback for old upsert events.
+  if (event.operation === "upsert") {
+    const tableName = tableForEntityKind(event.entity_kind);
+    if (!tableName || !rowExists(db, tableName, event.entity_id)) {
+      return applyCreate(db, event, fields);
+    }
+    return applyUpdatePatch(db, event, fields);
+  }
+
+  return false;
 }
 
 function storeEvent(db: Database, event: StoredEvent): void {
@@ -479,12 +586,28 @@ export function syncPull(cwd: string, sourceBranch: string): PullSummary {
 
     storage.db.transaction((): void => {
       for (const incoming of incomingEvents) {
-        const payload = parsePayload(incoming.payload);
-        const incomingFields: Record<string, unknown> = payload.fields ?? {};
-        const fieldsToApply: Record<string, unknown> = {};
-        let hasAppliedField = false;
+        const payloadValidation = parsePayload(incoming.payload);
 
-        for (const [fieldName, value] of Object.entries(incomingFields)) {
+        if (!payloadValidation.ok) {
+          createConflict(
+            storage.db,
+            incoming,
+            "__payload__",
+            null,
+            payloadValidation.reason ?? "Invalid payload",
+            "invalid",
+          );
+          createdConflicts += 1;
+          storeEvent(storage.db, incoming);
+          lastToken = cursorTokenFromEvent(incoming);
+          lastEventAt = incoming.created_at;
+          continue;
+        }
+
+        const payload: EventPayload = { fields: payloadValidation.fields };
+        const fieldsToApply: Record<string, unknown> = {};
+
+        for (const [fieldName, value] of Object.entries(payload.fields)) {
           const conflict = entityFieldConflict(storage.db, sourceBranch, incoming, fieldName, value);
 
           if (conflict) {
@@ -494,11 +617,20 @@ export function syncPull(cwd: string, sourceBranch: string): PullSummary {
           }
 
           fieldsToApply[fieldName] = value;
-          hasAppliedField = true;
         }
 
-        if (hasAppliedField && applyEntityFields(storage.db, incoming, fieldsToApply)) {
+        if (applyEntityFields(storage.db, incoming, fieldsToApply)) {
           appliedEvents += 1;
+        } else if (incoming.operation !== "resolve_conflict") {
+          createConflict(
+            storage.db,
+            incoming,
+            "__apply__",
+            null,
+            `Rejected event ${incoming.operation} for ${incoming.entity_kind}`,
+            "invalid",
+          );
+          createdConflicts += 1;
         }
 
         storeEvent(storage.db, incoming);
@@ -604,6 +736,83 @@ function appendResolutionEvent(
   );
 }
 
+export function listSyncConflicts(cwd: string, mode: SyncConflictMode): SyncConflictListItem[] {
+  const storage = openTrekoonDatabase(cwd);
+
+  try {
+    const whereClause = mode === "pending" ? "WHERE resolution = 'pending'" : "";
+    return storage.db
+      .query(
+        `
+        SELECT id, event_id, entity_kind, entity_id, field_name, ours_value, theirs_value, resolution, created_at, updated_at
+        FROM sync_conflicts
+        ${whereClause}
+        ORDER BY created_at ASC;
+        `,
+      )
+      .all() as SyncConflictListItem[];
+  } finally {
+    storage.close();
+  }
+}
+
+export function getSyncConflict(cwd: string, conflictId: string): SyncConflictDetail {
+  const storage = openTrekoonDatabase(cwd);
+
+  try {
+    const conflict = storage.db
+      .query(
+        `
+        SELECT id, event_id, entity_kind, entity_id, field_name, ours_value, theirs_value, resolution, created_at, updated_at
+        FROM sync_conflicts
+        WHERE id = ?
+        LIMIT 1;
+        `,
+      )
+      .get(conflictId) as ConflictRow | null;
+
+    if (!conflict) {
+      throw new Error(`Conflict '${conflictId}' not found.`);
+    }
+
+    const event = storage.db
+      .query(
+        `
+        SELECT id, operation, payload, git_branch, git_head, created_at
+        FROM events
+        WHERE id = ?
+        LIMIT 1;
+        `,
+      )
+      .get(conflict.event_id) as
+      | {
+          id: string;
+          operation: string;
+          payload: string;
+          git_branch: string | null;
+          git_head: string | null;
+          created_at: number;
+        }
+      | null;
+
+    return {
+      id: conflict.id,
+      eventId: conflict.event_id,
+      entityKind: conflict.entity_kind,
+      entityId: conflict.entity_id,
+      fieldName: conflict.field_name,
+      oursValue: parseConflictValue(conflict.ours_value),
+      theirsValue: parseConflictValue(conflict.theirs_value),
+      resolution: conflict.resolution,
+      createdAt: conflict.created_at,
+      updatedAt: conflict.updated_at,
+      event,
+    };
+  } finally {
+    storage.close();
+  }
+}
+
 export function syncResolve(cwd: string, conflictId: string, resolution: SyncResolution): ResolveSummary {
   const storage = openTrekoonDatabase(cwd);
   const git = resolveGitContext(cwd);
@@ -614,7 +823,7 @@ export function syncResolve(cwd: string, conflictId: string, resolution: SyncRes
     const conflict = storage.db
       .query(
         `
-        SELECT id, event_id, entity_kind, entity_id, field_name, ours_value, theirs_value, resolution
+        SELECT id, event_id, entity_kind, entity_id, field_name, ours_value, theirs_value, resolution, created_at, updated_at
         FROM sync_conflicts
         WHERE id = ?
         LIMIT 1;
