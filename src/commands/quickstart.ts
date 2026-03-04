@@ -23,6 +23,8 @@ const QUICKSTART_TEXT = [
   "- --all cannot be combined with --status or --limit.",
   "- Bulk update: use --all or --ids <csv> with --append and/or --status.",
   "- Bulk update rejects positional id, and --all/--ids cannot be combined.",
+  "- Ready queue: trekoon task ready [--limit <n>] [--epic <id>] (deterministic order).",
+  "- Next execution candidate: trekoon task next [--epic <id>]",
   "- Full tree + descriptions: trekoon epic show <epic-id> --all --json",
   "- For full task payload (including description), use --json:",
   "  trekoon task show <task-id> --all --json",
