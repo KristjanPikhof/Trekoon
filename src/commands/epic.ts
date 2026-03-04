@@ -469,7 +469,7 @@ export async function runEpic(context: CliContext): Promise<CliResult> {
 
           const targets = updateAll ? [...domain.listEpics()] : ids.map((id) => domain.getEpicOrThrow(id));
           const epics = targets.map((target) =>
-            domain.updateEpic(target.id, {
+            mutations.updateEpic(target.id, {
               status,
               description: append === undefined ? undefined : appendLine(target.description, append),
             }),
