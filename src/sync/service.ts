@@ -524,12 +524,12 @@ function applyDelete(db: Database, event: StoredEvent, fields: Record<string, un
       return false;
     }
 
-    const result = db.query("DELETE FROM dependencies WHERE source_id = ? AND depends_on_id = ?;").run(sourceId, dependsOnId);
-    return result.changes > 0;
+    db.query("DELETE FROM dependencies WHERE source_id = ? AND depends_on_id = ?;").run(sourceId, dependsOnId);
+    return true;
   }
 
-  const result = db.query(`DELETE FROM ${tableName} WHERE id = ?;`).run(event.entity_id);
-  return result.changes > 0;
+  db.query(`DELETE FROM ${tableName} WHERE id = ?;`).run(event.entity_id);
+  return true;
 }
 
 function applyEntityFields(db: Database, event: StoredEvent, fields: Record<string, unknown>): boolean {
