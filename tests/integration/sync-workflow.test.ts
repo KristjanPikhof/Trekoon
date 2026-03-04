@@ -276,4 +276,90 @@ describe("integration sync workflow", (): void => {
     const storagePaths = resolveStoragePaths(workspace);
     expect(existsSync(storagePaths.storageDir)).toBe(false);
   });
+
+  test("pull applies valid events when malformed events exist", async (): Promise<void> => {
+    const workspace: string = createWorkspace();
+    seedRepository(workspace);
+
+    const mainEpicId = randomUUID();
+    const validTaskId = randomUUID();
+
+    {
+      const storage = openTrekoonDatabase(workspace);
+      try {
+        const now = Date.now();
+        storage.db
+          .query("INSERT INTO epics (id, title, description, status, created_at, updated_at, version) VALUES (?, ?, ?, ?, ?, ?, 1);")
+          .run(mainEpicId, "Main epic", "seed", "todo", now, now);
+
+        appendEventWithGitContext(storage.db, workspace, {
+          entityKind: "epic",
+          entityId: mainEpicId,
+          operation: "upsert",
+          fields: {
+            title: "Main epic",
+            description: "seed",
+            status: "todo",
+          },
+        });
+
+        const malformedEventId = randomUUID();
+        storage.db
+          .query(
+            "INSERT INTO events (id, entity_kind, entity_id, operation, payload, git_branch, git_head, created_at, updated_at, version) VALUES (?, 'task', ?, 'upsert', ?, 'main', NULL, ?, ?, 1);",
+          )
+          .run(malformedEventId, validTaskId, '{"fields":"broken"}', now + 1, now + 1);
+
+        const validEventId = randomUUID();
+        storage.db
+          .query(
+            "INSERT INTO events (id, entity_kind, entity_id, operation, payload, git_branch, git_head, created_at, updated_at, version) VALUES (?, 'task', ?, 'upsert', ?, 'main', NULL, ?, ?, 1);",
+          )
+          .run(
+            validEventId,
+            validTaskId,
+            JSON.stringify({
+              fields: {
+                epic_id: mainEpicId,
+                title: "Applied task",
+                description: "from main",
+                status: "todo",
+              },
+            }),
+            now + 2,
+            now + 2,
+          );
+      } finally {
+        storage.close();
+      }
+    }
+
+    commitDb(workspace, "seed mixed valid and malformed events");
+    runGit(workspace, ["checkout", "-b", "feature/replay-resilience"]);
+
+    const pullResult = await runSync({
+      args: ["pull", "--from", "main"],
+      cwd: workspace,
+      mode: "toon",
+    });
+
+    expect(pullResult.ok).toBe(true);
+    expect((pullResult.data as { scannedEvents: number }).scannedEvents).toBeGreaterThanOrEqual(3);
+    expect((pullResult.data as { appliedEvents: number }).appliedEvents).toBeGreaterThanOrEqual(2);
+
+    const storage = openTrekoonDatabase(workspace);
+    try {
+      const appliedTask = storage.db
+        .query("SELECT id, title FROM tasks WHERE id = ?;")
+        .get(validTaskId) as { id: string; title: string } | null;
+      expect(appliedTask?.title).toBe("Applied task");
+
+      const invalidConflict = storage.db
+        .query("SELECT id FROM sync_conflicts WHERE resolution = 'invalid' LIMIT 1;")
+        .get() as { id: string } | null;
+      expect(invalidConflict?.id).toBeDefined();
+    } finally {
+      storage.close();
+    }
+  });
 });
