@@ -344,6 +344,32 @@ describe("epic command", (): void => {
     expect(epics.some((epic) => epic.status === "done")).toBeTrue();
   });
 
+  test("machine list exposes pagination metadata", async (): Promise<void> => {
+    const cwd = createWorkspace();
+
+    for (let index = 0; index < 3; index += 1) {
+      await createEpic(cwd, {
+        title: `Todo ${index}`,
+        description: "Top-level work",
+        status: "todo",
+      });
+    }
+
+    const firstPage = await runEpic({ cwd, mode: "toon", args: ["list", "--status", "todo", "--limit", "2"] });
+    expect(firstPage.ok).toBeTrue();
+    expect(firstPage.meta).toEqual({ pagination: { hasMore: true, nextCursor: "2" } });
+    expect((firstPage.data as { epics: unknown[] }).epics.length).toBe(2);
+
+    const secondPage = await runEpic({
+      cwd,
+      mode: "toon",
+      args: ["list", "--status", "todo", "--limit", "2", "--cursor", "2"],
+    });
+    expect(secondPage.ok).toBeTrue();
+    expect(secondPage.meta).toEqual({ pagination: { hasMore: false, nextCursor: null } });
+    expect((secondPage.data as { epics: unknown[] }).epics.length).toBe(1);
+  });
+
   test("rejects --all with --status", async (): Promise<void> => {
     const cwd = createWorkspace();
     const result = await runEpic({ cwd, mode: "human", args: ["list", "--all", "--status", "done"] });

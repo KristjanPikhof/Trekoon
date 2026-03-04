@@ -263,6 +263,48 @@ describe("subtask command", (): void => {
     expect(subtasks.some((subtask) => subtask.status === "done")).toBeTrue();
   });
 
+  test("machine list exposes pagination metadata", async (): Promise<void> => {
+    const cwd = createWorkspace();
+    const epicCreated = await runEpic({
+      cwd,
+      mode: "human",
+      args: ["create", "--title", "Roadmap", "--description", "desc"],
+    });
+    const epicId = (epicCreated.data as { epic: { id: string } }).epic.id;
+    const taskCreated = await runTask({
+      cwd,
+      mode: "human",
+      args: ["create", "--epic", epicId, "--title", "Implement", "--description", "task desc"],
+    });
+    const taskId = (taskCreated.data as { task: { id: string } }).task.id;
+
+    for (let index = 0; index < 3; index += 1) {
+      await runSubtask({
+        cwd,
+        mode: "human",
+        args: ["create", "--task", taskId, "--title", `Subtask ${index}`, "--status", "todo"],
+      });
+    }
+
+    const firstPage = await runSubtask({
+      cwd,
+      mode: "toon",
+      args: ["list", "--task", taskId, "--status", "todo", "--limit", "2"],
+    });
+    expect(firstPage.ok).toBeTrue();
+    expect(firstPage.meta).toEqual({ pagination: { hasMore: true, nextCursor: "2" } });
+    expect((firstPage.data as { subtasks: unknown[] }).subtasks.length).toBe(2);
+
+    const secondPage = await runSubtask({
+      cwd,
+      mode: "toon",
+      args: ["list", "--task", taskId, "--status", "todo", "--limit", "2", "--cursor", "2"],
+    });
+    expect(secondPage.ok).toBeTrue();
+    expect(secondPage.meta).toEqual({ pagination: { hasMore: false, nextCursor: null } });
+    expect((secondPage.data as { subtasks: unknown[] }).subtasks.length).toBe(1);
+  });
+
   test("list rejects --all with --status", async (): Promise<void> => {
     const cwd = createWorkspace();
     const result = await runSubtask({ cwd, mode: "human", args: ["list", "--all", "--status", "done"] });

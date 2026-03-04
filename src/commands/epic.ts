@@ -1,4 +1,12 @@
-import { hasFlag, parseArgs, parseStrictPositiveInt, readEnumOption, readMissingOptionValue, readOption } from "./arg-parser";
+import {
+  hasFlag,
+  parseArgs,
+  parseStrictNonNegativeInt,
+  parseStrictPositiveInt,
+  readEnumOption,
+  readMissingOptionValue,
+  readOption,
+} from "./arg-parser";
 
 import { MutationService } from "../domain/mutation-service";
 import { TrackerDomain } from "../domain/tracker-domain";
@@ -41,21 +49,58 @@ function getStatusPriority(status: string): number {
 }
 
 function sortByStatusPriority(epics: readonly EpicRecord[]): EpicRecord[] {
-  return [...epics].sort((left, right) => getStatusPriority(left.status) - getStatusPriority(right.status));
+  return [...epics].sort((left, right) => {
+    const byStatus = getStatusPriority(left.status) - getStatusPriority(right.status);
+    if (byStatus !== 0) {
+      return byStatus;
+    }
+
+    const byCreatedAt = left.createdAt - right.createdAt;
+    if (byCreatedAt !== 0) {
+      return byCreatedAt;
+    }
+
+    return left.id.localeCompare(right.id);
+  });
 }
 
-function filterSortAndLimitEpics(epics: readonly EpicRecord[], options: { includeAll: boolean; statuses: readonly string[] | undefined; limit: number | undefined }): EpicRecord[] {
-  const { includeAll, statuses, limit } = options;
+interface PaginationMeta {
+  readonly hasMore: boolean;
+  readonly nextCursor: string | null;
+}
+
+function filterSortAndLimitEpics(epics: readonly EpicRecord[], options: {
+  includeAll: boolean;
+  statuses: readonly string[] | undefined;
+  limit: number | undefined;
+  cursor: number;
+}): { epics: EpicRecord[]; pagination: PaginationMeta } {
+  const { includeAll, statuses, limit, cursor } = options;
   const selectedStatuses = includeAll ? undefined : (statuses ?? DEFAULT_OPEN_STATUSES);
   const selectedEpics = selectedStatuses === undefined ? [...epics] : epics.filter((epic) => selectedStatuses.includes(epic.status));
   const sortedEpics = sortByStatusPriority(selectedEpics);
 
   if (includeAll) {
-    return sortedEpics;
+    return {
+      epics: sortedEpics,
+      pagination: {
+        hasMore: false,
+        nextCursor: null,
+      },
+    };
   }
 
   const effectiveLimit = limit ?? DEFAULT_LIST_LIMIT;
-  return sortedEpics.slice(0, effectiveLimit);
+  const pagedEpics = sortedEpics.slice(cursor, cursor + effectiveLimit);
+  const nextIndex = cursor + pagedEpics.length;
+  const hasMore = nextIndex < sortedEpics.length;
+  return {
+    epics: pagedEpics,
+    pagination: {
+      hasMore,
+      nextCursor: hasMore ? `${nextIndex}` : null,
+    },
+  };
 }
 
 function invalidEpicListInput(human: string, message: string, data: Record<string, unknown>): CliResult {
@@ -266,6 +311,7 @@ export async function runEpic(context: CliContext): Promise<CliResult> {
         const missingListOption =
           readMissingOptionValue(parsed.missingOptionValues, "status", "s") ??
           readMissingOptionValue(parsed.missingOptionValues, "limit", "l") ??
+          readMissingOptionValue(parsed.missingOptionValues, "cursor") ??
           readMissingOptionValue(parsed.missingOptionValues, "view");
         if (missingListOption !== undefined) {
           return failMissingOptionValue("epic.list", missingListOption);
@@ -274,6 +320,7 @@ export async function runEpic(context: CliContext): Promise<CliResult> {
         const includeAll: boolean = hasFlag(parsed.flags, "all");
         const rawStatuses: string | undefined = readOption(parsed.options, "status");
         const rawLimit: string | undefined = readOption(parsed.options, "limit");
+        const rawCursor: string | undefined = readOption(parsed.options, "cursor");
         const rawView: string | undefined = readOption(parsed.options, "view");
         const view = readEnumOption(parsed.options, VIEW_MODES, "view");
         if (rawView !== undefined && view === undefined) {
@@ -320,11 +367,28 @@ export async function runEpic(context: CliContext): Promise<CliResult> {
           });
         }
 
-        const epics = filterSortAndLimitEpics(domain.listEpics(), {
+        const cursor = parseStrictNonNegativeInt(rawCursor) ?? 0;
+        if (Number.isNaN(cursor)) {
+          return invalidEpicListInput("Invalid --cursor value. Use an integer >= 0.", "Invalid --cursor value", {
+            code: "invalid_input",
+            cursor: rawCursor,
+          });
+        }
+
+        if (includeAll && rawCursor !== undefined) {
+          return invalidEpicListInput("Use either --all or --cursor, not both.", "--all and --cursor are mutually exclusive", {
+            code: "invalid_input",
+            flags: ["all", "cursor"],
+          });
+        }
+
+        const listed = filterSortAndLimitEpics(domain.listEpics(), {
           includeAll,
           statuses,
           limit,
+          cursor,
         });
+        const epics = listed.epics;
         const listView = view ?? "table";
         const human = epics.length === 0 ? "No epics found." : listView === "compact" ? epics.map(formatEpic).join("\n") : formatEpicListTable(epics);
 
@@ -332,6 +396,7 @@ export async function runEpic(context: CliContext): Promise<CliResult> {
           command: "epic.list",
           human,
           data: { epics },
+          ...(context.mode === "human" ? {} : { meta: { pagination: listed.pagination } }),
         });
       }
       case "show": {

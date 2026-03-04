@@ -344,6 +344,38 @@ describe("task command", (): void => {
     expect(tasks.some((task) => task.status === "done")).toBeTrue();
   });
 
+  test("machine list exposes pagination metadata", async (): Promise<void> => {
+    const cwd = createWorkspace();
+    const epicCreated = await runEpic({
+      cwd,
+      mode: "human",
+      args: ["create", "--title", "Roadmap", "--description", "desc"],
+    });
+    const epicId = (epicCreated.data as { epic: { id: string } }).epic.id;
+
+    for (let index = 0; index < 3; index += 1) {
+      await runTask({
+        cwd,
+        mode: "human",
+        args: ["create", "--epic", epicId, "--title", `Task ${index}`, "--description", "desc", "--status", "todo"],
+      });
+    }
+
+    const firstPage = await runTask({ cwd, mode: "toon", args: ["list", "--status", "todo", "--limit", "2"] });
+    expect(firstPage.ok).toBeTrue();
+    expect(firstPage.meta).toEqual({ pagination: { hasMore: true, nextCursor: "2" } });
+    expect((firstPage.data as { tasks: unknown[] }).tasks.length).toBe(2);
+
+    const secondPage = await runTask({
+      cwd,
+      mode: "toon",
+      args: ["list", "--status", "todo", "--limit", "2", "--cursor", "2"],
+    });
+    expect(secondPage.ok).toBeTrue();
+    expect(secondPage.meta).toEqual({ pagination: { hasMore: false, nextCursor: null } });
+    expect((secondPage.data as { tasks: unknown[] }).tasks.length).toBe(1);
+  });
+
   test("list rejects --all with --status", async (): Promise<void> => {
     const cwd = createWorkspace();
     const result = await runTask({ cwd, mode: "human", args: ["list", "--all", "--status", "done"] });

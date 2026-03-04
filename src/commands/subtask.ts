@@ -1,4 +1,12 @@
-import { hasFlag, parseArgs, parseStrictPositiveInt, readEnumOption, readMissingOptionValue, readOption } from "./arg-parser";
+import {
+  hasFlag,
+  parseArgs,
+  parseStrictNonNegativeInt,
+  parseStrictPositiveInt,
+  readEnumOption,
+  readMissingOptionValue,
+  readOption,
+} from "./arg-parser";
 
 import { MutationService } from "../domain/mutation-service";
 import { TrackerDomain } from "../domain/tracker-domain";
@@ -54,16 +62,44 @@ function filterSortAndLimitSubtasks(
   subtasks: readonly SubtaskRecord[],
   statuses: readonly string[] | undefined,
   limit: number | undefined,
-): SubtaskRecord[] {
+  cursor: number,
+): { subtasks: SubtaskRecord[]; pagination: { hasMore: boolean; nextCursor: string | null } } {
   const allowedStatuses = statuses === undefined ? undefined : new Set(statuses);
   const filtered = allowedStatuses === undefined ? [...subtasks] : subtasks.filter((subtask) => allowedStatuses.has(subtask.status));
-  const sorted = [...filtered].sort((left, right) => subtaskStatusPriority(left.status) - subtaskStatusPriority(right.status));
+  const sorted = [...filtered].sort((left, right) => {
+    const byStatus = subtaskStatusPriority(left.status) - subtaskStatusPriority(right.status);
+    if (byStatus !== 0) {
+      return byStatus;
+    }
+
+    const byCreatedAt = left.createdAt - right.createdAt;
+    if (byCreatedAt !== 0) {
+      return byCreatedAt;
+    }
+
+    return left.id.localeCompare(right.id);
+  });
 
   if (limit === undefined) {
-    return sorted;
+    return {
+      subtasks: sorted,
+      pagination: {
+        hasMore: false,
+        nextCursor: null,
+      },
+    };
   }
 
-  return sorted.slice(0, limit);
+  const pagedSubtasks = sorted.slice(cursor, cursor + limit);
+  const nextIndex = cursor + pagedSubtasks.length;
+  const hasMore = nextIndex < sorted.length;
+  return {
+    subtasks: pagedSubtasks,
+    pagination: {
+      hasMore,
+      nextCursor: hasMore ? `${nextIndex}` : null,
+    },
+  };
 }
 
 function appendLine(existing: string, line: string): string {
@@ -161,6 +197,7 @@ export async function runSubtask(context: CliContext): Promise<CliResult> {
           readMissingOptionValue(parsed.missingOptionValues, "view") ??
           readMissingOptionValue(parsed.missingOptionValues, "status", "s") ??
           readMissingOptionValue(parsed.missingOptionValues, "limit", "l") ??
+          readMissingOptionValue(parsed.missingOptionValues, "cursor") ??
           readMissingOptionValue(parsed.missingOptionValues, "task", "t");
         if (missingListOption !== undefined) {
           return failMissingOptionValue("subtask.list", missingListOption);
@@ -171,6 +208,7 @@ export async function runSubtask(context: CliContext): Promise<CliResult> {
         const includeAll = hasFlag(parsed.flags, "all");
         const rawStatuses = readOption(parsed.options, "status", "s");
         const rawLimit = readOption(parsed.options, "limit", "l");
+        const rawCursor = readOption(parsed.options, "cursor");
 
         if (rawView !== undefined && view === undefined) {
           return failResult({
@@ -208,6 +246,18 @@ export async function runSubtask(context: CliContext): Promise<CliResult> {
           });
         }
 
+        if (includeAll && rawCursor !== undefined) {
+          return failResult({
+            command: "subtask.list",
+            human: "Use either --all or --cursor, not both.",
+            data: { code: "invalid_input", flags: ["all", "cursor"] },
+            error: {
+              code: "invalid_input",
+              message: "--all and --cursor are mutually exclusive",
+            },
+          });
+        }
+
         const statuses = parseStatusCsv(rawStatuses);
         if (rawStatuses !== undefined && statuses !== undefined && statuses.length === 0) {
           return failResult({
@@ -234,6 +284,19 @@ export async function runSubtask(context: CliContext): Promise<CliResult> {
           });
         }
 
+        const parsedCursor = parseStrictNonNegativeInt(rawCursor);
+        if (Number.isNaN(parsedCursor)) {
+          return failResult({
+            command: "subtask.list",
+            human: "Invalid --cursor value. Use an integer >= 0.",
+            data: { code: "invalid_input", cursor: rawCursor },
+            error: {
+              code: "invalid_input",
+              message: "Invalid --cursor value",
+            },
+          });
+        }
+
         const taskId: string | undefined = readOption(parsed.options, "task", "t") ?? parsed.positional[1];
         const selectedStatuses = includeAll
           ? undefined
@@ -241,7 +304,13 @@ export async function runSubtask(context: CliContext): Promise<CliResult> {
         const selectedLimit = includeAll
           ? undefined
           : parsedLimit ?? DEFAULT_SUBTASK_LIST_LIMIT;
-        const subtasks = filterSortAndLimitSubtasks(domain.listSubtasks(taskId), selectedStatuses, selectedLimit);
+        const listed = filterSortAndLimitSubtasks(
+          domain.listSubtasks(taskId),
+          selectedStatuses,
+          selectedLimit,
+          parsedCursor ?? 0,
+        );
+        const subtasks = listed.subtasks;
         const listView = view ?? "table";
         const human =
           subtasks.length === 0
@@ -254,6 +323,7 @@ export async function runSubtask(context: CliContext): Promise<CliResult> {
           command: "subtask.list",
           human,
           data: { subtasks },
+          ...(context.mode === "human" ? {} : { meta: { pagination: listed.pagination } }),
         });
       }
       case "update": {

@@ -79,6 +79,19 @@ export function parseStrictPositiveInt(rawValue: string | undefined): number | u
   return parsed;
 }
 
+export function parseStrictNonNegativeInt(rawValue: string | undefined): number | undefined {
+  if (rawValue === undefined) {
+    return undefined;
+  }
+
+  const parsed = Number.parseInt(rawValue, 10);
+  if (!Number.isInteger(parsed) || parsed < 0 || `${parsed}` !== rawValue.trim()) {
+    return Number.NaN;
+  }
+
+  return parsed;
+}
+
 export function readEnumOption<const T extends readonly string[]>(
   options: ReadonlyMap<string, string>,
   allowed: T,
