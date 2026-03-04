@@ -26,7 +26,7 @@ afterEach((): void => {
   }
 });
 
-async function createTaskGraph(cwd: string): Promise<{ taskA: string; taskB: string; subtask: string }> {
+async function createTaskGraph(cwd: string): Promise<{ epicId: string; taskA: string; taskB: string; subtask: string }> {
   const epic = await runEpic({
     cwd,
     mode: "human",
@@ -55,6 +55,7 @@ async function createTaskGraph(cwd: string): Promise<{ taskA: string; taskB: str
   });
 
   return {
+    epicId,
     taskA: taskAId,
     taskB: taskBId,
     subtask: (subtask.data as { subtask: { id: string } }).subtask.id,
@@ -112,5 +113,74 @@ describe("dep command", (): void => {
     const cycle = await runDep({ cwd, mode: "human", args: ["add", nodes.subtask, nodes.taskA] });
     expect(cycle.ok).toBeFalse();
     expect(cycle.error?.code).toBe("invalid_dependency");
+  });
+
+  test("returns reverse dependents with distance metadata", async (): Promise<void> => {
+    const cwd = createWorkspace();
+    const nodes = await createTaskGraph(cwd);
+
+    const first = await runDep({ cwd, mode: "human", args: ["add", nodes.taskA, nodes.taskB] });
+    expect(first.ok).toBeTrue();
+
+    const second = await runDep({ cwd, mode: "human", args: ["add", nodes.taskB, nodes.subtask] });
+    expect(second.ok).toBeTrue();
+
+    const reverse = await runDep({ cwd, mode: "human", args: ["reverse", nodes.subtask] });
+    expect(reverse.ok).toBeTrue();
+
+    const data = reverse.data as {
+      targetId: string;
+      targetKind: string;
+      blockedNodes: Array<{ id: string; kind: string; distance: number; isDirect: boolean }>;
+    };
+    expect(data.targetId).toBe(nodes.subtask);
+    expect(data.targetKind).toBe("subtask");
+    expect(data.blockedNodes.map((node) => [node.id, node.distance, node.isDirect])).toEqual([
+      [nodes.taskB, 1, true],
+      [nodes.taskA, 2, false],
+    ]);
+  });
+
+  test("returns reverse direct dependents in deterministic order", async (): Promise<void> => {
+    const cwd = createWorkspace();
+    const nodes = await createTaskGraph(cwd);
+
+    const taskC = await runTask({
+      cwd,
+      mode: "human",
+      args: ["create", "--epic", nodes.epicId, "--title", "Task C", "--description", "desc c"],
+    });
+    expect(taskC.ok).toBeTrue();
+    const taskCId = (taskC.data as { task: { id: string } }).task.id;
+
+    const first = await runDep({ cwd, mode: "human", args: ["add", nodes.taskA, nodes.subtask] });
+    expect(first.ok).toBeTrue();
+
+    const second = await runDep({ cwd, mode: "human", args: ["add", taskCId, nodes.subtask] });
+    expect(second.ok).toBeTrue();
+
+    const reverse = await runDep({ cwd, mode: "human", args: ["reverse", nodes.subtask] });
+    expect(reverse.ok).toBeTrue();
+
+    const data = reverse.data as {
+      blockedNodes: Array<{ id: string; kind: string; distance: number; isDirect: boolean }>;
+    };
+
+    const returnedIds = data.blockedNodes.map((node) => node.id);
+    const sortedIds = [...returnedIds].sort((a, b) => a.localeCompare(b));
+    expect(returnedIds).toEqual(sortedIds);
+    expect(data.blockedNodes.every((node) => node.kind === "task")).toBeTrue();
+    expect(data.blockedNodes.every((node) => node.distance === 1)).toBeTrue();
+    expect(data.blockedNodes.every((node) => node.isDirect)).toBeTrue();
+  });
+
+  test("returns clear error for unknown reverse target id", async (): Promise<void> => {
+    const cwd = createWorkspace();
+    await createTaskGraph(cwd);
+
+    const reverse = await runDep({ cwd, mode: "human", args: ["reverse", "missing-node-id"] });
+    expect(reverse.ok).toBeFalse();
+    expect(reverse.error?.code).toBe("not_found");
+    expect((reverse.data as { id: string }).id).toBe("missing-node-id");
   });
 });
