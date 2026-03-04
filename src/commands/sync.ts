@@ -62,9 +62,14 @@ function formatConflictList(
 }
 
 function parseConflictMode(args: readonly string[]): SyncConflictMode | null {
-  const explicitMode = parseOption(args, "--mode");
-  if (!explicitMode) {
+  const modeIndex = args.indexOf("--mode");
+  if (modeIndex < 0) {
     return "pending";
+  }
+
+  const explicitMode = args[modeIndex + 1];
+  if (!explicitMode || explicitMode.startsWith("--")) {
+    return null;
   }
 
   if (explicitMode === "pending" || explicitMode === "all") {
