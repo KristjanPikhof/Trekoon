@@ -502,7 +502,7 @@ export async function runEpic(context: CliContext): Promise<CliResult> {
           append === undefined
             ? description
             : appendLine(domain.getEpicOrThrow(epicId).description, append);
-        const epic = domain.updateEpic(epicId, { title, description: nextDescription, status });
+        const epic = mutations.updateEpic(epicId, { title, description: nextDescription, status });
 
         return okResult({
           command: "epic.update",
