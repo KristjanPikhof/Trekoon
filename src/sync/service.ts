@@ -282,6 +282,11 @@ function entityFieldConflict(
   fieldName: string,
   incomingValue: unknown,
 ): { oursValue: string | null; theirsValue: string | null } | null {
+  const currentValue = currentEntityFieldValue(localDb, event.entity_kind, event.entity_id, fieldName);
+  if (serializeValue(currentValue) === serializeValue(incomingValue)) {
+    return null;
+  }
+
   const rows = localDb
     .query(
       `
