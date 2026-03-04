@@ -58,6 +58,8 @@ type ReadyReason = typeof READY_REASON_READY | typeof READY_REASON_BLOCKED;
 interface TaskReadinessSummary {
   readonly totalOpenTasks: number;
   readonly readyCount: number;
+  readonly returnedCount: number;
+  readonly appliedLimit: number | null;
   readonly blockedCount: number;
   readonly unresolvedDependencyCount: number;
 }
@@ -179,6 +181,8 @@ function buildTaskReadiness(domain: TrackerDomain, epicId: string | undefined): 
     summary: {
       totalOpenTasks: assessed.length,
       readyCount: candidates.length,
+      returnedCount: candidates.length,
+      appliedLimit: null,
       blockedCount: blocked.length,
       unresolvedDependencyCount: blocked.reduce((total, item) => total + item.blockerSummary.blockedByCount, 0),
     },
@@ -191,12 +195,12 @@ function formatTaskReadyCandidateLine(candidate: TaskReadyCandidate): string {
 
 function formatTaskReadyHumanOutput(result: TaskReadinessResult): string {
   if (result.candidates.length === 0) {
-    return `No ready tasks found. Open=${result.summary.totalOpenTasks}, blocked=${result.summary.blockedCount}, unresolvedDependencies=${result.summary.unresolvedDependencyCount}.`;
+    return `No ready tasks found. Open=${result.summary.totalOpenTasks}, ready=${result.summary.readyCount}, returned=${result.summary.returnedCount}, blocked=${result.summary.blockedCount}, unresolvedDependencies=${result.summary.unresolvedDependencyCount}.`;
   }
 
   const lines = result.candidates.map(formatTaskReadyCandidateLine);
   lines.push(
-    `Summary: ready=${result.summary.readyCount}, blocked=${result.summary.blockedCount}, unresolvedDependencies=${result.summary.unresolvedDependencyCount}.`,
+    `Summary: ready=${result.summary.readyCount}, returned=${result.summary.returnedCount}, blocked=${result.summary.blockedCount}, unresolvedDependencies=${result.summary.unresolvedDependencyCount}.`,
   );
   return lines.join("\n");
 }
@@ -634,16 +638,18 @@ export async function runTask(context: CliContext): Promise<CliResult> {
         const readiness = buildTaskReadiness(domain, epicId);
         const limit = parsedLimit ?? readiness.candidates.length;
         const candidates = readiness.candidates.slice(0, limit);
+        const summary = {
+          ...readiness.summary,
+          returnedCount: candidates.length,
+          appliedLimit: parsedLimit ?? null,
+        };
 
         return okResult({
           command: "task.ready",
           human: formatTaskReadyHumanOutput({
             ...readiness,
             candidates,
-            summary: {
-              ...readiness.summary,
-              readyCount: candidates.length,
-            },
+            summary,
           }),
           data: {
             candidates,
@@ -654,8 +660,7 @@ export async function runTask(context: CliContext): Promise<CliResult> {
               ranking: item.ranking,
             })),
             summary: {
-              ...readiness.summary,
-              readyCount: candidates.length,
+              ...summary,
             },
           },
         });
