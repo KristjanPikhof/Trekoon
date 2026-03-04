@@ -24,6 +24,49 @@ const VIEW_MODES = ["table", "compact", "tree", "detail"] as const;
 const LIST_VIEW_MODES = ["table", "compact"] as const;
 const DEFAULT_TASK_LIST_LIMIT = 10;
 const DEFAULT_OPEN_TASK_STATUSES = ["in_progress", "in-progress", "todo"] as const;
+const READY_REASON_READY = "all_dependencies_done";
+const READY_REASON_BLOCKED = "blocked_by_dependencies";
+
+interface DependencyBlocker {
+  readonly id: string;
+  readonly kind: "task" | "subtask";
+  readonly status: string;
+}
+
+interface TaskReadyCandidate {
+  readonly task: TaskRecord;
+  readonly readiness: {
+    readonly isReady: boolean;
+    readonly reason: typeof READY_REASON_READY | typeof READY_REASON_BLOCKED;
+  };
+  readonly blockerSummary: {
+    readonly totalDependencies: number;
+    readonly blockedByCount: number;
+    readonly blockedBy: ReadonlyArray<DependencyBlocker>;
+  };
+  readonly ranking: {
+    readonly statusPriority: number;
+    readonly blockerCount: number;
+    readonly createdAt: number;
+    readonly id: string;
+    readonly rank: number;
+  };
+}
+
+type ReadyReason = typeof READY_REASON_READY | typeof READY_REASON_BLOCKED;
+
+interface TaskReadinessSummary {
+  readonly totalOpenTasks: number;
+  readonly readyCount: number;
+  readonly blockedCount: number;
+  readonly unresolvedDependencyCount: number;
+}
+
+interface TaskReadinessResult {
+  readonly candidates: readonly TaskReadyCandidate[];
+  readonly blocked: readonly TaskReadyCandidate[];
+  readonly summary: TaskReadinessSummary;
+}
 
 function parseIdsOption(rawIds: string | undefined): string[] {
   if (rawIds === undefined) {
@@ -57,6 +100,105 @@ function taskStatusPriority(status: string): number {
   }
 
   return 2;
+}
+
+function buildTaskReadiness(domain: TrackerDomain, epicId: string | undefined): TaskReadinessResult {
+  const openStatuses = new Set<string>(DEFAULT_OPEN_TASK_STATUSES);
+  const openTasks = domain.listTasks(epicId).filter((task) => openStatuses.has(task.status));
+  const assessed = openTasks
+    .map((task) => {
+      const blockers: DependencyBlocker[] = [];
+      const dependencies = domain.listDependencies(task.id);
+      for (const dependency of dependencies) {
+        const dependencyStatus =
+          dependency.dependsOnKind === "task"
+            ? domain.getTaskOrThrow(dependency.dependsOnId).status
+            : domain.getSubtaskOrThrow(dependency.dependsOnId).status;
+
+        if (dependencyStatus !== "done") {
+          blockers.push({
+            id: dependency.dependsOnId,
+            kind: dependency.dependsOnKind,
+            status: dependencyStatus,
+          });
+        }
+      }
+
+      const blockerCount = blockers.length;
+      const readinessReason: ReadyReason = blockerCount === 0 ? READY_REASON_READY : READY_REASON_BLOCKED;
+      return {
+        task,
+        readiness: {
+          isReady: blockerCount === 0,
+          reason: readinessReason,
+        },
+        blockerSummary: {
+          totalDependencies: dependencies.length,
+          blockedByCount: blockerCount,
+          blockedBy: blockers,
+        },
+        ranking: {
+          statusPriority: taskStatusPriority(task.status),
+          blockerCount,
+          createdAt: task.createdAt,
+          id: task.id,
+        },
+      };
+    })
+    .sort((left, right) => {
+      const byStatus = left.ranking.statusPriority - right.ranking.statusPriority;
+      if (byStatus !== 0) {
+        return byStatus;
+      }
+
+      const byBlockers = left.ranking.blockerCount - right.ranking.blockerCount;
+      if (byBlockers !== 0) {
+        return byBlockers;
+      }
+
+      const byCreatedAt = left.ranking.createdAt - right.ranking.createdAt;
+      if (byCreatedAt !== 0) {
+        return byCreatedAt;
+      }
+
+      return left.ranking.id.localeCompare(right.ranking.id);
+    })
+    .map((item, index) => ({
+      ...item,
+      ranking: {
+        ...item.ranking,
+        rank: index + 1,
+      },
+    }));
+
+  const candidates = assessed.filter((item) => item.readiness.isReady);
+  const blocked = assessed.filter((item) => !item.readiness.isReady);
+  return {
+    candidates,
+    blocked,
+    summary: {
+      totalOpenTasks: assessed.length,
+      readyCount: candidates.length,
+      blockedCount: blocked.length,
+      unresolvedDependencyCount: blocked.reduce((total, item) => total + item.blockerSummary.blockedByCount, 0),
+    },
+  };
+}
+
+function formatTaskReadyCandidateLine(candidate: TaskReadyCandidate): string {
+  return `${candidate.ranking.rank}. ${formatTask(candidate.task)} | reason=${candidate.readiness.reason} | blockers=${candidate.blockerSummary.blockedByCount}/${candidate.blockerSummary.totalDependencies}`;
+}
+
+function formatTaskReadyHumanOutput(result: TaskReadinessResult): string {
+  if (result.candidates.length === 0) {
+    return `No ready tasks found. Open=${result.summary.totalOpenTasks}, blocked=${result.summary.blockedCount}, unresolvedDependencies=${result.summary.unresolvedDependencyCount}.`;
+  }
+
+  const lines = result.candidates.map(formatTaskReadyCandidateLine);
+  lines.push(
+    `Summary: ready=${result.summary.readyCount}, blocked=${result.summary.blockedCount}, unresolvedDependencies=${result.summary.unresolvedDependencyCount}.`,
+  );
+  return lines.join("\n");
 }
 
 function filterSortAndLimitTasks(
@@ -466,6 +608,86 @@ export async function runTask(context: CliContext): Promise<CliResult> {
           data: { task: taskTree, includeAll: true, subtasksCount: taskTree.subtasks.length },
         });
       }
+      case "ready": {
+        const missingReadyOption =
+          readMissingOptionValue(parsed.missingOptionValues, "limit", "l") ??
+          readMissingOptionValue(parsed.missingOptionValues, "epic", "e");
+        if (missingReadyOption !== undefined) {
+          return failMissingOptionValue("task.ready", missingReadyOption);
+        }
+
+        const rawLimit = readOption(parsed.options, "limit", "l");
+        const parsedLimit = parseStrictPositiveInt(rawLimit);
+        if (Number.isNaN(parsedLimit)) {
+          return failResult({
+            command: "task.ready",
+            human: "Invalid --limit value. Use an integer >= 1.",
+            data: { code: "invalid_input", limit: rawLimit },
+            error: {
+              code: "invalid_input",
+              message: "Invalid --limit value",
+            },
+          });
+        }
+
+        const epicId = readOption(parsed.options, "epic", "e");
+        const readiness = buildTaskReadiness(domain, epicId);
+        const limit = parsedLimit ?? readiness.candidates.length;
+        const candidates = readiness.candidates.slice(0, limit);
+
+        return okResult({
+          command: "task.ready",
+          human: formatTaskReadyHumanOutput({
+            ...readiness,
+            candidates,
+            summary: {
+              ...readiness.summary,
+              readyCount: candidates.length,
+            },
+          }),
+          data: {
+            candidates,
+            blocked: readiness.blocked.map((item) => ({
+              task: item.task,
+              readiness: item.readiness,
+              blockerSummary: item.blockerSummary,
+              ranking: item.ranking,
+            })),
+            summary: {
+              ...readiness.summary,
+              readyCount: candidates.length,
+            },
+          },
+        });
+      }
+      case "next": {
+        const missingNextOption = readMissingOptionValue(parsed.missingOptionValues, "epic", "e");
+        if (missingNextOption !== undefined) {
+          return failMissingOptionValue("task.next", missingNextOption);
+        }
+
+        const epicId = readOption(parsed.options, "epic", "e");
+        const readiness = buildTaskReadiness(domain, epicId);
+        const candidate = readiness.candidates[0] ?? null;
+
+        return okResult({
+          command: "task.next",
+          human:
+            candidate === null
+              ? formatTaskReadyHumanOutput(readiness)
+              : `${formatTaskReadyCandidateLine(candidate)}\nSummary: ready=${readiness.summary.readyCount}, blocked=${readiness.summary.blockedCount}, unresolvedDependencies=${readiness.summary.unresolvedDependencyCount}.`,
+          data: {
+            candidate,
+            summary: readiness.summary,
+            blocked: readiness.blocked.map((item) => ({
+              task: item.task,
+              readiness: item.readiness,
+              blockerSummary: item.blockerSummary,
+              ranking: item.ranking,
+            })),
+          },
+        });
+      }
       case "update": {
         const missingUpdateOption =
           readMissingOptionValue(parsed.missingOptionValues, "ids") ??
@@ -603,7 +825,7 @@ export async function runTask(context: CliContext): Promise<CliResult> {
       default:
         return failResult({
           command: "task",
-          human: "Usage: trekoon task <create|list|show|update|delete>",
+          human: "Usage: trekoon task <create|list|show|ready|next|update|delete>",
           data: {
             args: context.args,
           },
