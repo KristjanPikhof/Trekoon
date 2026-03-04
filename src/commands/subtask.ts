@@ -372,7 +372,7 @@ export async function runSubtask(context: CliContext): Promise<CliResult> {
           append === undefined
             ? description
             : appendLine(domain.getSubtaskOrThrow(subtaskId).description, append);
-        const subtask = domain.updateSubtask(subtaskId, { title, description: nextDescription, status });
+        const subtask = mutations.updateSubtask(subtaskId, { title, description: nextDescription, status });
 
         return okResult({
           command: "subtask.update",
