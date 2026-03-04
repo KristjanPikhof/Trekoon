@@ -512,7 +512,7 @@ export async function runEpic(context: CliContext): Promise<CliResult> {
       }
       case "delete": {
         const epicId: string = parsed.positional[1] ?? "";
-        domain.deleteEpic(epicId);
+        mutations.deleteEpic(epicId);
 
         return okResult({
           command: "epic.delete",
