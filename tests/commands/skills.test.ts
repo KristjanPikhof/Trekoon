@@ -1,4 +1,14 @@
-import { lstatSync, mkdtempSync, mkdirSync, readFileSync, readlinkSync, rmSync, writeFileSync } from "node:fs";
+import {
+  lstatSync,
+  mkdtempSync,
+  mkdirSync,
+  readFileSync,
+  readlinkSync,
+  realpathSync,
+  rmSync,
+  symlinkSync,
+  writeFileSync,
+} from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join, resolve } from "node:path";
 
@@ -128,7 +138,7 @@ describe("skills command", (): void => {
     expect(resolve(dirname(piData.linkPath), readlinkSync(piData.linkPath))).toBe(piData.installedDir);
   });
 
-  test("install --link supports --to override and detects non-link conflicts", async (): Promise<void> => {
+  test("install --link supports in-repo --to override and detects non-link conflicts", async (): Promise<void> => {
     const cwd = createWorkspace();
     const customRoot = join(cwd, "custom-editor", "skills");
 
@@ -164,6 +174,98 @@ describe("skills command", (): void => {
     const conflictData = conflict.data as { code: string; linkPath: string };
     expect(conflictData.code).toBe("path_conflict");
     expect(conflictData.linkPath).toBe(conflictPath);
+  });
+
+  test("install --link rejects outside-repo link targets by default", async (): Promise<void> => {
+    const cwd = createWorkspace();
+    const outsideRoot = mkdtempSync(join(tmpdir(), "trekoon-skills-outside-"));
+    tempDirs.push(outsideRoot);
+
+    const outsideAbsolute = await runSkills({
+      cwd,
+      mode: "json",
+      args: ["install", "--link", "--editor", "opencode", "--to", outsideRoot],
+    });
+
+    expect(outsideAbsolute.ok).toBeFalse();
+    expect(outsideAbsolute.error?.code).toBe("outside_repo_target");
+    expect(outsideAbsolute.human).toContain("--allow-outside-repo");
+
+    const outsideTraversal = await runSkills({
+      cwd,
+      mode: "json",
+      args: ["install", "--link", "--editor", "opencode", "--to", "../outside-target"],
+    });
+
+    expect(outsideTraversal.ok).toBeFalse();
+    expect(outsideTraversal.error?.code).toBe("outside_repo_target");
+    const traversalData = outsideTraversal.data as {
+      code: string;
+      linkRoot: string;
+      overrideFlag: string;
+    };
+    expect(traversalData.code).toBe("outside_repo_target");
+    expect(traversalData.linkRoot).toBe(resolve(cwd, "../outside-target"));
+    expect(traversalData.overrideFlag).toBe("--allow-outside-repo");
+  });
+
+  test("install --link enforces symlink boundary unless override is set", async (): Promise<void> => {
+    const cwd = createWorkspace();
+    const outsideRoot = mkdtempSync(join(tmpdir(), "trekoon-skills-outside-"));
+    tempDirs.push(outsideRoot);
+
+    const symlinkBridge = join(cwd, "bridge-outside");
+    symlinkSync(outsideRoot, symlinkBridge, "dir");
+
+    const blocked = await runSkills({
+      cwd,
+      mode: "json",
+      args: ["install", "--link", "--editor", "claude", "--to", join(symlinkBridge, "skills")],
+    });
+
+    expect(blocked.ok).toBeFalse();
+    expect(blocked.error?.code).toBe("outside_repo_target");
+    const blockedData = blocked.data as {
+      code: string;
+      linkRoot: string;
+      effectiveTargetRoot: string;
+      repoRoot: string;
+      overrideFlag: string;
+    };
+    expect(blockedData.code).toBe("outside_repo_target");
+    expect(blockedData.linkRoot).toBe(join(symlinkBridge, "skills"));
+    expect(blockedData.effectiveTargetRoot).toBe(realpathSync(outsideRoot));
+    expect(blockedData.repoRoot).toBe(realpathSync(cwd));
+    expect(blockedData.overrideFlag).toBe("--allow-outside-repo");
+
+    const allowed = await runSkills({
+      cwd,
+      mode: "json",
+      args: [
+        "install",
+        "--link",
+        "--editor",
+        "claude",
+        "--to",
+        join(symlinkBridge, "skills"),
+        "--allow-outside-repo",
+      ],
+    });
+
+    expect(allowed.ok).toBeTrue();
+    const allowedData = allowed.data as {
+      linked: boolean;
+      linkPath: string;
+      outsideRepoLink: boolean;
+      outsideRepoOverrideUsed: boolean;
+      outsideRepoOverrideFlag: string | null;
+    };
+    expect(allowed.human).toContain("WARNING: Linking outside repository root");
+    expect(allowedData.linked).toBeTrue();
+    expect(allowedData.linkPath).toBe(join(symlinkBridge, "skills", "trekoon"));
+    expect(allowedData.outsideRepoLink).toBeTrue();
+    expect(allowedData.outsideRepoOverrideUsed).toBeTrue();
+    expect(allowedData.outsideRepoOverrideFlag).toBe("--allow-outside-repo");
   });
 
   test("skills update refreshes canonical skill and reports link states", async (): Promise<void> => {
@@ -297,6 +399,14 @@ describe("skills command", (): void => {
     const missingToData = missingToValue.data as { code: string; option: string };
     expect(missingToData.code).toBe("invalid_input");
     expect(missingToData.option).toBe("to");
+
+    const outsideOverrideWithoutLink = await runSkills({
+      cwd,
+      mode: "json",
+      args: ["install", "--allow-outside-repo"],
+    });
+    expect(outsideOverrideWithoutLink.ok).toBeFalse();
+    expect(outsideOverrideWithoutLink.error?.code).toBe("invalid_input");
 
     const updateWithUnexpectedOption = await runSkills({
       cwd,

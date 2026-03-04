@@ -1,5 +1,5 @@
-import { copyFileSync, existsSync, lstatSync, mkdirSync, readlinkSync, rmSync, symlinkSync } from "node:fs";
-import { dirname, isAbsolute, join, resolve } from "node:path";
+import { copyFileSync, existsSync, lstatSync, mkdirSync, readlinkSync, realpathSync, rmSync, symlinkSync } from "node:fs";
+import { dirname, isAbsolute, join, relative, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
 import { hasFlag, parseArgs, readMissingOptionValue, readOption } from "./arg-parser";
@@ -9,10 +9,11 @@ import { type CliContext, type CliResult } from "../runtime/command-types";
 
 const SKILLS_USAGE = [
   "Usage:",
-  "  trekoon skills install [--link --editor opencode|claude|pi] [--to <path>]",
+  "  trekoon skills install [--link --editor opencode|claude|pi] [--to <path>] [--allow-outside-repo]",
   "  trekoon skills update",
 ].join("\n");
 const EDITOR_NAMES = ["opencode", "claude", "pi"] as const;
+const ALLOW_OUTSIDE_REPO_FLAG = "allow-outside-repo";
 
 type EditorName = (typeof EDITOR_NAMES)[number];
 type LinkStateStatus = "missing" | "valid" | "conflict";
@@ -23,6 +24,12 @@ interface InstallOutcome {
   readonly installedDir: string;
   readonly linkPath: string | null;
   readonly linkTarget: string | null;
+  readonly outsideRepoLink: boolean;
+}
+
+interface LinkTargetValidation {
+  readonly linkRoot: string;
+  readonly outsideRepoLink: boolean;
 }
 
 interface LinkState {
@@ -96,6 +103,114 @@ function resolveLinkRoot(cwd: string, editor: EditorName, toOverride: string | u
   return join(cwd, ".pi", "skills");
 }
 
+function isPathInsideRoot(pathValue: string, rootPath: string): boolean {
+  const normalizedPath: string = resolve(pathValue);
+  const normalizedRoot: string = resolve(rootPath);
+  const relativePath: string = relative(normalizedRoot, normalizedPath);
+  return relativePath === "" || (!relativePath.startsWith("..") && !isAbsolute(relativePath));
+}
+
+function realpathNearestExistingAncestor(pathValue: string): string {
+  let cursor: string = resolve(pathValue);
+
+  while (!existsSync(cursor)) {
+    const parent: string = dirname(cursor);
+    if (parent === cursor) {
+      break;
+    }
+
+    cursor = parent;
+  }
+
+  return realpathSync(cursor);
+}
+
+function validateLinkRoot(
+  cwd: string,
+  editor: EditorName,
+  toOverride: string | undefined,
+  allowOutsideRepo: boolean,
+): CliResult | LinkTargetValidation {
+  const linkRoot: string = resolveLinkRoot(cwd, editor, toOverride);
+  const repoRoot: string = realpathSync(cwd);
+  const effectiveTargetRoot: string = realpathNearestExistingAncestor(linkRoot);
+  const insideRepo: boolean = isPathInsideRoot(effectiveTargetRoot, repoRoot);
+
+  if (insideRepo) {
+    return {
+      linkRoot,
+      outsideRepoLink: false,
+    };
+  }
+
+  if (!allowOutsideRepo) {
+    return failResult({
+      command: "skills.install",
+      human: [
+        "Refusing to link skills outside repository root by default.",
+        `Requested link root: ${linkRoot}`,
+        `Resolved existing target ancestor: ${effectiveTargetRoot}`,
+        `Repository root: ${repoRoot}`,
+        `If intentional, re-run with --${ALLOW_OUTSIDE_REPO_FLAG} to override.`,
+      ].join("\n"),
+      data: {
+        code: "outside_repo_target",
+        linkRoot,
+        effectiveTargetRoot,
+        repoRoot,
+        overrideFlag: `--${ALLOW_OUTSIDE_REPO_FLAG}`,
+      },
+      error: {
+        code: "outside_repo_target",
+        message: "Link target is outside repository root",
+      },
+    });
+  }
+
+  return {
+    linkRoot,
+    outsideRepoLink: true,
+  };
+}
+
+function revalidateLinkParentBoundary(
+  repoRoot: string,
+  linkPath: string,
+  allowOutsideRepo: boolean,
+): CliResult | null {
+  if (allowOutsideRepo) {
+    return null;
+  }
+
+  const linkParentRealpath: string = realpathSync(dirname(linkPath));
+  const insideRepo: boolean = isPathInsideRoot(linkParentRealpath, repoRoot);
+  if (insideRepo) {
+    return null;
+  }
+
+  return failResult({
+    command: "skills.install",
+    human: [
+      "Refusing to link skills outside repository root by default.",
+      `Requested link root: ${dirname(linkPath)}`,
+      `Resolved existing target ancestor: ${linkParentRealpath}`,
+      `Repository root: ${repoRoot}`,
+      `If intentional, re-run with --${ALLOW_OUTSIDE_REPO_FLAG} to override.`,
+    ].join("\n"),
+    data: {
+      code: "outside_repo_target",
+      linkRoot: dirname(linkPath),
+      effectiveTargetRoot: linkParentRealpath,
+      repoRoot,
+      overrideFlag: `--${ALLOW_OUTSIDE_REPO_FLAG}`,
+    },
+    error: {
+      code: "outside_repo_target",
+      message: "Link target is outside repository root",
+    },
+  });
+}
+
 function resolveDefaultLinkPath(cwd: string, editor: EditorName): string {
   return join(resolveLinkRoot(cwd, editor, undefined), "trekoon");
 }
@@ -146,9 +261,18 @@ function installCanonicalSkill(cwd: string): CliResult | { sourcePath: string; i
   };
 }
 
-function replaceOrCreateSymlink(linkPath: string, targetPath: string): CliResult | null {
+function replaceOrCreateSymlink(
+  linkPath: string,
+  targetPath: string,
+  repoRoot: string,
+  allowOutsideRepo: boolean,
+): CliResult | null {
   if (!existsSync(linkPath)) {
     mkdirSync(dirname(linkPath), { recursive: true });
+    const boundaryFailure = revalidateLinkParentBoundary(repoRoot, linkPath, allowOutsideRepo);
+    if (boundaryFailure) {
+      return boundaryFailure;
+    }
     symlinkSync(targetPath, linkPath, "dir");
     return null;
   }
@@ -191,6 +315,10 @@ function replaceOrCreateSymlink(linkPath: string, targetPath: string): CliResult
   }
 
   rmSync(linkPath, { force: true });
+  const boundaryFailure = revalidateLinkParentBoundary(repoRoot, linkPath, allowOutsideRepo);
+  if (boundaryFailure) {
+    return boundaryFailure;
+  }
   symlinkSync(targetPath, linkPath, "dir");
   return null;
 }
@@ -259,8 +387,15 @@ function runSkillsInstall(context: CliContext): CliResult {
   }
 
   const wantsLink: boolean = hasFlag(parsed.flags, "link");
+  const allowOutsideRepo: boolean = hasFlag(parsed.flags, ALLOW_OUTSIDE_REPO_FLAG);
   const rawEditor: string | undefined = readOption(parsed.options, "editor");
   const rawTo: string | undefined = readOption(parsed.options, "to");
+
+  if (allowOutsideRepo && !wantsLink) {
+    return invalidInput("skills.install", `--${ALLOW_OUTSIDE_REPO_FLAG} requires --link.`, {
+      allowOutsideRepo,
+    });
+  }
 
   if (!wantsLink && rawEditor !== undefined) {
     return invalidInput("skills.install", "--editor requires --link.", {
@@ -299,22 +434,42 @@ function runSkillsInstall(context: CliContext): CliResult {
     let linkTarget: string | null = null;
 
     if (wantsLink && editor !== undefined) {
-      const linkRoot: string = resolveLinkRoot(context.cwd, editor, rawTo);
+      const validation = validateLinkRoot(context.cwd, editor, rawTo, allowOutsideRepo);
+      if ("ok" in validation) {
+        return validation;
+      }
+
+      const linkRoot: string = validation.linkRoot;
       linkPath = join(linkRoot, "trekoon");
       linkTarget = installResult.installedDir;
-      const linkFailure = replaceOrCreateSymlink(linkPath, linkTarget);
+      const linkFailure = replaceOrCreateSymlink(
+        linkPath,
+        linkTarget,
+        realpathSync(context.cwd),
+        allowOutsideRepo,
+      );
       if (linkFailure) {
         return linkFailure;
       }
-    }
 
-    outcome = {
-      sourcePath: installResult.sourcePath,
-      installedPath: installResult.installedPath,
-      installedDir: installResult.installedDir,
-      linkPath,
-      linkTarget,
-    };
+      outcome = {
+        sourcePath: installResult.sourcePath,
+        installedPath: installResult.installedPath,
+        installedDir: installResult.installedDir,
+        linkPath,
+        linkTarget,
+        outsideRepoLink: validation.outsideRepoLink,
+      };
+    } else {
+      outcome = {
+        sourcePath: installResult.sourcePath,
+        installedPath: installResult.installedPath,
+        installedDir: installResult.installedDir,
+        linkPath,
+        linkTarget,
+        outsideRepoLink: false,
+      };
+    }
   } catch (error: unknown) {
     const message = error instanceof Error ? error.message : "Unknown skills install failure";
     return failResult({
@@ -335,6 +490,11 @@ function runSkillsInstall(context: CliContext): CliResult {
     command: "skills.install",
     human: outcome.linkPath
       ? [
+          ...(outcome.outsideRepoLink
+            ? [
+                `WARNING: Linking outside repository root because --${ALLOW_OUTSIDE_REPO_FLAG} was provided.`,
+              ]
+            : []),
           "Installed Trekoon skill and linked editor path.",
           `Source: ${outcome.sourcePath}`,
           `Installed file: ${outcome.installedPath}`,
@@ -353,6 +513,9 @@ function runSkillsInstall(context: CliContext): CliResult {
       linked: outcome.linkPath !== null,
       linkPath: outcome.linkPath,
       linkTarget: outcome.linkTarget,
+      outsideRepoLink: outcome.outsideRepoLink,
+      outsideRepoOverrideUsed: outcome.outsideRepoLink,
+      outsideRepoOverrideFlag: outcome.outsideRepoLink ? `--${ALLOW_OUTSIDE_REPO_FLAG}` : null,
     },
   });
 }
