@@ -153,7 +153,7 @@ export class MutationService {
     })();
   }
 
-  private #appendEntityEvent(
+  #appendEntityEvent(
     entityKind: "epic" | "task" | "subtask" | "dependency",
     entityId: string,
     operation: string,
