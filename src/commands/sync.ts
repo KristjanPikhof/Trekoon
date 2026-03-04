@@ -142,6 +142,10 @@ export async function runSync(context: CliContext): Promise<CliResult> {
 
       if (conflictsCommand === "list") {
         const mode = parseConflictMode(context.args);
+        if (!mode) {
+          return usage("sync conflicts list --mode only accepts pending|all.");
+        }
+
         const conflicts = listSyncConflicts(context.cwd, mode);
 
         return okResult({
