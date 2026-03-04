@@ -244,6 +244,44 @@ describe("task command", (): void => {
     expect(statuses).toEqual(["in-progress", "in_progress", "todo"]);
   });
 
+  test("list uses id tie-break when timestamps match", async (): Promise<void> => {
+    const cwd = createWorkspace();
+    const epicCreated = await runEpic({
+      cwd,
+      mode: "human",
+      args: ["create", "--title", "Roadmap", "--description", "desc"],
+    });
+    const epicId = (epicCreated.data as { epic: { id: string } }).epic.id;
+    const originalNow = Date.now;
+    Date.now = (): number => 1_700_000_000_000;
+
+    try {
+      await runTask({
+        cwd,
+        mode: "human",
+        args: ["create", "--epic", epicId, "--title", "C", "--description", "desc", "--status", "todo"],
+      });
+      await runTask({
+        cwd,
+        mode: "human",
+        args: ["create", "--epic", epicId, "--title", "A", "--description", "desc", "--status", "todo"],
+      });
+      await runTask({
+        cwd,
+        mode: "human",
+        args: ["create", "--epic", epicId, "--title", "B", "--description", "desc", "--status", "todo"],
+      });
+    } finally {
+      Date.now = originalNow;
+    }
+
+    const listed = await runTask({ cwd, mode: "toon", args: ["list", "--all"] });
+    expect(listed.ok).toBeTrue();
+
+    const ids = (listed.data as { tasks: Array<{ id: string }> }).tasks.map((task) => task.id);
+    expect(ids).toEqual([...ids].sort());
+  });
+
   test("list --status done returns done items", async (): Promise<void> => {
     const cwd = createWorkspace();
     const epicCreated = await runEpic({

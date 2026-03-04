@@ -188,6 +188,50 @@ describe("subtask command", (): void => {
     expect(statuses).toEqual(["done"]);
   });
 
+  test("list uses id tie-break when timestamps match", async (): Promise<void> => {
+    const cwd = createWorkspace();
+    const epicCreated = await runEpic({
+      cwd,
+      mode: "human",
+      args: ["create", "--title", "Roadmap", "--description", "desc"],
+    });
+    const epicId = (epicCreated.data as { epic: { id: string } }).epic.id;
+    const taskCreated = await runTask({
+      cwd,
+      mode: "human",
+      args: ["create", "--epic", epicId, "--title", "Implement", "--description", "task desc"],
+    });
+    const taskId = (taskCreated.data as { task: { id: string } }).task.id;
+    const originalNow = Date.now;
+    Date.now = (): number => 1_700_000_000_000;
+
+    try {
+      await runSubtask({
+        cwd,
+        mode: "human",
+        args: ["create", "--task", taskId, "--title", "C", "--status", "todo"],
+      });
+      await runSubtask({
+        cwd,
+        mode: "human",
+        args: ["create", "--task", taskId, "--title", "A", "--status", "todo"],
+      });
+      await runSubtask({
+        cwd,
+        mode: "human",
+        args: ["create", "--task", taskId, "--title", "B", "--status", "todo"],
+      });
+    } finally {
+      Date.now = originalNow;
+    }
+
+    const listed = await runSubtask({ cwd, mode: "toon", args: ["list", "--task", taskId, "--all"] });
+    expect(listed.ok).toBeTrue();
+
+    const ids = (listed.data as { subtasks: Array<{ id: string }> }).subtasks.map((subtask) => subtask.id);
+    expect(ids).toEqual([...ids].sort());
+  });
+
   test("list --all includes done items and bypasses default limit", async (): Promise<void> => {
     const cwd = createWorkspace();
     const epicCreated = await runEpic({

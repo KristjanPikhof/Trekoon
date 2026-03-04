@@ -292,6 +292,26 @@ describe("epic command", (): void => {
     expect(inProgressIndex).toBeLessThan(todoIndex);
   });
 
+  test("list uses id tie-break when timestamps match", async (): Promise<void> => {
+    const cwd = createWorkspace();
+    const originalNow = Date.now;
+    Date.now = (): number => 1_700_000_000_000;
+
+    try {
+      await createEpic(cwd, { title: "C", description: "Top-level work", status: "todo" });
+      await createEpic(cwd, { title: "A", description: "Top-level work", status: "todo" });
+      await createEpic(cwd, { title: "B", description: "Top-level work", status: "todo" });
+    } finally {
+      Date.now = originalNow;
+    }
+
+    const listed = await runEpic({ cwd, mode: "toon", args: ["list", "--all"] });
+    expect(listed.ok).toBeTrue();
+
+    const ids = (listed.data as { epics: Array<{ id: string }> }).epics.map((epic) => epic.id);
+    expect(ids).toEqual([...ids].sort());
+  });
+
   test("--status done returns only done", async (): Promise<void> => {
     const cwd = createWorkspace();
     await createEpic(cwd, { title: "Done", description: "Top-level work", status: "done" });

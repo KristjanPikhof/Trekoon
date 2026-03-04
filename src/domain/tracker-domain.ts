@@ -136,7 +136,7 @@ export class TrackerDomain {
 
   listEpics(): readonly EpicRecord[] {
     const rows = this.#db
-      .query("SELECT id, title, description, status, created_at, updated_at FROM epics ORDER BY created_at ASC;")
+      .query("SELECT id, title, description, status, created_at, updated_at FROM epics ORDER BY created_at ASC, id ASC;")
       .all() as EpicRow[];
     return rows.map(mapEpic);
   }
@@ -208,14 +208,14 @@ export class TrackerDomain {
       this.getEpicOrThrow(epicId);
       const rows = this.#db
         .query(
-          "SELECT id, epic_id, title, description, status, created_at, updated_at FROM tasks WHERE epic_id = ? ORDER BY created_at ASC;",
+          "SELECT id, epic_id, title, description, status, created_at, updated_at FROM tasks WHERE epic_id = ? ORDER BY created_at ASC, id ASC;",
         )
         .all(epicId) as TaskRow[];
       return rows.map(mapTask);
     }
 
     const rows = this.#db
-      .query("SELECT id, epic_id, title, description, status, created_at, updated_at FROM tasks ORDER BY created_at ASC;")
+      .query("SELECT id, epic_id, title, description, status, created_at, updated_at FROM tasks ORDER BY created_at ASC, id ASC;")
       .all() as TaskRow[];
     return rows.map(mapTask);
   }
@@ -289,7 +289,7 @@ export class TrackerDomain {
       this.getTaskOrThrow(taskId);
       const rows = this.#db
         .query(
-          "SELECT id, task_id, title, description, status, created_at, updated_at FROM subtasks WHERE task_id = ? ORDER BY created_at ASC;",
+          "SELECT id, task_id, title, description, status, created_at, updated_at FROM subtasks WHERE task_id = ? ORDER BY created_at ASC, id ASC;",
         )
         .all(taskId) as SubtaskRow[];
       return rows.map(mapSubtask);
@@ -297,7 +297,7 @@ export class TrackerDomain {
 
     const rows = this.#db
       .query(
-        "SELECT id, task_id, title, description, status, created_at, updated_at FROM subtasks ORDER BY created_at ASC;",
+        "SELECT id, task_id, title, description, status, created_at, updated_at FROM subtasks ORDER BY created_at ASC, id ASC;",
       )
       .all() as SubtaskRow[];
     return rows.map(mapSubtask);
@@ -352,7 +352,7 @@ export class TrackerDomain {
     const taskIds = new Set(tasks.map((task) => task.id));
     const subtasks = this.#db
       .query(
-        "SELECT id, task_id, title, description, status, created_at, updated_at FROM subtasks WHERE task_id IN (SELECT id FROM tasks WHERE epic_id = ?) ORDER BY created_at ASC;",
+        "SELECT id, task_id, title, description, status, created_at, updated_at FROM subtasks WHERE task_id IN (SELECT id FROM tasks WHERE epic_id = ?) ORDER BY created_at ASC, id ASC;",
       )
       .all(epicId) as SubtaskRow[];
 
@@ -496,7 +496,7 @@ export class TrackerDomain {
 
     const rows = this.#db
       .query(
-        "SELECT id, source_id, source_kind, depends_on_id, depends_on_kind, created_at, updated_at FROM dependencies WHERE source_id = ? ORDER BY created_at ASC;",
+        "SELECT id, source_id, source_kind, depends_on_id, depends_on_kind, created_at, updated_at FROM dependencies WHERE source_id = ? ORDER BY created_at ASC, id ASC;",
       )
       .all(normalizedSourceId) as DependencyRow[];
 
