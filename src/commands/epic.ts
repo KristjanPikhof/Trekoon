@@ -236,6 +236,7 @@ export async function runEpic(context: CliContext): Promise<CliResult> {
     const parsed = parseArgs(context.args);
     const subcommand: string | undefined = parsed.positional[0];
     const domain = new TrackerDomain(database.db);
+    const mutations = new MutationService(database.db, context.cwd);
 
     switch (subcommand) {
       case "create": {
