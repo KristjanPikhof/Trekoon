@@ -203,6 +203,39 @@ describe("cli shell dispatch", (): void => {
     expect(data.dryRun).toBeTrue();
   });
 
+  test("rejects unsupported compatibility mode", async (): Promise<void> => {
+    const workspace = createWorkspace();
+    const parsed = parseInvocation(["sync", "status", "--json", "--compat", "unknown-mode"], { stdoutIsTTY: false });
+
+    const result = await executeShell(parsed, workspace);
+
+    expect(result.ok).toBeFalse();
+    expect(result.error?.code).toBe("invalid_args");
+    expect(result.human).toContain("Unsupported compatibility mode");
+  });
+
+  test("rejects missing compatibility mode value", async (): Promise<void> => {
+    const workspace = createWorkspace();
+    const parsed = parseInvocation(["sync", "status", "--json", "--compat"], { stdoutIsTTY: false });
+
+    const result = await executeShell(parsed, workspace);
+
+    expect(result.ok).toBeFalse();
+    expect(result.error?.code).toBe("invalid_args");
+    expect(result.human).toContain("--compat requires");
+  });
+
+  test("rejects compatibility mode for non-sync commands", async (): Promise<void> => {
+    const workspace = createWorkspace();
+    const parsed = parseInvocation(["task", "list", "--json", "--compat", "legacy-sync-command-ids"], { stdoutIsTTY: false });
+
+    const result = await executeShell(parsed, workspace);
+
+    expect(result.ok).toBeFalse();
+    expect(result.error?.code).toBe("invalid_args");
+    expect(result.human).toContain("only supports sync commands");
+  });
+
   test("adds machine-readable diagnostics for nested cwd", async (): Promise<void> => {
     const workspace = createWorkspace();
     initGitRepository(workspace);
