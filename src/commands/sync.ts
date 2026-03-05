@@ -1,18 +1,16 @@
+import { findUnknownOption, parseArgs, readMissingOptionValue, readOption, suggestOptions } from "./arg-parser";
+
 import { failResult, okResult } from "../io/output";
 import { type CliContext, type CliResult } from "../runtime/command-types";
 import { MissingBranchDatabaseError } from "../sync/branch-db";
 import { getSyncConflict, listSyncConflicts, syncPull, syncResolve, syncStatus } from "../sync/service";
-import { type SyncConflictMode, type SyncResolution } from "../sync/types";
+import { type SyncResolution } from "../sync/types";
 
-function parseOption(args: readonly string[], option: string): string | null {
-  const index: number = args.indexOf(option);
-  if (index < 0) {
-    return null;
-  }
-
-  const value: string | undefined = args[index + 1];
-  return value && !value.startsWith("--") ? value : null;
-}
+const STATUS_OPTIONS = ["from"] as const;
+const PULL_OPTIONS = ["from"] as const;
+const RESOLVE_OPTIONS = ["use"] as const;
+const CONFLICTS_LIST_OPTIONS = ["mode"] as const;
+const CONFLICTS_SHOW_OPTIONS: readonly string[] = [];
 
 function usage(message: string): CliResult {
   return failResult({
@@ -22,6 +20,28 @@ function usage(message: string): CliResult {
     error: {
       code: "invalid_args",
       message,
+    },
+  });
+}
+
+function prefixedOptions(options: readonly string[]): string[] {
+  return options.map((option) => `--${option}`);
+}
+
+function unknownOption(command: string, option: string, allowedOptions: readonly string[]): CliResult {
+  const suggestions = suggestOptions(option, allowedOptions).map((suggestion) => `--${suggestion}`);
+  const suggestionMessage = suggestions.length > 0 ? ` Did you mean ${suggestions.join(" or ")}?` : "";
+  return failResult({
+    command,
+    human: `Unknown option --${option}.${suggestionMessage}`,
+    data: {
+      option: `--${option}`,
+      allowedOptions: prefixedOptions(allowedOptions),
+      suggestions,
+    },
+    error: {
+      code: "unknown_option",
+      message: `Unknown option --${option}`,
     },
   });
 }
@@ -61,26 +81,9 @@ function formatConflictList(
     .join("\n");
 }
 
-function parseConflictMode(args: readonly string[]): SyncConflictMode | null {
-  const modeIndex = args.indexOf("--mode");
-  if (modeIndex < 0) {
-    return "pending";
-  }
-
-  const explicitMode = args[modeIndex + 1];
-  if (!explicitMode || explicitMode.startsWith("--")) {
-    return null;
-  }
-
-  if (explicitMode === "pending" || explicitMode === "all") {
-    return explicitMode;
-  }
-
-  return null;
-}
-
 export async function runSync(context: CliContext): Promise<CliResult> {
-  const subcommand: string | undefined = context.args[0];
+  const parsed = parseArgs(context.args);
+  const subcommand: string | undefined = parsed.positional[0];
 
   if (!subcommand) {
     return usage("Missing sync subcommand.");
@@ -88,7 +91,17 @@ export async function runSync(context: CliContext): Promise<CliResult> {
 
   try {
     if (subcommand === "status") {
-      const sourceBranch: string = parseOption(context.args, "--from") ?? "main";
+      const statusUnknownOption = findUnknownOption(parsed, STATUS_OPTIONS);
+      if (statusUnknownOption !== undefined) {
+        return unknownOption("sync status", statusUnknownOption, STATUS_OPTIONS);
+      }
+
+      const missingFromOption = readMissingOptionValue(parsed.missingOptionValues, "from");
+      if (missingFromOption !== undefined) {
+        return usage("sync status requires --from <branch> when provided.");
+      }
+
+      const sourceBranch: string = readOption(parsed.options, "from") ?? "main";
       const summary = syncStatus(context.cwd, sourceBranch);
 
       return okResult({
@@ -99,8 +112,18 @@ export async function runSync(context: CliContext): Promise<CliResult> {
     }
 
     if (subcommand === "pull") {
-      const sourceBranch: string | null = parseOption(context.args, "--from");
-      if (!sourceBranch) {
+      const pullUnknownOption = findUnknownOption(parsed, PULL_OPTIONS);
+      if (pullUnknownOption !== undefined) {
+        return unknownOption("sync pull", pullUnknownOption, PULL_OPTIONS);
+      }
+
+      const missingFromOption = readMissingOptionValue(parsed.missingOptionValues, "from");
+      if (missingFromOption !== undefined) {
+        return usage("sync pull requires --from <branch>.");
+      }
+
+      const sourceBranch: string | undefined = readOption(parsed.options, "from");
+      if (sourceBranch === undefined) {
         return usage("sync pull requires --from <branch>.");
       }
 
@@ -123,8 +146,18 @@ export async function runSync(context: CliContext): Promise<CliResult> {
     }
 
     if (subcommand === "resolve") {
-      const conflictId: string | undefined = context.args[1];
-      const rawResolution: string | null = parseOption(context.args, "--use");
+      const resolveUnknownOption = findUnknownOption(parsed, RESOLVE_OPTIONS);
+      if (resolveUnknownOption !== undefined) {
+        return unknownOption("sync resolve", resolveUnknownOption, RESOLVE_OPTIONS);
+      }
+
+      const conflictId: string | undefined = parsed.positional[1];
+      const missingResolutionOption = readMissingOptionValue(parsed.missingOptionValues, "use");
+      if (missingResolutionOption !== undefined) {
+        return usage("sync resolve requires <conflict-id> --use ours|theirs.");
+      }
+
+      const rawResolution: string | undefined = readOption(parsed.options, "use");
 
       if (!conflictId || !rawResolution) {
         return usage("sync resolve requires <conflict-id> --use ours|theirs.");
@@ -144,14 +177,24 @@ export async function runSync(context: CliContext): Promise<CliResult> {
     }
 
     if (subcommand === "conflicts") {
-      const conflictsCommand: string | undefined = context.args[1];
+      const conflictsCommand: string | undefined = parsed.positional[1];
       if (!conflictsCommand) {
         return usage("sync conflicts requires list|show.");
       }
 
       if (conflictsCommand === "list") {
-        const mode = parseConflictMode(context.args);
-        if (!mode) {
+        const listUnknownOption = findUnknownOption(parsed, CONFLICTS_LIST_OPTIONS);
+        if (listUnknownOption !== undefined) {
+          return unknownOption("sync conflicts list", listUnknownOption, CONFLICTS_LIST_OPTIONS);
+        }
+
+        const missingModeOption = readMissingOptionValue(parsed.missingOptionValues, "mode");
+        if (missingModeOption !== undefined) {
+          return usage("sync conflicts list --mode only accepts pending|all.");
+        }
+
+        const mode = readOption(parsed.options, "mode") ?? "pending";
+        if (mode !== "pending" && mode !== "all") {
           return usage("sync conflicts list --mode only accepts pending|all.");
         }
 
@@ -168,7 +211,12 @@ export async function runSync(context: CliContext): Promise<CliResult> {
       }
 
       if (conflictsCommand === "show") {
-        const conflictId: string | undefined = context.args[2];
+        const showUnknownOption = findUnknownOption(parsed, CONFLICTS_SHOW_OPTIONS);
+        if (showUnknownOption !== undefined) {
+          return unknownOption("sync conflicts show", showUnknownOption, CONFLICTS_SHOW_OPTIONS);
+        }
+
+        const conflictId: string | undefined = parsed.positional[2];
         if (!conflictId) {
           return usage("sync conflicts show requires <conflict-id>.");
         }
