@@ -323,7 +323,29 @@ export async function runSubtask(context: CliContext): Promise<CliResult> {
           command: "subtask.list",
           human,
           data: { subtasks },
-          ...(context.mode === "human" ? {} : { meta: { pagination: listed.pagination } }),
+          ...(context.mode === "human"
+            ? {}
+            : {
+                meta: {
+                  pagination: listed.pagination,
+                  defaults: {
+                    statuses: !includeAll && statuses === undefined ? [...DEFAULT_OPEN_SUBTASK_STATUSES] : null,
+                    limit: !includeAll && parsedLimit === undefined ? DEFAULT_SUBTASK_LIST_LIMIT : null,
+                    cursor: parsedCursor === undefined ? 0 : null,
+                    view: view === undefined ? "table" : null,
+                  },
+                  filters: {
+                    taskId: taskId ?? null,
+                    statuses: selectedStatuses ?? null,
+                    includeAll,
+                  },
+                  truncation: {
+                    applied: listed.pagination.hasMore,
+                    returned: subtasks.length,
+                    limit: selectedLimit ?? null,
+                  },
+                },
+              }),
         });
       }
       case "update": {
