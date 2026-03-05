@@ -4,7 +4,9 @@
 # Bun/TypeScript
 /node_modules/
 /dist/
-/bun.lockb
+/bun.lock
 
 # Trekoon local state
-/.trekoon/
+/.trekoon/*
+/.opencode/*
+/.claude/*
