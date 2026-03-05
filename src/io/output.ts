@@ -22,6 +22,7 @@ function toLegacySyncCommandId(command: string): string {
     "sync.status": "sync_status",
     "sync.pull": "sync_pull",
     "sync.resolve": "sync_resolve",
+    "sync.conflicts": "sync_conflicts",
     "sync.conflicts.list": "sync_conflicts_list",
     "sync.conflicts.show": "sync_conflicts_show",
   };
