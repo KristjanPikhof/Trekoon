@@ -13,6 +13,7 @@ import { runWipe } from "../commands/wipe";
 import { failResult, okResult, renderResult } from "../io/output";
 import { type CliContext, type CliResult, type OutputMode } from "./command-types";
 import { CLI_VERSION } from "./version";
+import { resolveStoragePaths } from "../storage/path";
 
 const SUPPORTED_ROOT_COMMANDS: readonly string[] = [
   "help",
@@ -85,6 +86,26 @@ export function renderShellResult(result: CliResult, mode: OutputMode): string {
   return renderResult(result, mode);
 }
 
+function withStorageRootDiagnostics(result: CliResult, cwd: string): CliResult {
+  const diagnostics = resolveStoragePaths(cwd).diagnostics;
+  if (diagnostics.warnings.length === 0 && diagnostics.errors.length === 0) {
+    return result;
+  }
+
+  return {
+    ...result,
+    meta: {
+      ...(result.meta ?? {}),
+      storageRootDiagnostics: {
+        invocationCwd: diagnostics.invocationCwd,
+        canonicalRoot: diagnostics.canonicalRoot,
+        warning: diagnostics.warnings[0] ?? null,
+        error: diagnostics.errors[0] ?? null,
+      },
+    },
+  };
+}
+
 export async function executeShell(parsed: ParsedInvocation, cwd: string = process.cwd()): Promise<CliResult> {
   if (parsed.wantsVersion) {
     return okResult({
@@ -101,19 +122,23 @@ export async function executeShell(parsed: ParsedInvocation, cwd: string = proce
       args: parsed.command ? [parsed.command] : [],
     };
 
-    return runHelp(helpContext);
+    return withStorageRootDiagnostics(await runHelp(helpContext), cwd);
   }
 
   if (!parsed.command) {
-    return runHelp({
+    return withStorageRootDiagnostics(
+      await runHelp({
       mode: parsed.mode,
       args: [],
       cwd,
-    });
+      }),
+      cwd,
+    );
   }
 
   if (!SUPPORTED_ROOT_COMMANDS.includes(parsed.command)) {
-    return failResult({
+    return withStorageRootDiagnostics(
+      failResult({
       command: "shell",
       human: `Unknown command: ${parsed.command}\nRun 'trekoon --help' for usage.`,
       data: {
@@ -124,7 +149,9 @@ export async function executeShell(parsed: ParsedInvocation, cwd: string = proce
         code: "unknown_command",
         message: `Unknown command '${parsed.command}'`,
       },
-    });
+      }),
+      cwd,
+    );
   }
 
   const context: CliContext = {
@@ -133,33 +160,47 @@ export async function executeShell(parsed: ParsedInvocation, cwd: string = proce
     cwd,
   };
 
+  let result: CliResult;
+
   switch (parsed.command) {
     case "help":
-      return runHelp(context);
+      result = await runHelp(context);
+      break;
     case "init":
-      return runInit(context);
+      result = await runInit(context);
+      break;
     case "quickstart":
-      return runQuickstart(context);
+      result = await runQuickstart(context);
+      break;
     case "wipe":
-      return runWipe(context);
+      result = await runWipe(context);
+      break;
     case "epic":
-      return runEpic(context);
+      result = await runEpic(context);
+      break;
     case "task":
-      return runTask(context);
+      result = await runTask(context);
+      break;
     case "subtask":
-      return runSubtask(context);
+      result = await runSubtask(context);
+      break;
     case "dep":
-      return runDep(context);
+      result = await runDep(context);
+      break;
     case "events":
-      return runEvents(context);
+      result = await runEvents(context);
+      break;
     case "migrate":
-      return runMigrate(context);
+      result = await runMigrate(context);
+      break;
     case "sync":
-      return runSync(context);
+      result = await runSync(context);
+      break;
     case "skills":
-      return runSkills(context);
+      result = await runSkills(context);
+      break;
     default:
-      return failResult({
+      result = failResult({
         command: "shell",
         human: `Unhandled command: ${parsed.command}`,
         data: { command: parsed.command },
@@ -168,5 +209,8 @@ export async function executeShell(parsed: ParsedInvocation, cwd: string = proce
           message: `No shell handler for '${parsed.command}'`,
         },
       });
+      break;
   }
+
+  return withStorageRootDiagnostics(result, cwd);
 }
