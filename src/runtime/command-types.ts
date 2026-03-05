@@ -11,10 +11,16 @@ export interface ToonError {
   readonly message: string;
 }
 
+export interface ContractMetadata {
+  readonly contractVersion: string;
+  readonly requestId: string;
+}
+
 export interface ToonEnvelope {
   readonly ok: boolean;
   readonly command: string;
   readonly data: unknown;
+  readonly metadata: ContractMetadata;
   readonly error?: ToonError;
   readonly meta?: Record<string, unknown>;
 }
