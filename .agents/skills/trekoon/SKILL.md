@@ -35,6 +35,9 @@ data:
     status: in_progress
     createdAt: 1700000001000
     updatedAt: 1700000001000
+metadata:
+  contractVersion: 1.0.0
+  requestId: req-abc12345
 ```
 
 On error:
@@ -43,6 +46,9 @@ On error:
 ok: false
 command: task.show
 data: {}
+metadata:
+  contractVersion: 1.0.0
+  requestId: req-def67890
 error:
   code: not_found
   message: task not found: invalid-id
@@ -55,9 +61,33 @@ error:
 | `ok` | `true` if command succeeded, `false` on error |
 | `command` | The command that was executed (e.g., `task.list`, `epic.create`) |
 | `data` | The response payload (tasks, epics, dependencies, etc.) |
+| `metadata` | Contract metadata (`contractVersion`, `requestId`) |
+| `meta` | Optional command-specific metadata (pagination/defaults/filters/diagnostics) |
 | `error` | Present only on failure, contains `code` and `message` |
 
 Use long flags (`--status`, `--description`, etc.) and ALWAYS append `--toon` to every command.
+
+### Contract details to rely on
+
+- Machine responses include `metadata.contractVersion` and `metadata.requestId`.
+- Command IDs are stable and typically dot namespaced (`task.list`, `sync.status`).
+- Some root commands use single-token IDs (`help`, `init`, `quickstart`, `wipe`, `version`).
+- Unknown options fail fast with deterministic `unknown_option` errors and may include:
+  - `data.option`
+  - `data.allowedOptions`
+  - `data.suggestions`
+
+### Compatibility mode (legacy sync consumers)
+
+Default behavior is strict canonical IDs (for example `sync.status`).
+
+If a legacy consumer still expects underscore sync IDs, compatibility mode can be used:
+
+```bash
+trekoon --toon --compat legacy-sync-command-ids sync status
+```
+
+When enabled, output includes `metadata.compatibility` with migration/deprecation details.
 
 ## 1) Status Management
 
@@ -205,8 +235,20 @@ trekoon task list --all --toon
 - `--all` cannot be combined with `--cursor`.
 - Machine pagination contract is in `meta.pagination.hasMore` and
   `meta.pagination.nextCursor`.
+- Machine list/show responses may also include:
+  - `meta.defaults`
+  - `meta.filters`
+  - `meta.truncation`
 - `epic show <id> --all --toon`: full epic tree (tasks + subtasks)
 - `task show <id> --all --toon`: task plus its subtasks
+
+### Canonical storage root behavior
+
+- In git repos/worktrees, Trekoon resolves storage from repository top-level so
+  nested cwd invocations use one canonical `.trekoon/trekoon.db`.
+- In non-git directories, Trekoon falls back to invocation cwd.
+- If invocation cwd differs from canonical root, machine output may include
+  `meta.storageRootDiagnostics`.
 
 ### View Options
 
