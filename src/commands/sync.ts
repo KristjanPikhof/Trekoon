@@ -12,9 +12,9 @@ const RESOLVE_OPTIONS = ["use"] as const;
 const CONFLICTS_LIST_OPTIONS = ["mode"] as const;
 const CONFLICTS_SHOW_OPTIONS: readonly string[] = [];
 
-function usage(message: string): CliResult {
+function usage(message: string, command = "sync"): CliResult {
   return failResult({
-    command: "sync",
+    command,
     human: `${message}\nUsage: trekoon sync <status|pull|resolve|conflicts> [options]`,
     data: { message },
     error: {
@@ -98,7 +98,7 @@ export async function runSync(context: CliContext): Promise<CliResult> {
 
       const missingFromOption = readMissingOptionValue(parsed.missingOptionValues, "from");
       if (missingFromOption !== undefined) {
-        return usage("sync status requires --from <branch> when provided.");
+        return usage("sync status requires --from <branch> when provided.", "sync.status");
       }
 
       const sourceBranch: string = readOption(parsed.options, "from") ?? "main";
@@ -119,12 +119,12 @@ export async function runSync(context: CliContext): Promise<CliResult> {
 
       const missingFromOption = readMissingOptionValue(parsed.missingOptionValues, "from");
       if (missingFromOption !== undefined) {
-        return usage("sync pull requires --from <branch>.");
+        return usage("sync pull requires --from <branch>.", "sync.pull");
       }
 
       const sourceBranch: string | undefined = readOption(parsed.options, "from");
       if (sourceBranch === undefined) {
-        return usage("sync pull requires --from <branch>.");
+        return usage("sync pull requires --from <branch>.", "sync.pull");
       }
 
       const summary = syncPull(context.cwd, sourceBranch);
@@ -154,17 +154,17 @@ export async function runSync(context: CliContext): Promise<CliResult> {
       const conflictId: string | undefined = parsed.positional[1];
       const missingResolutionOption = readMissingOptionValue(parsed.missingOptionValues, "use");
       if (missingResolutionOption !== undefined) {
-        return usage("sync resolve requires <conflict-id> --use ours|theirs.");
+        return usage("sync resolve requires <conflict-id> --use ours|theirs.", "sync.resolve");
       }
 
       const rawResolution: string | undefined = readOption(parsed.options, "use");
 
       if (!conflictId || !rawResolution) {
-        return usage("sync resolve requires <conflict-id> --use ours|theirs.");
+        return usage("sync resolve requires <conflict-id> --use ours|theirs.", "sync.resolve");
       }
 
       if (rawResolution !== "ours" && rawResolution !== "theirs") {
-        return usage("sync resolve --use only accepts ours|theirs.");
+        return usage("sync resolve --use only accepts ours|theirs.", "sync.resolve");
       }
 
       const summary = syncResolve(context.cwd, conflictId, rawResolution as SyncResolution);
@@ -179,7 +179,7 @@ export async function runSync(context: CliContext): Promise<CliResult> {
     if (subcommand === "conflicts") {
       const conflictsCommand: string | undefined = parsed.positional[1];
       if (!conflictsCommand) {
-        return usage("sync conflicts requires list|show.");
+          return usage("sync conflicts requires list|show.", "sync.conflicts");
       }
 
       if (conflictsCommand === "list") {
@@ -190,12 +190,12 @@ export async function runSync(context: CliContext): Promise<CliResult> {
 
         const missingModeOption = readMissingOptionValue(parsed.missingOptionValues, "mode");
         if (missingModeOption !== undefined) {
-          return usage("sync conflicts list --mode only accepts pending|all.");
+            return usage("sync conflicts list --mode only accepts pending|all.", "sync.conflicts.list");
         }
 
         const mode = readOption(parsed.options, "mode") ?? "pending";
         if (mode !== "pending" && mode !== "all") {
-          return usage("sync conflicts list --mode only accepts pending|all.");
+            return usage("sync conflicts list --mode only accepts pending|all.", "sync.conflicts.list");
         }
 
         const conflicts = listSyncConflicts(context.cwd, mode);
@@ -217,9 +217,9 @@ export async function runSync(context: CliContext): Promise<CliResult> {
         }
 
         const conflictId: string | undefined = parsed.positional[2];
-        if (!conflictId) {
-          return usage("sync conflicts show requires <conflict-id>.");
-        }
+          if (!conflictId) {
+            return usage("sync conflicts show requires <conflict-id>.", "sync.conflicts.show");
+          }
 
         const conflict = getSyncConflict(context.cwd, conflictId);
 
@@ -239,7 +239,7 @@ export async function runSync(context: CliContext): Promise<CliResult> {
         });
       }
 
-      return usage(`Unknown sync conflicts subcommand '${conflictsCommand}'.`);
+        return usage(`Unknown sync conflicts subcommand '${conflictsCommand}'.`, "sync.conflicts");
     }
 
     return usage(`Unknown sync subcommand '${subcommand}'.`);
