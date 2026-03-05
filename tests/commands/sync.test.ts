@@ -179,6 +179,15 @@ describe("sync command", (): void => {
     const workspace: string = createWorkspace();
     initializeRepository(workspace);
 
+    const statusMissingFromValue = await runSync({
+      args: ["status", "--from"],
+      cwd: workspace,
+      mode: "human",
+    });
+
+    expect(statusMissingFromValue.ok).toBe(false);
+    expect(statusMissingFromValue.error?.code).toBe("invalid_args");
+
     const missingFrom = await runSync({
       args: ["pull"],
       cwd: workspace,
@@ -196,6 +205,20 @@ describe("sync command", (): void => {
 
     expect(badResolution.ok).toBe(false);
     expect(badResolution.error?.code).toBe("invalid_args");
+
+    const typoFrom = await runSync({
+      args: ["pull", "--form", "main"],
+      cwd: workspace,
+      mode: "toon",
+    });
+
+    expect(typoFrom.ok).toBe(false);
+    expect(typoFrom.error?.code).toBe("unknown_option");
+    expect(typoFrom.data).toMatchObject({
+      option: "--form",
+      allowedOptions: ["--from"],
+      suggestions: ["--from"],
+    });
   });
 
   test("quarantines malformed payloads and continues", async (): Promise<void> => {
