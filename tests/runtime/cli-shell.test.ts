@@ -1,7 +1,7 @@
 import { execFileSync } from "node:child_process";
 import { existsSync, mkdirSync, mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { join, resolve } from "node:path";
 
 import { afterEach, describe, expect, test } from "bun:test";
 
@@ -205,6 +205,7 @@ describe("cli shell dispatch", (): void => {
   test("adds machine-readable diagnostics for nested cwd", async (): Promise<void> => {
     const workspace = createWorkspace();
     initGitRepository(workspace);
+    const canonicalWorkspace = resolve(workspace);
     const nestedCwd = join(workspace, "pkg", "tools", "cli");
     mkdirSync(nestedCwd, { recursive: true });
 
@@ -221,7 +222,7 @@ describe("cli shell dispatch", (): void => {
     };
 
     expect(meta.storageRootDiagnostics?.invocationCwd).toBe(nestedCwd);
-    expect(meta.storageRootDiagnostics?.canonicalRoot).toBe(workspace);
+    expect(meta.storageRootDiagnostics?.canonicalRoot).toBe(canonicalWorkspace);
     expect(meta.storageRootDiagnostics?.warning?.code).toBe("storage_root_diverged_from_cwd");
     expect(meta.storageRootDiagnostics?.error).toBeNull();
   });
