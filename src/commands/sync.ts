@@ -12,6 +12,34 @@ const RESOLVE_OPTIONS = ["use"] as const;
 const CONFLICTS_LIST_OPTIONS = ["mode"] as const;
 const CONFLICTS_SHOW_OPTIONS: readonly string[] = [];
 
+function resolveSyncCommandId(subcommand: string | undefined, conflictsSubcommand: string | undefined): string {
+  if (subcommand === "status") {
+    return "sync.status";
+  }
+
+  if (subcommand === "pull") {
+    return "sync.pull";
+  }
+
+  if (subcommand === "resolve") {
+    return "sync.resolve";
+  }
+
+  if (subcommand !== "conflicts") {
+    return "sync";
+  }
+
+  if (conflictsSubcommand === "list") {
+    return "sync.conflicts.list";
+  }
+
+  if (conflictsSubcommand === "show") {
+    return "sync.conflicts.show";
+  }
+
+  return "sync.conflicts";
+}
+
 function usage(message: string, command = "sync"): CliResult {
   return failResult({
     command,
@@ -84,6 +112,8 @@ function formatConflictList(
 export async function runSync(context: CliContext): Promise<CliResult> {
   const parsed = parseArgs(context.args);
   const subcommand: string | undefined = parsed.positional[0];
+  const conflictsSubcommand: string | undefined = subcommand === "conflicts" ? parsed.positional[1] : undefined;
+  const resolvedCommand: string = resolveSyncCommandId(subcommand, conflictsSubcommand);
 
   if (!subcommand) {
     return usage("Missing sync subcommand.");
@@ -246,7 +276,7 @@ export async function runSync(context: CliContext): Promise<CliResult> {
   } catch (error) {
     if (error instanceof MissingBranchDatabaseError) {
       return failResult({
-        command: "sync",
+        command: resolvedCommand,
         human: error.message,
         data: {
           reason: "missing_branch_db",
@@ -261,7 +291,7 @@ export async function runSync(context: CliContext): Promise<CliResult> {
     const message = error instanceof Error ? error.message : "Unknown sync error.";
 
     return failResult({
-      command: "sync",
+      command: resolvedCommand,
       human: message,
       data: {
         reason: "sync_failed",
