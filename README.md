@@ -46,6 +46,7 @@ npm i -g trekoon
 ## Command surface
 
 - `trekoon init`
+- `trekoon help [command]`
 - `trekoon quickstart`
 - `trekoon epic <create|list|show|update|delete>`
 - `trekoon task <create|list|show|ready|next|update|delete>`
@@ -75,7 +76,8 @@ trekoon --json quickstart
 trekoon quickstart --json
 ```
 
-Trekoon currently accepts long option form (`--option`).
+Trekoon options use long form (`--option`) for command/subcommand flags.
+Root help/version aliases `-h` and `-v` are also supported.
 
 Human view options:
 
@@ -306,12 +308,16 @@ Base envelope fields (all machine responses):
 
 ```text
 ok: true|false
-command: <dot.namespaced.command>
+command: <stable command id>
 data: <payload>
 metadata:
   contractVersion: "1.0.0"
   requestId: req-<stable-id>
 ```
+
+Most subcommand identifiers are dot-namespaced (`task.list`, `sync.pull`,
+`epic.show`). Root-level commands may use single-token IDs (`help`, `init`,
+`quickstart`, `wipe`, `version`).
 
 Additional metadata can appear when relevant:
 
