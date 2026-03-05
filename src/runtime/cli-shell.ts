@@ -12,8 +12,7 @@ import { runTask } from "../commands/task";
 import { runWipe } from "../commands/wipe";
 import { failResult, okResult, renderResult } from "../io/output";
 import { type CliContext, type CliResult, type OutputMode } from "./command-types";
-
-const CLI_VERSION = "0.1.0";
+import { CLI_VERSION } from "./version";
 
 const SUPPORTED_ROOT_COMMANDS: readonly string[] = [
   "help",

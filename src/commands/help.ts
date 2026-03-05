@@ -1,8 +1,10 @@
 import { okResult } from "../io/output";
 import { type CliContext, type CliResult } from "../runtime/command-types";
+import { CLI_VERSION } from "../runtime/version";
 
 const ROOT_HELP = [
   "Trekoon - AI-first local issue tracker",
+  `Version: ${CLI_VERSION}`,
   "",
   "Usage:",
   "  trekoon [global-options] <command> [command-options]",
@@ -65,6 +67,7 @@ export async function runHelp(context: CliContext): Promise<CliResult> {
     data: {
       topic,
       text,
+      version: CLI_VERSION,
     },
   });
 }

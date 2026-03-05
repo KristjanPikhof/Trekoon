@@ -5,6 +5,7 @@ import { join } from "node:path";
 import { afterEach, describe, expect, test } from "bun:test";
 
 import { executeShell, parseInvocation } from "../../src/runtime/cli-shell";
+import { CLI_VERSION } from "../../src/runtime/version";
 
 const tempDirs: string[] = [];
 
@@ -36,6 +37,32 @@ describe("cli shell dispatch", (): void => {
     expect(data.topic).toBe("skills");
     expect(data.text).toContain("trekoon skills install");
     expect(data.text).toContain("trekoon skills update");
+  });
+
+  test("includes package version in root help", async (): Promise<void> => {
+    const workspace = createWorkspace();
+    const parsed = parseInvocation(["--help"], { stdoutIsTTY: false });
+
+    const result = await executeShell(parsed, workspace);
+
+    expect(result.ok).toBeTrue();
+    expect(result.command).toBe("help");
+    const data = result.data as { text: string; version: string };
+    expect(data.version).toBe(CLI_VERSION);
+    expect(data.text).toContain(`Version: ${CLI_VERSION}`);
+  });
+
+  test("reports package version for --version", async (): Promise<void> => {
+    const workspace = createWorkspace();
+    const parsed = parseInvocation(["--version"], { stdoutIsTTY: false });
+
+    const result = await executeShell(parsed, workspace);
+
+    expect(result.ok).toBeTrue();
+    expect(result.command).toBe("version");
+    expect(result.human).toBe(CLI_VERSION);
+    const data = result.data as { version: string };
+    expect(data.version).toBe(CLI_VERSION);
   });
 
   test("dispatches skills install and creates project-local artifact", async (): Promise<void> => {
