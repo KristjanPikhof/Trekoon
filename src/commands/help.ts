@@ -17,6 +17,7 @@ const ROOT_HELP = [
   "  --version    Print CLI version",
   "",
   "Commands:",
+  "  help         Show root or command help",
   "  init         Initialize .trekoon storage and local DB",
   "  quickstart   Show AI execution loop + task detail workflow",
   "  wipe         Remove local Trekoon state (requires --yes)",
