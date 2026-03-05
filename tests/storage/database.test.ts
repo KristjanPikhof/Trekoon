@@ -1,4 +1,5 @@
-import { mkdtempSync, rmSync } from "node:fs";
+import { execFileSync } from "node:child_process";
+import { mkdirSync, mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
@@ -15,6 +16,10 @@ function createWorkspace(): string {
   const workspace: string = mkdtempSync(join(tmpdir(), "trekoon-storage-"));
   tempDirs.push(workspace);
   return workspace;
+}
+
+function initGitRepository(workspace: string): void {
+  execFileSync("git", ["init"], { cwd: workspace, stdio: "ignore" });
 }
 
 afterEach((): void => {
@@ -54,6 +59,26 @@ describe("storage lifecycle", (): void => {
       expect(epicsTable?.name).toBe("epics");
     } finally {
       storage.close();
+    }
+  });
+
+  test("resolves same canonical database file from nested cwd", (): void => {
+    const workspace: string = createWorkspace();
+    initGitRepository(workspace);
+    const nestedCwd: string = join(workspace, "apps", "cli", "nested");
+    mkdirSync(nestedCwd, { recursive: true });
+
+    const rootStorage = openTrekoonDatabase(workspace);
+    const nestedStorage = openTrekoonDatabase(nestedCwd);
+
+    try {
+      expect(rootStorage.paths.databaseFile).toBe(join(workspace, ".trekoon", "trekoon.db"));
+      expect(nestedStorage.paths.databaseFile).toBe(rootStorage.paths.databaseFile);
+      expect(nestedStorage.paths.worktreeRoot).toBe(workspace);
+      expect(nestedStorage.paths.diagnostics.warnings[0]?.code).toBe("storage_root_diverged_from_cwd");
+    } finally {
+      nestedStorage.close();
+      rootStorage.close();
     }
   });
 
