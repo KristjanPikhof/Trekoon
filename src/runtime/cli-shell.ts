@@ -11,7 +11,7 @@ import { runSync } from "../commands/sync";
 import { runTask } from "../commands/task";
 import { runWipe } from "../commands/wipe";
 import { failResult, okResult, renderResult } from "../io/output";
-import { type CliContext, type CliResult, type OutputMode } from "./command-types";
+import { type CliContext, type CliResult, type CompatibilityMode, type OutputMode } from "./command-types";
 import { CLI_VERSION } from "./version";
 import { resolveStoragePaths } from "../storage/path";
 
@@ -32,6 +32,9 @@ const SUPPORTED_ROOT_COMMANDS: readonly string[] = [
 
 export interface ParsedInvocation {
   readonly mode: OutputMode;
+  readonly compatibilityMode: CompatibilityMode | null;
+  readonly compatibilityModeRaw: string | null;
+  readonly compatibilityModeMissingValue: boolean;
   readonly command: string | null;
   readonly args: readonly string[];
   readonly wantsHelp: boolean;
@@ -45,11 +48,18 @@ export interface ParseInvocationOptions {
 export function parseInvocation(argv: readonly string[], options: ParseInvocationOptions = {}): ParsedInvocation {
   const stdoutIsTTY: boolean = options.stdoutIsTTY ?? Boolean(process.stdout.isTTY);
   let explicitMode: OutputMode | null = null;
+  let compatibilityModeRaw: string | null = null;
+  let compatibilityModeMissingValue = false;
   let wantsHelp = false;
   let wantsVersion = false;
   const positionals: string[] = [];
 
-  for (const token of argv) {
+  for (let index = 0; index < argv.length; index += 1) {
+    const token: string | undefined = argv[index];
+    if (!token) {
+      continue;
+    }
+
     if (token === "--json") {
       explicitMode = "json";
       continue;
@@ -70,11 +80,29 @@ export function parseInvocation(argv: readonly string[], options: ParseInvocatio
       continue;
     }
 
+    if (token === "--compat") {
+      const maybeValue: string | undefined = argv[index + 1];
+      if (!maybeValue || maybeValue.startsWith("--")) {
+        compatibilityModeMissingValue = true;
+        continue;
+      }
+
+      compatibilityModeRaw = maybeValue;
+      index += 1;
+      continue;
+    }
+
     positionals.push(token);
   }
 
+  const compatibilityMode: CompatibilityMode | null =
+    compatibilityModeRaw === "legacy-sync-command-ids" ? compatibilityModeRaw : null;
+
   return {
     mode: explicitMode ?? (stdoutIsTTY ? "human" : "json"),
+    compatibilityMode,
+    compatibilityModeRaw,
+    compatibilityModeMissingValue,
     command: positionals[0] ?? null,
     args: positionals.slice(1),
     wantsHelp,
@@ -82,8 +110,8 @@ export function parseInvocation(argv: readonly string[], options: ParseInvocatio
   };
 }
 
-export function renderShellResult(result: CliResult, mode: OutputMode): string {
-  return renderResult(result, mode);
+export function renderShellResult(result: CliResult, mode: OutputMode, compatibilityMode: CompatibilityMode | null = null): string {
+  return renderResult(result, mode, { compatibilityMode });
 }
 
 function withStorageRootDiagnostics(result: CliResult, cwd: string): CliResult {
@@ -107,6 +135,66 @@ function withStorageRootDiagnostics(result: CliResult, cwd: string): CliResult {
 }
 
 export async function executeShell(parsed: ParsedInvocation, cwd: string = process.cwd()): Promise<CliResult> {
+  if (parsed.compatibilityModeMissingValue) {
+    return failResult({
+      command: "shell",
+      human: "--compat requires an explicit mode value.",
+      data: {
+        option: "--compat",
+        allowedModes: ["legacy-sync-command-ids"],
+      },
+      error: {
+        code: "invalid_args",
+        message: "Missing compatibility mode value for --compat.",
+      },
+    });
+  }
+
+  if (parsed.compatibilityModeRaw !== null && parsed.compatibilityMode === null) {
+    return failResult({
+      command: "shell",
+      human: `Unsupported compatibility mode '${parsed.compatibilityModeRaw}'.`,
+      data: {
+        providedMode: parsed.compatibilityModeRaw,
+        allowedModes: ["legacy-sync-command-ids"],
+      },
+      error: {
+        code: "invalid_args",
+        message: `Unsupported compatibility mode '${parsed.compatibilityModeRaw}'.`,
+      },
+    });
+  }
+
+  if (parsed.compatibilityMode !== null && parsed.mode === "human") {
+    return failResult({
+      command: "shell",
+      human: "Compatibility mode is machine-only; use --json or --toon.",
+      data: {
+        mode: parsed.mode,
+        compatibilityMode: parsed.compatibilityMode,
+      },
+      error: {
+        code: "invalid_args",
+        message: "Compatibility mode requires machine output mode.",
+      },
+    });
+  }
+
+  if (parsed.compatibilityMode === "legacy-sync-command-ids" && parsed.command !== "sync") {
+    return failResult({
+      command: "shell",
+      human: "--compat legacy-sync-command-ids only supports sync commands.",
+      data: {
+        compatibilityMode: parsed.compatibilityMode,
+        command: parsed.command,
+      },
+      error: {
+        code: "invalid_args",
+        message: "Compatibility mode can only be used with the sync command.",
+      },
+    });
+  }
+
   if (parsed.wantsVersion) {
     return okResult({
       command: "version",
