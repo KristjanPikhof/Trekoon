@@ -65,19 +65,25 @@ describe("cli shell dispatch", (): void => {
     expect(data.version).toBe(CLI_VERSION);
   });
 
-  test("shows detailed help for dep/events/migrate", async (): Promise<void> => {
+  test("shows detailed help for dep/events/migrate/sync/skills", async (): Promise<void> => {
     const workspace = createWorkspace();
     const depHelp = await executeShell(parseInvocation(["dep", "--help"], { stdoutIsTTY: false }), workspace);
     const eventsHelp = await executeShell(parseInvocation(["events", "--help"], { stdoutIsTTY: false }), workspace);
     const migrateHelp = await executeShell(parseInvocation(["migrate", "--help"], { stdoutIsTTY: false }), workspace);
+    const syncHelp = await executeShell(parseInvocation(["sync", "--help"], { stdoutIsTTY: false }), workspace);
+    const skillsHelp = await executeShell(parseInvocation(["help", "skills"], { stdoutIsTTY: false }), workspace);
 
     expect(depHelp.ok).toBeTrue();
     expect(eventsHelp.ok).toBeTrue();
     expect(migrateHelp.ok).toBeTrue();
+    expect(syncHelp.ok).toBeTrue();
+    expect(skillsHelp.ok).toBeTrue();
 
     const depData = depHelp.data as { topic: string; text: string };
     const eventsData = eventsHelp.data as { topic: string; text: string };
     const migrateData = migrateHelp.data as { topic: string; text: string };
+    const syncData = syncHelp.data as { topic: string; text: string };
+    const skillsData = skillsHelp.data as { topic: string; text: string };
 
     expect(depData.topic).toBe("dep");
     expect(depData.text).toContain("Subcommands:");
@@ -90,6 +96,41 @@ describe("cli shell dispatch", (): void => {
     expect(migrateData.topic).toBe("migrate");
     expect(migrateData.text).toContain("rollback");
     expect(migrateData.text).toContain("trekoon migrate rollback --to-version 1");
+
+    expect(syncData.topic).toBe("sync");
+    expect(syncData.text).toContain("conflicts list");
+    expect(syncData.text).toContain("resolve <conflict-id> --use ours|theirs");
+
+    expect(skillsData.topic).toBe("skills");
+    expect(skillsData.text).toContain("Install behavior:");
+    expect(skillsData.text).toContain("--allow-outside-repo");
+  });
+
+  test("shows practical command help for init/quickstart/wipe", async (): Promise<void> => {
+    const workspace = createWorkspace();
+    const initHelp = await executeShell(parseInvocation(["init", "--help"], { stdoutIsTTY: false }), workspace);
+    const quickstartHelp = await executeShell(parseInvocation(["quickstart", "--help"], { stdoutIsTTY: false }), workspace);
+    const wipeHelp = await executeShell(parseInvocation(["wipe", "--help"], { stdoutIsTTY: false }), workspace);
+
+    expect(initHelp.ok).toBeTrue();
+    expect(quickstartHelp.ok).toBeTrue();
+    expect(wipeHelp.ok).toBeTrue();
+
+    const initData = initHelp.data as { topic: string; text: string };
+    const quickstartData = quickstartHelp.data as { topic: string; text: string };
+    const wipeData = wipeHelp.data as { topic: string; text: string };
+
+    expect(initData.topic).toBe("init");
+    expect(initData.text).toContain("Purpose:");
+    expect(initData.text).toContain("Initialize local Trekoon storage");
+
+    expect(quickstartData.topic).toBe("quickstart");
+    expect(quickstartData.text).toContain("Flow:");
+    expect(quickstartData.text).toContain("trekoon --toon task next");
+
+    expect(wipeData.topic).toBe("wipe");
+    expect(wipeData.text).toContain("Options:");
+    expect(wipeData.text).toContain("--yes  Required safety confirmation");
   });
 
   test("dispatches skills install and creates project-local artifact", async (): Promise<void> => {
