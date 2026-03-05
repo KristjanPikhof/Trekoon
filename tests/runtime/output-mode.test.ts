@@ -24,6 +24,15 @@ describe("output mode parsing", (): void => {
     const parsed = parseInvocation(["quickstart", "--json"], { stdoutIsTTY: true });
     expect(parsed.mode).toBe("json");
   });
+
+  test("parses explicit compatibility mode", (): void => {
+    const parsed = parseInvocation(["sync", "status", "--json", "--compat", "legacy-sync-command-ids"], {
+      stdoutIsTTY: false,
+    });
+
+    expect(parsed.mode).toBe("json");
+    expect(parsed.compatibilityMode).toBe("legacy-sync-command-ids");
+  });
 });
 
 describe("output rendering", (): void => {
@@ -63,5 +72,32 @@ describe("output rendering", (): void => {
 
     expect(toonOutput).not.toBe(jsonOutput);
     expect(decode(toonOutput) as unknown).toEqual(toToonEnvelope(result));
+  });
+
+  test("renders legacy sync command IDs in compatibility mode", (): void => {
+    const result = okResult({
+      command: "sync.status",
+      human: "sync human",
+      data: { branch: "main" },
+    });
+
+    const jsonOutput = renderResult(result, "json", { compatibilityMode: "legacy-sync-command-ids" });
+    const envelope = JSON.parse(jsonOutput) as {
+      command: string;
+      metadata: {
+        compatibility: {
+          mode: string;
+          canonicalCommand: string;
+          compatibilityCommand: string;
+          removalAfter: string;
+        };
+      };
+    };
+
+    expect(envelope.command).toBe("sync_status");
+    expect(envelope.metadata.compatibility.mode).toBe("legacy-sync-command-ids");
+    expect(envelope.metadata.compatibility.canonicalCommand).toBe("sync.status");
+    expect(envelope.metadata.compatibility.compatibilityCommand).toBe("sync_status");
+    expect(envelope.metadata.compatibility.removalAfter).toBe("2026-09-30");
   });
 });
