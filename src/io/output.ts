@@ -1,5 +1,16 @@
 import { encode } from "@toon-format/toon";
-import { type CliResult, type OutputMode, type ToonEnvelope, type ToonError } from "../runtime/command-types";
+import { type CliResult, type ContractMetadata, type OutputMode, type ToonEnvelope, type ToonError } from "../runtime/command-types";
+
+const CONTRACT_VERSION = "1.0.0";
+let requestSequence = 0;
+
+function createContractMetadata(): ContractMetadata {
+  requestSequence += 1;
+  return {
+    contractVersion: CONTRACT_VERSION,
+    requestId: `req-${requestSequence}`,
+  };
+}
 
 export interface ResultInput {
   readonly command: string;
@@ -50,6 +61,7 @@ export function toToonEnvelope(result: CliResult): ToonEnvelope {
     ok: result.ok,
     command: result.command,
     data: result.data,
+    metadata: createContractMetadata(),
     ...(result.error ? { error: result.error } : {}),
     ...(result.meta ? { meta: result.meta } : {}),
   };
