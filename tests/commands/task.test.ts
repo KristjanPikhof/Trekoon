@@ -364,7 +364,12 @@ describe("task command", (): void => {
 
     const firstPage = await runTask({ cwd, mode: "toon", args: ["list", "--status", "todo", "--limit", "2"] });
     expect(firstPage.ok).toBeTrue();
-    expect(firstPage.meta).toEqual({ pagination: { hasMore: true, nextCursor: "2" } });
+    expect(firstPage.meta).toMatchObject({
+      pagination: { hasMore: true, nextCursor: "2" },
+      defaults: { statuses: null, limit: null, cursor: 0, view: "table" },
+      filters: { statuses: ["todo"], includeAll: false },
+      truncation: { applied: true, returned: 2, limit: 2 },
+    });
     expect((firstPage.data as { tasks: unknown[] }).tasks.length).toBe(2);
 
     const secondPage = await runTask({
@@ -373,7 +378,12 @@ describe("task command", (): void => {
       args: ["list", "--status", "todo", "--limit", "2", "--cursor", "2"],
     });
     expect(secondPage.ok).toBeTrue();
-    expect(secondPage.meta).toEqual({ pagination: { hasMore: false, nextCursor: null } });
+    expect(secondPage.meta).toMatchObject({
+      pagination: { hasMore: false, nextCursor: null },
+      defaults: { statuses: null, limit: null, cursor: null, view: "table" },
+      filters: { statuses: ["todo"], includeAll: false },
+      truncation: { applied: false, returned: 1, limit: 2 },
+    });
     expect((secondPage.data as { tasks: unknown[] }).tasks.length).toBe(1);
   });
 
