@@ -65,6 +65,33 @@ describe("cli shell dispatch", (): void => {
     expect(data.version).toBe(CLI_VERSION);
   });
 
+  test("shows detailed help for dep/events/migrate", async (): Promise<void> => {
+    const workspace = createWorkspace();
+    const depHelp = await executeShell(parseInvocation(["dep", "--help"], { stdoutIsTTY: false }), workspace);
+    const eventsHelp = await executeShell(parseInvocation(["events", "--help"], { stdoutIsTTY: false }), workspace);
+    const migrateHelp = await executeShell(parseInvocation(["migrate", "--help"], { stdoutIsTTY: false }), workspace);
+
+    expect(depHelp.ok).toBeTrue();
+    expect(eventsHelp.ok).toBeTrue();
+    expect(migrateHelp.ok).toBeTrue();
+
+    const depData = depHelp.data as { topic: string; text: string };
+    const eventsData = eventsHelp.data as { topic: string; text: string };
+    const migrateData = migrateHelp.data as { topic: string; text: string };
+
+    expect(depData.topic).toBe("dep");
+    expect(depData.text).toContain("Subcommands:");
+    expect(depData.text).toContain("trekoon dep reverse <task-b>");
+
+    expect(eventsData.topic).toBe("events");
+    expect(eventsData.text).toContain("--dry-run");
+    expect(eventsData.text).toContain("default 90");
+
+    expect(migrateData.topic).toBe("migrate");
+    expect(migrateData.text).toContain("rollback");
+    expect(migrateData.text).toContain("trekoon migrate rollback --to-version 1");
+  });
+
   test("dispatches skills install and creates project-local artifact", async (): Promise<void> => {
     const workspace = createWorkspace();
     const parsed = parseInvocation(["skills", "install"], { stdoutIsTTY: false });
