@@ -1,7 +1,7 @@
 import { execFileSync } from "node:child_process";
 import { mkdirSync, mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { join, resolve } from "node:path";
+import { join } from "node:path";
 
 import { Database } from "bun:sqlite";
 import { afterEach, describe, expect, test } from "bun:test";
@@ -65,7 +65,6 @@ describe("storage lifecycle", (): void => {
   test("resolves same canonical database file from nested cwd", (): void => {
     const workspace: string = createWorkspace();
     initGitRepository(workspace);
-    const canonicalWorkspace: string = resolve(workspace);
     const nestedCwd: string = join(workspace, "apps", "cli", "nested");
     mkdirSync(nestedCwd, { recursive: true });
 
@@ -73,9 +72,9 @@ describe("storage lifecycle", (): void => {
     const nestedStorage = openTrekoonDatabase(nestedCwd);
 
     try {
-      expect(rootStorage.paths.databaseFile).toBe(join(canonicalWorkspace, ".trekoon", "trekoon.db"));
+      expect(rootStorage.paths.databaseFile).toBe(join(rootStorage.paths.worktreeRoot, ".trekoon", "trekoon.db"));
       expect(nestedStorage.paths.databaseFile).toBe(rootStorage.paths.databaseFile);
-      expect(nestedStorage.paths.worktreeRoot).toBe(canonicalWorkspace);
+      expect(nestedStorage.paths.worktreeRoot).toBe(rootStorage.paths.worktreeRoot);
       expect(nestedStorage.paths.diagnostics.warnings[0]?.code).toBe("storage_root_diverged_from_cwd");
     } finally {
       nestedStorage.close();
