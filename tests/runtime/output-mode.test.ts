@@ -27,6 +27,19 @@ describe("output mode parsing", (): void => {
 });
 
 describe("output rendering", (): void => {
+  test("envelope exposes top-level contract metadata", (): void => {
+    const envelope = toToonEnvelope(
+      okResult({
+        command: "task.list",
+        human: "ok",
+        data: { tasks: [] },
+      }),
+    );
+
+    expect(envelope.metadata.contractVersion).toBe("1.0.0");
+    expect(envelope.metadata.requestId).toMatch(/^req-[0-9a-f]{8}$/);
+  });
+
   test("renders JSON envelope with --json mode", (): void => {
     const result = okResult({
       command: "quickstart",
