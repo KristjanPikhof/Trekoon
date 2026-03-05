@@ -1,4 +1,5 @@
-import { existsSync, mkdtempSync, rmSync } from "node:fs";
+import { execFileSync } from "node:child_process";
+import { existsSync, mkdirSync, mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
@@ -13,6 +14,10 @@ function createWorkspace(): string {
   const workspace = mkdtempSync(join(tmpdir(), "trekoon-shell-"));
   tempDirs.push(workspace);
   return workspace;
+}
+
+function initGitRepository(workspace: string): void {
+  execFileSync("git", ["init"], { cwd: workspace, stdio: "ignore" });
 }
 
 afterEach((): void => {
@@ -195,5 +200,29 @@ describe("cli shell dispatch", (): void => {
     expect(result.command).toBe("events.prune");
     const data = result.data as { dryRun: boolean };
     expect(data.dryRun).toBeTrue();
+  });
+
+  test("adds machine-readable diagnostics for nested cwd", async (): Promise<void> => {
+    const workspace = createWorkspace();
+    initGitRepository(workspace);
+    const nestedCwd = join(workspace, "pkg", "tools", "cli");
+    mkdirSync(nestedCwd, { recursive: true });
+
+    const result = await executeShell(parseInvocation(["init", "--toon"], { stdoutIsTTY: false }), nestedCwd);
+
+    expect(result.ok).toBeTrue();
+    const meta = result.meta as {
+      storageRootDiagnostics?: {
+        invocationCwd: string;
+        canonicalRoot: string;
+        warning: { code: string } | null;
+        error: unknown;
+      };
+    };
+
+    expect(meta.storageRootDiagnostics?.invocationCwd).toBe(nestedCwd);
+    expect(meta.storageRootDiagnostics?.canonicalRoot).toBe(workspace);
+    expect(meta.storageRootDiagnostics?.warning?.code).toBe("storage_root_diverged_from_cwd");
+    expect(meta.storageRootDiagnostics?.error).toBeNull();
   });
 });
