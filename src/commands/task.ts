@@ -537,7 +537,29 @@ export async function runTask(context: CliContext): Promise<CliResult> {
           command: "task.list",
           human,
           data: { tasks },
-          ...(context.mode === "human" ? {} : { meta: { pagination: listed.pagination } }),
+          ...(context.mode === "human"
+            ? {}
+            : {
+                meta: {
+                  pagination: listed.pagination,
+                  defaults: {
+                    statuses: !includeAll && statuses === undefined ? [...DEFAULT_OPEN_TASK_STATUSES] : null,
+                    limit: !includeAll && parsedLimit === undefined ? DEFAULT_TASK_LIST_LIMIT : null,
+                    cursor: parsedCursor === undefined ? 0 : null,
+                    view: view === undefined ? "table" : null,
+                  },
+                  filters: {
+                    epicId: epicId ?? null,
+                    statuses: selectedStatuses ?? null,
+                    includeAll,
+                  },
+                  truncation: {
+                    applied: listed.pagination.hasMore,
+                    returned: tasks.length,
+                    limit: selectedLimit ?? null,
+                  },
+                },
+              }),
         });
       }
       case "show": {
@@ -593,6 +615,22 @@ export async function runTask(context: CliContext): Promise<CliResult> {
             command: "task.show",
             human: formatTask(task),
             data: { task, includeAll: false },
+            ...(context.mode === "human"
+              ? {}
+              : {
+                  meta: {
+                    defaults: {
+                      view: view === undefined ? effectiveView : null,
+                    },
+                    filters: {
+                      includeAll: false,
+                    },
+                    truncation: {
+                      applied: true,
+                      scope: "compact",
+                    },
+                  },
+                }),
           });
         }
 
@@ -603,6 +641,22 @@ export async function runTask(context: CliContext): Promise<CliResult> {
             command: "task.show",
             human: formatTaskShowTree(taskTree),
             data: { task: taskTree, includeAll: true, subtasksCount: taskTree.subtasks.length },
+            ...(context.mode === "human"
+              ? {}
+              : {
+                  meta: {
+                    defaults: {
+                      view: view === undefined ? effectiveView : null,
+                    },
+                    filters: {
+                      includeAll: true,
+                    },
+                    truncation: {
+                      applied: effectiveView === "tree",
+                      scope: "tree",
+                    },
+                  },
+                }),
           });
         }
 
@@ -610,6 +664,22 @@ export async function runTask(context: CliContext): Promise<CliResult> {
           command: "task.show",
           human: effectiveView === "table" ? formatTaskShowTable(taskTree) : formatTaskShowDetail(taskTree),
           data: { task: taskTree, includeAll: true, subtasksCount: taskTree.subtasks.length },
+          ...(context.mode === "human"
+            ? {}
+            : {
+                meta: {
+                  defaults: {
+                    view: view === undefined ? effectiveView : null,
+                  },
+                  filters: {
+                    includeAll: true,
+                  },
+                  truncation: {
+                    applied: false,
+                    scope: "full",
+                  },
+                },
+              }),
         });
       }
       case "ready": {
