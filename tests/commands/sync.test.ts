@@ -120,6 +120,7 @@ describe("sync command", (): void => {
     });
 
     expect(statusBefore.ok).toBe(true);
+    expect(statusBefore.command).toBe("sync.status");
     expect((statusBefore.data as { behind: number }).behind).toBe(1);
     expect((statusBefore.data as { ahead: number }).ahead).toBe(1);
 
@@ -130,6 +131,7 @@ describe("sync command", (): void => {
     });
 
     expect(pullResult.ok).toBe(true);
+    expect(pullResult.command).toBe("sync.pull");
     expect((pullResult.data as { createdConflicts: number }).createdConflicts).toBe(1);
     expect((pullResult.data as { diagnostics: { conflictEvents: number } }).diagnostics.conflictEvents).toBe(1);
     expect((pullResult.data as { diagnostics: { quarantinedEvents: number } }).diagnostics.quarantinedEvents).toBe(0);
@@ -148,6 +150,7 @@ describe("sync command", (): void => {
         mode: "toon",
       });
       expect(listResult.ok).toBe(true);
+      expect(listResult.command).toBe("sync.conflicts.list");
       expect((listResult.data as { conflicts: Array<{ id: string }> }).conflicts[0]?.id).toBe(pendingConflict!.id);
 
       const showResult = await runSync({
@@ -156,6 +159,7 @@ describe("sync command", (): void => {
         mode: "toon",
       });
       expect(showResult.ok).toBe(true);
+      expect(showResult.command).toBe("sync.conflicts.show");
       expect((showResult.data as { conflict: { id: string } }).conflict.id).toBe(pendingConflict!.id);
 
       const resolveResult = await runSync({
@@ -165,6 +169,7 @@ describe("sync command", (): void => {
       });
 
       expect(resolveResult.ok).toBe(true);
+      expect(resolveResult.command).toBe("sync.resolve");
 
       const resolved = storage.db
         .query("SELECT resolution FROM sync_conflicts WHERE id = ?;")
