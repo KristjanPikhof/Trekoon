@@ -2,13 +2,29 @@ import { encode } from "@toon-format/toon";
 import { type CliResult, type ContractMetadata, type OutputMode, type ToonEnvelope, type ToonError } from "../runtime/command-types";
 
 const CONTRACT_VERSION = "1.0.0";
-let requestSequence = 0;
 
-function createContractMetadata(): ContractMetadata {
-  requestSequence += 1;
+function hashString(value: string): string {
+  let hash = 2166136261;
+  for (let index = 0; index < value.length; index += 1) {
+    hash ^= value.charCodeAt(index);
+    hash = Math.imul(hash, 16777619);
+  }
+
+  return (hash >>> 0).toString(16).padStart(8, "0");
+}
+
+function createContractMetadata(result: CliResult): ContractMetadata {
+  const requestSignature = JSON.stringify({
+    ok: result.ok,
+    command: result.command,
+    data: result.data,
+    error: result.error ?? null,
+    meta: result.meta ?? null,
+  });
+
   return {
     contractVersion: CONTRACT_VERSION,
-    requestId: `req-${requestSequence}`,
+    requestId: `req-${hashString(requestSignature)}`,
   };
 }
 
@@ -61,7 +77,7 @@ export function toToonEnvelope(result: CliResult): ToonEnvelope {
     ok: result.ok,
     command: result.command,
     data: result.data,
-    metadata: createContractMetadata(),
+    metadata: createContractMetadata(result),
     ...(result.error ? { error: result.error } : {}),
     ...(result.meta ? { meta: result.meta } : {}),
   };
