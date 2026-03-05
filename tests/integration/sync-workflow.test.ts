@@ -199,7 +199,7 @@ describe("integration sync workflow", (): void => {
 
       const toon = toToonEnvelope(
         okResult({
-          command: "epic show",
+          command: "epic.show",
           human: "integration",
           data: {
             tree: {
