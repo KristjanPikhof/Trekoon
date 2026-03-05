@@ -396,7 +396,28 @@ export async function runEpic(context: CliContext): Promise<CliResult> {
           command: "epic.list",
           human,
           data: { epics },
-          ...(context.mode === "human" ? {} : { meta: { pagination: listed.pagination } }),
+          ...(context.mode === "human"
+            ? {}
+            : {
+                meta: {
+                  pagination: listed.pagination,
+                  defaults: {
+                    statuses: !includeAll && statuses === undefined ? [...DEFAULT_OPEN_STATUSES] : null,
+                    limit: !includeAll && limit === undefined ? DEFAULT_LIST_LIMIT : null,
+                    cursor: rawCursor === undefined ? 0 : null,
+                    view: view === undefined ? "table" : null,
+                  },
+                  filters: {
+                    statuses: includeAll ? null : (statuses ?? [...DEFAULT_OPEN_STATUSES]),
+                    includeAll,
+                  },
+                  truncation: {
+                    applied: listed.pagination.hasMore,
+                    returned: epics.length,
+                    limit: includeAll ? null : (limit ?? DEFAULT_LIST_LIMIT),
+                  },
+                },
+              }),
         });
       }
       case "show": {
@@ -430,6 +451,22 @@ export async function runEpic(context: CliContext): Promise<CliResult> {
             command: "epic.show",
             human: formatEpic(epic),
             data: { epic, includeAll: false },
+            ...(context.mode === "human"
+              ? {}
+              : {
+                  meta: {
+                    defaults: {
+                      view: view === undefined ? effectiveView : null,
+                    },
+                    filters: {
+                      includeAll: false,
+                    },
+                    truncation: {
+                      applied: true,
+                      scope: "compact",
+                    },
+                  },
+                }),
           });
         }
 
@@ -440,6 +477,22 @@ export async function runEpic(context: CliContext): Promise<CliResult> {
             command: "epic.show",
             human: formatEpicShowCompact(tree),
             data: { tree, includeAll: false },
+            ...(context.mode === "human"
+              ? {}
+              : {
+                  meta: {
+                    defaults: {
+                      view: view === undefined ? effectiveView : null,
+                    },
+                    filters: {
+                      includeAll: false,
+                    },
+                    truncation: {
+                      applied: true,
+                      scope: "tree",
+                    },
+                  },
+                }),
           });
         }
 
@@ -449,6 +502,22 @@ export async function runEpic(context: CliContext): Promise<CliResult> {
           command: "epic.show",
           human: effectiveView === "table" ? formatEpicShowTable(tree) : formatEpicShowDetailed(tree),
           data: { tree, includeAll: true },
+          ...(context.mode === "human"
+            ? {}
+            : {
+                meta: {
+                  defaults: {
+                    view: view === undefined ? effectiveView : null,
+                  },
+                  filters: {
+                    includeAll: true,
+                  },
+                  truncation: {
+                    applied: false,
+                    scope: "full",
+                  },
+                },
+              }),
         });
       }
       case "update": {
