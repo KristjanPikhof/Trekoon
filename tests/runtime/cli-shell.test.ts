@@ -1,12 +1,13 @@
 import { execFileSync } from "node:child_process";
 import { existsSync, mkdirSync, mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { join, resolve } from "node:path";
+import { join } from "node:path";
 
 import { afterEach, describe, expect, test } from "bun:test";
 
 import { executeShell, parseInvocation } from "../../src/runtime/cli-shell";
 import { CLI_VERSION } from "../../src/runtime/version";
+import { resolveStoragePaths } from "../../src/storage/path";
 
 const tempDirs: string[] = [];
 
@@ -205,9 +206,9 @@ describe("cli shell dispatch", (): void => {
   test("adds machine-readable diagnostics for nested cwd", async (): Promise<void> => {
     const workspace = createWorkspace();
     initGitRepository(workspace);
-    const canonicalWorkspace = resolve(workspace);
     const nestedCwd = join(workspace, "pkg", "tools", "cli");
     mkdirSync(nestedCwd, { recursive: true });
+    const canonicalWorkspace = resolveStoragePaths(nestedCwd).worktreeRoot;
 
     const result = await executeShell(parseInvocation(["init", "--toon"], { stdoutIsTTY: false }), nestedCwd);
 
