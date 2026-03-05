@@ -232,8 +232,8 @@ Behavior:
 
 ### 7) Install project-local Trekoon skill for agents
 
-`trekoon skills install` always writes the bundled skill file into the current
-repository at:
+`trekoon skills install` always writes the bundled skill file under the current
+working directory at:
 
 - `.agents/skills/trekoon/SKILL.md`
 
@@ -255,7 +255,7 @@ Path behavior:
 - Default pi link path: `.pi/skills/trekoon`
 - `--to <path>` overrides the editor root for link creation only.
 - `--to` does **not** move or copy `SKILL.md` to that path.
-- By default, link targets must resolve inside the repository root.
+- By default, link targets must resolve inside the current working directory root.
 - Use `--allow-outside-repo` only for intentional external links.
 - When override is used, install prints a warning and includes confirmation
   fields in machine output.
@@ -272,11 +272,11 @@ Path behavior:
 How `--to` works (step-by-step):
 
 1. Trekoon always installs/copies to:
-   - `<repo>/.agents/skills/trekoon/SKILL.md`
+   - `<cwd>/.agents/skills/trekoon/SKILL.md`
 2. If `--link` is present, Trekoon creates a `trekoon` symlink directory entry.
 3. `--to <path>` sets the symlink root directory.
 4. Final link path is:
-   - `<resolved-to-path>/trekoon -> <repo>/.agents/skills/trekoon`
+   - `<resolved-to-path>/trekoon -> <cwd>/.agents/skills/trekoon`
 
 Example:
 
@@ -286,9 +286,9 @@ trekoon skills install --link --editor opencode --to ./.custom-editor/skills
 
 This produces:
 
-- `<repo>/.agents/skills/trekoon/SKILL.md` (copied file)
-- `<repo>/.custom-editor/skills/trekoon` (symlink)
-- symlink target: `<repo>/.agents/skills/trekoon`
+- `<cwd>/.agents/skills/trekoon/SKILL.md` (copied file)
+- `<cwd>/.custom-editor/skills/trekoon` (symlink)
+- symlink target: `<cwd>/.agents/skills/trekoon`
 
 Trekoon does not mutate global editor config directories.
 
