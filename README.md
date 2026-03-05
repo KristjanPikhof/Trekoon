@@ -51,7 +51,9 @@ npm i -g trekoon
 - `trekoon task <create|list|show|ready|next|update|delete>`
 - `trekoon subtask <create|list|update|delete>`
 - `trekoon dep <add|remove|list|reverse>`
-- `trekoon sync <status|pull|resolve>`
+- `trekoon events prune [--dry-run] [--archive] [--retention-days <n>]`
+- `trekoon migrate <status|rollback> [--to-version <n>]`
+- `trekoon sync <status|pull|resolve|conflicts>`
 - `trekoon skills install [--link --editor opencode|claude|pi] [--to <path>] [--allow-outside-repo]`
 - `trekoon skills update`
 - `trekoon wipe --yes`
@@ -113,8 +115,15 @@ trekoon epic update --ids <epic-1>,<epic-2> --status done
 
 ## Quickstart
 
-Trekoon is local-first: each worktree uses its own `.trekoon/trekoon.db`.
-Git does not merge this DB file; Trekoon sync commands merge tracker state.
+Trekoon is local-first: in git repos/worktrees, Trekoon resolves state to one
+canonical repository root (`git rev-parse --show-toplevel`) so nested
+invocations share the same `.trekoon/trekoon.db`.
+
+Outside git repos, Trekoon falls back to the invocation cwd.
+
+When machine output is enabled (`--json`/`--toon`) and invocation cwd differs
+from canonical root, Trekoon emits `meta.storageRootDiagnostics` to make
+divergence explicit for automation.
 
 ### 1) Initialize
 
@@ -184,6 +193,8 @@ trekoon --json task show <task-id>
 ```bash
 trekoon sync status
 trekoon sync pull --from main
+trekoon sync conflicts list
+trekoon sync conflicts show <conflict-id>
 trekoon sync resolve <conflict-id> --use ours
 ```
 
@@ -291,6 +302,22 @@ Trekoon does not mutate global editor config directories.
 Use `--toon` for production agent loops. The examples below show command +
 expected envelope fields.
 
+Base envelope fields (all machine responses):
+
+```text
+ok: true|false
+command: <dot.namespaced.command>
+data: <payload>
+metadata:
+  contractVersion: "1.0.0"
+  requestId: req-<stable-id>
+```
+
+Additional metadata can appear when relevant:
+
+- `metadata.compatibility` when `--compat` mode is active
+- `meta.storageRootDiagnostics` when cwd differs from canonical state root
+
 ### Ready queue (deterministic candidates)
 
 ```bash
@@ -358,6 +385,9 @@ ok: true
 command: task.list
 data:
   tasks[]: ...
+metadata:
+  contractVersion: "1.0.0"
+  requestId: req-<stable-id>
 meta:
   pagination: { hasMore, nextCursor }
 ```
