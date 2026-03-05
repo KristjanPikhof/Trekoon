@@ -93,7 +93,7 @@ export async function runSync(context: CliContext): Promise<CliResult> {
     if (subcommand === "status") {
       const statusUnknownOption = findUnknownOption(parsed, STATUS_OPTIONS);
       if (statusUnknownOption !== undefined) {
-        return unknownOption("sync status", statusUnknownOption, STATUS_OPTIONS);
+        return unknownOption("sync.status", statusUnknownOption, STATUS_OPTIONS);
       }
 
       const missingFromOption = readMissingOptionValue(parsed.missingOptionValues, "from");
@@ -105,7 +105,7 @@ export async function runSync(context: CliContext): Promise<CliResult> {
       const summary = syncStatus(context.cwd, sourceBranch);
 
       return okResult({
-        command: "sync status",
+        command: "sync.status",
         human: statusMessage(summary.sourceBranch, summary.ahead, summary.behind, summary.pendingConflicts),
         data: summary,
       });
@@ -114,7 +114,7 @@ export async function runSync(context: CliContext): Promise<CliResult> {
     if (subcommand === "pull") {
       const pullUnknownOption = findUnknownOption(parsed, PULL_OPTIONS);
       if (pullUnknownOption !== undefined) {
-        return unknownOption("sync pull", pullUnknownOption, PULL_OPTIONS);
+        return unknownOption("sync.pull", pullUnknownOption, PULL_OPTIONS);
       }
 
       const missingFromOption = readMissingOptionValue(parsed.missingOptionValues, "from");
@@ -130,7 +130,7 @@ export async function runSync(context: CliContext): Promise<CliResult> {
       const summary = syncPull(context.cwd, sourceBranch);
 
       return okResult({
-        command: "sync pull",
+        command: "sync.pull",
         human: [
           `Pulled from '${summary.sourceBranch}'`,
           `Scanned events: ${summary.scannedEvents}`,
@@ -148,7 +148,7 @@ export async function runSync(context: CliContext): Promise<CliResult> {
     if (subcommand === "resolve") {
       const resolveUnknownOption = findUnknownOption(parsed, RESOLVE_OPTIONS);
       if (resolveUnknownOption !== undefined) {
-        return unknownOption("sync resolve", resolveUnknownOption, RESOLVE_OPTIONS);
+        return unknownOption("sync.resolve", resolveUnknownOption, RESOLVE_OPTIONS);
       }
 
       const conflictId: string | undefined = parsed.positional[1];
@@ -170,7 +170,7 @@ export async function runSync(context: CliContext): Promise<CliResult> {
       const summary = syncResolve(context.cwd, conflictId, rawResolution as SyncResolution);
 
       return okResult({
-        command: "sync resolve",
+        command: "sync.resolve",
         human: `Resolved ${summary.conflictId} using ${summary.resolution}.`,
         data: summary,
       });
@@ -185,7 +185,7 @@ export async function runSync(context: CliContext): Promise<CliResult> {
       if (conflictsCommand === "list") {
         const listUnknownOption = findUnknownOption(parsed, CONFLICTS_LIST_OPTIONS);
         if (listUnknownOption !== undefined) {
-          return unknownOption("sync conflicts list", listUnknownOption, CONFLICTS_LIST_OPTIONS);
+          return unknownOption("sync.conflicts.list", listUnknownOption, CONFLICTS_LIST_OPTIONS);
         }
 
         const missingModeOption = readMissingOptionValue(parsed.missingOptionValues, "mode");
@@ -201,7 +201,7 @@ export async function runSync(context: CliContext): Promise<CliResult> {
         const conflicts = listSyncConflicts(context.cwd, mode);
 
         return okResult({
-          command: "sync conflicts list",
+          command: "sync.conflicts.list",
           human: formatConflictList(conflicts),
           data: {
             mode,
@@ -213,7 +213,7 @@ export async function runSync(context: CliContext): Promise<CliResult> {
       if (conflictsCommand === "show") {
         const showUnknownOption = findUnknownOption(parsed, CONFLICTS_SHOW_OPTIONS);
         if (showUnknownOption !== undefined) {
-          return unknownOption("sync conflicts show", showUnknownOption, CONFLICTS_SHOW_OPTIONS);
+          return unknownOption("sync.conflicts.show", showUnknownOption, CONFLICTS_SHOW_OPTIONS);
         }
 
         const conflictId: string | undefined = parsed.positional[2];
@@ -224,7 +224,7 @@ export async function runSync(context: CliContext): Promise<CliResult> {
         const conflict = getSyncConflict(context.cwd, conflictId);
 
         return okResult({
-          command: "sync conflicts show",
+          command: "sync.conflicts.show",
           human: [
             `Conflict: ${conflict.id}`,
             `Entity: ${conflict.entityKind} ${conflict.entityId}`,
