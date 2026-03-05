@@ -1,7 +1,58 @@
 import { encode } from "@toon-format/toon";
-import { type CliResult, type ContractMetadata, type OutputMode, type ToonEnvelope, type ToonError } from "../runtime/command-types";
+import {
+  type CliResult,
+  type CompatibilityMetadata,
+  type CompatibilityMode,
+  type ContractMetadata,
+  type OutputMode,
+  type ToonEnvelope,
+  type ToonError,
+} from "../runtime/command-types";
 
 const CONTRACT_VERSION = "1.0.0";
+const COMPATIBILITY_DEPRECATED_SINCE = "0.1.8";
+const COMPATIBILITY_REMOVAL_AFTER = "2026-09-30";
+
+interface RenderOptions {
+  readonly compatibilityMode?: CompatibilityMode | null;
+}
+
+function toLegacySyncCommandId(command: string): string {
+  const mapping: Record<string, string> = {
+    "sync.status": "sync_status",
+    "sync.pull": "sync_pull",
+    "sync.resolve": "sync_resolve",
+    "sync.conflicts.list": "sync_conflicts_list",
+    "sync.conflicts.show": "sync_conflicts_show",
+  };
+
+  return mapping[command] ?? command;
+}
+
+function resolveCompatibilityCommand(command: string, compatibilityMode: CompatibilityMode | null): string {
+  if (compatibilityMode === "legacy-sync-command-ids") {
+    return toLegacySyncCommandId(command);
+  }
+
+  return command;
+}
+
+function createCompatibilityMetadata(command: string, compatibilityMode: CompatibilityMode | null): CompatibilityMetadata | undefined {
+  if (compatibilityMode !== "legacy-sync-command-ids") {
+    return undefined;
+  }
+
+  const compatibilityCommand: string = toLegacySyncCommandId(command);
+  return {
+    mode: compatibilityMode,
+    warningCode: "compatibility_mode_deprecated",
+    deprecatedSince: COMPATIBILITY_DEPRECATED_SINCE,
+    removalAfter: COMPATIBILITY_REMOVAL_AFTER,
+    migration: "Drop --compat legacy-sync-command-ids and parse canonical dotted command IDs.",
+    canonicalCommand: command,
+    compatibilityCommand,
+  };
+}
 
 function hashString(value: string): string {
   let hash = 2166136261;
@@ -13,7 +64,7 @@ function hashString(value: string): string {
   return (hash >>> 0).toString(16).padStart(8, "0");
 }
 
-function createContractMetadata(result: CliResult): ContractMetadata {
+function createContractMetadata(result: CliResult, compatibilityMode: CompatibilityMode | null): ContractMetadata {
   const requestSignature = JSON.stringify({
     ok: result.ok,
     command: result.command,
@@ -22,9 +73,19 @@ function createContractMetadata(result: CliResult): ContractMetadata {
     meta: result.meta ?? null,
   });
 
-  return {
+  const base: ContractMetadata = {
     contractVersion: CONTRACT_VERSION,
     requestId: `req-${hashString(requestSignature)}`,
+  };
+
+  const compatibility = createCompatibilityMetadata(result.command, compatibilityMode);
+  if (!compatibility) {
+    return base;
+  }
+
+  return {
+    ...base,
+    compatibility,
   };
 }
 
@@ -72,19 +133,22 @@ export function failResult(input: ResultInput & { readonly error: ToonError }): 
   };
 }
 
-export function toToonEnvelope(result: CliResult): ToonEnvelope {
+export function toToonEnvelope(result: CliResult, options: RenderOptions = {}): ToonEnvelope {
+  const compatibilityMode: CompatibilityMode | null = options.compatibilityMode ?? null;
+  const command: string = resolveCompatibilityCommand(result.command, compatibilityMode);
+
   return {
     ok: result.ok,
-    command: result.command,
+    command,
     data: result.data,
-    metadata: createContractMetadata(result),
+    metadata: createContractMetadata(result, compatibilityMode),
     ...(result.error ? { error: result.error } : {}),
     ...(result.meta ? { meta: result.meta } : {}),
   };
 }
 
-export function renderResult(result: CliResult, mode: OutputMode): string {
-  const envelope: ToonEnvelope = toToonEnvelope(result);
+export function renderResult(result: CliResult, mode: OutputMode, options: RenderOptions = {}): string {
+  const envelope: ToonEnvelope = toToonEnvelope(result, options);
 
   if (mode === "json") {
     return JSON.stringify(envelope);
