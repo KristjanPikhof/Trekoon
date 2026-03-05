@@ -60,6 +60,7 @@ Global output modes:
 
 - `--json` for structured JSON output
 - `--toon` for true TOON-encoded output (not JSON text)
+- `--compat <mode>` for explicit machine compatibility behavior
 - `--help` for root and command help
 - `--version` for CLI version
 
@@ -194,6 +195,27 @@ react deterministically:
 - `diagnostics.quarantinedEvents`
 - `diagnostics.conflictEvents`
 - `diagnostics.errorHints`
+
+Compatibility mode for legacy sync command IDs:
+
+```bash
+trekoon --json --compat legacy-sync-command-ids sync status
+trekoon --toon --compat legacy-sync-command-ids sync pull --from main
+```
+
+Behavior:
+
+- Default remains strict canonical IDs (`sync.status`, `sync.pull`, ...).
+- Compatibility mode rewrites sync command IDs to legacy forms
+  (`sync_status`, `sync_pull`, ...).
+- Compatibility mode is machine-only and valid only for `sync` commands.
+- Machine output includes `metadata.compatibility` with:
+  - deprecation warning code
+  - migration guidance
+  - canonical + compatibility command IDs
+  - removal window (`removalAfter: 2026-09-30`)
+- Migration path: remove `--compat legacy-sync-command-ids` and consume dotted
+  command IDs directly.
 
 ### 7) Install project-local Trekoon skill for agents
 
