@@ -1,4 +1,5 @@
 export type OutputMode = "human" | "json" | "toon";
+export type CompatibilityMode = "legacy-sync-command-ids";
 
 export interface CliContext {
   readonly mode: OutputMode;
@@ -14,6 +15,17 @@ export interface ToonError {
 export interface ContractMetadata {
   readonly contractVersion: string;
   readonly requestId: string;
+  readonly compatibility?: CompatibilityMetadata;
+}
+
+export interface CompatibilityMetadata {
+  readonly mode: CompatibilityMode;
+  readonly warningCode: "compatibility_mode_deprecated";
+  readonly deprecatedSince: string;
+  readonly removalAfter: string;
+  readonly migration: string;
+  readonly canonicalCommand: string;
+  readonly compatibilityCommand: string;
 }
 
 export interface ToonEnvelope {
