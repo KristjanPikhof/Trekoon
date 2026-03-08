@@ -10,6 +10,11 @@ import {
   type EpicTree,
   type NodeKind,
   type ReverseDependencyNode,
+  type SearchEntityMatch,
+  type SearchField,
+  type SearchFieldMatch,
+  type SearchNode,
+  type SearchSummary,
   type SubtaskRecord,
   type TaskTreeDetailed,
   type TaskRecord,
@@ -55,32 +60,6 @@ interface UnresolvedDependencyBlocker {
   readonly id: string;
   readonly kind: "task" | "subtask";
   readonly status: string;
-}
-
-type SearchField = "title" | "description";
-
-interface SearchFieldMatch {
-  readonly field: SearchField;
-  readonly count: number;
-}
-
-interface SearchEntityMatch {
-  readonly kind: NodeKind;
-  readonly id: string;
-  readonly fields: readonly SearchFieldMatch[];
-}
-
-interface SearchSummary {
-  readonly matchedEntities: number;
-  readonly matchedFields: number;
-  readonly totalMatches: number;
-}
-
-interface SearchNode {
-  readonly kind: NodeKind;
-  readonly id: string;
-  readonly title: string;
-  readonly description: string;
 }
 
 function assertNonEmpty(field: string, value: string | undefined | null): string {
@@ -169,6 +148,24 @@ function countMatches(value: string, searchText: string): number {
   }
 
   return count;
+}
+
+function buildMatchSnippet(value: string, searchText: string, contextSize = 24): string {
+  if (searchText.length === 0) {
+    return "";
+  }
+
+  const matchIndex = value.indexOf(searchText);
+  if (matchIndex === -1) {
+    return "";
+  }
+
+  const start = Math.max(0, matchIndex - contextSize);
+  const end = Math.min(value.length, matchIndex + searchText.length + contextSize);
+  const rawSnippet = value.slice(start, end).replace(/\s+/g, " ").trim();
+  const prefix = start > 0 ? "…" : "";
+  const suffix = end < value.length ? "…" : "";
+  return `${prefix}${rawSnippet}${suffix}`;
 }
 
 function summarizeMatches(matches: readonly SearchEntityMatch[]): SearchSummary {
@@ -722,7 +719,11 @@ export class TrackerDomain {
       for (const field of fields) {
         const count = countMatches(node[field], searchText);
         if (count > 0) {
-          matchedFields.push({ field, count });
+          matchedFields.push({
+            field,
+            count,
+            snippet: buildMatchSnippet(node[field], searchText),
+          });
         }
       }
 
