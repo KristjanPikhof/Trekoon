@@ -615,6 +615,11 @@ describe("subtask command", (): void => {
     });
     expect(applied.ok).toBeTrue();
     expect((applied.data as { query: { mode: string } }).query.mode).toBe("apply");
+    expect(applied.human).toContain('title(1) "Subtask beta"');
+    expect(((applied.data as { matches: Array<{ fields: Array<{ field: string; snippet: string }> }> }).matches[0]?.fields[0])).toMatchObject({
+      field: "title",
+      snippet: "Subtask beta",
+    });
 
     const updated = await runSubtask({ cwd, mode: "toon", args: ["list", "--task", taskId, "--all"] });
     const updatedSubtask = (updated.data as { subtasks: Array<{ title: string; description: string }> }).subtasks[0];

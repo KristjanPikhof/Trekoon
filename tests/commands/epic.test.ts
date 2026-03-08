@@ -542,6 +542,12 @@ describe("epic command", (): void => {
     expect(applied.ok).toBeTrue();
     expect((applied.data as { query: { mode: string } }).query.mode).toBe("apply");
     expect((applied.data as { summary: { mode: string; matchedEntities: number } }).summary).toMatchObject({ mode: "apply", matchedEntities: 3 });
+    expect(applied.human).toContain('title(1) "Roadmap beta"');
+    expect(applied.human).toContain('description(1) "Epic beta desc"');
+    expect((applied.data as { matches: Array<{ fields: Array<{ field: string; count: number; snippet: string }> }> }).matches[0]?.fields).toEqual([
+      { field: "title", count: 1, snippet: "Roadmap beta" },
+      { field: "description", count: 1, snippet: "Epic beta desc" },
+    ]);
 
     const updated = await runEpic({ cwd, mode: "toon", args: ["show", epicId, "--all"] });
     const outsideUnchanged = await runEpic({ cwd, mode: "toon", args: ["show", outsideEpicId, "--all"] });

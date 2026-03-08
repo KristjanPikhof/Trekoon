@@ -925,6 +925,12 @@ describe("task command", (): void => {
     expect(applied.ok).toBeTrue();
     expect((applied.data as { query: { mode: string } }).query.mode).toBe("apply");
     expect((applied.data as { summary: { mode: string; matchedEntities: number } }).summary).toMatchObject({ mode: "apply", matchedEntities: 2 });
+    expect(applied.human).toContain('title(1) "Task beta"');
+    expect(applied.human).toContain('title(1) "Subtask beta"');
+    expect((applied.data as { matches: Array<{ fields: Array<{ field: string; snippet: string }> }> }).matches.map((match) => match.fields[0]?.snippet)).toEqual([
+      "Task beta",
+      "Subtask beta",
+    ]);
 
     const updatedTarget = await runTask({ cwd, mode: "toon", args: ["show", targetTaskId, "--all"] });
     const updatedSibling = await runTask({ cwd, mode: "toon", args: ["show", siblingTaskId, "--all"] });
