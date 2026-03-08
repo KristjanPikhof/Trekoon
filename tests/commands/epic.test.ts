@@ -436,4 +436,71 @@ describe("epic command", (): void => {
     expect(missingAppend.error?.code).toBe("invalid_input");
     expect((missingAppend.data as { option: string }).option).toBe("append");
   });
+
+  test("search and replace scope the full epic tree", async (): Promise<void> => {
+    const cwd = createWorkspace();
+    const createdEpic = await runEpic({
+      cwd,
+      mode: "human",
+      args: ["create", "--title", "Roadmap alpha", "--description", "Epic alpha desc"],
+    });
+    const epicId = (createdEpic.data as { epic: { id: string } }).epic.id;
+
+    const createdTask = await runTask({
+      cwd,
+      mode: "human",
+      args: ["create", "--epic", epicId, "--title", "Task alpha", "--description", "Task alpha desc"],
+    });
+    const taskId = (createdTask.data as { task: { id: string } }).task.id;
+
+    const createdSubtask = await runSubtask({
+      cwd,
+      mode: "human",
+      args: ["create", "--task", taskId, "--title", "Subtask alpha", "--description", "Subtask alpha desc"],
+    });
+    const subtaskId = (createdSubtask.data as { subtask: { id: string } }).subtask.id;
+
+    const search = await runEpic({ cwd, mode: "toon", args: ["search", epicId, "alpha"] });
+    expect(search.ok).toBeTrue();
+    expect((search.data as { summary: { matchedEntities: number; matchedFields: number; totalMatches: number } }).summary).toEqual({
+      matchedEntities: 3,
+      matchedFields: 6,
+      totalMatches: 6,
+    });
+    expect((search.data as { matches: Array<{ kind: string; id: string }> }).matches.map((match) => match.id)).toEqual([
+      epicId,
+      taskId,
+      subtaskId,
+    ]);
+
+    const preview = await runEpic({
+      cwd,
+      mode: "toon",
+      args: ["replace", epicId, "--search", "alpha", "--replace", "beta"],
+    });
+    expect(preview.ok).toBeTrue();
+    expect((preview.data as { query: { mode: string } }).query.mode).toBe("preview");
+
+    const unchanged = await runEpic({ cwd, mode: "toon", args: ["show", epicId, "--all"] });
+    expect((unchanged.data as { tree: { title: string } }).tree.title).toBe("Roadmap alpha");
+
+    const applied = await runEpic({
+      cwd,
+      mode: "toon",
+      args: ["replace", epicId, "--search", "alpha", "--replace", "beta", "--apply"],
+    });
+    expect(applied.ok).toBeTrue();
+    expect((applied.data as { query: { mode: string } }).query.mode).toBe("apply");
+
+    const updated = await runEpic({ cwd, mode: "toon", args: ["show", epicId, "--all"] });
+    const tree = (updated.data as {
+      tree: { title: string; description: string; tasks: Array<{ title: string; description: string; subtasks: Array<{ title: string; description: string }> }> };
+    }).tree;
+    expect(tree.title).toBe("Roadmap beta");
+    expect(tree.description).toBe("Epic beta desc");
+    expect(tree.tasks[0]?.title).toBe("Task beta");
+    expect(tree.tasks[0]?.description).toBe("Task beta desc");
+    expect(tree.tasks[0]?.subtasks[0]?.title).toBe("Subtask beta");
+    expect(tree.tasks[0]?.subtasks[0]?.description).toBe("Subtask beta desc");
+  });
 });
