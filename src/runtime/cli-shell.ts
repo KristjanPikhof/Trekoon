@@ -111,7 +111,12 @@ export function parseInvocation(argv: readonly string[], options: ParseInvocatio
 }
 
 export function renderShellResult(result: CliResult, mode: OutputMode, compatibilityMode: CompatibilityMode | null = null): string {
-  return renderResult(result, mode, { compatibilityMode });
+  const effectiveCompatibilityMode: CompatibilityMode | null =
+    compatibilityMode === "legacy-sync-command-ids" && result.command.startsWith("sync.")
+      ? compatibilityMode
+      : null;
+
+  return renderResult(result, mode, { compatibilityMode: effectiveCompatibilityMode });
 }
 
 function withStorageRootDiagnostics(result: CliResult, cwd: string): CliResult {
