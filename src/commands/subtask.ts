@@ -82,7 +82,12 @@ function formatSearchHuman(matches: readonly SearchEntityMatch[], emptyMessage: 
   }
 
   return matches
-    .map((match) => `${match.kind} ${match.id}: ${match.fields.map((field) => `${field.field}(${field.count})`).join(", ")}`)
+    .map(
+      (match) =>
+        `${match.kind} ${match.id}: ${match.fields
+          .map((field) => `${field.field}(${field.count}) "${field.snippet}"`)
+          .join(", ")}`,
+    )
     .join("\n");
 }
 
