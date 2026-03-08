@@ -1,5 +1,4 @@
 import {
-  type SearchReplaceField,
   SEARCH_REPLACE_FIELDS,
   findUnknownOption,
   hasFlag,
@@ -75,10 +74,6 @@ function invalidSearchInput(command: string, human: string, message: string, dat
       message,
     },
   });
-}
-
-function replaceMatches(value: string, searchText: string, replacement: string): string {
-  return searchText.length === 0 ? value : value.split(searchText).join(replacement);
 }
 
 function formatSearchHuman(matches: readonly SearchEntityMatch[], emptyMessage: string): string {
@@ -503,17 +498,10 @@ export async function runSubtask(context: CliContext): Promise<CliResult> {
           });
         }
 
-        const subtask = domain.collectSubtaskSearchScope(subtaskId)[0]!;
-        const { matches, summary: matchSummary } = domain.searchSubtaskScope(subtaskId, searchText, parsedFields.values);
-        if (previewMode.mode === "apply") {
-          const nextTitle = parsedFields.values.includes("title") ? replaceMatches(subtask.title, searchText, replacementText) : subtask.title;
-          const nextDescription = parsedFields.values.includes("description")
-            ? replaceMatches(subtask.description, searchText, replacementText)
-            : subtask.description;
-          if (nextTitle !== subtask.title || nextDescription !== subtask.description) {
-            mutations.updateSubtask(subtaskId, { title: nextTitle, description: nextDescription });
-          }
-        }
+        const replacementSummary = previewMode.mode === "apply"
+          ? mutations.applySubtaskReplacement(subtaskId, searchText, replacementText, parsedFields.values)
+          : mutations.previewSubtaskReplacement(subtaskId, searchText, replacementText, parsedFields.values);
+        const { matches, summary: matchSummary } = replacementSummary;
 
         const summary = {
           ...matchSummary,
