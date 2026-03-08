@@ -561,6 +561,11 @@ describe("subtask command", (): void => {
       matchedFields: 2,
       totalMatches: 2,
     });
+    expect(search.human).toContain(`title(1) "Subtask ${literalSearch}"`);
+    expect(((search.data as { matches: Array<{ fields: Array<{ field: string; snippet: string }> }> }).matches[0]?.fields[1])).toMatchObject({
+      field: "description",
+      snippet: `Desc ${literalSearch}`,
+    });
 
     const invalidMode = await runSubtask({
       cwd,
