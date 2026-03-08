@@ -123,8 +123,8 @@ describe("output rendering", (): void => {
   test("does not add compatibility metadata to rendered version envelopes", (): void => {
     const result = okResult({
       command: "version",
-      human: "0.1.9",
-      data: { version: "0.1.9" },
+      human: "0.2.0",
+      data: { version: "0.2.0" },
     });
 
     const jsonOutput = renderShellResult(result, "json", "legacy-sync-command-ids");
