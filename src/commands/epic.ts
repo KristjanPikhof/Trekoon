@@ -16,7 +16,7 @@ import {
 
 import { MutationService } from "../domain/mutation-service";
 import { TrackerDomain } from "../domain/tracker-domain";
-import { DomainError, type EpicRecord } from "../domain/types";
+import { DomainError, type EpicRecord, type SearchEntityMatch } from "../domain/types";
 import { formatHumanTable } from "../io/human-table";
 import { failResult, okResult } from "../io/output";
 import { type CliContext, type CliResult } from "../runtime/command-types";
@@ -32,27 +32,6 @@ const DEFAULT_LIST_LIMIT = 10;
 const DEFAULT_OPEN_STATUSES = ["in_progress", "in-progress", "todo"] as const;
 const SEARCH_OPTIONS = ["fields", "preview"] as const;
 const REPLACE_OPTIONS = ["search", "replace", "fields", "preview", "apply"] as const;
-
-type SearchField = SearchReplaceField;
-type SearchEntityKind = "epic" | "task" | "subtask";
-
-interface SearchFieldMatch {
-  readonly field: SearchField;
-  readonly count: number;
-}
-
-interface SearchEntityMatch {
-  readonly kind: SearchEntityKind;
-  readonly id: string;
-  readonly fields: readonly SearchFieldMatch[];
-}
-
-interface EpicSearchNode {
-  readonly kind: SearchEntityKind;
-  readonly id: string;
-  readonly title: string;
-  readonly description: string;
-}
 
 function parseStatusCsv(rawStatuses: string | undefined): string[] | undefined {
   if (rawStatuses === undefined) {
@@ -99,80 +78,8 @@ function invalidSearchInput(command: string, human: string, message: string, dat
   });
 }
 
-function countMatches(value: string, searchText: string): number {
-  if (searchText.length === 0) {
-    return 0;
-  }
-
-  let count = 0;
-  let offset = 0;
-  while (offset <= value.length - searchText.length) {
-    const nextIndex = value.indexOf(searchText, offset);
-    if (nextIndex === -1) {
-      return count;
-    }
-
-    count += 1;
-    offset = nextIndex + searchText.length;
-  }
-
-  return count;
-}
-
 function replaceMatches(value: string, searchText: string, replacement: string): string {
   return searchText.length === 0 ? value : value.split(searchText).join(replacement);
-}
-
-function buildEpicSearchNodes(domain: TrackerDomain, epicId: string): EpicSearchNode[] {
-  const tree = domain.buildEpicTreeDetailed(epicId);
-  return [
-    {
-      kind: "epic",
-      id: tree.id,
-      title: tree.title,
-      description: tree.description,
-    },
-    ...tree.tasks.flatMap((task) => [
-      {
-        kind: "task" as const,
-        id: task.id,
-        title: task.title,
-        description: task.description,
-      },
-      ...task.subtasks.map((subtask) => ({
-        kind: "subtask" as const,
-        id: subtask.id,
-        title: subtask.title,
-        description: subtask.description,
-      })),
-    ]),
-  ];
-}
-
-function collectMatches(nodes: readonly EpicSearchNode[], searchText: string, fields: readonly SearchField[]): SearchEntityMatch[] {
-  const matches: SearchEntityMatch[] = [];
-
-  for (const node of nodes) {
-    const matchedFields: SearchFieldMatch[] = [];
-    for (const field of fields) {
-      const count = countMatches(node[field], searchText);
-      if (count > 0) {
-        matchedFields.push({ field, count });
-      }
-    }
-
-    if (matchedFields.length === 0) {
-      continue;
-    }
-
-    matches.push({
-      kind: node.kind,
-      id: node.id,
-      fields: matchedFields,
-    });
-  }
-
-  return matches;
 }
 
 function formatSearchHuman(matches: readonly SearchEntityMatch[], emptyMessage: string): string {
@@ -183,21 +90,6 @@ function formatSearchHuman(matches: readonly SearchEntityMatch[], emptyMessage: 
   return matches
     .map((match) => `${match.kind} ${match.id}: ${match.fields.map((field) => `${field.field}(${field.count})`).join(", ")}`)
     .join("\n");
-}
-
-function summarizeMatches(matches: readonly SearchEntityMatch[]): {
-  readonly matchedEntities: number;
-  readonly matchedFields: number;
-  readonly totalMatches: number;
-} {
-  return {
-    matchedEntities: matches.length,
-    matchedFields: matches.reduce((total, match) => total + match.fields.length, 0),
-    totalMatches: matches.reduce(
-      (total, match) => total + match.fields.reduce((fieldTotal, field) => fieldTotal + field.count, 0),
-      0,
-    ),
-  };
 }
 
 function getStatusPriority(status: string): number {
@@ -717,8 +609,7 @@ export async function runEpic(context: CliContext): Promise<CliResult> {
           });
         }
 
-        const matches = collectMatches(buildEpicSearchNodes(domain, epicId), searchText, parsedFields.values);
-        const summary = summarizeMatches(matches);
+        const { matches, summary } = domain.searchEpicScope(epicId, searchText, parsedFields.values);
 
         return okResult({
           command: "epic.search",
@@ -784,8 +675,8 @@ export async function runEpic(context: CliContext): Promise<CliResult> {
           });
         }
 
-        const nodes = buildEpicSearchNodes(domain, epicId);
-        const matches = collectMatches(nodes, searchText, parsedFields.values);
+        const nodes = domain.collectEpicSearchScope(epicId);
+        const { matches, summary: matchSummary } = domain.searchEpicScope(epicId, searchText, parsedFields.values);
         if (previewMode.mode === "apply") {
           for (const node of nodes) {
             const nextTitle = parsedFields.values.includes("title") ? replaceMatches(node.title, searchText, replacementText) : node.title;
@@ -811,7 +702,7 @@ export async function runEpic(context: CliContext): Promise<CliResult> {
         }
 
         const summary = {
-          ...summarizeMatches(matches),
+          ...matchSummary,
           mode: previewMode.mode,
         };
 
