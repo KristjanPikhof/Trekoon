@@ -56,6 +56,15 @@ function buildMatchSnippet(value: string, searchText: string, contextSize = 24):
   return `${prefix}${rawSnippet}${suffix}`;
 }
 
+function buildReplacementSnippet(value: string, replacementIndex: number, replacementLength: number, contextSize = 24): string {
+  const start = Math.max(0, replacementIndex - contextSize);
+  const end = Math.min(value.length, replacementIndex + replacementLength + contextSize);
+  const rawSnippet = value.slice(start, end).replace(/\s+/g, " ").trim();
+  const prefix = start > 0 ? "…" : "";
+  const suffix = end < value.length ? "…" : "";
+  return `${prefix}${rawSnippet}${suffix}`;
+}
+
 function summarizeMatches(matches: readonly SearchEntityMatch[]): SearchSummary {
   return {
     matchedEntities: matches.length,
@@ -303,7 +312,7 @@ export class MutationService {
     replacementText: string,
     fields: readonly SearchField[],
   ): ScopeReplacementResult {
-    const result = this.#buildScopeReplacementResult(nodes, searchText, replacementText, fields);
+    const result = this.#buildScopeReplacementResult(nodes, searchText, replacementText, fields, "apply");
 
     this.#db.transaction((): void => {
       for (const node of nodes) {
@@ -355,6 +364,7 @@ export class MutationService {
     searchText: string,
     replacementText: string,
     fields: readonly SearchField[],
+    mode: "preview" | "apply" = "preview",
   ): ScopeReplacementResult {
     const matches: SearchEntityMatch[] = [];
 
@@ -362,6 +372,7 @@ export class MutationService {
       const fieldMatches = fields
         .map((field) => {
           const value = field === "title" ? node.title : node.description;
+          const matchIndex = value.indexOf(searchText);
           const nextValue = replaceMatches(value, searchText, replacementText);
           const count = nextValue === value ? 0 : countMatches(value, searchText);
 
@@ -372,7 +383,10 @@ export class MutationService {
           return {
             field,
             count,
-            snippet: buildMatchSnippet(value, searchText),
+            snippet:
+              mode === "apply"
+                ? buildReplacementSnippet(nextValue, matchIndex, replacementText.length)
+                : buildMatchSnippet(value, searchText),
           };
         })
         .filter((fieldMatch) => fieldMatch !== null);
