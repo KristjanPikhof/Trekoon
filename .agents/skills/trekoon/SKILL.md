@@ -295,7 +295,31 @@ Rules:
 - In bulk mode, do not pass a positional ID.
 - Bulk update supports `--append` and/or `--status`.
 
-## 7) Setup/install/init (if `trekoon` is unavailable)
+## 7) Scoped search/replace recipes for agents
+
+Use scoped search/replace instead of repeated `show` scans when you need to
+locate or migrate repeated text inside one issue tree.
+
+```bash
+trekoon epic search <epic-id> "path/to/somewhere" --toon
+trekoon task search <task-id> "path/to/somewhere" --toon
+trekoon subtask search <subtask-id> "path/to/somewhere" --toon
+
+trekoon epic replace <epic-id> --search "path/to/somewhere" --replace "path/to/new-path" --toon
+trekoon epic replace <epic-id> --search "path/to/somewhere" --replace "path/to/new-path" --apply --toon
+```
+
+Guardrails:
+
+- Use `search` first when you only need to confirm whether the text exists.
+- Use preview `replace` next to confirm the exact candidate set.
+- Use `--apply` only after preview matches the intended scope.
+- Prefer the narrowest root that satisfies the task: `subtask` → `task` →
+  `epic`.
+- Keep prompts deterministic: literal search text, explicit IDs, no regex
+  assumptions.
+
+## 8) Setup/install/init (if `trekoon` is unavailable)
 
 1. Install Trekoon (or make sure it is on `PATH`).
 2. In the target repository/worktree, initialize tracker state:
@@ -309,7 +333,7 @@ trekoon init --toon
 
 If `.trekoon/trekoon.db` is missing, initialize before any create/update commands.
 
-## 8) Safety
+## 9) Safety
 
 - Never edit `.trekoon/trekoon.db` directly.
 - `trekoon wipe --yes --toon` is prohibited unless the user explicitly confirms they want a destructive wipe.
