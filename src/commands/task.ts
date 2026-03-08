@@ -1,4 +1,5 @@
 import {
+  findUnknownOption,
   hasFlag,
   parseArgs,
   parseStrictNonNegativeInt,
@@ -6,6 +7,7 @@ import {
   readEnumOption,
   readMissingOptionValue,
   readOption,
+  suggestOptions,
 } from "./arg-parser";
 
 import { MutationService } from "../domain/mutation-service";
@@ -26,6 +28,40 @@ const DEFAULT_TASK_LIST_LIMIT = 10;
 const DEFAULT_OPEN_TASK_STATUSES = ["in_progress", "in-progress", "todo"] as const;
 const READY_REASON_READY = "all_dependencies_done";
 const READY_REASON_BLOCKED = "blocked_by_dependencies";
+const SEARCH_FIELDS = ["title", "description"] as const;
+const SEARCH_OPTIONS = ["fields", "preview"] as const;
+const REPLACE_OPTIONS = ["search", "replace", "fields", "preview", "apply"] as const;
+
+type SearchField = (typeof SEARCH_FIELDS)[number];
+type SearchEntityKind = "task" | "subtask";
+
+interface SearchFieldMatch {
+  readonly field: SearchField;
+  readonly count: number;
+}
+
+interface SearchEntityMatch {
+  readonly kind: SearchEntityKind;
+  readonly id: string;
+  readonly fields: readonly SearchFieldMatch[];
+}
+
+interface SearchFieldSelection {
+  readonly fields: readonly SearchField[];
+  readonly error: CliResult | null;
+}
+
+interface SearchPreviewMode {
+  readonly mode: "preview" | "apply";
+  readonly error: CliResult | null;
+}
+
+interface TaskSearchNode {
+  readonly kind: SearchEntityKind;
+  readonly id: string;
+  readonly title: string;
+  readonly description: string;
+}
 
 interface DependencyBlocker {
   readonly id: string;
@@ -79,6 +115,200 @@ function parseIdsOption(rawIds: string | undefined): string[] {
     .split(",")
     .map((value) => value.trim())
     .filter((value) => value.length > 0);
+}
+
+function prefixedOptions(options: readonly string[]): string[] {
+  return options.map((option) => `--${option}`);
+}
+
+function unknownOption(command: string, option: string, allowedOptions: readonly string[]): CliResult {
+  const suggestions = suggestOptions(option, allowedOptions).map((suggestion) => `--${suggestion}`);
+  const suggestionMessage = suggestions.length > 0 ? ` Did you mean ${suggestions.join(" or ")}?` : "";
+  return failResult({
+    command,
+    human: `Unknown option --${option}.${suggestionMessage}`,
+    data: {
+      option: `--${option}`,
+      allowedOptions: prefixedOptions(allowedOptions),
+      suggestions,
+    },
+    error: {
+      code: "unknown_option",
+      message: `Unknown option --${option}`,
+    },
+  });
+}
+
+function invalidSearchInput(command: string, human: string, message: string, data: Record<string, unknown>): CliResult {
+  return failResult({
+    command,
+    human,
+    data,
+    error: {
+      code: "invalid_input",
+      message,
+    },
+  });
+}
+
+function parseFieldsOption(command: string, rawFields: string | undefined): SearchFieldSelection {
+  if (rawFields === undefined) {
+    return {
+      fields: SEARCH_FIELDS,
+      error: null,
+    };
+  }
+
+  const fields = rawFields
+    .split(",")
+    .map((value) => value.trim())
+    .filter((value) => value.length > 0);
+  if (fields.length === 0) {
+    return {
+      fields: SEARCH_FIELDS,
+      error: invalidSearchInput(
+        command,
+        "Invalid --fields value. Use title, description, or title,description.",
+        "Invalid --fields value",
+        {
+          fields: rawFields,
+          allowedFields: [...SEARCH_FIELDS],
+        },
+      ),
+    };
+  }
+
+  const allowedFields = new Set<SearchField>(SEARCH_FIELDS);
+  const invalidFields = fields.filter((field): boolean => !allowedFields.has(field as SearchField));
+  if (invalidFields.length > 0) {
+    return {
+      fields: SEARCH_FIELDS,
+      error: invalidSearchInput(
+        command,
+        "Invalid --fields value. Use title, description, or title,description.",
+        "Invalid --fields value",
+        {
+          fields: rawFields,
+          invalidFields,
+          allowedFields: [...SEARCH_FIELDS],
+        },
+      ),
+    };
+  }
+
+  return {
+    fields: [...new Set(fields)] as SearchField[],
+    error: null,
+  };
+}
+
+function resolvePreviewMode(command: string, preview: boolean, apply: boolean): SearchPreviewMode {
+  if (preview && apply) {
+    return {
+      mode: "preview",
+      error: invalidSearchInput(command, "Use either --preview or --apply, not both.", "Conflicting mode flags", {
+        flags: ["preview", "apply"],
+      }),
+    };
+  }
+
+  return {
+    mode: apply ? "apply" : "preview",
+    error: null,
+  };
+}
+
+function countMatches(value: string, searchText: string): number {
+  if (searchText.length === 0) {
+    return 0;
+  }
+
+  let count = 0;
+  let offset = 0;
+  while (offset <= value.length - searchText.length) {
+    const nextIndex = value.indexOf(searchText, offset);
+    if (nextIndex === -1) {
+      return count;
+    }
+
+    count += 1;
+    offset = nextIndex + searchText.length;
+  }
+
+  return count;
+}
+
+function replaceMatches(value: string, searchText: string, replacement: string): string {
+  return searchText.length === 0 ? value : value.split(searchText).join(replacement);
+}
+
+function buildTaskSearchNodes(domain: TrackerDomain, taskId: string): TaskSearchNode[] {
+  const tree = domain.buildTaskTreeDetailed(taskId);
+  return [
+    {
+      kind: "task",
+      id: tree.id,
+      title: tree.title,
+      description: tree.description,
+    },
+    ...tree.subtasks.map((subtask) => ({
+      kind: "subtask" as const,
+      id: subtask.id,
+      title: subtask.title,
+      description: subtask.description,
+    })),
+  ];
+}
+
+function collectMatches(nodes: readonly TaskSearchNode[], searchText: string, fields: readonly SearchField[]): SearchEntityMatch[] {
+  const matches: SearchEntityMatch[] = [];
+
+  for (const node of nodes) {
+    const matchedFields: SearchFieldMatch[] = [];
+    for (const field of fields) {
+      const count = countMatches(node[field], searchText);
+      if (count > 0) {
+        matchedFields.push({ field, count });
+      }
+    }
+
+    if (matchedFields.length === 0) {
+      continue;
+    }
+
+    matches.push({
+      kind: node.kind,
+      id: node.id,
+      fields: matchedFields,
+    });
+  }
+
+  return matches;
+}
+
+function formatSearchHuman(matches: readonly SearchEntityMatch[], emptyMessage: string): string {
+  if (matches.length === 0) {
+    return emptyMessage;
+  }
+
+  return matches
+    .map((match) => `${match.kind} ${match.id}: ${match.fields.map((field) => `${field.field}(${field.count})`).join(", ")}`)
+    .join("\n");
+}
+
+function summarizeMatches(matches: readonly SearchEntityMatch[]): {
+  readonly matchedEntities: number;
+  readonly matchedFields: number;
+  readonly totalMatches: number;
+} {
+  return {
+    matchedEntities: matches.length,
+    matchedFields: matches.reduce((total, match) => total + match.fields.length, 0),
+    totalMatches: matches.reduce(
+      (total, match) => total + match.fields.reduce((fieldTotal, field) => fieldTotal + field.count, 0),
+      0,
+    ),
+  };
 }
 
 function parseStatusCsv(rawStatuses: string | undefined): string[] | undefined {
@@ -763,6 +993,144 @@ export async function runTask(context: CliContext): Promise<CliResult> {
           },
         });
       }
+      case "search": {
+        const searchUnknownOption = findUnknownOption(parsed, SEARCH_OPTIONS);
+        if (searchUnknownOption !== undefined) {
+          return unknownOption("task.search", searchUnknownOption, SEARCH_OPTIONS);
+        }
+
+        const missingSearchOption = readMissingOptionValue(parsed.missingOptionValues, "fields");
+        if (missingSearchOption !== undefined) {
+          return failMissingOptionValue("task.search", missingSearchOption);
+        }
+
+        const taskId: string = parsed.positional[1] ?? "";
+        const searchText: string = parsed.positional[2] ?? "";
+        if (taskId.length === 0 || searchText.trim().length === 0) {
+          return invalidSearchInput(
+            "task.search",
+            "Usage: trekoon task search <task-id> \"search text\" [--fields <csv>] [--preview]",
+            "Missing search target",
+            {
+              taskId,
+            },
+          );
+        }
+
+        const parsedFields = parseFieldsOption("task.search", readOption(parsed.options, "fields"));
+        if (parsedFields.error !== null) {
+          return parsedFields.error;
+        }
+
+        const matches = collectMatches(buildTaskSearchNodes(domain, taskId), searchText, parsedFields.fields);
+        const summary = summarizeMatches(matches);
+
+        return okResult({
+          command: "task.search",
+          human: formatSearchHuman(matches, "No matches found."),
+          data: {
+            scope: {
+              kind: "task",
+              id: taskId,
+            },
+            query: {
+              search: searchText,
+              fields: parsedFields.fields,
+              mode: "preview",
+            },
+            summary,
+            matches,
+          },
+        });
+      }
+      case "replace": {
+        const replaceUnknownOption = findUnknownOption(parsed, REPLACE_OPTIONS);
+        if (replaceUnknownOption !== undefined) {
+          return unknownOption("task.replace", replaceUnknownOption, REPLACE_OPTIONS);
+        }
+
+        const missingReplaceOption =
+          readMissingOptionValue(parsed.missingOptionValues, "search") ??
+          readMissingOptionValue(parsed.missingOptionValues, "replace") ??
+          readMissingOptionValue(parsed.missingOptionValues, "fields");
+        if (missingReplaceOption !== undefined) {
+          return failMissingOptionValue("task.replace", missingReplaceOption);
+        }
+
+        const taskId: string = parsed.positional[1] ?? "";
+        const searchText = readOption(parsed.options, "search") ?? "";
+        const replacementText = readOption(parsed.options, "replace") ?? "";
+        if (taskId.length === 0 || searchText.trim().length === 0) {
+          return invalidSearchInput(
+            "task.replace",
+            "Usage: trekoon task replace <task-id> --search \"text\" --replace \"text\" [--fields <csv>] [--preview|--apply]",
+            "Missing replace target",
+            {
+              taskId,
+              search: searchText,
+            },
+          );
+        }
+
+        const parsedFields = parseFieldsOption("task.replace", readOption(parsed.options, "fields"));
+        if (parsedFields.error !== null) {
+          return parsedFields.error;
+        }
+
+        const previewMode = resolvePreviewMode(
+          "task.replace",
+          hasFlag(parsed.flags, "preview"),
+          hasFlag(parsed.flags, "apply"),
+        );
+        if (previewMode.error !== null) {
+          return previewMode.error;
+        }
+
+        const nodes = buildTaskSearchNodes(domain, taskId);
+        const matches = collectMatches(nodes, searchText, parsedFields.fields);
+        if (previewMode.mode === "apply") {
+          for (const node of nodes) {
+            const nextTitle = parsedFields.fields.includes("title") ? replaceMatches(node.title, searchText, replacementText) : node.title;
+            const nextDescription = parsedFields.fields.includes("description")
+              ? replaceMatches(node.description, searchText, replacementText)
+              : node.description;
+            if (nextTitle === node.title && nextDescription === node.description) {
+              continue;
+            }
+
+            if (node.kind === "task") {
+              mutations.updateTask(node.id, { title: nextTitle, description: nextDescription });
+              continue;
+            }
+
+            mutations.updateSubtask(node.id, { title: nextTitle, description: nextDescription });
+          }
+        }
+
+        const summary = {
+          ...summarizeMatches(matches),
+          mode: previewMode.mode,
+        };
+
+        return okResult({
+          command: "task.replace",
+          human: formatSearchHuman(matches, `No ${previewMode.mode === "apply" ? "replacements" : "matches"} found.`),
+          data: {
+            scope: {
+              kind: "task",
+              id: taskId,
+            },
+            query: {
+              search: searchText,
+              replace: replacementText,
+              fields: parsedFields.fields,
+              mode: previewMode.mode,
+            },
+            summary,
+            matches,
+          },
+        });
+      }
       case "update": {
         const missingUpdateOption =
           readMissingOptionValue(parsed.missingOptionValues, "ids") ??
@@ -900,7 +1268,7 @@ export async function runTask(context: CliContext): Promise<CliResult> {
       default:
         return failResult({
           command: "task",
-          human: "Usage: trekoon task <create|list|show|ready|next|update|delete>",
+          human: "Usage: trekoon task <create|list|show|ready|next|search|replace|update|delete>",
           data: {
             args: context.args,
           },
