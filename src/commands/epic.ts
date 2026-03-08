@@ -1,12 +1,16 @@
 import {
+  type SearchReplaceField,
+  SEARCH_REPLACE_FIELDS,
   findUnknownOption,
   hasFlag,
   parseArgs,
+  parseCsvEnumOption,
   parseStrictNonNegativeInt,
   parseStrictPositiveInt,
   readEnumOption,
   readMissingOptionValue,
   readOption,
+  resolvePreviewApplyMode,
   suggestOptions,
 } from "./arg-parser";
 
@@ -26,11 +30,10 @@ const VIEW_MODES = ["table", "compact", "tree", "detail"] as const;
 const LIST_VIEW_MODES = ["table", "compact"] as const;
 const DEFAULT_LIST_LIMIT = 10;
 const DEFAULT_OPEN_STATUSES = ["in_progress", "in-progress", "todo"] as const;
-const SEARCH_FIELDS = ["title", "description"] as const;
 const SEARCH_OPTIONS = ["fields", "preview"] as const;
 const REPLACE_OPTIONS = ["search", "replace", "fields", "preview", "apply"] as const;
 
-type SearchField = (typeof SEARCH_FIELDS)[number];
+type SearchField = SearchReplaceField;
 type SearchEntityKind = "epic" | "task" | "subtask";
 
 interface SearchFieldMatch {
@@ -42,16 +45,6 @@ interface SearchEntityMatch {
   readonly kind: SearchEntityKind;
   readonly id: string;
   readonly fields: readonly SearchFieldMatch[];
-}
-
-interface SearchPreviewMode {
-  readonly mode: "preview" | "apply";
-  readonly error: CliResult | null;
-}
-
-interface SearchFieldSelection {
-  readonly fields: readonly SearchField[];
-  readonly error: CliResult | null;
 }
 
 interface EpicSearchNode {
@@ -104,73 +97,6 @@ function invalidSearchInput(command: string, human: string, message: string, dat
       message,
     },
   });
-}
-
-function parseFieldsOption(command: string, rawFields: string | undefined): SearchFieldSelection {
-  if (rawFields === undefined) {
-    return {
-      fields: SEARCH_FIELDS,
-      error: null,
-    };
-  }
-
-  const fields = rawFields
-    .split(",")
-    .map((value) => value.trim())
-    .filter((value) => value.length > 0);
-  if (fields.length === 0) {
-    return {
-      fields: SEARCH_FIELDS,
-      error: invalidSearchInput(
-        command,
-        "Invalid --fields value. Use title, description, or title,description.",
-        "Invalid --fields value",
-        {
-          fields: rawFields,
-          allowedFields: [...SEARCH_FIELDS],
-        },
-      ),
-    };
-  }
-
-  const allowedFields = new Set<SearchField>(SEARCH_FIELDS);
-  const invalidFields = fields.filter((field): boolean => !allowedFields.has(field as SearchField));
-  if (invalidFields.length > 0) {
-    return {
-      fields: SEARCH_FIELDS,
-      error: invalidSearchInput(
-        command,
-        "Invalid --fields value. Use title, description, or title,description.",
-        "Invalid --fields value",
-        {
-          fields: rawFields,
-          invalidFields,
-          allowedFields: [...SEARCH_FIELDS],
-        },
-      ),
-    };
-  }
-
-  return {
-    fields: [...new Set(fields)] as SearchField[],
-    error: null,
-  };
-}
-
-function resolvePreviewMode(command: string, preview: boolean, apply: boolean): SearchPreviewMode {
-  if (preview && apply) {
-    return {
-      mode: "preview",
-      error: invalidSearchInput(command, "Use either --preview or --apply, not both.", "Conflicting mode flags", {
-        flags: ["preview", "apply"],
-      }),
-    };
-  }
-
-  return {
-    mode: apply ? "apply" : "preview",
-    error: null,
-  };
 }
 
 function countMatches(value: string, searchText: string): number {
@@ -782,12 +708,16 @@ export async function runEpic(context: CliContext): Promise<CliResult> {
           );
         }
 
-        const parsedFields = parseFieldsOption("epic.search", readOption(parsed.options, "fields"));
-        if (parsedFields.error !== null) {
-          return parsedFields.error;
+        const parsedFields = parseCsvEnumOption(readOption(parsed.options, "fields"), SEARCH_REPLACE_FIELDS);
+        if (parsedFields.empty || parsedFields.invalidValues.length > 0) {
+          return invalidSearchInput("epic.search", "Invalid --fields value. Use title, description, or title,description.", "Invalid --fields value", {
+            fields: readOption(parsed.options, "fields"),
+            invalidFields: parsedFields.invalidValues,
+            allowedFields: [...SEARCH_REPLACE_FIELDS],
+          });
         }
 
-        const matches = collectMatches(buildEpicSearchNodes(domain, epicId), searchText, parsedFields.fields);
+        const matches = collectMatches(buildEpicSearchNodes(domain, epicId), searchText, parsedFields.values);
         const summary = summarizeMatches(matches);
 
         return okResult({
@@ -800,7 +730,7 @@ export async function runEpic(context: CliContext): Promise<CliResult> {
             },
             query: {
               search: searchText,
-              fields: parsedFields.fields,
+              fields: parsedFields.values,
               mode: "preview",
             },
             summary,
@@ -837,26 +767,29 @@ export async function runEpic(context: CliContext): Promise<CliResult> {
           );
         }
 
-        const parsedFields = parseFieldsOption("epic.replace", readOption(parsed.options, "fields"));
-        if (parsedFields.error !== null) {
-          return parsedFields.error;
+        const rawFields = readOption(parsed.options, "fields");
+        const parsedFields = parseCsvEnumOption(rawFields, SEARCH_REPLACE_FIELDS);
+        if (parsedFields.empty || parsedFields.invalidValues.length > 0) {
+          return invalidSearchInput("epic.replace", "Invalid --fields value. Use title, description, or title,description.", "Invalid --fields value", {
+            fields: rawFields,
+            invalidFields: parsedFields.invalidValues,
+            allowedFields: [...SEARCH_REPLACE_FIELDS],
+          });
         }
 
-        const previewMode = resolvePreviewMode(
-          "epic.replace",
-          hasFlag(parsed.flags, "preview"),
-          hasFlag(parsed.flags, "apply"),
-        );
-        if (previewMode.error !== null) {
-          return previewMode.error;
+        const previewMode = resolvePreviewApplyMode(parsed.flags);
+        if (previewMode.conflict) {
+          return invalidSearchInput("epic.replace", "Use either --preview or --apply, not both.", "Conflicting mode flags", {
+            flags: ["preview", "apply"],
+          });
         }
 
         const nodes = buildEpicSearchNodes(domain, epicId);
-        const matches = collectMatches(nodes, searchText, parsedFields.fields);
+        const matches = collectMatches(nodes, searchText, parsedFields.values);
         if (previewMode.mode === "apply") {
           for (const node of nodes) {
-            const nextTitle = parsedFields.fields.includes("title") ? replaceMatches(node.title, searchText, replacementText) : node.title;
-            const nextDescription = parsedFields.fields.includes("description")
+            const nextTitle = parsedFields.values.includes("title") ? replaceMatches(node.title, searchText, replacementText) : node.title;
+            const nextDescription = parsedFields.values.includes("description")
               ? replaceMatches(node.description, searchText, replacementText)
               : node.description;
             if (nextTitle === node.title && nextDescription === node.description) {
@@ -893,7 +826,7 @@ export async function runEpic(context: CliContext): Promise<CliResult> {
             query: {
               search: searchText,
               replace: replacementText,
-              fields: parsedFields.fields,
+              fields: parsedFields.values,
               mode: previewMode.mode,
             },
             summary,
