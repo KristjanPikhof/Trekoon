@@ -48,9 +48,9 @@ npm i -g trekoon
 - `trekoon init`
 - `trekoon help [command]`
 - `trekoon quickstart`
-- `trekoon epic <create|list|show|update|delete>`
-- `trekoon task <create|list|show|ready|next|update|delete>`
-- `trekoon subtask <create|list|update|delete>`
+- `trekoon epic <create|list|show|search|replace|update|delete>`
+- `trekoon task <create|list|show|ready|next|search|replace|update|delete>`
+- `trekoon subtask <create|list|search|replace|update|delete>`
 - `trekoon dep <add|remove|list|reverse>`
 - `trekoon events prune [--dry-run] [--archive] [--retention-days <n>]`
 - `trekoon migrate <status|rollback> [--to-version <n>]`
@@ -232,14 +232,25 @@ Compact TOON expectations for agents:
 
 ```text
 ok: true
-command: epic.search | epic.replace
+command: epic.search
 data:
   scope: epic
-  rootId: <epic-id>
-  matches[]: { kind, id, field, occurrences, snippet }
-  summary: { matchedEntities, matchedFields, totalOccurrences }
-  mode: preview|apply
-  changedIds[]: <only when apply mutates rows>
+  query: { search, fields[], mode: preview }
+  matches[]: { kind, id, fields[]: { field, count, snippet } }
+  summary: { matchedEntities, matchedFields, totalMatches }
+metadata:
+  contractVersion: 1.0.0
+  requestId: req-<id>
+```
+
+```text
+ok: true
+command: epic.replace
+data:
+  scope: epic
+  query: { search, replace, fields[], mode: preview|apply }
+  matches[]: { kind, id, fields[]: { field, count, snippet } }
+  summary: { matchedEntities, matchedFields, totalMatches, mode }
 metadata:
   contractVersion: 1.0.0
   requestId: req-<id>
@@ -253,7 +264,8 @@ Background behavior:
   deterministic and low-token.
 - Preview reports the candidate set without mutating records.
 - `--apply` reuses the same scoped traversal, updates only rows with real text
-  changes, and returns compact changed IDs instead of the full tree.
+  changes, and returns the matched rows with `query.mode` and `summary.mode`
+  set to `"apply"`.
 
 ### 8) Sync workflow for worktrees
 
