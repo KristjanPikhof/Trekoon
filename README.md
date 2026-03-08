@@ -228,6 +228,33 @@ Use this loop for low-risk agent workflows:
 Epic-scoped replace applies across the epic title/description and every task and
 subtask title/description in that epic tree.
 
+Compact TOON expectations for agents:
+
+```text
+ok: true
+command: epic.search | epic.replace
+data:
+  scope: epic
+  rootId: <epic-id>
+  matches[]: { kind, id, field, occurrences, snippet }
+  summary: { matchedEntities, matchedFields, totalOccurrences }
+  mode: preview|apply
+  changedIds[]: <only when apply mutates rows>
+metadata:
+  contractVersion: 1.0.0
+  requestId: req-<id>
+```
+
+Background behavior:
+
+- `epic search` and preview `epic replace` traverse the epic first, then
+  descendant tasks, then descendant subtasks.
+- Within each record, Trekoon checks `title` before `description` so output stays
+  deterministic and low-token.
+- Preview reports the candidate set without mutating records.
+- `--apply` reuses the same scoped traversal, updates only rows with real text
+  changes, and returns compact changed IDs instead of the full tree.
+
 ### 8) Sync workflow for worktrees
 
 - Run `trekoon sync status` at session start and before PR/merge.
