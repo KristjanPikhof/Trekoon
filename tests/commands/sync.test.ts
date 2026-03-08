@@ -319,6 +319,220 @@ describe("sync command", (): void => {
     expect((pullResult.data as { appliedEvents: number }).appliedEvents).toBeGreaterThanOrEqual(1);
   });
 
+  test("replays batched canonical replace updates without conflicts", async (): Promise<void> => {
+    const workspace: string = createWorkspace();
+    initializeRepository(workspace);
+
+    const epicId = randomUUID();
+    const taskId = randomUUID();
+    const subtaskId = randomUUID();
+    const now = Date.now();
+    let baseCursorToken = "0:";
+
+    {
+      const storage = openTrekoonDatabase(workspace);
+      try {
+        storage.db
+          .query("INSERT INTO epics (id, title, description, status, created_at, updated_at, version) VALUES (?, ?, ?, ?, ?, ?, 1);")
+          .run(epicId, "Roadmap alpha", "Epic alpha desc", "todo", now, now);
+
+        storage.db
+          .query("INSERT INTO tasks (id, epic_id, title, description, status, created_at, updated_at, version) VALUES (?, ?, ?, ?, ?, ?, ?, 1);")
+          .run(taskId, epicId, "Task alpha", "Task alpha desc", "todo", now, now);
+
+        storage.db
+          .query("INSERT INTO subtasks (id, task_id, title, description, status, created_at, updated_at, version) VALUES (?, ?, ?, ?, ?, ?, ?, 1);")
+          .run(subtaskId, taskId, "Subtask alpha", "Subtask alpha desc", "todo", now, now);
+
+        appendEventWithGitContext(storage.db, workspace, {
+          entityKind: "epic",
+          entityId: epicId,
+          operation: "epic.created",
+          fields: {
+            title: "Roadmap alpha",
+            description: "Epic alpha desc",
+            status: "todo",
+          },
+        });
+        appendEventWithGitContext(storage.db, workspace, {
+          entityKind: "task",
+          entityId: taskId,
+          operation: "task.created",
+          fields: {
+            epic_id: epicId,
+            title: "Task alpha",
+            description: "Task alpha desc",
+            status: "todo",
+          },
+        });
+        appendEventWithGitContext(storage.db, workspace, {
+          entityKind: "subtask",
+          entityId: subtaskId,
+          operation: "subtask.created",
+          fields: {
+            task_id: taskId,
+            title: "Subtask alpha",
+            description: "Subtask alpha desc",
+            status: "todo",
+          },
+        });
+
+        const latestEvent = storage.db
+          .query("SELECT id, created_at FROM events ORDER BY created_at DESC, id DESC LIMIT 1;")
+          .get() as { id: string; created_at: number } | null;
+        baseCursorToken = `${latestEvent?.created_at ?? 0}:${latestEvent?.id ?? ""}`;
+      } finally {
+        storage.close();
+      }
+    }
+
+    commitDatabase(workspace, "seed replace base events");
+    runGit(workspace, ["checkout", "-b", "feature/replace-batch-replay"]);
+    runGit(workspace, ["checkout", "main"]);
+
+    {
+      const storage = openTrekoonDatabase(workspace);
+      try {
+        storage.db
+          .query("UPDATE epics SET title = ?, description = ?, updated_at = ?, version = version + 1 WHERE id = ?;")
+          .run("Roadmap beta", "Epic beta desc", now + 1, epicId);
+        storage.db
+          .query("UPDATE tasks SET title = ?, description = ?, updated_at = ?, version = version + 1 WHERE id = ?;")
+          .run("Task beta", "Task beta desc", now + 1, taskId);
+        storage.db
+          .query("UPDATE subtasks SET title = ?, description = ?, updated_at = ?, version = version + 1 WHERE id = ?;")
+          .run("Subtask beta", "Subtask beta desc", now + 1, subtaskId);
+
+        appendEventWithGitContext(storage.db, workspace, {
+          entityKind: "epic",
+          entityId: epicId,
+          operation: "epic.updated",
+          fields: {
+            title: "Roadmap beta",
+            description: "Epic beta desc",
+            status: "todo",
+          },
+        });
+        appendEventWithGitContext(storage.db, workspace, {
+          entityKind: "task",
+          entityId: taskId,
+          operation: "task.updated",
+          fields: {
+            epic_id: epicId,
+            title: "Task beta",
+            description: "Task beta desc",
+            status: "todo",
+          },
+        });
+        appendEventWithGitContext(storage.db, workspace, {
+          entityKind: "subtask",
+          entityId: subtaskId,
+          operation: "subtask.updated",
+          fields: {
+            task_id: taskId,
+            title: "Subtask beta",
+            description: "Subtask beta desc",
+            status: "todo",
+          },
+        });
+      } finally {
+        storage.close();
+      }
+    }
+
+    commitDatabase(workspace, "seed replace batch update events");
+    runGit(workspace, ["checkout", "feature/replace-batch-replay"]);
+
+    {
+      const storage = openTrekoonDatabase(workspace);
+      try {
+        storage.db
+          .query(
+            "INSERT INTO sync_cursors (id, source_branch, cursor_token, last_event_at, created_at, updated_at, version) VALUES (?, ?, ?, ?, ?, ?, 1) ON CONFLICT(id) DO UPDATE SET cursor_token = excluded.cursor_token, last_event_at = excluded.last_event_at, updated_at = excluded.updated_at, version = sync_cursors.version + 1;",
+          )
+          .run("main", "main", baseCursorToken, now, now, now);
+
+        storage.db
+          .query("UPDATE epics SET title = ?, description = ?, updated_at = ?, version = version + 1 WHERE id = ?;")
+          .run("Roadmap beta", "Epic beta desc", now + 2, epicId);
+        storage.db
+          .query("UPDATE tasks SET title = ?, description = ?, updated_at = ?, version = version + 1 WHERE id = ?;")
+          .run("Task beta", "Task beta desc", now + 2, taskId);
+        storage.db
+          .query("UPDATE subtasks SET title = ?, description = ?, updated_at = ?, version = version + 1 WHERE id = ?;")
+          .run("Subtask beta", "Subtask beta desc", now + 2, subtaskId);
+      } finally {
+        storage.close();
+      }
+    }
+
+    const pullResult = await runSync({
+      args: ["pull", "--from", "main"],
+      cwd: workspace,
+      mode: "toon",
+    });
+
+    expect(pullResult.ok).toBe(true);
+    expect((pullResult.data as { scannedEvents: number }).scannedEvents).toBe(3);
+    expect((pullResult.data as { appliedEvents: number }).appliedEvents).toBe(3);
+    expect((pullResult.data as { createdConflicts: number }).createdConflicts).toBe(0);
+    expect((pullResult.data as {
+      diagnostics: {
+        applyRejectedEvents: number;
+        quarantinedEvents: number;
+        conflictEvents: number;
+        malformedPayloadEvents: number;
+        errorHints: string[];
+      };
+    }).diagnostics).toEqual({
+      applyRejectedEvents: 0,
+      quarantinedEvents: 0,
+      conflictEvents: 0,
+      malformedPayloadEvents: 0,
+      errorHints: [],
+    });
+
+    {
+      const storage = openTrekoonDatabase(workspace);
+      try {
+        const epic = storage.db.query("SELECT title, description, status FROM epics WHERE id = ?;").get(epicId) as {
+          title: string;
+          description: string;
+          status: string;
+        } | null;
+        const task = storage.db.query("SELECT title, description, status FROM tasks WHERE id = ?;").get(taskId) as {
+          title: string;
+          description: string;
+          status: string;
+        } | null;
+        const subtask = storage.db.query("SELECT title, description, status FROM subtasks WHERE id = ?;").get(subtaskId) as {
+          title: string;
+          description: string;
+          status: string;
+        } | null;
+        const conflict = storage.db.query("SELECT id FROM sync_conflicts LIMIT 1;").get() as { id: string } | null;
+
+        expect(epic).toEqual({ title: "Roadmap beta", description: "Epic beta desc", status: "todo" });
+        expect(task).toEqual({ title: "Task beta", description: "Task beta desc", status: "todo" });
+        expect(subtask).toEqual({ title: "Subtask beta", description: "Subtask beta desc", status: "todo" });
+        expect(conflict).toBeNull();
+      } finally {
+        storage.close();
+      }
+    }
+
+    const replayResult = await runSync({
+      args: ["pull", "--from", "main"],
+      cwd: workspace,
+      mode: "toon",
+    });
+
+    expect(replayResult.ok).toBe(true);
+    expect((replayResult.data as { scannedEvents: number }).scannedEvents).toBe(0);
+    expect((replayResult.data as { appliedEvents: number }).appliedEvents).toBe(0);
+    expect((replayResult.data as { createdConflicts: number }).createdConflicts).toBe(0);
+  });
+
   test("applies dependency.removed events by edge identity", async (): Promise<void> => {
     const workspace: string = createWorkspace();
     initializeRepository(workspace);
