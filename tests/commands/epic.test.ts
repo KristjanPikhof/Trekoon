@@ -437,31 +437,53 @@ describe("epic command", (): void => {
     expect((missingAppend.data as { option: string }).option).toBe("append");
   });
 
-  test("search and replace scope the full epic tree", async (): Promise<void> => {
+  test("search and replace keep literal scope boundaries stable", async (): Promise<void> => {
     const cwd = createWorkspace();
+    const literalSearch = "[alpha].*";
     const createdEpic = await runEpic({
       cwd,
       mode: "human",
-      args: ["create", "--title", "Roadmap alpha", "--description", "Epic alpha desc"],
+      args: ["create", "--title", `Roadmap ${literalSearch}`, "--description", `Epic ${literalSearch} desc`],
     });
     const epicId = (createdEpic.data as { epic: { id: string } }).epic.id;
 
     const createdTask = await runTask({
       cwd,
       mode: "human",
-      args: ["create", "--epic", epicId, "--title", "Task alpha", "--description", "Task alpha desc"],
+      args: ["create", "--epic", epicId, "--title", `Task ${literalSearch}`, "--description", `Task ${literalSearch} desc`],
     });
     const taskId = (createdTask.data as { task: { id: string } }).task.id;
 
     const createdSubtask = await runSubtask({
       cwd,
       mode: "human",
-      args: ["create", "--task", taskId, "--title", "Subtask alpha", "--description", "Subtask alpha desc"],
+      args: ["create", "--task", taskId, "--title", `Subtask ${literalSearch}`, "--description", `Subtask ${literalSearch} desc`],
     });
     const subtaskId = (createdSubtask.data as { subtask: { id: string } }).subtask.id;
 
-    const search = await runEpic({ cwd, mode: "toon", args: ["search", epicId, "alpha"] });
+    const outsideEpic = await runEpic({
+      cwd,
+      mode: "human",
+      args: ["create", "--title", `Outside ${literalSearch}`, "--description", `Outside ${literalSearch} desc`],
+    });
+    const outsideEpicId = (outsideEpic.data as { epic: { id: string } }).epic.id;
+
+    const outsideTask = await runTask({
+      cwd,
+      mode: "human",
+      args: ["create", "--epic", outsideEpicId, "--title", `Sibling ${literalSearch}`, "--description", `Sibling ${literalSearch} desc`],
+    });
+    const outsideTaskId = (outsideTask.data as { task: { id: string } }).task.id;
+
+    await runSubtask({
+      cwd,
+      mode: "human",
+      args: ["create", "--task", outsideTaskId, "--title", `Outside subtask ${literalSearch}`, "--description", `Outside subtask ${literalSearch} desc`],
+    });
+
+    const search = await runEpic({ cwd, mode: "toon", args: ["search", epicId, literalSearch] });
     expect(search.ok).toBeTrue();
+    expect((search.data as { scope: { kind: string; id: string } }).scope).toEqual({ kind: "epic", id: epicId });
     expect((search.data as { summary: { matchedEntities: number; matchedFields: number; totalMatches: number } }).summary).toEqual({
       matchedEntities: 3,
       matchedFields: 6,
@@ -476,24 +498,55 @@ describe("epic command", (): void => {
     const preview = await runEpic({
       cwd,
       mode: "toon",
-      args: ["replace", epicId, "--search", "alpha", "--replace", "beta"],
+      args: ["replace", epicId, "--search", literalSearch, "--replace", "beta"],
     });
     expect(preview.ok).toBeTrue();
-    expect((preview.data as { query: { mode: string } }).query.mode).toBe("preview");
+    expect((preview.data as { query: { search: string; replace: string; fields: string[]; mode: string } }).query).toEqual({
+      search: literalSearch,
+      replace: "beta",
+      fields: ["title", "description"],
+      mode: "preview",
+    });
+    expect((preview.data as { summary: { matchedEntities: number; matchedFields: number; totalMatches: number; mode: string } }).summary).toEqual({
+      matchedEntities: 3,
+      matchedFields: 6,
+      totalMatches: 6,
+      mode: "preview",
+    });
 
     const unchanged = await runEpic({ cwd, mode: "toon", args: ["show", epicId, "--all"] });
-    expect((unchanged.data as { tree: { title: string } }).tree.title).toBe("Roadmap alpha");
+    expect((unchanged.data as { tree: { title: string } }).tree.title).toBe(`Roadmap ${literalSearch}`);
+
+    const noMatch = await runEpic({
+      cwd,
+      mode: "toon",
+      args: ["replace", epicId, "--search", "missing literal", "--replace", "beta", "--preview"],
+    });
+    expect(noMatch.ok).toBeTrue();
+    expect((noMatch.data as { query: { mode: string } }).query.mode).toBe("preview");
+    expect((noMatch.data as { summary: { matchedEntities: number; matchedFields: number; totalMatches: number; mode: string } }).summary).toEqual({
+      matchedEntities: 0,
+      matchedFields: 0,
+      totalMatches: 0,
+      mode: "preview",
+    });
+    expect((noMatch.data as { matches: unknown[] }).matches).toEqual([]);
 
     const applied = await runEpic({
       cwd,
       mode: "toon",
-      args: ["replace", epicId, "--search", "alpha", "--replace", "beta", "--apply"],
+      args: ["replace", epicId, "--search", literalSearch, "--replace", "beta", "--apply"],
     });
     expect(applied.ok).toBeTrue();
     expect((applied.data as { query: { mode: string } }).query.mode).toBe("apply");
+    expect((applied.data as { summary: { mode: string; matchedEntities: number } }).summary).toMatchObject({ mode: "apply", matchedEntities: 3 });
 
     const updated = await runEpic({ cwd, mode: "toon", args: ["show", epicId, "--all"] });
+    const outsideUnchanged = await runEpic({ cwd, mode: "toon", args: ["show", outsideEpicId, "--all"] });
     const tree = (updated.data as {
+      tree: { title: string; description: string; tasks: Array<{ title: string; description: string; subtasks: Array<{ title: string; description: string }> }> };
+    }).tree;
+    const outsideTree = (outsideUnchanged.data as {
       tree: { title: string; description: string; tasks: Array<{ title: string; description: string; subtasks: Array<{ title: string; description: string }> }> };
     }).tree;
     expect(tree.title).toBe("Roadmap beta");
@@ -502,5 +555,11 @@ describe("epic command", (): void => {
     expect(tree.tasks[0]?.description).toBe("Task beta desc");
     expect(tree.tasks[0]?.subtasks[0]?.title).toBe("Subtask beta");
     expect(tree.tasks[0]?.subtasks[0]?.description).toBe("Subtask beta desc");
+    expect(outsideTree.title).toBe(`Outside ${literalSearch}`);
+    expect(outsideTree.description).toBe(`Outside ${literalSearch} desc`);
+    expect(outsideTree.tasks[0]?.title).toBe(`Sibling ${literalSearch}`);
+    expect(outsideTree.tasks[0]?.description).toBe(`Sibling ${literalSearch} desc`);
+    expect(outsideTree.tasks[0]?.subtasks[0]?.title).toBe(`Outside subtask ${literalSearch}`);
+    expect(outsideTree.tasks[0]?.subtasks[0]?.description).toBe(`Outside subtask ${literalSearch} desc`);
   });
 });
