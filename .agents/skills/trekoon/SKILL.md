@@ -334,14 +334,25 @@ Compact TOON fields to expect:
 
 ```text
 ok: true
-command: epic.search | epic.replace
+command: epic.search
 data:
   scope: epic
-  rootId: <epic-id>
-  matches[]: { kind, id, field, occurrences, snippet }
-  summary: { matchedEntities, matchedFields, totalOccurrences }
-  mode: preview|apply
-  changedIds[]: <present only when apply changes rows>
+  query: { search, fields[], mode: preview }
+  matches[]: { kind, id, fields[]: { field, count, snippet } }
+  summary: { matchedEntities, matchedFields, totalMatches }
+metadata:
+  contractVersion: 1.0.0
+  requestId: req-<id>
+```
+
+```text
+ok: true
+command: epic.replace
+data:
+  scope: epic
+  query: { search, replace, fields[], mode: preview|apply }
+  matches[]: { kind, id, fields[]: { field, count, snippet } }
+  summary: { matchedEntities, matchedFields, totalMatches, mode }
 metadata:
   contractVersion: 1.0.0
   requestId: req-<id>
@@ -354,7 +365,8 @@ Background behavior to assume:
 - Field traversal is deterministic: `title` before `description`.
 - Preview reads and summarizes candidates without mutation.
 - `--apply` reuses the same scoped traversal, mutates only rows with real text
-  changes, and returns compact changed IDs for low-token follow-up.
+  changes, and returns matched rows with `query.mode` and `summary.mode` set
+  to `"apply"`.
 
 ## 8) Setup/install/init (if `trekoon` is unavailable)
 
