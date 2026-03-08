@@ -8,5 +8,5 @@
 
 # Trekoon local state
 /.trekoon/*
-/.opencode/*
-/.claude/*
+/.opencode/
+/.claude/
