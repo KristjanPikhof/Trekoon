@@ -57,6 +57,32 @@ interface UnresolvedDependencyBlocker {
   readonly status: string;
 }
 
+type SearchField = "title" | "description";
+
+interface SearchFieldMatch {
+  readonly field: SearchField;
+  readonly count: number;
+}
+
+interface SearchEntityMatch {
+  readonly kind: NodeKind;
+  readonly id: string;
+  readonly fields: readonly SearchFieldMatch[];
+}
+
+interface SearchSummary {
+  readonly matchedEntities: number;
+  readonly matchedFields: number;
+  readonly totalMatches: number;
+}
+
+interface SearchNode {
+  readonly kind: NodeKind;
+  readonly id: string;
+  readonly title: string;
+  readonly description: string;
+}
+
 function assertNonEmpty(field: string, value: string | undefined | null): string {
   const normalized: string = (value ?? "").trim();
   if (!normalized) {
@@ -122,6 +148,37 @@ function mapDependency(row: DependencyRow): DependencyRecord {
     dependsOnKind: row.depends_on_kind,
     createdAt: row.created_at,
     updatedAt: row.updated_at,
+  };
+}
+
+function countMatches(value: string, searchText: string): number {
+  if (searchText.length === 0) {
+    return 0;
+  }
+
+  let count = 0;
+  let offset = 0;
+  while (offset <= value.length - searchText.length) {
+    const nextIndex = value.indexOf(searchText, offset);
+    if (nextIndex === -1) {
+      return count;
+    }
+
+    count += 1;
+    offset = nextIndex + searchText.length;
+  }
+
+  return count;
+}
+
+function summarizeMatches(matches: readonly SearchEntityMatch[]): SearchSummary {
+  return {
+    matchedEntities: matches.length,
+    matchedFields: matches.reduce((total, match) => total + match.fields.length, 0),
+    totalMatches: matches.reduce(
+      (total, match) => total + match.fields.reduce((fieldTotal, field) => fieldTotal + field.count, 0),
+      0,
+    ),
   };
 }
 
@@ -433,6 +490,89 @@ export class TrackerDomain {
     };
   }
 
+  collectEpicSearchScope(epicId: string): readonly SearchNode[] {
+    const tree = this.buildEpicTreeDetailed(epicId);
+
+    return [
+      {
+        kind: "epic",
+        id: tree.id,
+        title: tree.title,
+        description: tree.description,
+      },
+      ...tree.tasks.flatMap((task) => [
+        {
+          kind: "task" as const,
+          id: task.id,
+          title: task.title,
+          description: task.description,
+        },
+        ...task.subtasks.map((subtask) => ({
+          kind: "subtask" as const,
+          id: subtask.id,
+          title: subtask.title,
+          description: subtask.description,
+        })),
+      ]),
+    ];
+  }
+
+  collectTaskSearchScope(taskId: string): readonly SearchNode[] {
+    const tree = this.buildTaskTreeDetailed(taskId);
+
+    return [
+      {
+        kind: "task",
+        id: tree.id,
+        title: tree.title,
+        description: tree.description,
+      },
+      ...tree.subtasks.map((subtask) => ({
+        kind: "subtask" as const,
+        id: subtask.id,
+        title: subtask.title,
+        description: subtask.description,
+      })),
+    ];
+  }
+
+  collectSubtaskSearchScope(subtaskId: string): readonly SearchNode[] {
+    const subtask = this.getSubtaskOrThrow(subtaskId);
+
+    return [
+      {
+        kind: "subtask",
+        id: subtask.id,
+        title: subtask.title,
+        description: subtask.description,
+      },
+    ];
+  }
+
+  searchEpicScope(epicId: string, searchText: string, fields: readonly SearchField[]): { readonly matches: readonly SearchEntityMatch[]; readonly summary: SearchSummary } {
+    const matches = this.collectSearchMatches(this.collectEpicSearchScope(epicId), searchText, fields);
+    return {
+      matches,
+      summary: summarizeMatches(matches),
+    };
+  }
+
+  searchTaskScope(taskId: string, searchText: string, fields: readonly SearchField[]): { readonly matches: readonly SearchEntityMatch[]; readonly summary: SearchSummary } {
+    const matches = this.collectSearchMatches(this.collectTaskSearchScope(taskId), searchText, fields);
+    return {
+      matches,
+      summary: summarizeMatches(matches),
+    };
+  }
+
+  searchSubtaskScope(subtaskId: string, searchText: string, fields: readonly SearchField[]): { readonly matches: readonly SearchEntityMatch[]; readonly summary: SearchSummary } {
+    const matches = this.collectSearchMatches(this.collectSubtaskSearchScope(subtaskId), searchText, fields);
+    return {
+      matches,
+      summary: summarizeMatches(matches),
+    };
+  }
+
   resolveNodeKind(id: string): "task" | "subtask" {
     const task = this.getTask(id);
     if (task) {
@@ -568,6 +708,36 @@ export class TrackerDomain {
     }
 
     return mapDependency(row);
+  }
+
+  private collectSearchMatches(
+    nodes: readonly SearchNode[],
+    searchText: string,
+    fields: readonly SearchField[],
+  ): readonly SearchEntityMatch[] {
+    const matches: SearchEntityMatch[] = [];
+
+    for (const node of nodes) {
+      const matchedFields: SearchFieldMatch[] = [];
+      for (const field of fields) {
+        const count = countMatches(node[field], searchText);
+        if (count > 0) {
+          matchedFields.push({ field, count });
+        }
+      }
+
+      if (matchedFields.length === 0) {
+        continue;
+      }
+
+      matches.push({
+        kind: node.kind,
+        id: node.id,
+        fields: matchedFields,
+      });
+    }
+
+    return matches;
   }
 
   private wouldCreateCycle(sourceId: string, dependsOnId: string): boolean {
