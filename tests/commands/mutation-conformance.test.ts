@@ -20,13 +20,24 @@ function createWorkspace(): string {
 }
 
 function eventOperationsForEntity(cwd: string, entityKind: string, entityId: string): string[] {
+  return eventRowsForEntity(cwd, entityKind, entityId).map((row) => row.operation);
+}
+
+function eventRowsForEntity(
+  cwd: string,
+  entityKind: string,
+  entityId: string,
+): Array<{ operation: string; payload: { fields?: Record<string, unknown> } }> {
   const storage = openTrekoonDatabase(cwd);
   try {
     const rows = storage.db
-      .query("SELECT operation FROM events WHERE entity_kind = ? AND entity_id = ? ORDER BY created_at ASC;")
-      .all(entityKind, entityId) as Array<{ operation: string }>;
+      .query("SELECT operation, payload FROM events WHERE entity_kind = ? AND entity_id = ? ORDER BY created_at ASC;")
+      .all(entityKind, entityId) as Array<{ operation: string; payload: string }>;
 
-    return rows.map((row) => row.operation);
+    return rows.map((row) => ({
+      operation: row.operation,
+      payload: JSON.parse(row.payload) as { fields?: Record<string, unknown> },
+    }));
   } finally {
     storage.close();
   }
@@ -172,5 +183,181 @@ describe("mutation conformance", (): void => {
     } finally {
       storage.close();
     }
+  });
+
+  test("scoped replace appends canonical update events", async (): Promise<void> => {
+    const cwd = createWorkspace();
+
+    const createdEpic = await runEpic({
+      cwd,
+      mode: "toon",
+      args: ["create", "--title", "Roadmap alpha", "--description", "Epic alpha desc"],
+    });
+    expect(createdEpic.ok).toBeTrue();
+    const epicId = (createdEpic.data as { epic: { id: string } }).epic.id;
+
+    const createdTask = await runTask({
+      cwd,
+      mode: "toon",
+      args: ["create", "--epic", epicId, "--title", "Task alpha", "--description", "Task alpha desc"],
+    });
+    expect(createdTask.ok).toBeTrue();
+    const taskId = (createdTask.data as { task: { id: string } }).task.id;
+
+    const createdSubtask = await runSubtask({
+      cwd,
+      mode: "toon",
+      args: ["create", "--task", taskId, "--title", "Subtask alpha", "--description", "Subtask alpha desc"],
+    });
+    expect(createdSubtask.ok).toBeTrue();
+    const subtaskId = (createdSubtask.data as { subtask: { id: string } }).subtask.id;
+
+    const replaced = await runEpic({
+      cwd,
+      mode: "toon",
+      args: ["replace", epicId, "--search", "alpha", "--replace", "beta", "--apply"],
+    });
+
+    expect(replaced.ok).toBeTrue();
+
+    const epicEvents = eventRowsForEntity(cwd, "epic", epicId);
+    const taskEvents = eventRowsForEntity(cwd, "task", taskId);
+    const subtaskEvents = eventRowsForEntity(cwd, "subtask", subtaskId);
+
+    expect(epicEvents.at(-1)).toEqual({
+      operation: ENTITY_OPERATIONS.epic.updated,
+      payload: {
+        fields: {
+          title: "Roadmap beta",
+          description: "Epic beta desc",
+          status: "todo",
+        },
+      },
+    });
+    expect(taskEvents.at(-1)).toEqual({
+      operation: ENTITY_OPERATIONS.task.updated,
+      payload: {
+        fields: {
+          epic_id: epicId,
+          title: "Task beta",
+          description: "Task beta desc",
+          status: "todo",
+        },
+      },
+    });
+    expect(subtaskEvents.at(-1)).toEqual({
+      operation: ENTITY_OPERATIONS.subtask.updated,
+      payload: {
+        fields: {
+          task_id: taskId,
+          title: "Subtask beta",
+          description: "Subtask beta desc",
+          status: "todo",
+        },
+      },
+    });
+  });
+
+  test("scoped replace rolls back without partial update events", async (): Promise<void> => {
+    const cwd = createWorkspace();
+
+    const createdEpic = await runEpic({
+      cwd,
+      mode: "toon",
+      args: ["create", "--title", "Roadmap alpha", "--description", "Epic alpha desc"],
+    });
+    expect(createdEpic.ok).toBeTrue();
+    const epicId = (createdEpic.data as { epic: { id: string } }).epic.id;
+
+    const createdTask = await runTask({
+      cwd,
+      mode: "toon",
+      args: ["create", "--epic", epicId, "--title", "Task alpha", "--description", "Task alpha desc"],
+    });
+    expect(createdTask.ok).toBeTrue();
+    const taskId = (createdTask.data as { task: { id: string } }).task.id;
+
+    const createdSubtask = await runSubtask({
+      cwd,
+      mode: "toon",
+      args: ["create", "--task", taskId, "--title", "Subtask alpha", "--description", "Subtask alpha desc"],
+    });
+    expect(createdSubtask.ok).toBeTrue();
+    const subtaskId = (createdSubtask.data as { subtask: { id: string } }).subtask.id;
+
+    const storage = openTrekoonDatabase(cwd);
+    try {
+      storage.db.exec(`
+        CREATE TRIGGER fail_task_replace
+        BEFORE UPDATE ON tasks
+        WHEN NEW.title = 'Task beta'
+        BEGIN
+          SELECT RAISE(ABORT, 'blocked task replace');
+        END;
+      `);
+    } finally {
+      storage.close();
+    }
+
+    const replaced = await runEpic({
+      cwd,
+      mode: "toon",
+      args: ["replace", epicId, "--search", "alpha", "--replace", "beta", "--apply"],
+    });
+
+    expect(replaced.ok).toBeFalse();
+    expect(replaced.error?.code).toBe("internal_error");
+
+    const shown = await runEpic({ cwd, mode: "toon", args: ["show", epicId, "--all"] });
+    expect(shown.ok).toBeTrue();
+    expect((shown.data as {
+      tree: {
+        id: string;
+        title: string;
+        description: string;
+        status: string;
+        tasks: Array<{
+          id: string;
+          epicId: string;
+          title: string;
+          description: string;
+          status: string;
+          subtasks: Array<{
+            id: string;
+            taskId: string;
+            title: string;
+            description: string;
+            status: string;
+          }>;
+        }>;
+      };
+    }).tree).toEqual({
+      id: epicId,
+      title: "Roadmap alpha",
+      description: "Epic alpha desc",
+      status: "todo",
+      tasks: [
+        {
+          id: taskId,
+          epicId,
+          title: "Task alpha",
+          description: "Task alpha desc",
+          status: "todo",
+          subtasks: [
+            {
+              id: subtaskId,
+              taskId,
+              title: "Subtask alpha",
+              description: "Subtask alpha desc",
+              status: "todo",
+            },
+          ],
+        },
+      ],
+    });
+
+    expect(eventOperationsForEntity(cwd, "epic", epicId)).toEqual([ENTITY_OPERATIONS.epic.created]);
+    expect(eventOperationsForEntity(cwd, "task", taskId)).toEqual([ENTITY_OPERATIONS.task.created]);
+    expect(eventOperationsForEntity(cwd, "subtask", subtaskId)).toEqual([ENTITY_OPERATIONS.subtask.created]);
   });
 });
