@@ -90,6 +90,7 @@ export type SearchField = "title" | "description";
 export interface SearchFieldMatch {
   readonly field: SearchField;
   readonly count: number;
+  readonly snippet: string;
 }
 
 export interface SearchEntityMatch {
