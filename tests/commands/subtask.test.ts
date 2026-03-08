@@ -525,8 +525,9 @@ describe("subtask command", (): void => {
     expect((updated.data as { subtask: { status: string } }).subtask.status).toBe("done");
   });
 
-  test("search and replace support subtask field filtering", async (): Promise<void> => {
+  test("search and replace keep subtask literals and no-match stable", async (): Promise<void> => {
     const cwd = createWorkspace();
+    const literalSearch = "(alpha)+?";
     const epicCreated = await runEpic({
       cwd,
       mode: "human",
@@ -542,12 +543,19 @@ describe("subtask command", (): void => {
     const subtaskCreated = await runSubtask({
       cwd,
       mode: "human",
-      args: ["create", "--task", taskId, "--title", "Subtask alpha", "--description", "Desc alpha"],
+      args: ["create", "--task", taskId, "--title", `Subtask ${literalSearch}`, "--description", `Desc ${literalSearch}`],
     });
     const subtaskId = (subtaskCreated.data as { subtask: { id: string } }).subtask.id;
 
-    const search = await runSubtask({ cwd, mode: "toon", args: ["search", subtaskId, "alpha"] });
+    await runSubtask({
+      cwd,
+      mode: "human",
+      args: ["create", "--task", taskId, "--title", `Sibling ${literalSearch}`, "--description", `Sibling ${literalSearch}`],
+    });
+
+    const search = await runSubtask({ cwd, mode: "toon", args: ["search", subtaskId, literalSearch] });
     expect(search.ok).toBeTrue();
+    expect((search.data as { scope: { kind: string; id: string } }).scope).toEqual({ kind: "subtask", id: subtaskId });
     expect((search.data as { summary: { matchedEntities: number; matchedFields: number; totalMatches: number } }).summary).toEqual({
       matchedEntities: 1,
       matchedFields: 2,
@@ -557,21 +565,58 @@ describe("subtask command", (): void => {
     const invalidMode = await runSubtask({
       cwd,
       mode: "toon",
-      args: ["replace", subtaskId, "--search", "alpha", "--replace", "beta", "--preview", "--apply"],
+      args: ["replace", subtaskId, "--search", literalSearch, "--replace", "beta", "--preview", "--apply"],
     });
     expect(invalidMode.ok).toBeFalse();
     expect(invalidMode.error?.code).toBe("invalid_input");
 
+    const preview = await runSubtask({
+      cwd,
+      mode: "toon",
+      args: ["replace", subtaskId, "--search", literalSearch, "--replace", "beta", "--fields", "title"],
+    });
+    expect(preview.ok).toBeTrue();
+    expect((preview.data as { query: { search: string; replace: string; fields: string[]; mode: string } }).query).toEqual({
+      search: literalSearch,
+      replace: "beta",
+      fields: ["title"],
+      mode: "preview",
+    });
+    expect((preview.data as { summary: { matchedEntities: number; matchedFields: number; totalMatches: number; mode: string } }).summary).toEqual({
+      matchedEntities: 1,
+      matchedFields: 1,
+      totalMatches: 1,
+      mode: "preview",
+    });
+
+    const noMatch = await runSubtask({
+      cwd,
+      mode: "toon",
+      args: ["replace", subtaskId, "--search", "missing literal", "--replace", "beta", "--fields", "title", "--preview"],
+    });
+    expect(noMatch.ok).toBeTrue();
+    expect((noMatch.data as { summary: { matchedEntities: number; matchedFields: number; totalMatches: number; mode: string } }).summary).toEqual({
+      matchedEntities: 0,
+      matchedFields: 0,
+      totalMatches: 0,
+      mode: "preview",
+    });
+    expect((noMatch.data as { matches: unknown[] }).matches).toEqual([]);
+
     const applied = await runSubtask({
       cwd,
       mode: "toon",
-      args: ["replace", subtaskId, "--search", "alpha", "--replace", "beta", "--fields", "title", "--apply"],
+      args: ["replace", subtaskId, "--search", literalSearch, "--replace", "beta", "--fields", "title", "--apply"],
     });
     expect(applied.ok).toBeTrue();
+    expect((applied.data as { query: { mode: string } }).query.mode).toBe("apply");
 
     const updated = await runSubtask({ cwd, mode: "toon", args: ["list", "--task", taskId, "--all"] });
     const updatedSubtask = (updated.data as { subtasks: Array<{ title: string; description: string }> }).subtasks[0];
+    const siblingSubtask = (updated.data as { subtasks: Array<{ title: string; description: string }> }).subtasks[1];
     expect(updatedSubtask?.title).toBe("Subtask beta");
-    expect(updatedSubtask?.description).toBe("Desc alpha");
+    expect(updatedSubtask?.description).toBe(`Desc ${literalSearch}`);
+    expect(siblingSubtask?.title).toBe(`Sibling ${literalSearch}`);
+    expect(siblingSubtask?.description).toBe(`Sibling ${literalSearch}`);
   });
 });
