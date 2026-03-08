@@ -16,7 +16,7 @@ import {
 
 import { MutationService } from "../domain/mutation-service";
 import { TrackerDomain } from "../domain/tracker-domain";
-import { DomainError, type SubtaskRecord } from "../domain/types";
+import { DomainError, type SearchEntityMatch, type SubtaskRecord } from "../domain/types";
 import { formatHumanTable } from "../io/human-table";
 import { failResult, okResult } from "../io/output";
 import { type CliContext, type CliResult } from "../runtime/command-types";
@@ -31,19 +31,6 @@ const DEFAULT_SUBTASK_LIST_LIMIT = 10;
 const DEFAULT_OPEN_SUBTASK_STATUSES = ["in_progress", "in-progress", "todo"] as const;
 const SEARCH_OPTIONS = ["fields", "preview"] as const;
 const REPLACE_OPTIONS = ["search", "replace", "fields", "preview", "apply"] as const;
-
-type SearchField = SearchReplaceField;
-
-interface SearchFieldMatch {
-  readonly field: SearchField;
-  readonly count: number;
-}
-
-interface SearchEntityMatch {
-  readonly kind: "subtask";
-  readonly id: string;
-  readonly fields: readonly SearchFieldMatch[];
-}
 
 function parseIdsOption(rawIds: string | undefined): string[] {
   if (rawIds === undefined) {
@@ -90,50 +77,8 @@ function invalidSearchInput(command: string, human: string, message: string, dat
   });
 }
 
-function countMatches(value: string, searchText: string): number {
-  if (searchText.length === 0) {
-    return 0;
-  }
-
-  let count = 0;
-  let offset = 0;
-  while (offset <= value.length - searchText.length) {
-    const nextIndex = value.indexOf(searchText, offset);
-    if (nextIndex === -1) {
-      return count;
-    }
-
-    count += 1;
-    offset = nextIndex + searchText.length;
-  }
-
-  return count;
-}
-
 function replaceMatches(value: string, searchText: string, replacement: string): string {
   return searchText.length === 0 ? value : value.split(searchText).join(replacement);
-}
-
-function collectMatches(subtask: SubtaskRecord, searchText: string, fields: readonly SearchField[]): SearchEntityMatch[] {
-  const matchedFields: SearchFieldMatch[] = [];
-  for (const field of fields) {
-    const count = countMatches(subtask[field], searchText);
-    if (count > 0) {
-      matchedFields.push({ field, count });
-    }
-  }
-
-  if (matchedFields.length === 0) {
-    return [];
-  }
-
-  return [
-    {
-      kind: "subtask",
-      id: subtask.id,
-      fields: matchedFields,
-    },
-  ];
 }
 
 function formatSearchHuman(matches: readonly SearchEntityMatch[], emptyMessage: string): string {
@@ -144,21 +89,6 @@ function formatSearchHuman(matches: readonly SearchEntityMatch[], emptyMessage: 
   return matches
     .map((match) => `${match.kind} ${match.id}: ${match.fields.map((field) => `${field.field}(${field.count})`).join(", ")}`)
     .join("\n");
-}
-
-function summarizeMatches(matches: readonly SearchEntityMatch[]): {
-  readonly matchedEntities: number;
-  readonly matchedFields: number;
-  readonly totalMatches: number;
-} {
-  return {
-    matchedEntities: matches.length,
-    matchedFields: matches.reduce((total, match) => total + match.fields.length, 0),
-    totalMatches: matches.reduce(
-      (total, match) => total + match.fields.reduce((fieldTotal, field) => fieldTotal + field.count, 0),
-      0,
-    ),
-  };
 }
 
 function parseStatusCsv(rawStatuses: string | undefined): string[] | undefined {
@@ -507,9 +437,7 @@ export async function runSubtask(context: CliContext): Promise<CliResult> {
           });
         }
 
-        const subtask = domain.getSubtaskOrThrow(subtaskId);
-        const matches = collectMatches(subtask, searchText, parsedFields.values);
-        const summary = summarizeMatches(matches);
+        const { matches, summary } = domain.searchSubtaskScope(subtaskId, searchText, parsedFields.values);
 
         return okResult({
           command: "subtask.search",
@@ -575,8 +503,8 @@ export async function runSubtask(context: CliContext): Promise<CliResult> {
           });
         }
 
-        const subtask = domain.getSubtaskOrThrow(subtaskId);
-        const matches = collectMatches(subtask, searchText, parsedFields.values);
+        const subtask = domain.collectSubtaskSearchScope(subtaskId)[0]!;
+        const { matches, summary: matchSummary } = domain.searchSubtaskScope(subtaskId, searchText, parsedFields.values);
         if (previewMode.mode === "apply") {
           const nextTitle = parsedFields.values.includes("title") ? replaceMatches(subtask.title, searchText, replacementText) : subtask.title;
           const nextDescription = parsedFields.values.includes("description")
@@ -588,7 +516,7 @@ export async function runSubtask(context: CliContext): Promise<CliResult> {
         }
 
         const summary = {
-          ...summarizeMatches(matches),
+          ...matchSummary,
           mode: previewMode.mode,
         };
 
