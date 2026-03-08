@@ -319,6 +319,43 @@ Guardrails:
 - Keep prompts deterministic: literal search text, explicit IDs, no regex
   assumptions.
 
+Agent contract for epic-scoped replace:
+
+- Exact search command:
+  `trekoon epic search <epic-id> "path/to/somewhere" --toon`
+- Exact replace command:
+  `trekoon epic replace <epic-id> --search "path/to/somewhere" --replace "path/to/new-path" --toon`
+- Apply command:
+  `trekoon epic replace <epic-id> --search "path/to/somewhere" --replace "path/to/new-path" --apply --toon`
+- Epic scope includes the epic title/description plus every task and subtask
+  title/description in that epic tree.
+
+Compact TOON fields to expect:
+
+```text
+ok: true
+command: epic.search | epic.replace
+data:
+  scope: epic
+  rootId: <epic-id>
+  matches[]: { kind, id, field, occurrences, snippet }
+  summary: { matchedEntities, matchedFields, totalOccurrences }
+  mode: preview|apply
+  changedIds[]: <present only when apply changes rows>
+metadata:
+  contractVersion: 1.0.0
+  requestId: req-<id>
+```
+
+Background behavior to assume:
+
+- Scope traversal is deterministic: epic first, then descendant tasks, then
+  descendant subtasks.
+- Field traversal is deterministic: `title` before `description`.
+- Preview reads and summarizes candidates without mutation.
+- `--apply` reuses the same scoped traversal, mutates only rows with real text
+  changes, and returns compact changed IDs for low-token follow-up.
+
 ## 8) Setup/install/init (if `trekoon` is unavailable)
 
 1. Install Trekoon (or make sure it is on `PATH`).
