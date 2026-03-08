@@ -38,6 +38,24 @@ function replaceMatches(value: string, searchText: string, replacement: string):
   return searchText.length === 0 ? value : value.split(searchText).join(replacement);
 }
 
+function buildMatchSnippet(value: string, searchText: string, contextSize = 24): string {
+  if (searchText.length === 0) {
+    return "";
+  }
+
+  const matchIndex = value.indexOf(searchText);
+  if (matchIndex === -1) {
+    return "";
+  }
+
+  const start = Math.max(0, matchIndex - contextSize);
+  const end = Math.min(value.length, matchIndex + searchText.length + contextSize);
+  const rawSnippet = value.slice(start, end).replace(/\s+/g, " ").trim();
+  const prefix = start > 0 ? "…" : "";
+  const suffix = end < value.length ? "…" : "";
+  return `${prefix}${rawSnippet}${suffix}`;
+}
+
 function summarizeMatches(matches: readonly SearchEntityMatch[]): SearchSummary {
   return {
     matchedEntities: matches.length,
@@ -354,6 +372,7 @@ export class MutationService {
           return {
             field,
             count,
+            snippet: buildMatchSnippet(value, searchText),
           };
         })
         .filter((fieldMatch) => fieldMatch !== null);
