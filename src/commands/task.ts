@@ -1,5 +1,4 @@
 import {
-  type SearchReplaceField,
   SEARCH_REPLACE_FIELDS,
   findUnknownOption,
   hasFlag,
@@ -121,10 +120,6 @@ function invalidSearchInput(command: string, human: string, message: string, dat
       message,
     },
   });
-}
-
-function replaceMatches(value: string, searchText: string, replacement: string): string {
-  return searchText.length === 0 ? value : value.split(searchText).join(replacement);
 }
 
 function formatSearchHuman(matches: readonly SearchEntityMatch[], emptyMessage: string): string {
@@ -918,26 +913,10 @@ export async function runTask(context: CliContext): Promise<CliResult> {
           });
         }
 
-        const nodes = domain.collectTaskSearchScope(taskId);
-        const { matches, summary: matchSummary } = domain.searchTaskScope(taskId, searchText, parsedFields.values);
-        if (previewMode.mode === "apply") {
-          for (const node of nodes) {
-            const nextTitle = parsedFields.values.includes("title") ? replaceMatches(node.title, searchText, replacementText) : node.title;
-            const nextDescription = parsedFields.values.includes("description")
-              ? replaceMatches(node.description, searchText, replacementText)
-              : node.description;
-            if (nextTitle === node.title && nextDescription === node.description) {
-              continue;
-            }
-
-            if (node.kind === "task") {
-              mutations.updateTask(node.id, { title: nextTitle, description: nextDescription });
-              continue;
-            }
-
-            mutations.updateSubtask(node.id, { title: nextTitle, description: nextDescription });
-          }
-        }
+        const replacementSummary = previewMode.mode === "apply"
+          ? mutations.applyTaskReplacement(taskId, searchText, replacementText, parsedFields.values)
+          : mutations.previewTaskReplacement(taskId, searchText, replacementText, parsedFields.values);
+        const { matches, summary: matchSummary } = replacementSummary;
 
         const summary = {
           ...matchSummary,
