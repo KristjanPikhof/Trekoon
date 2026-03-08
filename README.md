@@ -207,7 +207,28 @@ Scope rules:
 - Add `--fields title`, `--fields description`, or
   `--fields title,description` when you need a narrower scan.
 
-### 7) Sync workflow for worktrees
+### 7) Preview first, then apply scoped replace
+
+Use search first to confirm the scope, then run replace in preview mode, and
+only use `--apply` after the preview matches the intended migration.
+
+```bash
+trekoon --toon epic search <epic-id> "path/to/somewhere"
+trekoon --toon epic replace <epic-id> --search "path/to/somewhere" --replace "path/to/new-path"
+trekoon --toon epic replace <epic-id> --search "path/to/somewhere" --replace "path/to/new-path" --apply
+```
+
+Use this loop for low-risk agent workflows:
+
+1. `search` when you need the smallest possible read before deciding whether a
+   migration is needed.
+2. preview `replace` to verify the exact candidate set and changed fields.
+3. `replace --apply` only after the preview output matches the intended scope.
+
+Epic-scoped replace applies across the epic title/description and every task and
+subtask title/description in that epic tree.
+
+### 8) Sync workflow for worktrees
 
 - Run `trekoon sync status` at session start and before PR/merge.
 - Run `trekoon sync pull --from main` before merge to align tracker state.
@@ -251,7 +272,7 @@ Behavior:
 - Migration path: remove `--compat legacy-sync-command-ids` and consume dotted
   command IDs directly.
 
-### 8) Install project-local Trekoon skill for agents
+### 9) Install project-local Trekoon skill for agents
 
 `trekoon skills install` always writes the bundled skill file under the current
 working directory at:
@@ -313,7 +334,7 @@ This produces:
 
 Trekoon does not mutate global editor config directories.
 
-### 9) Pre-merge checklist
+### 10) Pre-merge checklist
 
 - [ ] `trekoon sync status` shows no unresolved conflicts
 - [ ] done tasks/subtasks are marked completed
