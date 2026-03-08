@@ -11,11 +11,31 @@ interface EventRecordInput {
   readonly fields: Record<string, unknown>;
 }
 
+function nextEventTimestamp(db: Database): number {
+  const now: number = Date.now();
+  const latestEvent = db
+    .query(
+      `
+      SELECT created_at
+      FROM events
+      ORDER BY created_at DESC, id DESC
+      LIMIT 1;
+      `,
+    )
+    .get() as { created_at: number } | null;
+
+  if (!latestEvent) {
+    return now;
+  }
+
+  return Math.max(now, latestEvent.created_at + 1);
+}
+
 export function appendEventWithGitContext(db: Database, cwd: string, input: EventRecordInput): string {
   const git = resolveGitContext(cwd);
   persistGitContext(db, git);
 
-  const now: number = Date.now();
+  const now: number = nextEventTimestamp(db);
   const eventId: string = randomUUID();
 
   db.query(
