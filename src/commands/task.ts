@@ -16,7 +16,7 @@ import {
 
 import { MutationService } from "../domain/mutation-service";
 import { TrackerDomain } from "../domain/tracker-domain";
-import { DomainError, type TaskRecord } from "../domain/types";
+import { DomainError, type SearchEntityMatch, type TaskRecord } from "../domain/types";
 import { formatHumanTable } from "../io/human-table";
 import { failResult, okResult } from "../io/output";
 import { type CliContext, type CliResult } from "../runtime/command-types";
@@ -34,27 +34,6 @@ const READY_REASON_READY = "all_dependencies_done";
 const READY_REASON_BLOCKED = "blocked_by_dependencies";
 const SEARCH_OPTIONS = ["fields", "preview"] as const;
 const REPLACE_OPTIONS = ["search", "replace", "fields", "preview", "apply"] as const;
-
-type SearchField = SearchReplaceField;
-type SearchEntityKind = "task" | "subtask";
-
-interface SearchFieldMatch {
-  readonly field: SearchField;
-  readonly count: number;
-}
-
-interface SearchEntityMatch {
-  readonly kind: SearchEntityKind;
-  readonly id: string;
-  readonly fields: readonly SearchFieldMatch[];
-}
-
-interface TaskSearchNode {
-  readonly kind: SearchEntityKind;
-  readonly id: string;
-  readonly title: string;
-  readonly description: string;
-}
 
 interface DependencyBlocker {
   readonly id: string;
@@ -144,72 +123,8 @@ function invalidSearchInput(command: string, human: string, message: string, dat
   });
 }
 
-function countMatches(value: string, searchText: string): number {
-  if (searchText.length === 0) {
-    return 0;
-  }
-
-  let count = 0;
-  let offset = 0;
-  while (offset <= value.length - searchText.length) {
-    const nextIndex = value.indexOf(searchText, offset);
-    if (nextIndex === -1) {
-      return count;
-    }
-
-    count += 1;
-    offset = nextIndex + searchText.length;
-  }
-
-  return count;
-}
-
 function replaceMatches(value: string, searchText: string, replacement: string): string {
   return searchText.length === 0 ? value : value.split(searchText).join(replacement);
-}
-
-function buildTaskSearchNodes(domain: TrackerDomain, taskId: string): TaskSearchNode[] {
-  const tree = domain.buildTaskTreeDetailed(taskId);
-  return [
-    {
-      kind: "task",
-      id: tree.id,
-      title: tree.title,
-      description: tree.description,
-    },
-    ...tree.subtasks.map((subtask) => ({
-      kind: "subtask" as const,
-      id: subtask.id,
-      title: subtask.title,
-      description: subtask.description,
-    })),
-  ];
-}
-
-function collectMatches(nodes: readonly TaskSearchNode[], searchText: string, fields: readonly SearchField[]): SearchEntityMatch[] {
-  const matches: SearchEntityMatch[] = [];
-
-  for (const node of nodes) {
-    const matchedFields: SearchFieldMatch[] = [];
-    for (const field of fields) {
-      const count = countMatches(node[field], searchText);
-      if (count > 0) {
-        matchedFields.push({ field, count });
-      }
-    }
-
-    if (matchedFields.length === 0) {
-      continue;
-    }
-
-    matches.push({
-      kind: node.kind,
-      id: node.id,
-      fields: matchedFields,
-    });
-  }
-
-  return matches;
 }
 
 function formatSearchHuman(matches: readonly SearchEntityMatch[], emptyMessage: string): string {
@@ -220,21 +135,6 @@ function formatSearchHuman(matches: readonly SearchEntityMatch[], emptyMessage: 
   return matches
     .map((match) => `${match.kind} ${match.id}: ${match.fields.map((field) => `${field.field}(${field.count})`).join(", ")}`)
     .join("\n");
-}
-
-function summarizeMatches(matches: readonly SearchEntityMatch[]): {
-  readonly matchedEntities: number;
-  readonly matchedFields: number;
-  readonly totalMatches: number;
-} {
-  return {
-    matchedEntities: matches.length,
-    matchedFields: matches.reduce((total, match) => total + match.fields.length, 0),
-    totalMatches: matches.reduce(
-      (total, match) => total + match.fields.reduce((fieldTotal, field) => fieldTotal + field.count, 0),
-      0,
-    ),
-  };
 }
 
 function parseStatusCsv(rawStatuses: string | undefined): string[] | undefined {
@@ -952,8 +852,7 @@ export async function runTask(context: CliContext): Promise<CliResult> {
           });
         }
 
-        const matches = collectMatches(buildTaskSearchNodes(domain, taskId), searchText, parsedFields.values);
-        const summary = summarizeMatches(matches);
+        const { matches, summary } = domain.searchTaskScope(taskId, searchText, parsedFields.values);
 
         return okResult({
           command: "task.search",
@@ -1019,8 +918,8 @@ export async function runTask(context: CliContext): Promise<CliResult> {
           });
         }
 
-        const nodes = buildTaskSearchNodes(domain, taskId);
-        const matches = collectMatches(nodes, searchText, parsedFields.values);
+        const nodes = domain.collectTaskSearchScope(taskId);
+        const { matches, summary: matchSummary } = domain.searchTaskScope(taskId, searchText, parsedFields.values);
         if (previewMode.mode === "apply") {
           for (const node of nodes) {
             const nextTitle = parsedFields.values.includes("title") ? replaceMatches(node.title, searchText, replacementText) : node.title;
@@ -1041,7 +940,7 @@ export async function runTask(context: CliContext): Promise<CliResult> {
         }
 
         const summary = {
-          ...summarizeMatches(matches),
+          ...matchSummary,
           mode: previewMode.mode,
         };
 
