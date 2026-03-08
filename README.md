@@ -123,9 +123,9 @@ invocations share the same `.trekoon/trekoon.db`.
 
 Outside git repos, Trekoon falls back to the invocation cwd.
 
-When machine output is enabled (`--json`/`--toon`) and invocation cwd differs
-from canonical root, Trekoon emits `meta.storageRootDiagnostics` to make
-divergence explicit for automation.
+When machine output is enabled (`--json`/`--toon`) and a command resolves
+storage from a non-canonical cwd, Trekoon emits
+`meta.storageRootDiagnostics` to make the divergence explicit for automation.
 
 ### 1) Initialize
 
@@ -322,7 +322,8 @@ Most subcommand identifiers are dot-namespaced (`task.list`, `sync.pull`,
 Additional metadata can appear when relevant:
 
 - `metadata.compatibility` when `--compat` mode is active
-- `meta.storageRootDiagnostics` when cwd differs from canonical state root
+- `meta.storageRootDiagnostics` when a machine-readable command resolves
+  storage from a non-canonical cwd
 
 ### Ready queue (deterministic candidates)
 
