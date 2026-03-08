@@ -873,6 +873,11 @@ describe("task command", (): void => {
       matchedFields: 4,
       totalMatches: 4,
     });
+    expect(search.human).toContain(`title(1) "Task ${literalSearch}"`);
+    expect(((search.data as { matches: Array<{ fields: Array<{ field: string; snippet: string }> }> }).matches[0]?.fields[0])).toMatchObject({
+      field: "title",
+      snippet: `Task ${literalSearch}`,
+    });
     expect((search.data as { matches: Array<{ id: string }> }).matches.map((match) => match.id)).toEqual([targetTaskId, subtaskId]);
 
     const preview = await runTask({
