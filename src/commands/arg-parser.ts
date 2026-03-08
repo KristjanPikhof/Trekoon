@@ -6,6 +6,21 @@ export interface ParsedArgs {
   readonly providedOptions: readonly string[];
 }
 
+export const SEARCH_REPLACE_FIELDS = ["title", "description"] as const;
+
+export type SearchReplaceField = (typeof SEARCH_REPLACE_FIELDS)[number];
+
+export interface ParsedCsvEnumOption<T extends string> {
+  readonly values: readonly T[];
+  readonly invalidValues: readonly string[];
+  readonly empty: boolean;
+}
+
+export interface PreviewApplyModeSelection {
+  readonly mode: "preview" | "apply";
+  readonly conflict: boolean;
+}
+
 const LONG_PREFIX = "--";
 
 export function parseArgs(args: readonly string[]): ParsedArgs {
@@ -94,6 +109,73 @@ export function parseStrictNonNegativeInt(rawValue: string | undefined): number 
   }
 
   return parsed;
+}
+
+export function parseCsvOption(rawValue: string | undefined): string[] | undefined {
+  if (rawValue === undefined) {
+    return undefined;
+  }
+
+  return rawValue
+    .split(",")
+    .map((value) => value.trim())
+    .filter((value) => value.length > 0);
+}
+
+export function parseCsvEnumOption<const T extends readonly string[]>(
+  rawValue: string | undefined,
+  allowed: T,
+): ParsedCsvEnumOption<T[number]> {
+  const values = parseCsvOption(rawValue);
+  if (values === undefined) {
+    return {
+      values: [...allowed],
+      invalidValues: [],
+      empty: false,
+    };
+  }
+
+  if (values.length === 0) {
+    return {
+      values: [...allowed],
+      invalidValues: [],
+      empty: true,
+    };
+  }
+
+  const allowedValues = new Set<string>(allowed);
+  const validValues: T[number][] = [];
+  const invalidValues: string[] = [];
+
+  for (const value of values) {
+    if (!allowedValues.has(value)) {
+      invalidValues.push(value);
+      continue;
+    }
+
+    if (!validValues.includes(value as T[number])) {
+      validValues.push(value as T[number]);
+    }
+  }
+
+  return {
+    values: validValues.length > 0 ? validValues : [...allowed],
+    invalidValues,
+    empty: false,
+  };
+}
+
+export function resolvePreviewApplyMode(
+  flags: ReadonlySet<string>,
+  previewKey = "preview",
+  applyKey = "apply",
+): PreviewApplyModeSelection {
+  const preview = flags.has(previewKey);
+  const apply = flags.has(applyKey);
+  return {
+    mode: apply ? "apply" : "preview",
+    conflict: preview && apply,
+  };
 }
 
 function levenshteinDistance(source: string, target: string): number {
