@@ -489,6 +489,8 @@ describe("epic command", (): void => {
       matchedFields: 6,
       totalMatches: 6,
     });
+    expect(search.human).toContain(`title(1) "Roadmap ${literalSearch}"`);
+    expect(search.human).toContain(`description(1) "Epic ${literalSearch} desc"`);
     expect((search.data as { matches: Array<{ kind: string; id: string }> }).matches.map((match) => match.id)).toEqual([
       epicId,
       taskId,
