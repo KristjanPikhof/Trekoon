@@ -74,7 +74,7 @@ const WIPE_HELP = [
 ].join("\n");
 
 const EPIC_HELP = [
-  "Usage: trekoon epic <create|list|show|update|delete> [options]",
+  "Usage: trekoon epic <create|list|show|search|replace|update|delete> [options]",
   "",
   "List behavior:",
   "  Defaults:",
@@ -97,6 +97,16 @@ const EPIC_HELP = [
   "  Machine default:",
   "    - With --all, machine modes default to detail",
   "",
+  "Search/Replace behavior:",
+  "  search:",
+  "    - trekoon epic search <epic-id> \"search text\"",
+  "    - Options: --fields title|description|title,description, --preview",
+  "    - Scope: epic title/description + descendant task/subtask title/description",
+  "  replace:",
+  "    - trekoon epic replace <epic-id> --search \"text\" --replace \"text\"",
+  "    - Preview is default; use --apply to mutate",
+  "    - --preview and --apply are mutually exclusive",
+  "",
   "Update behavior:",
   "  Bulk target flags:",
   "    --all | --ids <csv>",
@@ -105,7 +115,7 @@ const EPIC_HELP = [
 ].join("\n");
 
 const TASK_HELP = [
-  "Usage: trekoon task <create|list|show|ready|next|update|delete> [options]",
+  "Usage: trekoon task <create|list|show|ready|next|search|replace|update|delete> [options]",
   "",
   "List behavior:",
   "  Defaults:",
@@ -137,6 +147,16 @@ const TASK_HELP = [
   "    - Returns top ready candidate",
   "    - Option: --epic <id>",
   "",
+  "Search/Replace behavior:",
+  "  search:",
+  "    - trekoon task search <task-id> \"search text\"",
+  "    - Options: --fields title|description|title,description, --preview",
+  "    - Scope: task title/description + descendant subtask title/description",
+  "  replace:",
+  "    - trekoon task replace <task-id> --search \"text\" --replace \"text\"",
+  "    - Preview is default; use --apply to mutate",
+  "    - --preview and --apply are mutually exclusive",
+  "",
   "Update behavior:",
   "  Bulk target flags:",
   "    --all | --ids <csv>",
@@ -145,7 +165,7 @@ const TASK_HELP = [
 ].join("\n");
 
 const SUBTASK_HELP = [
-  "Usage: trekoon subtask <create|list|update|delete> [options]",
+  "Usage: trekoon subtask <create|list|search|replace|update|delete> [options]",
   "",
   "List behavior:",
   "  Defaults:",
@@ -158,6 +178,16 @@ const SUBTASK_HELP = [
   "    - Machine modes expose meta.pagination.hasMore / nextCursor",
   "  Constraints:",
   "    - --all is mutually exclusive with --status, --limit, and --cursor",
+  "",
+  "Search/Replace behavior:",
+  "  search:",
+  "    - trekoon subtask search <subtask-id> \"search text\"",
+  "    - Options: --fields title|description|title,description, --preview",
+  "    - Scope: subtask title/description only",
+  "  replace:",
+  "    - trekoon subtask replace <subtask-id> --search \"text\" --replace \"text\"",
+  "    - Preview is default; use --apply to mutate",
+  "    - --preview and --apply are mutually exclusive",
   "",
   "Update behavior:",
   "  Bulk target flags:",
