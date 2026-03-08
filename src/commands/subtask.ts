@@ -1,12 +1,16 @@
 import {
+  type SearchReplaceField,
+  SEARCH_REPLACE_FIELDS,
   findUnknownOption,
   hasFlag,
   parseArgs,
+  parseCsvEnumOption,
   parseStrictNonNegativeInt,
   parseStrictPositiveInt,
   readEnumOption,
   readMissingOptionValue,
   readOption,
+  resolvePreviewApplyMode,
   suggestOptions,
 } from "./arg-parser";
 
@@ -25,11 +29,10 @@ function formatSubtask(subtask: SubtaskRecord): string {
 const VIEW_MODES = ["table", "compact"] as const;
 const DEFAULT_SUBTASK_LIST_LIMIT = 10;
 const DEFAULT_OPEN_SUBTASK_STATUSES = ["in_progress", "in-progress", "todo"] as const;
-const SEARCH_FIELDS = ["title", "description"] as const;
 const SEARCH_OPTIONS = ["fields", "preview"] as const;
 const REPLACE_OPTIONS = ["search", "replace", "fields", "preview", "apply"] as const;
 
-type SearchField = (typeof SEARCH_FIELDS)[number];
+type SearchField = SearchReplaceField;
 
 interface SearchFieldMatch {
   readonly field: SearchField;
@@ -40,16 +43,6 @@ interface SearchEntityMatch {
   readonly kind: "subtask";
   readonly id: string;
   readonly fields: readonly SearchFieldMatch[];
-}
-
-interface SearchFieldSelection {
-  readonly fields: readonly SearchField[];
-  readonly error: CliResult | null;
-}
-
-interface SearchPreviewMode {
-  readonly mode: "preview" | "apply";
-  readonly error: CliResult | null;
 }
 
 function parseIdsOption(rawIds: string | undefined): string[] {
@@ -95,73 +88,6 @@ function invalidSearchInput(command: string, human: string, message: string, dat
       message,
     },
   });
-}
-
-function parseFieldsOption(command: string, rawFields: string | undefined): SearchFieldSelection {
-  if (rawFields === undefined) {
-    return {
-      fields: SEARCH_FIELDS,
-      error: null,
-    };
-  }
-
-  const fields = rawFields
-    .split(",")
-    .map((value) => value.trim())
-    .filter((value) => value.length > 0);
-  if (fields.length === 0) {
-    return {
-      fields: SEARCH_FIELDS,
-      error: invalidSearchInput(
-        command,
-        "Invalid --fields value. Use title, description, or title,description.",
-        "Invalid --fields value",
-        {
-          fields: rawFields,
-          allowedFields: [...SEARCH_FIELDS],
-        },
-      ),
-    };
-  }
-
-  const allowedFields = new Set<SearchField>(SEARCH_FIELDS);
-  const invalidFields = fields.filter((field): boolean => !allowedFields.has(field as SearchField));
-  if (invalidFields.length > 0) {
-    return {
-      fields: SEARCH_FIELDS,
-      error: invalidSearchInput(
-        command,
-        "Invalid --fields value. Use title, description, or title,description.",
-        "Invalid --fields value",
-        {
-          fields: rawFields,
-          invalidFields,
-          allowedFields: [...SEARCH_FIELDS],
-        },
-      ),
-    };
-  }
-
-  return {
-    fields: [...new Set(fields)] as SearchField[],
-    error: null,
-  };
-}
-
-function resolvePreviewMode(command: string, preview: boolean, apply: boolean): SearchPreviewMode {
-  if (preview && apply) {
-    return {
-      mode: "preview",
-      error: invalidSearchInput(command, "Use either --preview or --apply, not both.", "Conflicting mode flags", {
-        flags: ["preview", "apply"],
-      }),
-    };
-  }
-
-  return {
-    mode: apply ? "apply" : "preview",
-    error: null,
-  };
 }
 
 function countMatches(value: string, searchText: string): number {
@@ -572,13 +498,17 @@ export async function runSubtask(context: CliContext): Promise<CliResult> {
           );
         }
 
-        const parsedFields = parseFieldsOption("subtask.search", readOption(parsed.options, "fields"));
-        if (parsedFields.error !== null) {
-          return parsedFields.error;
+        const parsedFields = parseCsvEnumOption(readOption(parsed.options, "fields"), SEARCH_REPLACE_FIELDS);
+        if (parsedFields.empty || parsedFields.invalidValues.length > 0) {
+          return invalidSearchInput("subtask.search", "Invalid --fields value. Use title, description, or title,description.", "Invalid --fields value", {
+            fields: readOption(parsed.options, "fields"),
+            invalidFields: parsedFields.invalidValues,
+            allowedFields: [...SEARCH_REPLACE_FIELDS],
+          });
         }
 
         const subtask = domain.getSubtaskOrThrow(subtaskId);
-        const matches = collectMatches(subtask, searchText, parsedFields.fields);
+        const matches = collectMatches(subtask, searchText, parsedFields.values);
         const summary = summarizeMatches(matches);
 
         return okResult({
@@ -591,7 +521,7 @@ export async function runSubtask(context: CliContext): Promise<CliResult> {
             },
             query: {
               search: searchText,
-              fields: parsedFields.fields,
+              fields: parsedFields.values,
               mode: "preview",
             },
             summary,
@@ -628,25 +558,28 @@ export async function runSubtask(context: CliContext): Promise<CliResult> {
           );
         }
 
-        const parsedFields = parseFieldsOption("subtask.replace", readOption(parsed.options, "fields"));
-        if (parsedFields.error !== null) {
-          return parsedFields.error;
+        const rawFields = readOption(parsed.options, "fields");
+        const parsedFields = parseCsvEnumOption(rawFields, SEARCH_REPLACE_FIELDS);
+        if (parsedFields.empty || parsedFields.invalidValues.length > 0) {
+          return invalidSearchInput("subtask.replace", "Invalid --fields value. Use title, description, or title,description.", "Invalid --fields value", {
+            fields: rawFields,
+            invalidFields: parsedFields.invalidValues,
+            allowedFields: [...SEARCH_REPLACE_FIELDS],
+          });
         }
 
-        const previewMode = resolvePreviewMode(
-          "subtask.replace",
-          hasFlag(parsed.flags, "preview"),
-          hasFlag(parsed.flags, "apply"),
-        );
-        if (previewMode.error !== null) {
-          return previewMode.error;
+        const previewMode = resolvePreviewApplyMode(parsed.flags);
+        if (previewMode.conflict) {
+          return invalidSearchInput("subtask.replace", "Use either --preview or --apply, not both.", "Conflicting mode flags", {
+            flags: ["preview", "apply"],
+          });
         }
 
         const subtask = domain.getSubtaskOrThrow(subtaskId);
-        const matches = collectMatches(subtask, searchText, parsedFields.fields);
+        const matches = collectMatches(subtask, searchText, parsedFields.values);
         if (previewMode.mode === "apply") {
-          const nextTitle = parsedFields.fields.includes("title") ? replaceMatches(subtask.title, searchText, replacementText) : subtask.title;
-          const nextDescription = parsedFields.fields.includes("description")
+          const nextTitle = parsedFields.values.includes("title") ? replaceMatches(subtask.title, searchText, replacementText) : subtask.title;
+          const nextDescription = parsedFields.values.includes("description")
             ? replaceMatches(subtask.description, searchText, replacementText)
             : subtask.description;
           if (nextTitle !== subtask.title || nextDescription !== subtask.description) {
@@ -670,7 +603,7 @@ export async function runSubtask(context: CliContext): Promise<CliResult> {
             query: {
               search: searchText,
               replace: replacementText,
-              fields: parsedFields.fields,
+              fields: parsedFields.values,
               mode: previewMode.mode,
             },
             summary,
