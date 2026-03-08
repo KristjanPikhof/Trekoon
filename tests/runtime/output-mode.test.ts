@@ -2,7 +2,7 @@ import { decode } from "@toon-format/toon";
 import { describe, expect, test } from "bun:test";
 
 import { okResult, renderResult, toToonEnvelope } from "../../src/io/output";
-import { parseInvocation } from "../../src/runtime/cli-shell";
+import { parseInvocation, renderShellResult } from "../../src/runtime/cli-shell";
 
 describe("output mode parsing", (): void => {
   test("TTY default => human", (): void => {
@@ -99,5 +99,43 @@ describe("output rendering", (): void => {
     expect(envelope.metadata.compatibility.canonicalCommand).toBe("sync.status");
     expect(envelope.metadata.compatibility.compatibilityCommand).toBe("sync_status");
     expect(envelope.metadata.compatibility.removalAfter).toBe("2026-09-30");
+  });
+
+  test("does not add compatibility metadata to rendered help envelopes", (): void => {
+    const result = okResult({
+      command: "help",
+      human: "help text",
+      data: { topic: "sync" },
+    });
+
+    const jsonOutput = renderShellResult(result, "json", "legacy-sync-command-ids");
+    const envelope = JSON.parse(jsonOutput) as {
+      command: string;
+      metadata: {
+        compatibility?: unknown;
+      };
+    };
+
+    expect(envelope.command).toBe("help");
+    expect(envelope.metadata.compatibility).toBeUndefined();
+  });
+
+  test("does not add compatibility metadata to rendered version envelopes", (): void => {
+    const result = okResult({
+      command: "version",
+      human: "0.1.9",
+      data: { version: "0.1.9" },
+    });
+
+    const jsonOutput = renderShellResult(result, "json", "legacy-sync-command-ids");
+    const envelope = JSON.parse(jsonOutput) as {
+      command: string;
+      metadata: {
+        compatibility?: unknown;
+      };
+    };
+
+    expect(envelope.command).toBe("version");
+    expect(envelope.metadata.compatibility).toBeUndefined();
   });
 });
