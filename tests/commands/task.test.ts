@@ -827,4 +827,68 @@ describe("task command", (): void => {
     expect((noneReady.data as { candidate: unknown }).candidate).toBeNull();
     expect((noneReady.data as { summary: { blockedCount: number } }).summary.blockedCount).toBe(1);
   });
+
+  test("search and replace stay scoped to a task tree", async (): Promise<void> => {
+    const cwd = createWorkspace();
+    const epicCreated = await runEpic({
+      cwd,
+      mode: "human",
+      args: ["create", "--title", "Roadmap", "--description", "desc"],
+    });
+    const epicId = (epicCreated.data as { epic: { id: string } }).epic.id;
+
+    const targetTask = await runTask({
+      cwd,
+      mode: "human",
+      args: ["create", "--epic", epicId, "--title", "Task alpha", "--description", "Task alpha desc"],
+    });
+    const targetTaskId = (targetTask.data as { task: { id: string } }).task.id;
+
+    const siblingTask = await runTask({
+      cwd,
+      mode: "human",
+      args: ["create", "--epic", epicId, "--title", "Sibling alpha", "--description", "Sibling alpha desc"],
+    });
+    const siblingTaskId = (siblingTask.data as { task: { id: string } }).task.id;
+
+    const subtaskCreated = await runSubtask({
+      cwd,
+      mode: "human",
+      args: ["create", "--task", targetTaskId, "--title", "Subtask alpha", "--description", "Subtask alpha desc"],
+    });
+    const subtaskId = (subtaskCreated.data as { subtask: { id: string } }).subtask.id;
+
+    const search = await runTask({ cwd, mode: "toon", args: ["search", targetTaskId, "alpha"] });
+    expect(search.ok).toBeTrue();
+    expect((search.data as { matches: Array<{ id: string }> }).matches.map((match) => match.id)).toEqual([targetTaskId, subtaskId]);
+
+    const preview = await runTask({
+      cwd,
+      mode: "toon",
+      args: ["replace", targetTaskId, "--search", "alpha", "--replace", "beta", "--fields", "title"],
+    });
+    expect(preview.ok).toBeTrue();
+    expect((preview.data as { query: { mode: string } }).query.mode).toBe("preview");
+    expect((preview.data as { query: { fields: string[] } }).query.fields).toEqual(["title"]);
+
+    const applied = await runTask({
+      cwd,
+      mode: "toon",
+      args: ["replace", targetTaskId, "--search", "alpha", "--replace", "beta", "--fields", "title", "--apply"],
+    });
+    expect(applied.ok).toBeTrue();
+
+    const updatedTarget = await runTask({ cwd, mode: "toon", args: ["show", targetTaskId, "--all"] });
+    const updatedSibling = await runTask({ cwd, mode: "toon", args: ["show", siblingTaskId, "--all"] });
+    const targetTree = (updatedTarget.data as {
+      task: { title: string; description: string; subtasks: Array<{ title: string; description: string }> };
+    }).task;
+    const siblingTree = (updatedSibling.data as { task: { title: string; description: string } }).task;
+    expect(targetTree.title).toBe("Task beta");
+    expect(targetTree.description).toBe("Task alpha desc");
+    expect(targetTree.subtasks[0]?.title).toBe("Subtask beta");
+    expect(targetTree.subtasks[0]?.description).toBe("Subtask alpha desc");
+    expect(siblingTree.title).toBe("Sibling alpha");
+    expect(siblingTree.description).toBe("Sibling alpha desc");
+  });
 });
