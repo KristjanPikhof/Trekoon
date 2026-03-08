@@ -85,6 +85,32 @@ export interface EpicTreeDetailed {
   readonly tasks: ReadonlyArray<TaskTreeDetailed>;
 }
 
+export type SearchField = "title" | "description";
+
+export interface SearchFieldMatch {
+  readonly field: SearchField;
+  readonly count: number;
+}
+
+export interface SearchEntityMatch {
+  readonly kind: NodeKind;
+  readonly id: string;
+  readonly fields: readonly SearchFieldMatch[];
+}
+
+export interface SearchSummary {
+  readonly matchedEntities: number;
+  readonly matchedFields: number;
+  readonly totalMatches: number;
+}
+
+export interface SearchNode {
+  readonly kind: NodeKind;
+  readonly id: string;
+  readonly title: string;
+  readonly description: string;
+}
+
 export interface DomainErrorShape {
   readonly code: string;
   readonly message: string;
