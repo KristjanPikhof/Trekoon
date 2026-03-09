@@ -3,6 +3,7 @@ import { randomUUID } from "node:crypto";
 import { Database } from "bun:sqlite";
 
 import {
+  type CompactEpicExpandResult,
   type CompactDependencyBatchAddResult,
   type CompactDependencySpec,
   type CompactEntityRef,
@@ -103,6 +104,11 @@ interface DependencyBatchValidationIssue {
 interface DependencyBatchResolution {
   readonly spec?: ResolvedDependencyBatchSpec;
   readonly issues: readonly DependencyBatchValidationIssue[];
+}
+
+interface ResolvedCompactEntity {
+  readonly id: string;
+  readonly kind: "task" | "subtask";
 }
 
 function assertNonEmpty(field: string, value: string | undefined | null): string {
@@ -472,6 +478,46 @@ export class TrackerDomain {
           tempKey: validatedSpecs[index]?.tempKey ?? "",
           id: subtask.id,
         })),
+      },
+    };
+  }
+
+  expandEpic(input: {
+    epicId: string;
+    taskSpecs: readonly CompactTaskSpec[];
+    subtaskSpecs: readonly CompactSubtaskSpec[];
+    dependencySpecs: readonly CompactDependencySpec[];
+  }): CompactEpicExpandResult {
+    const createdTasks = this.createTaskBatch({
+      epicId: input.epicId,
+      specs: input.taskSpecs,
+    });
+
+    const resolvedSubtaskSpecs = this.#resolveEpicExpandSubtaskSpecs(input.subtaskSpecs, createdTasks.result.mappings);
+    const createdSubtasks = resolvedSubtaskSpecs.length === 0
+      ? { subtasks: [], result: { mappings: [] } }
+      : this.createSubtaskBatch({
+          taskId: resolvedSubtaskSpecs[0]?.parent.kind === "id" ? resolvedSubtaskSpecs[0].parent.id : "",
+          specs: resolvedSubtaskSpecs,
+        });
+
+    const mappings = [...createdTasks.result.mappings, ...createdSubtasks.result.mappings];
+    const resolvedDependencySpecs = this.#resolveEpicExpandDependencySpecs(input.dependencySpecs, mappings);
+    const createdDependencies = resolvedDependencySpecs.length === 0
+      ? { dependencies: [], result: { mappings: [] } }
+      : this.addDependencyBatch({ specs: resolvedDependencySpecs });
+
+    return {
+      tasks: createdTasks.tasks,
+      subtasks: createdSubtasks.subtasks,
+      dependencies: createdDependencies.dependencies,
+      result: {
+        mappings,
+        counts: {
+          tasks: createdTasks.tasks.length,
+          subtasks: createdSubtasks.subtasks.length,
+          dependencies: createdDependencies.dependencies.length,
+        },
       },
     };
   }
@@ -973,6 +1019,86 @@ export class TrackerDomain {
     }
 
     return { id, issues: [] };
+  }
+
+  #resolveEpicExpandSubtaskSpecs(
+    specs: readonly CompactSubtaskSpec[],
+    mappings: readonly { tempKey: string; id: string; kind: "task" | "subtask" }[],
+  ): CompactSubtaskSpec[] {
+    return specs.map((spec, index) => {
+      const parent = this.#resolveEpicExpandEntityRef(spec.parent, mappings, "subtask", index, "parent");
+      if (parent.kind !== "task") {
+        throw new DomainError({
+          code: "invalid_input",
+          message: `Subtask parent must resolve to a task in --subtask spec ${index + 1}`,
+          details: {
+            index,
+            field: "parent",
+            kind: parent.kind,
+            id: parent.id,
+          },
+        });
+      }
+
+      return {
+        ...spec,
+        parent: {
+          kind: "id",
+          id: parent.id,
+        },
+      };
+    });
+  }
+
+  #resolveEpicExpandDependencySpecs(
+    specs: readonly CompactDependencySpec[],
+    mappings: readonly { tempKey: string; id: string; kind: "task" | "subtask" }[],
+  ): CompactDependencySpec[] {
+    return specs.map((spec, index) => ({
+      source: {
+        kind: "id",
+        id: this.#resolveEpicExpandEntityRef(spec.source, mappings, "dep", index, "source").id,
+      },
+      dependsOn: {
+        kind: "id",
+        id: this.#resolveEpicExpandEntityRef(spec.dependsOn, mappings, "dep", index, "dependsOn").id,
+      },
+    }));
+  }
+
+  #resolveEpicExpandEntityRef(
+    reference: CompactEntityRef,
+    mappings: readonly { tempKey: string; id: string; kind: "task" | "subtask" }[],
+    option: "subtask" | "dep",
+    index: number,
+    field: "parent" | "source" | "dependsOn",
+  ): ResolvedCompactEntity {
+    if (reference.kind === "temp_key") {
+      const mapping = mappings.find((candidate) => candidate.tempKey === reference.tempKey);
+      if (mapping === undefined) {
+        throw new DomainError({
+          code: "invalid_input",
+          message: `Unknown temp key @${reference.tempKey} in --${option} spec ${index + 1}`,
+          details: {
+            index,
+            field,
+            tempKey: reference.tempKey,
+            option,
+          },
+        });
+      }
+
+      return {
+        id: mapping.id,
+        kind: mapping.kind,
+      };
+    }
+
+    const id = assertNonEmpty(field === "parent" ? "taskId" : `${field}Id`, reference.id);
+    return {
+      id,
+      kind: this.resolveNodeKind(id),
+    };
   }
 
   #collectDependencyBatchIssues(specs: readonly ResolvedDependencyBatchSpec[]): DependencyBatchValidationIssue[] {
