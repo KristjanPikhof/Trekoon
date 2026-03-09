@@ -271,6 +271,7 @@ trekoon task list --all --toon
 
 ```bash
 trekoon epic create --title "..." --description "..." --status todo --toon
+trekoon epic create --title "..." --description "..." --task "<spec>" [--subtask "<spec>"] [--dep "<spec>"] --toon
 trekoon task create --epic <epic-id> --title "..." --description "..." --status todo --toon
 trekoon subtask create --task <task-id> --title "..." --description "..." --status todo --toon
 ```
@@ -279,12 +280,93 @@ Notes:
 - `description` is required for epic/task create and it must be well written.
 - `status` defaults to `todo` if omitted.
 - `description` is optional for subtask create.
+- `epic create` can run in one-shot planning mode with repeated `--task`,
+  `--subtask`, and `--dep` flags so a full executable tree is created without
+  needing a pre-existing epic id.
 
 ### Batch create and expand workflows
 
 Use batch commands when one invocation should create multiple related records
 atomically. Use single-item commands when only one record is needed or when you
 already have persisted IDs and do not need temp-key linking.
+
+#### `epic create` (one-shot bulk mode)
+
+Use when:
+
+- you do not have an epic id yet
+- one invocation should create the epic plus tasks/subtasks/dependencies
+- dependency links need temp-key resolution inside the same command
+
+```bash
+trekoon epic create \
+  --title "Sprint 42" \
+  --description "Plan + execution tree" \
+  --task "task-api|Design API|Define grammar|todo" \
+  --subtask "@task-api|sub-tests|Write tests|Cover parser cases|todo" \
+  --dep "@task-api|@sub-tests" \
+  --toon
+```
+
+How this differs from `epic expand`:
+
+- `epic create` one-shot mode creates the epic and full tree together
+- `epic expand` adds a full tree to an already existing epic id
+
+Result mapping to expect:
+
+```text
+data:
+  epic: created epic
+  tasks[]: created tasks in input order
+  subtasks[]: created subtasks in input order
+  dependencies[]: created dependencies in input order
+  result:
+    mappings[]: { kind: task|subtask, tempKey, id }
+    counts: { tasks, subtasks, dependencies }
+```
+
+Rollback behavior:
+
+- same transactional guarantees as `epic expand`
+- malformed specs, unresolved temp keys, missing ids, duplicates, or cycles
+  fail the entire create request
+
+#### Preferred: one-shot `epic create`
+
+Use when:
+
+- the epic does not exist yet
+- you already know the initial task/subtask/dependency tree
+- later specs need to refer to earlier created records before UUIDs exist
+
+```bash
+trekoon epic create --title "Batch command rollout" \
+  --description "Ship one-shot planning workflows" \
+  --task "task-api|Design API|Define grammar|todo" \
+  --subtask "@task-api|sub-tests|Write tests|Cover parser cases|todo" \
+  --dep "@task-api|@sub-tests" \
+  --toon
+```
+
+Command shape:
+
+- `trekoon epic create --title "..." --description "..." [--status <status>]`
+- add zero or more `--task`, `--subtask`, and `--dep` compact specs
+- uses the same compact grammar and temp-key rules as `epic expand`
+
+Result mapping to expect:
+
+```text
+data:
+  epic: created epic row
+  tasks[]: created tasks in input order
+  subtasks[]: created subtasks in input order
+  dependencies[]: created dependencies in input order
+  result:
+    mappings[]: { kind: task|subtask, tempKey, id }
+    counts: { tasks, subtasks, dependencies }
+```
 
 #### `task create-many`
 
@@ -378,7 +460,8 @@ data:
 
 Use when:
 
-- one invocation should create tasks, subtasks, and dependencies together
+- the epic already exists
+- one invocation should add tasks, subtasks, and dependencies together
 - later specs need to refer to earlier created records before UUIDs exist
 
 ```bash
@@ -425,6 +508,7 @@ data:
 - invalid compact specs, unresolved temp keys, missing ids, duplicates, or
   cycles fail the entire batch
 - on failure, Trekoon rolls back created rows and linked dependency/event work
+- one-shot `epic create` also rolls back the epic row itself on failure
 
 ## 6) Update work
 
