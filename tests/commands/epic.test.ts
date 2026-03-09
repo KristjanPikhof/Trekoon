@@ -137,6 +137,64 @@ describe("epic command", (): void => {
     expect(listedCompact.human).toContain("Roadmap");
   });
 
+  test("expand rejects unknown temp keys without persisting partial mutations", async (): Promise<void> => {
+    const cwd = createWorkspace();
+    const epic = await createEpic(cwd, { title: "Roadmap", description: "Top-level work" });
+
+    const expanded = await runEpic({
+      cwd,
+      mode: "toon",
+      args: [
+        "expand",
+        epic.id,
+        "--task",
+        "task-1|Build parser|Parser desc|todo",
+        "--subtask",
+        "@missing-task|sub-1|Write tests|Test desc|todo",
+      ],
+    });
+
+    expect(expanded.ok).toBeFalse();
+    expect(expanded.error?.code).toBe("invalid_input");
+    expect(expanded.human).toContain("Unknown temp key @missing-task");
+
+    const shown = await runEpic({ cwd, mode: "toon", args: ["show", epic.id, "--all"] });
+    expect(shown.ok).toBeTrue();
+    expect((shown.data as { tree: { tasks: unknown[] } }).tree.tasks).toEqual([]);
+  });
+
+  test("expand rejects dependency cycles without persisting partial mutations", async (): Promise<void> => {
+    const cwd = createWorkspace();
+    const epic = await createEpic(cwd, { title: "Roadmap", description: "Top-level work" });
+
+    const expanded = await runEpic({
+      cwd,
+      mode: "toon",
+      args: [
+        "expand",
+        epic.id,
+        "--task",
+        "task-1|Task A|Desc A|todo",
+        "--task",
+        "task-2|Task B|Desc B|todo",
+        "--dep",
+        "@task-1|@task-2",
+        "--dep",
+        "@task-2|@task-1",
+      ],
+    });
+
+    expect(expanded.ok).toBeFalse();
+    expect(expanded.error?.code).toBe("invalid_dependency");
+    expect((expanded.data as { issues: Array<{ index: number; type: string }> }).issues).toMatchObject([
+      { index: 1, type: "cycle" },
+    ]);
+
+    const shown = await runEpic({ cwd, mode: "toon", args: ["show", epic.id, "--all"] });
+    expect(shown.ok).toBeTrue();
+    expect((shown.data as { tree: { tasks: unknown[] } }).tree.tasks).toEqual([]);
+  });
+
   test("show defaults to table and handles empty task tree", async (): Promise<void> => {
     const cwd = createWorkspace();
     const createdEpic = await runEpic({
