@@ -61,6 +61,21 @@ export interface CompactDependencyBatchAddResult {
   readonly result: CompactBatchResultContract;
 }
 
+export interface CompactBatchCounts {
+  readonly tasks: number;
+  readonly subtasks: number;
+  readonly dependencies: number;
+}
+
+export interface CompactEpicExpandResult {
+  readonly tasks: ReadonlyArray<TaskRecord>;
+  readonly subtasks: ReadonlyArray<SubtaskRecord>;
+  readonly dependencies: ReadonlyArray<DependencyRecord>;
+  readonly result: CompactBatchResultContract & {
+    readonly counts: CompactBatchCounts;
+  };
+}
+
 export interface EpicRecord {
   readonly id: string;
   readonly title: string;
