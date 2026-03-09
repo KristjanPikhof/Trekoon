@@ -140,10 +140,31 @@ describe("task command", (): void => {
 
     expect(created.ok).toBeFalse();
     expect(created.error?.code).toBe("invalid_input");
+    expect(created.human).toContain("Task spec 2 is missing a description.");
 
     const listed = await runTask({ cwd, mode: "toon", args: ["list", "--all", "--epic", epicId] });
     expect(listed.ok).toBeTrue();
     expect((listed.data as { tasks: unknown[] }).tasks).toEqual([]);
+  });
+
+  test("create-many rejects unexpected positional args", async (): Promise<void> => {
+    const cwd = createWorkspace();
+    const epicCreated = await runEpic({
+      cwd,
+      mode: "human",
+      args: ["create", "--title", "Roadmap", "--description", "desc"],
+    });
+    const epicId = (epicCreated.data as { epic: { id: string } }).epic.id;
+
+    const created = await runTask({
+      cwd,
+      mode: "toon",
+      args: ["create-many", "unexpected", "--epic", epicId, "--task", "seed-1|First|Desc one|todo"],
+    });
+
+    expect(created.ok).toBeFalse();
+    expect(created.error?.code).toBe("invalid_input");
+    expect(created.human).toContain("Unexpected positional arguments: unexpected.");
   });
 
   test("create-many rejects duplicate temp keys without partial inserts", async (): Promise<void> => {
