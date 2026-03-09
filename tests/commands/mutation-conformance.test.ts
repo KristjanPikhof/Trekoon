@@ -185,6 +185,71 @@ describe("mutation conformance", (): void => {
     }
   });
 
+  test("batch create and dependency add-many append canonical events atomically", async (): Promise<void> => {
+    const cwd = createWorkspace();
+
+    const epic = await runEpic({
+      cwd,
+      mode: "toon",
+      args: ["create", "--title", "Roadmap", "--description", "Scope"],
+    });
+    const epicId = (epic.data as { epic: { id: string } }).epic.id;
+
+    const createdTasks = await runTask({
+      cwd,
+      mode: "toon",
+      args: [
+        "create-many",
+        "--epic",
+        epicId,
+        "--task",
+        "task-1|Task A|A|todo",
+        "--task",
+        "task-2|Task B|B|todo",
+      ],
+    });
+    expect(createdTasks.ok).toBeTrue();
+    const [taskAId, taskBId] = (createdTasks.data as { tasks: Array<{ id: string }> }).tasks.map((task) => task.id);
+
+    const createdSubtasks = await runSubtask({
+      cwd,
+      mode: "toon",
+      args: [
+        "create-many",
+        "--task",
+        taskAId ?? "",
+        "--subtask",
+        "sub-1|Subtask A|desc|todo",
+        "--subtask",
+        "sub-2|Subtask B|desc|done",
+      ],
+    });
+    expect(createdSubtasks.ok).toBeTrue();
+    const [subtaskAId, subtaskBId] = (createdSubtasks.data as { subtasks: Array<{ id: string }> }).subtasks.map((subtask) => subtask.id);
+
+    const addedDeps = await runDep({
+      cwd,
+      mode: "toon",
+      args: ["add-many", "--dep", `${taskBId}|${taskAId}`, "--dep", `${subtaskBId}|${subtaskAId}`],
+    });
+    expect(addedDeps.ok).toBeTrue();
+
+    expect(eventOperationsForEntity(cwd, "task", taskAId ?? "")).toEqual([ENTITY_OPERATIONS.task.created]);
+    expect(eventOperationsForEntity(cwd, "task", taskBId ?? "")).toEqual([ENTITY_OPERATIONS.task.created]);
+    expect(eventOperationsForEntity(cwd, "subtask", subtaskAId ?? "")).toEqual([ENTITY_OPERATIONS.subtask.created]);
+    expect(eventOperationsForEntity(cwd, "subtask", subtaskBId ?? "")).toEqual([ENTITY_OPERATIONS.subtask.created]);
+
+    const storage = openTrekoonDatabase(cwd);
+    try {
+      const addedRows = storage.db
+        .query("SELECT payload FROM events WHERE entity_kind = 'dependency' AND operation = ? ORDER BY created_at ASC;")
+        .all(ENTITY_OPERATIONS.dependency.added) as Array<{ payload: string }>;
+      expect(addedRows).toHaveLength(2);
+    } finally {
+      storage.close();
+    }
+  });
+
   test("scoped replace appends canonical update events", async (): Promise<void> => {
     const cwd = createWorkspace();
 
