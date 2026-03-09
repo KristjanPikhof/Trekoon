@@ -464,4 +464,75 @@ describe("integration sync workflow", (): void => {
     expect((secondPull.data as { appliedEvents: number }).appliedEvents).toBe(0);
     expect((secondPull.data as { createdConflicts: number }).createdConflicts).toBe(0);
   });
+
+  test("pull replays one-shot epic create graph once and stays idempotent", async (): Promise<void> => {
+    const workspace: string = createWorkspace();
+    seedRepository(workspace);
+
+    const initResult = await runInit({
+      args: [],
+      cwd: workspace,
+      mode: "human",
+    });
+    expect(initResult.ok).toBe(true);
+    commitDb(workspace, "init tracker db");
+
+    runGit(workspace, ["checkout", "-b", "feature/one-shot-create-replay"]);
+    runGit(workspace, ["checkout", "main"]);
+
+    const created = await runEpic({
+      cwd: workspace,
+      mode: "toon",
+      args: [
+        "create",
+        "--title",
+        "Replay epic",
+        "--description",
+        "one-shot replay",
+        "--task",
+        "task-1|Task A|A|todo",
+        "--subtask",
+        "@task-1|sub-1|Subtask A|desc|todo",
+        "--dep",
+        "@task-1|@sub-1",
+      ],
+    });
+    expect(created.ok).toBe(true);
+    const epicId = (created.data as { epic: { id: string } }).epic.id;
+
+    commitDb(workspace, "seed one-shot create events");
+    runGit(workspace, ["checkout", "feature/one-shot-create-replay"]);
+
+    const firstPull = await runSync({
+      args: ["pull", "--from", "main"],
+      cwd: workspace,
+      mode: "toon",
+    });
+    expect(firstPull.ok).toBe(true);
+    expect((firstPull.data as { createdConflicts: number }).createdConflicts).toBe(0);
+
+    const storage = openTrekoonDatabase(workspace);
+    try {
+      const counts = {
+        epics: (storage.db.query("SELECT COUNT(*) AS count FROM epics WHERE id = ?;").get(epicId) as { count: number }).count,
+        tasks: (storage.db.query("SELECT COUNT(*) AS count FROM tasks;").get() as { count: number }).count,
+        subtasks: (storage.db.query("SELECT COUNT(*) AS count FROM subtasks;").get() as { count: number }).count,
+        dependencies: (storage.db.query("SELECT COUNT(*) AS count FROM dependencies;").get() as { count: number }).count,
+      };
+
+      expect(counts).toEqual({ epics: 1, tasks: 1, subtasks: 1, dependencies: 1 });
+    } finally {
+      storage.close();
+    }
+
+    const secondPull = await runSync({
+      args: ["pull", "--from", "main"],
+      cwd: workspace,
+      mode: "toon",
+    });
+    expect(secondPull.ok).toBe(true);
+    expect((secondPull.data as { scannedEvents: number }).scannedEvents).toBe(0);
+    expect((secondPull.data as { appliedEvents: number }).appliedEvents).toBe(0);
+    expect((secondPull.data as { createdConflicts: number }).createdConflicts).toBe(0);
+  });
 });
