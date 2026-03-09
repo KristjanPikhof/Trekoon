@@ -76,6 +76,10 @@ export interface CompactEpicExpandResult {
   };
 }
 
+export interface CompactEpicCreateResult extends CompactEpicExpandResult {
+  readonly epic: EpicRecord;
+}
+
 export interface EpicRecord {
   readonly id: string;
   readonly title: string;
