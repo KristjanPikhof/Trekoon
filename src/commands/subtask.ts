@@ -2,20 +2,23 @@ import {
   SEARCH_REPLACE_FIELDS,
   findUnknownOption,
   hasFlag,
+  isValidCompactTempKey,
   parseArgs,
+  parseCompactFields,
   parseCsvEnumOption,
   parseStrictNonNegativeInt,
   parseStrictPositiveInt,
   readEnumOption,
   readMissingOptionValue,
   readOption,
+  readOptions,
   resolvePreviewApplyMode,
   suggestOptions,
 } from "./arg-parser";
 
 import { MutationService } from "../domain/mutation-service";
 import { TrackerDomain } from "../domain/tracker-domain";
-import { DomainError, type SearchEntityMatch, type SubtaskRecord } from "../domain/types";
+import { DomainError, type CompactBatchResultContract, type CompactSubtaskSpec, type SearchEntityMatch, type SubtaskRecord } from "../domain/types";
 import { formatHumanTable } from "../io/human-table";
 import { failResult, okResult } from "../io/output";
 import { type CliContext, type CliResult } from "../runtime/command-types";
@@ -30,6 +33,7 @@ const DEFAULT_SUBTASK_LIST_LIMIT = 10;
 const DEFAULT_OPEN_SUBTASK_STATUSES = ["in_progress", "in-progress", "todo"] as const;
 const SEARCH_OPTIONS = ["fields", "preview"] as const;
 const REPLACE_OPTIONS = ["search", "replace", "fields", "preview", "apply"] as const;
+const CREATE_MANY_OPTIONS = ["task", "t", "subtask"] as const;
 
 function parseIdsOption(rawIds: string | undefined): string[] {
   if (rawIds === undefined) {
@@ -212,6 +216,125 @@ function failMissingOptionValue(command: string, option: string): CliResult {
   });
 }
 
+function failBatchSpec(command: string, human: string, data: Record<string, unknown>): CliResult {
+  return failResult({
+    command,
+    human,
+    data,
+    error: {
+      code: "invalid_input",
+      message: human,
+    },
+  });
+}
+
+function parseSubtaskCreateManySpecs(parentTaskId: string, rawSpecs: readonly string[]): { specs: CompactSubtaskSpec[]; error?: CliResult } {
+  const specs: CompactSubtaskSpec[] = [];
+  const seenTempKeys = new Set<string>();
+
+  for (const [index, rawSpec] of rawSpecs.entries()) {
+    const parsed = parseCompactFields(rawSpec);
+    if (parsed.invalidEscape !== null) {
+      return {
+        specs: [],
+        error: failBatchSpec("subtask.create-many", `Invalid escape sequence ${parsed.invalidEscape} in --subtask spec ${index + 1}.`, {
+          option: "subtask",
+          index,
+          rawSpec,
+          invalidEscape: parsed.invalidEscape,
+        }),
+      };
+    }
+
+    if (parsed.hasDanglingEscape) {
+      return {
+        specs: [],
+        error: failBatchSpec("subtask.create-many", `Trailing escape in --subtask spec ${index + 1}.`, {
+          option: "subtask",
+          index,
+          rawSpec,
+        }),
+      };
+    }
+
+    if (parsed.fields.length !== 4) {
+      return {
+        specs: [],
+        error: failBatchSpec("subtask.create-many", `Subtask specs must use <temp-key>|<title>|<description>|<status> in --subtask spec ${index + 1}.`, {
+          option: "subtask",
+          index,
+          rawSpec,
+          fields: parsed.fields,
+        }),
+      };
+    }
+
+    const tempKey = parsed.fields[0] ?? "";
+    const title = parsed.fields[1] ?? "";
+    const description = parsed.fields[2] ?? "";
+    const status = parsed.fields[3] ?? "";
+    if (!tempKey || !isValidCompactTempKey(tempKey)) {
+      return {
+        specs: [],
+        error: failBatchSpec("subtask.create-many", `Subtask spec ${index + 1} must start with a temp key like seed-1.`, {
+          option: "subtask",
+          index,
+          rawSpec,
+          tempKey,
+        }),
+      };
+    }
+
+    if (seenTempKeys.has(tempKey)) {
+      return {
+        specs: [],
+        error: failBatchSpec("subtask.create-many", `Duplicate temp key '${tempKey}' in --subtask specs.`, {
+          option: "subtask",
+          index,
+          rawSpec,
+          tempKey,
+        }),
+      };
+    }
+
+    if (!title || title.trim().length === 0) {
+      return {
+        specs: [],
+        error: failBatchSpec("subtask.create-many", `Subtask spec ${index + 1} is missing a title.`, {
+          option: "subtask",
+          index,
+          rawSpec,
+        }),
+      };
+    }
+
+    seenTempKeys.add(tempKey);
+    const spec: CompactSubtaskSpec = status.length > 0
+      ? {
+          parent: {
+            kind: "id",
+            id: parentTaskId,
+          },
+          tempKey,
+          title,
+          description,
+          status,
+        }
+      : {
+          parent: {
+            kind: "id",
+            id: parentTaskId,
+          },
+          tempKey,
+          title,
+          description,
+        };
+    specs.push(spec);
+  }
+
+  return { specs };
+}
+
 export async function runSubtask(context: CliContext): Promise<CliResult> {
   const database = openTrekoonDatabase(context.cwd);
 
@@ -246,6 +369,51 @@ export async function runSubtask(context: CliContext): Promise<CliResult> {
           command: "subtask.create",
           human: `Created subtask ${formatSubtask(subtask)}`,
           data: { subtask },
+        });
+      }
+      case "create-many": {
+        const createManyUnknownOption = findUnknownOption(parsed, CREATE_MANY_OPTIONS);
+        if (createManyUnknownOption !== undefined) {
+          return unknownOption("subtask.create-many", createManyUnknownOption, CREATE_MANY_OPTIONS);
+        }
+
+        const missingCreateManyOption = readMissingOptionValue(parsed.missingOptionValues, "task", "t", "subtask");
+        if (missingCreateManyOption !== undefined) {
+          return failMissingOptionValue("subtask.create-many", missingCreateManyOption);
+        }
+
+        const taskId = readOption(parsed.options, "task", "t") ?? parsed.positional[1];
+        if (taskId === undefined || taskId.trim().length === 0) {
+          return failBatchSpec("subtask.create-many", "Provide --task (or positional task id) for subtask create-many.", {
+            option: "task",
+          });
+        }
+
+        const rawSpecs = readOptions(parsed.optionEntries, "subtask");
+        if (rawSpecs.length === 0) {
+          return failBatchSpec("subtask.create-many", "Provide at least one --subtask spec.", {
+            option: "subtask",
+          });
+        }
+
+        const specResult = parseSubtaskCreateManySpecs(taskId, rawSpecs);
+        if (specResult.error !== undefined) {
+          return specResult.error;
+        }
+
+        const created = mutations.createSubtaskBatch({
+          taskId,
+          specs: specResult.specs,
+        });
+        const result: CompactBatchResultContract = created.result;
+        return okResult({
+          command: "subtask.create-many",
+          human: `Created ${created.subtasks.length} subtask(s): ${created.subtasks.map(formatSubtask).join("\n")}`,
+          data: {
+            taskId,
+            subtasks: created.subtasks,
+            result,
+          },
         });
       }
       case "list": {
@@ -669,7 +837,7 @@ export async function runSubtask(context: CliContext): Promise<CliResult> {
       default:
         return failResult({
           command: "subtask",
-          human: "Usage: trekoon subtask <create|list|search|replace|update|delete>",
+          human: "Usage: trekoon subtask <create|create-many|list|search|replace|update|delete>",
           data: {
             args: context.args,
           },
