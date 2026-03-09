@@ -5,8 +5,12 @@ import { join } from "node:path";
 
 import { afterEach, describe, expect, test } from "bun:test";
 
+import { runDep } from "../../src/commands/dep";
+import { runEpic } from "../../src/commands/epic";
 import { runInit } from "../../src/commands/init";
+import { runSubtask } from "../../src/commands/subtask";
 import { runSync } from "../../src/commands/sync";
+import { runTask } from "../../src/commands/task";
 import { runWipe } from "../../src/commands/wipe";
 import { okResult, toToonEnvelope } from "../../src/io/output";
 import { appendEventWithGitContext } from "../../src/sync/event-writes";
@@ -361,5 +365,103 @@ describe("integration sync workflow", (): void => {
     } finally {
       storage.close();
     }
+  });
+
+  test("pull replays canonical batch events once and stays idempotent on rerun", async (): Promise<void> => {
+    const workspace: string = createWorkspace();
+    seedRepository(workspace);
+
+    const initResult = await runInit({
+      args: [],
+      cwd: workspace,
+      mode: "human",
+    });
+    expect(initResult.ok).toBe(true);
+    commitDb(workspace, "init tracker db");
+
+    runGit(workspace, ["checkout", "-b", "feature/canonical-replay"]);
+    runGit(workspace, ["checkout", "main"]);
+
+    const epicCreated = await runEpic({
+      cwd: workspace,
+      mode: "toon",
+      args: ["create", "--title", "Replay epic", "--description", "canonical replay"],
+    });
+    expect(epicCreated.ok).toBe(true);
+    const epicId = (epicCreated.data as { epic: { id: string } }).epic.id;
+
+    const taskBatch = await runTask({
+      cwd: workspace,
+      mode: "toon",
+      args: [
+        "create-many",
+        "--epic",
+        epicId,
+        "--task",
+        "task-1|Task A|A|todo",
+        "--task",
+        "task-2|Task B|B|todo",
+      ],
+    });
+    expect(taskBatch.ok).toBe(true);
+    const [taskAId, taskBId] = (taskBatch.data as { tasks: Array<{ id: string }> }).tasks.map((task) => task.id);
+
+    const subtaskBatch = await runSubtask({
+      cwd: workspace,
+      mode: "toon",
+      args: [
+        "create-many",
+        "--task",
+        taskAId ?? "",
+        "--subtask",
+        "sub-1|Subtask A|desc|todo",
+        "--subtask",
+        "sub-2|Subtask B|desc|done",
+      ],
+    });
+    expect(subtaskBatch.ok).toBe(true);
+    const [subtaskAId, subtaskBId] = (subtaskBatch.data as { subtasks: Array<{ id: string }> }).subtasks.map((subtask) => subtask.id);
+
+    const depBatch = await runDep({
+      cwd: workspace,
+      mode: "toon",
+      args: ["add-many", "--dep", `${taskBId}|${taskAId}`, "--dep", `${subtaskBId}|${subtaskAId}`],
+    });
+    expect(depBatch.ok).toBe(true);
+
+    commitDb(workspace, "seed canonical batch events");
+    runGit(workspace, ["checkout", "feature/canonical-replay"]);
+
+    const firstPull = await runSync({
+      args: ["pull", "--from", "main"],
+      cwd: workspace,
+      mode: "toon",
+    });
+    expect(firstPull.ok).toBe(true);
+    expect((firstPull.data as { createdConflicts: number }).createdConflicts).toBe(0);
+
+    const storage = openTrekoonDatabase(workspace);
+    try {
+      const counts = {
+        epics: (storage.db.query("SELECT COUNT(*) AS count FROM epics WHERE id = ?;").get(epicId) as { count: number }).count,
+        tasks: (storage.db.query("SELECT COUNT(*) AS count FROM tasks;").get() as { count: number }).count,
+        subtasks: (storage.db.query("SELECT COUNT(*) AS count FROM subtasks;").get() as { count: number }).count,
+        dependencies: (storage.db.query("SELECT COUNT(*) AS count FROM dependencies;").get() as { count: number }).count,
+      };
+
+      expect(counts).toEqual({ epics: 1, tasks: 2, subtasks: 2, dependencies: 2 });
+    } finally {
+      storage.close();
+    }
+
+    const secondPull = await runSync({
+      args: ["pull", "--from", "main"],
+      cwd: workspace,
+      mode: "toon",
+    });
+    expect(secondPull.ok).toBe(true);
+    expect((secondPull.data as { scannedEvents: number }).scannedEvents).toBe(0);
+    expect((secondPull.data as { appliedEvents: number }).appliedEvents).toBe(0);
+    expect((secondPull.data as { createdConflicts: number }).createdConflicts).toBe(0);
   });
 });
