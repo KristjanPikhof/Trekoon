@@ -1,9 +1,23 @@
+import {
+  COMPACT_TEMP_KEY_PREFIX,
+  type CompactEntityRef,
+  type CompactEntityIdRef,
+  type CompactTempKey,
+  type CompactTempKeyRef,
+} from "../domain/types";
+
 export interface ParsedArgs {
   readonly positional: readonly string[];
   readonly options: ReadonlyMap<string, string>;
+  readonly optionEntries: readonly ParsedOptionEntry[];
   readonly flags: ReadonlySet<string>;
   readonly missingOptionValues: ReadonlySet<string>;
   readonly providedOptions: readonly string[];
+}
+
+export interface ParsedOptionEntry {
+  readonly key: string;
+  readonly value: string;
 }
 
 export const SEARCH_REPLACE_FIELDS = ["title", "description"] as const;
@@ -21,11 +35,18 @@ export interface PreviewApplyModeSelection {
   readonly conflict: boolean;
 }
 
+export interface ParsedCompactFields {
+  readonly fields: readonly string[];
+  readonly invalidEscape: string | null;
+  readonly hasDanglingEscape: boolean;
+}
+
 const LONG_PREFIX = "--";
 
 export function parseArgs(args: readonly string[]): ParsedArgs {
   const positional: string[] = [];
   const options = new Map<string, string>();
+  const optionEntries: ParsedOptionEntry[] = [];
   const flags = new Set<string>();
   const missingOptionValues = new Set<string>();
   const providedOptions: string[] = [];
@@ -51,12 +72,14 @@ export function parseArgs(args: readonly string[]): ParsedArgs {
     }
 
     options.set(key, value);
+    optionEntries.push({ key, value });
     index += 1;
   }
 
   return {
     positional,
     options,
+    optionEntries,
     flags,
     missingOptionValues,
     providedOptions,
@@ -76,6 +99,11 @@ export function readOption(options: ReadonlyMap<string, string>, ...keys: string
 
 export function hasFlag(flags: ReadonlySet<string>, ...keys: string[]): boolean {
   return keys.some((key) => flags.has(key));
+}
+
+export function readOptions(optionEntries: readonly ParsedOptionEntry[], ...keys: string[]): string[] {
+  const allowedKeys = new Set<string>(keys);
+  return optionEntries.filter((entry) => allowedKeys.has(entry.key)).map((entry) => entry.value);
 }
 
 export function readMissingOptionValue(
@@ -176,6 +204,90 @@ export function resolvePreviewApplyMode(
     mode: apply ? "apply" : "preview",
     conflict: preview && apply,
   };
+}
+
+export function isValidCompactTempKey(value: string): value is CompactTempKey {
+  return /^[A-Za-z][A-Za-z0-9._-]{0,63}$/u.test(value);
+}
+
+export function parseCompactFields(rawValue: string): ParsedCompactFields {
+  const fields: string[] = [];
+  let current = "";
+  let escaping = false;
+
+  for (const character of rawValue) {
+    if (escaping) {
+      switch (character) {
+        case "|":
+          current += "|";
+          break;
+        case "\\":
+          current += "\\";
+          break;
+        case "n":
+          current += "\n";
+          break;
+        case "r":
+          current += "\r";
+          break;
+        case "t":
+          current += "\t";
+          break;
+        default:
+          return {
+            fields,
+            invalidEscape: `\\${character}`,
+            hasDanglingEscape: false,
+          };
+      }
+
+      escaping = false;
+      continue;
+    }
+
+    if (character === "\\") {
+      escaping = true;
+      continue;
+    }
+
+    if (character === "|") {
+      fields.push(current);
+      current = "";
+      continue;
+    }
+
+    current += character;
+  }
+
+  if (escaping) {
+    return {
+      fields,
+      invalidEscape: null,
+      hasDanglingEscape: true,
+    };
+  }
+
+  fields.push(current);
+  return {
+    fields,
+    invalidEscape: null,
+    hasDanglingEscape: false,
+  };
+}
+
+export function parseCompactEntityRef(rawValue: string): CompactEntityRef {
+  if (rawValue.startsWith(COMPACT_TEMP_KEY_PREFIX)) {
+    const tempKey = rawValue.slice(COMPACT_TEMP_KEY_PREFIX.length);
+    return {
+      kind: "temp_key",
+      tempKey,
+    } satisfies CompactTempKeyRef;
+  }
+
+  return {
+    kind: "id",
+    id: rawValue,
+  } satisfies CompactEntityIdRef;
 }
 
 function levenshteinDistance(source: string, target: string): number {
