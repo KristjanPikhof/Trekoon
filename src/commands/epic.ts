@@ -44,6 +44,7 @@ const VIEW_MODES = ["table", "compact", "tree", "detail"] as const;
 const LIST_VIEW_MODES = ["table", "compact"] as const;
 const DEFAULT_LIST_LIMIT = 10;
 const DEFAULT_OPEN_STATUSES = ["in_progress", "in-progress", "todo"] as const;
+const CREATE_OPTIONS = ["title", "t", "description", "d", "status", "s", "task", "subtask", "dep"] as const;
 const SEARCH_OPTIONS = ["fields", "preview"] as const;
 const REPLACE_OPTIONS = ["search", "replace", "fields", "preview", "apply"] as const;
 const EXPAND_OPTIONS = ["task", "subtask", "dep"] as const;
@@ -686,26 +687,88 @@ export async function runEpic(context: CliContext): Promise<CliResult> {
 
     switch (subcommand) {
       case "create": {
-        const missingCreateOption =
+      const missingCreateOption =
+          readMissingOptionValue(parsed.missingOptionValues, "title", "t") ??
           readMissingOptionValue(parsed.missingOptionValues, "status", "s") ??
-          readMissingOptionValue(parsed.missingOptionValues, "description", "d");
+          readMissingOptionValue(parsed.missingOptionValues, "description", "d") ??
+          readMissingOptionValue(parsed.missingOptionValues, "task", "subtask", "dep");
         if (missingCreateOption !== undefined) {
           return failMissingOptionValue("epic.create", missingCreateOption);
+        }
+
+        const createUnknownOption = findUnknownOption(parsed, CREATE_OPTIONS);
+        if (createUnknownOption !== undefined) {
+          return unknownOption("epic.create", createUnknownOption, CREATE_OPTIONS);
+        }
+
+        const unexpectedPositionals = readUnexpectedPositionals(parsed, 1);
+        if (unexpectedPositionals.length > 0) {
+          return failUnexpectedPositionals("epic.create", unexpectedPositionals);
         }
 
         const title: string | undefined = readOption(parsed.options, "title", "t");
         const description: string | undefined = readOption(parsed.options, "description", "d");
         const status: string | undefined = readOption(parsed.options, "status", "s");
-        const epic = mutations.createEpic({
+
+        const taskSpecs = readOptions(parsed.optionEntries, "task");
+        const subtaskSpecs = readOptions(parsed.optionEntries, "subtask");
+        const dependencySpecs = readOptions(parsed.optionEntries, "dep");
+
+        if (taskSpecs.length === 0 && subtaskSpecs.length === 0 && dependencySpecs.length === 0) {
+          const epic = mutations.createEpic({
+            title: title ?? "",
+            description: description ?? "",
+            status,
+          });
+
+          return okResult({
+            command: "epic.create",
+            human: `Created epic ${formatEpic(epic)}`,
+            data: { epic },
+          });
+        }
+
+        const parsedTasks = parseExpandTaskSpecs(taskSpecs);
+        if (parsedTasks.error !== undefined) {
+          return parsedTasks.error;
+        }
+
+        const parsedSubtasks = parseExpandSubtaskSpecs(subtaskSpecs);
+        if (parsedSubtasks.error !== undefined) {
+          return parsedSubtasks.error;
+        }
+
+        const parsedDeps = parseExpandDependencySpecs(dependencySpecs);
+        if (parsedDeps.error !== undefined) {
+          return parsedDeps.error;
+        }
+
+        const duplicateTempKey = findDuplicateExpandTempKey(parsedTasks.specs, parsedSubtasks.specs);
+        if (duplicateTempKey !== null) {
+          return failBatchSpec("epic.create", `Duplicate temp key '${duplicateTempKey}' across --task and --subtask specs.`, {
+            tempKey: duplicateTempKey,
+          });
+        }
+
+        const created = mutations.createEpicGraph({
           title: title ?? "",
           description: description ?? "",
           status,
+          taskSpecs: parsedTasks.specs,
+          subtaskSpecs: parsedSubtasks.specs,
+          dependencySpecs: parsedDeps.specs,
         });
 
         return okResult({
           command: "epic.create",
-          human: `Created epic ${formatEpic(epic)}`,
-          data: { epic },
+          human: `Created epic ${formatEpic(created.epic)} with ${created.tasks.length} task(s), ${created.subtasks.length} subtask(s), and ${created.dependencies.length} dependenc${created.dependencies.length === 1 ? "y" : "ies"}.`,
+          data: {
+            epic: created.epic,
+            tasks: created.tasks,
+            subtasks: created.subtasks,
+            dependencies: created.dependencies,
+            result: created.result,
+          },
         });
       }
       case "expand": {
