@@ -12,6 +12,7 @@ import {
   readMissingOptionValue,
   readOption,
   readOptions,
+  readUnexpectedPositionals,
   resolvePreviewApplyMode,
   suggestOptions,
 } from "./arg-parser";
@@ -440,6 +441,21 @@ function failBatchSpec(command: string, human: string, data: Record<string, unkn
   });
 }
 
+function failUnexpectedPositionals(command: string, unexpected: readonly string[]): CliResult {
+  return failBatchSpec(command, `Unexpected positional arguments: ${unexpected.join(", ")}.`, {
+    unexpectedPositionals: unexpected,
+  });
+}
+
+function failEmptyCompactField(command: string, option: string, index: number, rawSpec: string, field: string): CliResult {
+  return failBatchSpec(command, `${option === "task" ? "Task" : "Spec"} spec ${index + 1} is missing a ${field}.`, {
+    option,
+    index,
+    rawSpec,
+    field,
+  });
+}
+
 function parseTaskCreateManySpecs(rawSpecs: readonly string[]): { specs: CompactTaskSpec[]; error?: CliResult } {
   const specs: CompactTaskSpec[] = [];
   const seenTempKeys = new Set<string>();
@@ -520,14 +536,10 @@ function parseTaskCreateManySpecs(rawSpecs: readonly string[]): { specs: Compact
       };
     }
 
-    if (description === undefined) {
+    if (description.trim().length === 0) {
       return {
         specs: [],
-        error: failBatchSpec("task.create-many", `Task spec ${index + 1} must include a description field.`, {
-          option: "task",
-          index,
-          rawSpec,
-        }),
+        error: failEmptyCompactField("task.create-many", "task", index, rawSpec, "description"),
       };
     }
 
@@ -596,6 +608,11 @@ export async function runTask(context: CliContext): Promise<CliResult> {
         const missingCreateManyOption = readMissingOptionValue(parsed.missingOptionValues, "epic", "e", "task");
         if (missingCreateManyOption !== undefined) {
           return failMissingOptionValue("task.create-many", missingCreateManyOption);
+        }
+
+        const unexpectedPositionals = readUnexpectedPositionals(parsed, 1);
+        if (unexpectedPositionals.length > 0) {
+          return failUnexpectedPositionals("task.create-many", unexpectedPositionals);
         }
 
         const epicId = readOption(parsed.options, "epic", "e");
