@@ -411,6 +411,101 @@ describe("mutation conformance", (): void => {
     }
   });
 
+  test("one-shot epic create appends epic, task, subtask, then dependency events", async (): Promise<void> => {
+    const cwd = createWorkspace();
+
+    const created = await runEpic({
+      cwd,
+      mode: "toon",
+      args: [
+        "create",
+        "--title",
+        "Roadmap",
+        "--description",
+        "Scope",
+        "--task",
+        "task-1|Task A|A|todo",
+        "--subtask",
+        "@task-1|sub-1|Subtask A|desc|todo",
+        "--dep",
+        "@task-1|@sub-1",
+      ],
+    });
+    expect(created.ok).toBeTrue();
+
+    const data = created.data as {
+      epic: { id: string };
+      tasks: Array<{ id: string }>;
+      subtasks: Array<{ id: string }>;
+      dependencies: Array<{ id: string }>;
+    };
+    expect(eventRowsForEntity(cwd, "epic", data.epic.id)).toEqual([
+      {
+        operation: ENTITY_OPERATIONS.epic.created,
+        payload: {
+          fields: {
+            title: "Roadmap",
+            description: "Scope",
+            status: "todo",
+          },
+        },
+      },
+    ]);
+
+    const storage = openTrekoonDatabase(cwd);
+    try {
+      const rows = storage.db
+        .query("SELECT entity_kind, operation FROM events ORDER BY created_at ASC, id ASC;")
+        .all() as Array<{ entity_kind: string; operation: string }>;
+
+      expect(rows).toEqual([
+        { entity_kind: "epic", operation: ENTITY_OPERATIONS.epic.created },
+        { entity_kind: "task", operation: ENTITY_OPERATIONS.task.created },
+        { entity_kind: "subtask", operation: ENTITY_OPERATIONS.subtask.created },
+        { entity_kind: "dependency", operation: ENTITY_OPERATIONS.dependency.added },
+      ]);
+    } finally {
+      storage.close();
+    }
+  });
+
+  test("one-shot epic create rolls back epic and events on unresolved refs", async (): Promise<void> => {
+    const cwd = createWorkspace();
+
+    const created = await runEpic({
+      cwd,
+      mode: "toon",
+      args: [
+        "create",
+        "--title",
+        "Roadmap",
+        "--description",
+        "Scope",
+        "--task",
+        "task-1|Task A|A|todo",
+        "--dep",
+        "@task-1|@missing-subtask",
+      ],
+    });
+    expect(created.ok).toBeFalse();
+    expect(created.error?.code).toBe("invalid_input");
+
+    const storage = openTrekoonDatabase(cwd);
+    try {
+      const counts = {
+        epics: (storage.db.query("SELECT COUNT(*) AS count FROM epics;").get() as { count: number }).count,
+        tasks: (storage.db.query("SELECT COUNT(*) AS count FROM tasks;").get() as { count: number }).count,
+        subtasks: (storage.db.query("SELECT COUNT(*) AS count FROM subtasks;").get() as { count: number }).count,
+        dependencies: (storage.db.query("SELECT COUNT(*) AS count FROM dependencies;").get() as { count: number }).count,
+        events: (storage.db.query("SELECT COUNT(*) AS count FROM events;").get() as { count: number }).count,
+      };
+
+      expect(counts).toEqual({ epics: 0, tasks: 0, subtasks: 0, dependencies: 0, events: 0 });
+    } finally {
+      storage.close();
+    }
+  });
+
   test("scoped replace appends canonical update events", async (): Promise<void> => {
     const cwd = createWorkspace();
 
