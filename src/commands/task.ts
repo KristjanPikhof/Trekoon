@@ -2,20 +2,23 @@ import {
   SEARCH_REPLACE_FIELDS,
   findUnknownOption,
   hasFlag,
+  isValidCompactTempKey,
   parseArgs,
+  parseCompactFields,
   parseCsvEnumOption,
   parseStrictNonNegativeInt,
   parseStrictPositiveInt,
   readEnumOption,
   readMissingOptionValue,
   readOption,
+  readOptions,
   resolvePreviewApplyMode,
   suggestOptions,
 } from "./arg-parser";
 
 import { MutationService } from "../domain/mutation-service";
 import { TrackerDomain } from "../domain/tracker-domain";
-import { DomainError, type SearchEntityMatch, type TaskRecord } from "../domain/types";
+import { DomainError, type CompactBatchResultContract, type CompactTaskSpec, type SearchEntityMatch, type TaskRecord } from "../domain/types";
 import { formatHumanTable } from "../io/human-table";
 import { failResult, okResult } from "../io/output";
 import { type CliContext, type CliResult } from "../runtime/command-types";
@@ -33,6 +36,7 @@ const READY_REASON_READY = "all_dependencies_done";
 const READY_REASON_BLOCKED = "blocked_by_dependencies";
 const SEARCH_OPTIONS = ["fields", "preview"] as const;
 const REPLACE_OPTIONS = ["search", "replace", "fields", "preview", "apply"] as const;
+const CREATE_MANY_OPTIONS = ["epic", "e", "task"] as const;
 
 interface DependencyBlocker {
   readonly id: string;
@@ -424,6 +428,129 @@ function failMissingOptionValue(command: string, option: string): CliResult {
   });
 }
 
+function failBatchSpec(command: string, human: string, data: Record<string, unknown>): CliResult {
+  return failResult({
+    command,
+    human,
+    data,
+    error: {
+      code: "invalid_input",
+      message: human,
+    },
+  });
+}
+
+function parseTaskCreateManySpecs(rawSpecs: readonly string[]): { specs: CompactTaskSpec[]; error?: CliResult } {
+  const specs: CompactTaskSpec[] = [];
+  const seenTempKeys = new Set<string>();
+
+  for (const [index, rawSpec] of rawSpecs.entries()) {
+    const parsed = parseCompactFields(rawSpec);
+    if (parsed.invalidEscape !== null) {
+      return {
+        specs: [],
+        error: failBatchSpec("task.create-many", `Invalid escape sequence ${parsed.invalidEscape} in --task spec ${index + 1}.`, {
+          option: "task",
+          index,
+          rawSpec,
+          invalidEscape: parsed.invalidEscape,
+        }),
+      };
+    }
+
+    if (parsed.hasDanglingEscape) {
+      return {
+        specs: [],
+        error: failBatchSpec("task.create-many", `Trailing escape in --task spec ${index + 1}.`, {
+          option: "task",
+          index,
+          rawSpec,
+        }),
+      };
+    }
+
+    if (parsed.fields.length !== 4) {
+      return {
+        specs: [],
+        error: failBatchSpec("task.create-many", `Task specs must use <temp-key>|<title>|<description>|<status> in --task spec ${index + 1}.`, {
+          option: "task",
+          index,
+          rawSpec,
+          fields: parsed.fields,
+        }),
+      };
+    }
+
+    const tempKey = parsed.fields[0] ?? "";
+    const title = parsed.fields[1] ?? "";
+    const description = parsed.fields[2] ?? "";
+    const status = parsed.fields[3] ?? "";
+    if (!tempKey || !isValidCompactTempKey(tempKey)) {
+      return {
+        specs: [],
+        error: failBatchSpec("task.create-many", `Task spec ${index + 1} must start with a temp key like seed-1.`, {
+          option: "task",
+          index,
+          rawSpec,
+          tempKey,
+        }),
+      };
+    }
+
+    if (seenTempKeys.has(tempKey)) {
+      return {
+        specs: [],
+        error: failBatchSpec("task.create-many", `Duplicate temp key '${tempKey}' in --task specs.`, {
+          option: "task",
+          index,
+          rawSpec,
+          tempKey,
+        }),
+      };
+    }
+
+    if (!title || title.trim().length === 0) {
+      return {
+        specs: [],
+        error: failBatchSpec("task.create-many", `Task spec ${index + 1} is missing a title.`, {
+          option: "task",
+          index,
+          rawSpec,
+        }),
+      };
+    }
+
+    if (description === undefined) {
+      return {
+        specs: [],
+        error: failBatchSpec("task.create-many", `Task spec ${index + 1} must include a description field.`, {
+          option: "task",
+          index,
+          rawSpec,
+        }),
+      };
+    }
+
+    seenTempKeys.add(tempKey);
+    const spec: CompactTaskSpec = status.length > 0
+      ? {
+          tempKey,
+          title,
+          description,
+          status,
+        }
+      : {
+          tempKey,
+          title,
+          description,
+        };
+
+    specs.push(spec);
+  }
+
+  return { specs };
+}
+
 export async function runTask(context: CliContext): Promise<CliResult> {
   const database = openTrekoonDatabase(context.cwd);
 
@@ -458,6 +585,51 @@ export async function runTask(context: CliContext): Promise<CliResult> {
           command: "task.create",
           human: `Created task ${formatTask(task)}`,
           data: { task },
+        });
+      }
+      case "create-many": {
+        const createManyUnknownOption = findUnknownOption(parsed, CREATE_MANY_OPTIONS);
+        if (createManyUnknownOption !== undefined) {
+          return unknownOption("task.create-many", createManyUnknownOption, CREATE_MANY_OPTIONS);
+        }
+
+        const missingCreateManyOption = readMissingOptionValue(parsed.missingOptionValues, "epic", "e", "task");
+        if (missingCreateManyOption !== undefined) {
+          return failMissingOptionValue("task.create-many", missingCreateManyOption);
+        }
+
+        const epicId = readOption(parsed.options, "epic", "e");
+        if (epicId === undefined || epicId.trim().length === 0) {
+          return failBatchSpec("task.create-many", "Provide --epic for task create-many.", {
+            option: "epic",
+          });
+        }
+
+        const rawSpecs = readOptions(parsed.optionEntries, "task");
+        if (rawSpecs.length === 0) {
+          return failBatchSpec("task.create-many", "Provide at least one --task spec.", {
+            option: "task",
+          });
+        }
+
+        const specResult = parseTaskCreateManySpecs(rawSpecs);
+        if (specResult.error !== undefined) {
+          return specResult.error;
+        }
+
+        const created = mutations.createTaskBatch({
+          epicId,
+          specs: specResult.specs,
+        });
+        const result: CompactBatchResultContract = created.result;
+        return okResult({
+          command: "task.create-many",
+          human: `Created ${created.tasks.length} task(s): ${created.tasks.map(formatTask).join("\n")}`,
+          data: {
+            epicId,
+            tasks: created.tasks,
+            result,
+          },
         });
       }
       case "list": {
@@ -1084,7 +1256,7 @@ export async function runTask(context: CliContext): Promise<CliResult> {
       default:
         return failResult({
           command: "task",
-          human: "Usage: trekoon task <create|list|show|ready|next|search|replace|update|delete>",
+          human: "Usage: trekoon task <create|create-many|list|show|ready|next|search|replace|update|delete>",
           data: {
             args: context.args,
           },
