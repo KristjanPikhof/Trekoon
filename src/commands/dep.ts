@@ -6,6 +6,7 @@ import {
   parseCompactFields,
   readMissingOptionValue,
   readOptions,
+  readUnexpectedPositionals,
   suggestOptions,
 } from "./arg-parser";
 
@@ -93,6 +94,12 @@ function failBatchSpec(command: string, human: string, data: Record<string, unkn
       code: "invalid_input",
       message: human,
     },
+  });
+}
+
+function failUnexpectedPositionals(command: string, unexpected: readonly string[]): CliResult {
+  return failBatchSpec(command, `Unexpected positional arguments: ${unexpected.join(", ")}.`, {
+    unexpectedPositionals: unexpected,
   });
 }
 
@@ -205,6 +212,11 @@ export async function runDep(context: CliContext): Promise<CliResult> {
         const missingAddManyOption = readMissingOptionValue(parsed.missingOptionValues, "dep");
         if (missingAddManyOption !== undefined) {
           return failMissingOptionValue("dep.add-many", missingAddManyOption);
+        }
+
+        const unexpectedPositionals = readUnexpectedPositionals(parsed, 1);
+        if (unexpectedPositionals.length > 0) {
+          return failUnexpectedPositionals("dep.add-many", unexpectedPositionals);
         }
 
         const rawSpecs = readOptions(parsed.optionEntries, "dep");
