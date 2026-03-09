@@ -332,42 +332,6 @@ Rollback behavior:
 - malformed specs, unresolved temp keys, missing ids, duplicates, or cycles
   fail the entire create request
 
-#### Preferred: one-shot `epic create`
-
-Use when:
-
-- the epic does not exist yet
-- you already know the initial task/subtask/dependency tree
-- later specs need to refer to earlier created records before UUIDs exist
-
-```bash
-trekoon epic create --title "Batch command rollout" \
-  --description "Ship one-shot planning workflows" \
-  --task "task-api|Design API|Define grammar|todo" \
-  --subtask "@task-api|sub-tests|Write tests|Cover parser cases|todo" \
-  --dep "@task-api|@sub-tests" \
-  --toon
-```
-
-Command shape:
-
-- `trekoon epic create --title "..." --description "..." [--status <status>]`
-- add zero or more `--task`, `--subtask`, and `--dep` compact specs
-- uses the same compact grammar and temp-key rules as `epic expand`
-
-Result mapping to expect:
-
-```text
-data:
-  epic: created epic row
-  tasks[]: created tasks in input order
-  subtasks[]: created subtasks in input order
-  dependencies[]: created dependencies in input order
-  result:
-    mappings[]: { kind: task|subtask, tempKey, id }
-    counts: { tasks, subtasks, dependencies }
-```
-
 #### `task create-many`
 
 Use when:
