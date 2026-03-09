@@ -76,6 +76,12 @@ const WIPE_HELP = [
 const EPIC_HELP = [
   "Usage: trekoon epic <create|expand|list|show|search|replace|update|delete> [options]",
   "",
+  "Create behavior:",
+  "  trekoon epic create --title \"...\" --description \"...\" [--status <status>]",
+  "  trekoon epic create --title \"...\" --description \"...\" [--task <spec>] [--subtask <spec>] [--dep <spec>]",
+  "  Preferred one-shot flow when the full tree is known up front.",
+  "  Uses the same compact spec grammar as epic expand and returns mappings/counts.",
+  "",
   "Expand behavior:",
   "  trekoon epic expand <epic-id> [--task <spec>] [--subtask <spec>] [--dep <spec>]",
   "  --task <temp-key>|<title>|<description>|<status>",
