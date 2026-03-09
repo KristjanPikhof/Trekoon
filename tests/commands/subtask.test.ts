@@ -78,6 +78,84 @@ describe("subtask command", (): void => {
     expect(removed.ok).toBeTrue();
   });
 
+  test("create-many creates subtasks in input order with compact mappings", async (): Promise<void> => {
+    const cwd = createWorkspace();
+    const epicCreated = await runEpic({
+      cwd,
+      mode: "human",
+      args: ["create", "--title", "Roadmap", "--description", "desc"],
+    });
+    const epicId = (epicCreated.data as { epic: { id: string } }).epic.id;
+    const taskCreated = await runTask({
+      cwd,
+      mode: "human",
+      args: ["create", "--epic", epicId, "--title", "Implement", "--description", "task desc"],
+    });
+    const taskId = (taskCreated.data as { task: { id: string } }).task.id;
+
+    const created = await runSubtask({
+      cwd,
+      mode: "toon",
+      args: [
+        "create-many",
+        "--task",
+        taskId,
+        "--subtask",
+        "seed-1|First|Desc one|todo",
+        "--subtask",
+        "seed-2|Second|Desc two|done",
+      ],
+    });
+
+    expect(created.ok).toBeTrue();
+    expect((created.data as { subtasks: Array<{ title: string; status: string }> }).subtasks).toMatchObject([
+      { title: "First", status: "todo" },
+      { title: "Second", status: "done" },
+    ]);
+    expect((created.data as { result: { mappings: Array<{ kind: string; tempKey: string; id: string }> } }).result.mappings).toMatchObject([
+      { kind: "subtask", tempKey: "seed-1" },
+      { kind: "subtask", tempKey: "seed-2" },
+    ]);
+    expect(created.human.indexOf("First")).toBeLessThan(created.human.indexOf("Second"));
+  });
+
+  test("create-many prevalidates full batch before inserting subtasks", async (): Promise<void> => {
+    const cwd = createWorkspace();
+    const epicCreated = await runEpic({
+      cwd,
+      mode: "human",
+      args: ["create", "--title", "Roadmap", "--description", "desc"],
+    });
+    const epicId = (epicCreated.data as { epic: { id: string } }).epic.id;
+    const taskCreated = await runTask({
+      cwd,
+      mode: "human",
+      args: ["create", "--epic", epicId, "--title", "Implement", "--description", "task desc"],
+    });
+    const taskId = (taskCreated.data as { task: { id: string } }).task.id;
+
+    const created = await runSubtask({
+      cwd,
+      mode: "toon",
+      args: [
+        "create-many",
+        "--task",
+        taskId,
+        "--subtask",
+        "seed-1|First|Desc one|todo",
+        "--subtask",
+        "seed-2||Desc two|done",
+      ],
+    });
+
+    expect(created.ok).toBeFalse();
+    expect(created.error?.code).toBe("invalid_input");
+
+    const listed = await runSubtask({ cwd, mode: "toon", args: ["list", "--task", taskId, "--all"] });
+    expect(listed.ok).toBeTrue();
+    expect((listed.data as { subtasks: unknown[] }).subtasks).toEqual([]);
+  });
+
   test("list defaults to table and supports compact view", async (): Promise<void> => {
     const cwd = createWorkspace();
     const epicCreated = await runEpic({
