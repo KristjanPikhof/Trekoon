@@ -13,6 +13,7 @@ import {
   readMissingOptionValue,
   readOption,
   readOptions,
+  readUnexpectedPositionals,
   resolvePreviewApplyMode,
   suggestOptions,
 } from "./arg-parser";
@@ -357,6 +358,22 @@ function failBatchSpec(command: string, human: string, data: Record<string, unkn
   });
 }
 
+function failUnexpectedPositionals(command: string, unexpected: readonly string[]): CliResult {
+  return failBatchSpec(command, `Unexpected positional arguments: ${unexpected.join(", ")}.`, {
+    unexpectedPositionals: unexpected,
+  });
+}
+
+function failEmptyCompactField(command: string, option: string, index: number, rawSpec: string, field: string): CliResult {
+  const label = option === "task" ? "Task" : "Subtask";
+  return failBatchSpec(command, `${label} spec ${index + 1} is missing a ${field}.`, {
+    option,
+    index,
+    rawSpec,
+    field,
+  });
+}
+
 function validateCompactEntityRef(
   command: string,
   option: string,
@@ -465,6 +482,13 @@ function parseExpandTaskSpecs(rawSpecs: readonly string[]): { specs: CompactTask
       };
     }
 
+    if (description.trim().length === 0) {
+      return {
+        specs: [],
+        error: failEmptyCompactField("epic.expand", "task", index, rawSpec, "description"),
+      };
+    }
+
     seenTempKeys.add(tempKey);
     const spec: CompactTaskSpec = status.length > 0
       ? { tempKey, title, description, status }
@@ -557,6 +581,13 @@ function parseExpandSubtaskSpecs(rawSpecs: readonly string[]): { specs: CompactS
           index,
           rawSpec,
         }),
+      };
+    }
+
+    if (description.trim().length === 0) {
+      return {
+        specs: [],
+        error: failEmptyCompactField("epic.expand", "subtask", index, rawSpec, "description"),
       };
     }
 
@@ -686,6 +717,11 @@ export async function runEpic(context: CliContext): Promise<CliResult> {
         const missingExpandOption = readMissingOptionValue(parsed.missingOptionValues, "task", "subtask", "dep");
         if (missingExpandOption !== undefined) {
           return failMissingOptionValue("epic.expand", missingExpandOption);
+        }
+
+        const unexpectedPositionals = readUnexpectedPositionals(parsed, 2);
+        if (unexpectedPositionals.length > 0) {
+          return failUnexpectedPositionals("epic.expand", unexpectedPositionals);
         }
 
         const epicId: string = parsed.positional[1] ?? "";
