@@ -189,6 +189,53 @@ describe("batch grammar contracts", (): void => {
     });
   });
 
+  test("epic create can return epic plus compact graph mapping contract", async (): Promise<void> => {
+    const cwd = createWorkspace();
+
+    const result = await runEpic({
+      cwd,
+      mode: "toon",
+      args: [
+        "create",
+        "--title",
+        "Roadmap",
+        "--description",
+        "desc",
+        "--task",
+        "task-1|Build parser|Parser desc|todo",
+        "--subtask",
+        "@task-1|sub-1|Write tests|Test desc|todo",
+        "--dep",
+        "@task-1|@sub-1",
+      ],
+    });
+
+    expect(result.ok).toBeTrue();
+    const data = result.data as {
+      epic: { id: string; title: string };
+      tasks: Array<{ id: string; epicId: string }>;
+      subtasks: Array<{ id: string; taskId: string }>;
+      dependencies: Array<{ sourceId: string; dependsOnId: string }>;
+      result: {
+        mappings: Array<{ kind: string; tempKey: string; id: string }>;
+        counts: { tasks: number; subtasks: number; dependencies: number };
+      };
+    };
+
+    expect(data.epic.title).toBe("Roadmap");
+    expect(data.tasks[0]?.epicId).toBe(data.epic.id);
+    expect(data.subtasks[0]?.taskId).toBe(data.tasks[0]?.id);
+    expect(data.dependencies[0]).toMatchObject({
+      sourceId: data.tasks[0]?.id,
+      dependsOnId: data.subtasks[0]?.id,
+    });
+    expect(data.result.mappings).toEqual([
+      { kind: "task", tempKey: "task-1", id: data.tasks[0]?.id ?? "" },
+      { kind: "subtask", tempKey: "sub-1", id: data.subtasks[0]?.id ?? "" },
+    ]);
+    expect(data.result.counts).toEqual({ tasks: 1, subtasks: 1, dependencies: 1 });
+  });
+
   test("dep add-many creates ordered dependencies and keeps empty mapping contract", async (): Promise<void> => {
     const cwd = createWorkspace();
     const epicCreated = await runEpic({
@@ -244,6 +291,7 @@ describe("batch grammar contracts", (): void => {
     expect(taskHelp).toContain("trekoon task create-many --epic <epic-id> --task <spec>");
     expect(taskHelp).not.toContain("grammar only for now");
     expect(subtaskHelp).toContain("trekoon subtask create-many [<task-id>] [--task <task-id>] --subtask <spec>");
+    expect(epicHelp).toContain("trekoon epic create --title \"...\" --description \"...\" [--task <spec>] [--subtask <spec>] [--dep <spec>]");
     expect(epicHelp).toContain("trekoon epic expand <epic-id>");
     expect(epicHelp).toContain("@<temp-key>");
     expect(depHelp).toContain("add-many --dep <source-ref>|<depends-on-ref>");
