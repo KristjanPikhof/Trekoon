@@ -134,7 +134,7 @@ describe("batch grammar contracts", (): void => {
     expect(result.human).toContain("Duplicate temp key");
   });
 
-  test("epic expand parses task/subtask/dep contracts with temp refs", async (): Promise<void> => {
+  test("epic expand creates tasks, subtasks, and dependencies with compact mappings", async (): Promise<void> => {
     const cwd = createWorkspace();
     const epicCreated = await runEpic({
       cwd,
@@ -158,23 +158,35 @@ describe("batch grammar contracts", (): void => {
       ],
     });
 
-    expect(result.ok).toBeFalse();
-    expect(result.error?.code).toBe("not_implemented");
+    expect(result.ok).toBeTrue();
     const data = result.data as {
       epicId: string;
-      tasks: Array<{ tempKey: string }>;
-      subtasks: Array<{ parent: { kind: string; tempKey?: string }; tempKey: string }>;
-      dependencies: Array<{ source: { kind: string; tempKey?: string }; dependsOn: { kind: string; tempKey?: string } }>;
-      result: { mappings: unknown[] };
+      tasks: Array<{ id: string; epicId: string; title: string }>;
+      subtasks: Array<{ id: string; taskId: string; title: string }>;
+      dependencies: Array<{ sourceId: string; dependsOnId: string }>;
+      result: {
+        mappings: Array<{ kind: string; tempKey: string; id: string }>;
+        counts: { tasks: number; subtasks: number; dependencies: number };
+      };
     };
     expect(data.epicId).toBe(epicId);
-    expect(data.tasks.map((task) => task.tempKey)).toEqual(["task-1"]);
-    expect(data.subtasks[0]).toMatchObject({ parent: { kind: "temp_key", tempKey: "task-1" }, tempKey: "sub-1" });
+    expect(data.tasks).toHaveLength(1);
+    expect(data.tasks[0]).toMatchObject({ epicId, title: "Build parser" });
+    expect(data.subtasks).toHaveLength(1);
+    expect(data.subtasks[0]).toMatchObject({ taskId: data.tasks[0]?.id, title: "Write tests" });
     expect(data.dependencies[0]).toMatchObject({
-      source: { kind: "temp_key", tempKey: "task-1" },
-      dependsOn: { kind: "temp_key", tempKey: "sub-1" },
+      sourceId: data.tasks[0]?.id,
+      dependsOnId: data.subtasks[0]?.id,
     });
-    expect(data.result.mappings).toEqual([]);
+    expect(data.result.mappings).toEqual([
+      { kind: "task", tempKey: "task-1", id: data.tasks[0]?.id ?? "" },
+      { kind: "subtask", tempKey: "sub-1", id: data.subtasks[0]?.id ?? "" },
+    ]);
+    expect(data.result.counts).toEqual({
+      tasks: 1,
+      subtasks: 1,
+      dependencies: 1,
+    });
   });
 
   test("dep add-many creates ordered dependencies and keeps empty mapping contract", async (): Promise<void> => {
