@@ -146,6 +146,38 @@ describe("task command", (): void => {
     expect((listed.data as { tasks: unknown[] }).tasks).toEqual([]);
   });
 
+  test("create-many rejects duplicate temp keys without partial inserts", async (): Promise<void> => {
+    const cwd = createWorkspace();
+    const epicCreated = await runEpic({
+      cwd,
+      mode: "human",
+      args: ["create", "--title", "Roadmap", "--description", "desc"],
+    });
+    const epicId = (epicCreated.data as { epic: { id: string } }).epic.id;
+
+    const created = await runTask({
+      cwd,
+      mode: "toon",
+      args: [
+        "create-many",
+        "--epic",
+        epicId,
+        "--task",
+        "seed-1|First|Desc one|todo",
+        "--task",
+        "seed-1|Second|Desc two|done",
+      ],
+    });
+
+    expect(created.ok).toBeFalse();
+    expect(created.error?.code).toBe("invalid_input");
+    expect(created.human).toContain("Duplicate temp key 'seed-1'");
+
+    const listed = await runTask({ cwd, mode: "toon", args: ["list", "--all", "--epic", epicId] });
+    expect(listed.ok).toBeTrue();
+    expect((listed.data as { tasks: unknown[] }).tasks).toEqual([]);
+  });
+
   test("task show --all returns subtasks with descriptions", async (): Promise<void> => {
     const cwd = createWorkspace();
     const epicCreated = await runEpic({
