@@ -209,6 +209,21 @@ describe("dep command", (): void => {
     expect((listB.data as { dependencies: unknown[] }).dependencies).toEqual([]);
   });
 
+  test("add-many rejects unexpected positional args", async (): Promise<void> => {
+    const cwd = createWorkspace();
+    const nodes = await createTaskGraph(cwd);
+
+    const added = await runDep({
+      cwd,
+      mode: "toon",
+      args: ["add-many", nodes.taskA, "--dep", `${nodes.taskA}|${nodes.taskB}`],
+    });
+
+    expect(added.ok).toBeFalse();
+    expect(added.error?.code).toBe("invalid_input");
+    expect(added.human).toContain(`Unexpected positional arguments: ${nodes.taskA}.`);
+  });
+
   test("enforces referential checks for task/subtask nodes", async (): Promise<void> => {
     const cwd = createWorkspace();
     const nodes = await createTaskGraph(cwd);
