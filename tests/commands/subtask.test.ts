@@ -156,6 +156,43 @@ describe("subtask command", (): void => {
     expect((listed.data as { subtasks: unknown[] }).subtasks).toEqual([]);
   });
 
+  test("create-many accepts positional task id and rejects duplicate temp keys atomically", async (): Promise<void> => {
+    const cwd = createWorkspace();
+    const epicCreated = await runEpic({
+      cwd,
+      mode: "human",
+      args: ["create", "--title", "Roadmap", "--description", "desc"],
+    });
+    const epicId = (epicCreated.data as { epic: { id: string } }).epic.id;
+    const taskCreated = await runTask({
+      cwd,
+      mode: "human",
+      args: ["create", "--epic", epicId, "--title", "Implement", "--description", "task desc"],
+    });
+    const taskId = (taskCreated.data as { task: { id: string } }).task.id;
+
+    const created = await runSubtask({
+      cwd,
+      mode: "toon",
+      args: [
+        "create-many",
+        taskId,
+        "--subtask",
+        "seed-1|First|Desc one|todo",
+        "--subtask",
+        "seed-1|Second|Desc two|done",
+      ],
+    });
+
+    expect(created.ok).toBeFalse();
+    expect(created.error?.code).toBe("invalid_input");
+    expect(created.human).toContain("Duplicate temp key 'seed-1'");
+
+    const listed = await runSubtask({ cwd, mode: "toon", args: ["list", "--task", taskId, "--all"] });
+    expect(listed.ok).toBeTrue();
+    expect((listed.data as { subtasks: unknown[] }).subtasks).toEqual([]);
+  });
+
   test("list defaults to table and supports compact view", async (): Promise<void> => {
     const cwd = createWorkspace();
     const epicCreated = await runEpic({
