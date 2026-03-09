@@ -380,3 +380,7 @@ export function readEnumOption<const T extends readonly string[]>(
 
   return allowed.includes(value) ? value : undefined;
 }
+
+export function readUnexpectedPositionals(parsed: ParsedArgs, expectedCount: number): readonly string[] {
+  return parsed.positional.slice(expectedCount);
+}
