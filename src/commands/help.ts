@@ -76,7 +76,7 @@ const WIPE_HELP = [
 const EPIC_HELP = [
   "Usage: trekoon epic <create|expand|list|show|search|replace|update|delete> [options]",
   "",
-  "Expand behavior (grammar only for now):",
+  "Expand behavior:",
   "  trekoon epic expand <epic-id> [--task <spec>] [--subtask <spec>] [--dep <spec>]",
   "  --task <temp-key>|<title>|<description>|<status>",
   `  --subtask <parent-ref>|<temp-key>|<title>|<description>|<status>  (use ${"@"}<temp-key> for newly declared parents)`,
