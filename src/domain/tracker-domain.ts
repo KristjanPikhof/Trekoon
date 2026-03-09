@@ -3,6 +3,13 @@ import { randomUUID } from "node:crypto";
 import { Database } from "bun:sqlite";
 
 import {
+  type CompactDependencyBatchAddResult,
+  type CompactDependencySpec,
+  type CompactEntityRef,
+  type CompactSubtaskBatchCreateResult,
+  type CompactSubtaskSpec,
+  type CompactTaskBatchCreateResult,
+  type CompactTaskSpec,
   type DependencyRecord,
   DomainError,
   type EpicTreeDetailed,
@@ -60,6 +67,37 @@ interface UnresolvedDependencyBlocker {
   readonly id: string;
   readonly kind: "task" | "subtask";
   readonly status: string;
+}
+
+interface ValidatedTaskBatchSpec {
+  readonly tempKey: string;
+  readonly title: string;
+  readonly description: string;
+  readonly status: string;
+}
+
+interface ValidatedSubtaskBatchSpec {
+  readonly tempKey: string;
+  readonly taskId: string;
+  readonly title: string;
+  readonly description: string;
+  readonly status: string;
+}
+
+interface ResolvedDependencyBatchSpec {
+  readonly index: number;
+  readonly sourceId: string;
+  readonly sourceKind: "task" | "subtask";
+  readonly dependsOnId: string;
+  readonly dependsOnKind: "task" | "subtask";
+}
+
+interface DependencyBatchValidationIssue {
+  readonly index: number;
+  readonly type: "missing_id" | "duplicate" | "cycle";
+  readonly sourceId: string;
+  readonly dependsOnId: string;
+  readonly details: Record<string, unknown>;
 }
 
 function assertNonEmpty(field: string, value: string | undefined | null): string {
@@ -271,6 +309,43 @@ export class TrackerDomain {
     return this.getTaskOrThrow(id);
   }
 
+  createTaskBatch(input: { epicId: string; specs: readonly CompactTaskSpec[] }): CompactTaskBatchCreateResult {
+    const epicId: string = assertNonEmpty("epicId", input.epicId);
+    this.getEpicOrThrow(epicId);
+
+    const validatedSpecs: ValidatedTaskBatchSpec[] = input.specs.map((spec) => ({
+      tempKey: assertNonEmpty("tempKey", spec.tempKey),
+      title: assertNonEmpty("title", spec.title),
+      description: assertNonEmpty("description", spec.description),
+      status: normalizeStatus(spec.status),
+    }));
+
+    const tasks: TaskRecord[] = [];
+    for (const spec of validatedSpecs) {
+      const now: number = Date.now();
+      const id: string = randomUUID();
+
+      this.#db
+        .query(
+          "INSERT INTO tasks (id, epic_id, title, description, status, created_at, updated_at, version) VALUES (?, ?, ?, ?, ?, ?, ?, 1);",
+        )
+        .run(id, epicId, spec.title, spec.description, spec.status, now, now);
+
+      tasks.push(this.getTaskOrThrow(id));
+    }
+
+    return {
+      tasks,
+      result: {
+        mappings: tasks.map((task, index) => ({
+          kind: "task",
+          tempKey: validatedSpecs[index]?.tempKey ?? "",
+          id: task.id,
+        })),
+      },
+    };
+  }
+
   listTasks(epicId?: string): readonly TaskRecord[] {
     if (epicId) {
       this.getEpicOrThrow(epicId);
@@ -351,6 +426,49 @@ export class TrackerDomain {
       .run(id, taskId, title, description, status, now, now);
 
     return this.getSubtaskOrThrow(id);
+  }
+
+  createSubtaskBatch(input: { taskId: string; specs: readonly CompactSubtaskSpec[] }): CompactSubtaskBatchCreateResult {
+    const defaultTaskId: string = assertNonEmpty("taskId", input.taskId);
+    this.getTaskOrThrow(defaultTaskId);
+
+    const validatedSpecs: ValidatedSubtaskBatchSpec[] = input.specs.map((spec) => {
+      const taskId = spec.parent.kind === "id" ? assertNonEmpty("taskId", spec.parent.id) : defaultTaskId;
+      this.getTaskOrThrow(taskId);
+
+      return {
+        tempKey: assertNonEmpty("tempKey", spec.tempKey),
+        taskId,
+        title: assertNonEmpty("title", spec.title),
+        description: spec.description === undefined ? "" : assertNonEmpty("description", spec.description),
+        status: normalizeStatus(spec.status),
+      };
+    });
+
+    const subtasks: SubtaskRecord[] = [];
+    for (const spec of validatedSpecs) {
+      const now: number = Date.now();
+      const id: string = randomUUID();
+
+      this.#db
+        .query(
+          "INSERT INTO subtasks (id, task_id, title, description, status, created_at, updated_at, version) VALUES (?, ?, ?, ?, ?, ?, ?, 1);",
+        )
+        .run(id, spec.taskId, spec.title, spec.description, spec.status, now, now);
+
+      subtasks.push(this.getSubtaskOrThrow(id));
+    }
+
+    return {
+      subtasks,
+      result: {
+        mappings: subtasks.map((subtask, index) => ({
+          kind: "subtask",
+          tempKey: validatedSpecs[index]?.tempKey ?? "",
+          id: subtask.id,
+        })),
+      },
+    };
   }
 
   listSubtasks(taskId?: string): readonly SubtaskRecord[] {
@@ -633,6 +751,52 @@ export class TrackerDomain {
     return this.getDependencyOrThrow(id);
   }
 
+  addDependencyBatch(input: { specs: readonly CompactDependencySpec[] }): CompactDependencyBatchAddResult {
+    const resolvedSpecs = input.specs.map((spec, index) => this.#resolveDependencyBatchSpec(index, spec));
+    const issues = this.#collectDependencyBatchIssues(resolvedSpecs);
+    if (issues.length > 0) {
+      const firstIssue = issues[0] ?? null;
+      throw new DomainError({
+        code: "invalid_dependency",
+        message:
+          firstIssue?.type === "missing_id"
+            ? "dependency batch contains missing ids"
+            : firstIssue?.type === "duplicate"
+              ? "dependency batch contains duplicate edges"
+              : "dependency batch contains cycles",
+        details: {
+          issues,
+          firstIssue,
+        },
+      });
+    }
+
+    const dependencies: DependencyRecord[] = [];
+    for (const spec of resolvedSpecs) {
+      const existing = this.#getDependencyByEdge(spec.sourceId, spec.dependsOnId);
+      if (existing) {
+        dependencies.push(existing);
+        continue;
+      }
+
+      const id: string = randomUUID();
+      const now: number = Date.now();
+
+      this.#db
+        .query(
+          "INSERT INTO dependencies (id, source_id, source_kind, depends_on_id, depends_on_kind, created_at, updated_at, version) VALUES (?, ?, ?, ?, ?, ?, ?, 1);",
+        )
+        .run(id, spec.sourceId, spec.sourceKind, spec.dependsOnId, spec.dependsOnKind, now, now);
+
+      dependencies.push(this.getDependencyOrThrow(id));
+    }
+
+    return {
+      dependencies,
+      result: { mappings: [] },
+    };
+  }
+
   removeDependency(sourceId: string, dependsOnId: string): number {
     const normalizedSourceId: string = assertNonEmpty("sourceId", sourceId);
     const normalizedDependsOnId: string = assertNonEmpty("dependsOnId", dependsOnId);
@@ -705,6 +869,236 @@ export class TrackerDomain {
     }
 
     return mapDependency(row);
+  }
+
+  #getDependencyByEdge(sourceId: string, dependsOnId: string): DependencyRecord | null {
+    const row = this.#db
+      .query(
+        "SELECT id, source_id, source_kind, depends_on_id, depends_on_kind, created_at, updated_at FROM dependencies WHERE source_id = ? AND depends_on_id = ?;",
+      )
+      .get(sourceId, dependsOnId) as DependencyRow | null;
+
+    return row ? mapDependency(row) : null;
+  }
+
+  #resolveDependencyBatchSpec(index: number, spec: CompactDependencySpec): ResolvedDependencyBatchSpec {
+    const sourceId = this.#resolveDependencyBatchId(spec.source, "source", index);
+    const dependsOnId = this.#resolveDependencyBatchId(spec.dependsOn, "dependsOn", index);
+
+    if (sourceId === dependsOnId) {
+      throw new DomainError({
+        code: "invalid_dependency",
+        message: "dependency batch contains cycles",
+        details: {
+          issues: [
+            {
+              index,
+              type: "cycle",
+              sourceId,
+              dependsOnId,
+              details: { sourceId, dependsOnId, reason: "self_reference" },
+            },
+          ],
+          firstIssue: {
+            index,
+            type: "cycle",
+            sourceId,
+            dependsOnId,
+            details: { sourceId, dependsOnId, reason: "self_reference" },
+          },
+        },
+      });
+    }
+
+    return {
+      index,
+      sourceId,
+      sourceKind: this.resolveNodeKind(sourceId),
+      dependsOnId,
+      dependsOnKind: this.resolveNodeKind(dependsOnId),
+    };
+  }
+
+  #resolveDependencyBatchId(reference: CompactEntityRef, field: "source" | "dependsOn", index: number): string {
+    if (reference.kind === "temp_key") {
+      throw new DomainError({
+        code: "invalid_dependency",
+        message: "dependency batch contains missing ids",
+        details: {
+          issues: [
+            {
+              index,
+              type: "missing_id",
+              sourceId: field === "source" ? `@${reference.tempKey}` : "",
+              dependsOnId: field === "dependsOn" ? `@${reference.tempKey}` : "",
+              details: {
+                field,
+                tempKey: reference.tempKey,
+                message: `Unresolved temp key @${reference.tempKey}`,
+              },
+            },
+          ],
+          firstIssue: {
+            index,
+            type: "missing_id",
+            sourceId: field === "source" ? `@${reference.tempKey}` : "",
+            dependsOnId: field === "dependsOn" ? `@${reference.tempKey}` : "",
+            details: {
+              field,
+              tempKey: reference.tempKey,
+              message: `Unresolved temp key @${reference.tempKey}`,
+            },
+          },
+        },
+      });
+    }
+
+    const id = assertNonEmpty(field === "source" ? "sourceId" : "dependsOnId", reference.id);
+    const task = this.getTask(id);
+    const subtask = this.getSubtask(id);
+    if (!task && !subtask) {
+      throw new DomainError({
+        code: "invalid_dependency",
+        message: "dependency batch contains missing ids",
+        details: {
+          issues: [
+            {
+              index,
+              type: "missing_id",
+              sourceId: field === "source" ? id : "",
+              dependsOnId: field === "dependsOn" ? id : "",
+              details: {
+                field,
+                id,
+                message: `Node not found: ${id}`,
+              },
+            },
+          ],
+          firstIssue: {
+            index,
+            type: "missing_id",
+            sourceId: field === "source" ? id : "",
+            dependsOnId: field === "dependsOn" ? id : "",
+            details: {
+              field,
+              id,
+              message: `Node not found: ${id}`,
+            },
+          },
+        },
+      });
+    }
+
+    return id;
+  }
+
+  #collectDependencyBatchIssues(specs: readonly ResolvedDependencyBatchSpec[]): DependencyBatchValidationIssue[] {
+    const issues: DependencyBatchValidationIssue[] = [];
+    const seenEdges = new Map<string, number>();
+    const adjacency = this.#buildDependencyAdjacency();
+
+    for (const spec of specs) {
+      const edgeKey = `${spec.sourceId}->${spec.dependsOnId}`;
+      const existingIndex = seenEdges.get(edgeKey);
+      if (existingIndex !== undefined) {
+        issues.push({
+          index: spec.index,
+          type: "duplicate",
+          sourceId: spec.sourceId,
+          dependsOnId: spec.dependsOnId,
+          details: {
+            sourceId: spec.sourceId,
+            dependsOnId: spec.dependsOnId,
+            firstIndex: existingIndex,
+            duplicateIndex: spec.index,
+            duplicateKind: "batch",
+          },
+        });
+        continue;
+      }
+
+      if (this.#getDependencyByEdge(spec.sourceId, spec.dependsOnId) !== null) {
+        issues.push({
+          index: spec.index,
+          type: "duplicate",
+          sourceId: spec.sourceId,
+          dependsOnId: spec.dependsOnId,
+          details: {
+            sourceId: spec.sourceId,
+            dependsOnId: spec.dependsOnId,
+            duplicateKind: "existing",
+          },
+        });
+        continue;
+      }
+
+      if (this.#wouldCreateCycleInAdjacency(adjacency, spec.sourceId, spec.dependsOnId)) {
+        issues.push({
+          index: spec.index,
+          type: "cycle",
+          sourceId: spec.sourceId,
+          dependsOnId: spec.dependsOnId,
+          details: {
+            sourceId: spec.sourceId,
+            dependsOnId: spec.dependsOnId,
+          },
+        });
+        continue;
+      }
+
+      const nextNeighbors = adjacency.get(spec.sourceId) ?? new Set<string>();
+      nextNeighbors.add(spec.dependsOnId);
+      adjacency.set(spec.sourceId, nextNeighbors);
+      seenEdges.set(edgeKey, spec.index);
+    }
+
+    return issues.sort((left, right) => left.index - right.index || left.type.localeCompare(right.type));
+  }
+
+  #buildDependencyAdjacency(): Map<string, Set<string>> {
+    const rows = this.#db.query("SELECT source_id, depends_on_id FROM dependencies ORDER BY source_id ASC, depends_on_id ASC;").all() as Array<{
+      source_id: string;
+      depends_on_id: string;
+    }>;
+    const adjacency = new Map<string, Set<string>>();
+
+    for (const row of rows) {
+      const neighbors = adjacency.get(row.source_id) ?? new Set<string>();
+      neighbors.add(row.depends_on_id);
+      adjacency.set(row.source_id, neighbors);
+    }
+
+    return adjacency;
+  }
+
+  #wouldCreateCycleInAdjacency(adjacency: ReadonlyMap<string, ReadonlySet<string>>, sourceId: string, dependsOnId: string): boolean {
+    const visited = new Set<string>();
+    const queue: string[] = [dependsOnId];
+
+    while (queue.length > 0) {
+      const current = queue.shift();
+      if (current === undefined || visited.has(current)) {
+        continue;
+      }
+
+      if (current === sourceId) {
+        return true;
+      }
+
+      visited.add(current);
+      const neighbors = adjacency.get(current);
+      if (neighbors === undefined) {
+        continue;
+      }
+
+      for (const neighbor of neighbors) {
+        if (!visited.has(neighbor)) {
+          queue.push(neighbor);
+        }
+      }
+    }
+
+    return false;
   }
 
   private collectSearchMatches(
