@@ -2,20 +2,34 @@ import {
   SEARCH_REPLACE_FIELDS,
   findUnknownOption,
   hasFlag,
+  isValidCompactTempKey,
   parseArgs,
+  parseCompactEntityRef,
+  parseCompactFields,
   parseCsvEnumOption,
   parseStrictNonNegativeInt,
   parseStrictPositiveInt,
   readEnumOption,
   readMissingOptionValue,
   readOption,
+  readOptions,
   resolvePreviewApplyMode,
   suggestOptions,
 } from "./arg-parser";
 
 import { MutationService } from "../domain/mutation-service";
 import { TrackerDomain } from "../domain/tracker-domain";
-import { DomainError, type EpicRecord, type SearchEntityMatch } from "../domain/types";
+import {
+  COMPACT_TEMP_KEY_PREFIX,
+  DomainError,
+  type CompactBatchResultContract,
+  type CompactDependencySpec,
+  type CompactEntityRef,
+  type CompactSubtaskSpec,
+  type CompactTaskSpec,
+  type EpicRecord,
+  type SearchEntityMatch,
+} from "../domain/types";
 import { formatHumanTable } from "../io/human-table";
 import { failResult, okResult } from "../io/output";
 import { type CliContext, type CliResult } from "../runtime/command-types";
@@ -31,6 +45,7 @@ const DEFAULT_LIST_LIMIT = 10;
 const DEFAULT_OPEN_STATUSES = ["in_progress", "in-progress", "todo"] as const;
 const SEARCH_OPTIONS = ["fields", "preview"] as const;
 const REPLACE_OPTIONS = ["search", "replace", "fields", "preview", "apply"] as const;
+const EXPAND_OPTIONS = ["task", "subtask", "dep"] as const;
 
 function parseStatusCsv(rawStatuses: string | undefined): string[] | undefined {
   if (rawStatuses === undefined) {
@@ -330,6 +345,288 @@ function failFromError(error: unknown, command: string): CliResult {
   });
 }
 
+function failBatchSpec(command: string, human: string, data: Record<string, unknown>): CliResult {
+  return failResult({
+    command,
+    human,
+    data,
+    error: {
+      code: "invalid_input",
+      message: human,
+    },
+  });
+}
+
+function validateCompactEntityRef(
+  command: string,
+  option: string,
+  index: number,
+  rawSpec: string,
+  label: string,
+  reference: CompactEntityRef,
+): CliResult | undefined {
+  if (reference.kind === "temp_key" && !isValidCompactTempKey(reference.tempKey)) {
+    return failBatchSpec(command, `${label} in --${option} spec ${index + 1} must use ${COMPACT_TEMP_KEY_PREFIX}<temp-key> with letters, numbers, dot, dash, or underscore.`, {
+      option,
+      index,
+      rawSpec,
+      reference,
+    });
+  }
+
+  if (reference.kind === "id" && reference.id.trim().length === 0) {
+    return failBatchSpec(command, `${label} in --${option} spec ${index + 1} is required.`, {
+      option,
+      index,
+      rawSpec,
+      reference,
+    });
+  }
+
+  return undefined;
+}
+
+function parseExpandTaskSpecs(rawSpecs: readonly string[]): { specs: CompactTaskSpec[]; error?: CliResult } {
+  const specs: CompactTaskSpec[] = [];
+  const seenTempKeys = new Set<string>();
+
+  for (const [index, rawSpec] of rawSpecs.entries()) {
+    const parsed = parseCompactFields(rawSpec);
+    if (parsed.invalidEscape !== null) {
+      return {
+        specs: [],
+        error: failBatchSpec("epic.expand", `Invalid escape sequence ${parsed.invalidEscape} in --task spec ${index + 1}.`, {
+          option: "task",
+          index,
+          rawSpec,
+        }),
+      };
+    }
+
+    if (parsed.hasDanglingEscape) {
+      return {
+        specs: [],
+        error: failBatchSpec("epic.expand", `Trailing escape in --task spec ${index + 1}.`, {
+          option: "task",
+          index,
+          rawSpec,
+        }),
+      };
+    }
+
+    if (parsed.fields.length !== 4) {
+      return {
+        specs: [],
+        error: failBatchSpec("epic.expand", `Task specs must use <temp-key>|<title>|<description>|<status> in --task spec ${index + 1}.`, {
+          option: "task",
+          index,
+          rawSpec,
+          fields: parsed.fields,
+        }),
+      };
+    }
+
+    const tempKey = parsed.fields[0] ?? "";
+    const title = parsed.fields[1] ?? "";
+    const description = parsed.fields[2] ?? "";
+    const status = parsed.fields[3] ?? "";
+    if (!tempKey || !isValidCompactTempKey(tempKey)) {
+      return {
+        specs: [],
+        error: failBatchSpec("epic.expand", `Task spec ${index + 1} must start with a temp key like seed-1.`, {
+          option: "task",
+          index,
+          rawSpec,
+          tempKey,
+        }),
+      };
+    }
+
+    if (seenTempKeys.has(tempKey)) {
+      return {
+        specs: [],
+        error: failBatchSpec("epic.expand", `Duplicate temp key '${tempKey}' across --task specs.`, {
+          option: "task",
+          index,
+          rawSpec,
+          tempKey,
+        }),
+      };
+    }
+
+    if (!title || title.trim().length === 0) {
+      return {
+        specs: [],
+        error: failBatchSpec("epic.expand", `Task spec ${index + 1} is missing a title.`, {
+          option: "task",
+          index,
+          rawSpec,
+        }),
+      };
+    }
+
+    seenTempKeys.add(tempKey);
+    const spec: CompactTaskSpec = status.length > 0
+      ? { tempKey, title, description, status }
+      : { tempKey, title, description };
+    specs.push(spec);
+  }
+
+  return { specs };
+}
+
+function parseExpandSubtaskSpecs(rawSpecs: readonly string[]): { specs: CompactSubtaskSpec[]; error?: CliResult } {
+  const specs: CompactSubtaskSpec[] = [];
+  const seenTempKeys = new Set<string>();
+
+  for (const [index, rawSpec] of rawSpecs.entries()) {
+    const parsed = parseCompactFields(rawSpec);
+    if (parsed.invalidEscape !== null) {
+      return {
+        specs: [],
+        error: failBatchSpec("epic.expand", `Invalid escape sequence ${parsed.invalidEscape} in --subtask spec ${index + 1}.`, {
+          option: "subtask",
+          index,
+          rawSpec,
+        }),
+      };
+    }
+
+    if (parsed.hasDanglingEscape) {
+      return {
+        specs: [],
+        error: failBatchSpec("epic.expand", `Trailing escape in --subtask spec ${index + 1}.`, {
+          option: "subtask",
+          index,
+          rawSpec,
+        }),
+      };
+    }
+
+    if (parsed.fields.length !== 5) {
+      return {
+        specs: [],
+        error: failBatchSpec("epic.expand", `Subtask specs must use <parent-ref>|<temp-key>|<title>|<description>|<status> in --subtask spec ${index + 1}.`, {
+          option: "subtask",
+          index,
+          rawSpec,
+          fields: parsed.fields,
+        }),
+      };
+    }
+
+    const parent = parseCompactEntityRef(parsed.fields[0] ?? "");
+    const parentError = validateCompactEntityRef("epic.expand", "subtask", index, rawSpec, "Parent ref", parent);
+    if (parentError !== undefined) {
+      return { specs: [], error: parentError };
+    }
+
+    const tempKey = parsed.fields[1] ?? "";
+    const title = parsed.fields[2] ?? "";
+    const description = parsed.fields[3] ?? "";
+    const status = parsed.fields[4] ?? "";
+    if (!tempKey || !isValidCompactTempKey(tempKey)) {
+      return {
+        specs: [],
+        error: failBatchSpec("epic.expand", `Subtask spec ${index + 1} must include a valid temp key.`, {
+          option: "subtask",
+          index,
+          rawSpec,
+          tempKey,
+        }),
+      };
+    }
+
+    if (seenTempKeys.has(tempKey)) {
+      return {
+        specs: [],
+        error: failBatchSpec("epic.expand", `Duplicate temp key '${tempKey}' across --subtask specs.`, {
+          option: "subtask",
+          index,
+          rawSpec,
+          tempKey,
+        }),
+      };
+    }
+
+    if (!title || title.trim().length === 0) {
+      return {
+        specs: [],
+        error: failBatchSpec("epic.expand", `Subtask spec ${index + 1} is missing a title.`, {
+          option: "subtask",
+          index,
+          rawSpec,
+        }),
+      };
+    }
+
+    seenTempKeys.add(tempKey);
+    const spec: CompactSubtaskSpec = status.length > 0
+      ? { parent, tempKey, title, description, status }
+      : { parent, tempKey, title, description };
+    specs.push(spec);
+  }
+
+  return { specs };
+}
+
+function parseExpandDependencySpecs(rawSpecs: readonly string[]): { specs: CompactDependencySpec[]; error?: CliResult } {
+  const specs: CompactDependencySpec[] = [];
+
+  for (const [index, rawSpec] of rawSpecs.entries()) {
+    const parsed = parseCompactFields(rawSpec);
+    if (parsed.invalidEscape !== null) {
+      return {
+        specs: [],
+        error: failBatchSpec("epic.expand", `Invalid escape sequence ${parsed.invalidEscape} in --dep spec ${index + 1}.`, {
+          option: "dep",
+          index,
+          rawSpec,
+        }),
+      };
+    }
+
+    if (parsed.hasDanglingEscape) {
+      return {
+        specs: [],
+        error: failBatchSpec("epic.expand", `Trailing escape in --dep spec ${index + 1}.`, {
+          option: "dep",
+          index,
+          rawSpec,
+        }),
+      };
+    }
+
+    if (parsed.fields.length !== 2) {
+      return {
+        specs: [],
+        error: failBatchSpec("epic.expand", `Dependency specs must use <source-ref>|<depends-on-ref> in --dep spec ${index + 1}.`, {
+          option: "dep",
+          index,
+          rawSpec,
+          fields: parsed.fields,
+        }),
+      };
+    }
+
+    const source = parseCompactEntityRef(parsed.fields[0] ?? "");
+    const sourceError = validateCompactEntityRef("epic.expand", "dep", index, rawSpec, "Source ref", source);
+    if (sourceError !== undefined) {
+      return { specs: [], error: sourceError };
+    }
+
+    const dependsOn = parseCompactEntityRef(parsed.fields[1] ?? "");
+    const dependsOnError = validateCompactEntityRef("epic.expand", "dep", index, rawSpec, "Depends-on ref", dependsOn);
+    if (dependsOnError !== undefined) {
+      return { specs: [], error: dependsOnError };
+    }
+
+    specs.push({ source, dependsOn });
+  }
+
+  return { specs };
+}
+
 export async function runEpic(context: CliContext): Promise<CliResult> {
   const database = openTrekoonDatabase(context.cwd);
 
@@ -361,6 +658,63 @@ export async function runEpic(context: CliContext): Promise<CliResult> {
           command: "epic.create",
           human: `Created epic ${formatEpic(epic)}`,
           data: { epic },
+        });
+      }
+      case "expand": {
+        const expandUnknownOption = findUnknownOption(parsed, EXPAND_OPTIONS);
+        if (expandUnknownOption !== undefined) {
+          return unknownOption("epic.expand", expandUnknownOption, EXPAND_OPTIONS);
+        }
+
+        const missingExpandOption = readMissingOptionValue(parsed.missingOptionValues, "task", "subtask", "dep");
+        if (missingExpandOption !== undefined) {
+          return failMissingOptionValue("epic.expand", missingExpandOption);
+        }
+
+        const epicId: string = parsed.positional[1] ?? "";
+        if (epicId.trim().length === 0) {
+          return failBatchSpec("epic.expand", "Provide an epic id for epic expand.", {
+            id: epicId,
+          });
+        }
+
+        const taskSpecs = readOptions(parsed.optionEntries, "task");
+        const subtaskSpecs = readOptions(parsed.optionEntries, "subtask");
+        const dependencySpecs = readOptions(parsed.optionEntries, "dep");
+        if (taskSpecs.length === 0 && subtaskSpecs.length === 0 && dependencySpecs.length === 0) {
+          return failBatchSpec("epic.expand", "Provide at least one --task, --subtask, or --dep spec.", {});
+        }
+
+        const parsedTasks = parseExpandTaskSpecs(taskSpecs);
+        if (parsedTasks.error !== undefined) {
+          return parsedTasks.error;
+        }
+
+        const parsedSubtasks = parseExpandSubtaskSpecs(subtaskSpecs);
+        if (parsedSubtasks.error !== undefined) {
+          return parsedSubtasks.error;
+        }
+
+        const parsedDeps = parseExpandDependencySpecs(dependencySpecs);
+        if (parsedDeps.error !== undefined) {
+          return parsedDeps.error;
+        }
+
+        const result: CompactBatchResultContract = { mappings: [] };
+        return failResult({
+          command: "epic.expand",
+          human: "Epic expand grammar validated. Domain expansion is not implemented yet.",
+          data: {
+            epicId,
+            tasks: parsedTasks.specs,
+            subtasks: parsedSubtasks.specs,
+            dependencies: parsedDeps.specs,
+            result,
+          },
+          error: {
+            code: "not_implemented",
+            message: "epic.expand domain workflow not implemented",
+          },
         });
       }
       case "list": {
@@ -841,7 +1195,7 @@ export async function runEpic(context: CliContext): Promise<CliResult> {
       default:
         return failResult({
           command: "epic",
-          human: "Usage: trekoon epic <create|list|show|search|replace|update|delete>",
+          human: "Usage: trekoon epic <create|expand|list|show|search|replace|update|delete>",
           data: {
             args: context.args,
           },
