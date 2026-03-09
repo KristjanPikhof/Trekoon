@@ -627,6 +627,23 @@ function parseExpandDependencySpecs(rawSpecs: readonly string[]): { specs: Compa
   return { specs };
 }
 
+function findDuplicateExpandTempKey(tasks: readonly CompactTaskSpec[], subtasks: readonly CompactSubtaskSpec[]): string | null {
+  const seen = new Set<string>();
+  for (const task of tasks) {
+    seen.add(task.tempKey);
+  }
+
+  for (const subtask of subtasks) {
+    if (seen.has(subtask.tempKey)) {
+      return subtask.tempKey;
+    }
+
+    seen.add(subtask.tempKey);
+  }
+
+  return null;
+}
+
 export async function runEpic(context: CliContext): Promise<CliResult> {
   const database = openTrekoonDatabase(context.cwd);
 
@@ -700,20 +717,31 @@ export async function runEpic(context: CliContext): Promise<CliResult> {
           return parsedDeps.error;
         }
 
-        const result: CompactBatchResultContract = { mappings: [] };
-        return failResult({
+        const duplicateTempKey = findDuplicateExpandTempKey(parsedTasks.specs, parsedSubtasks.specs);
+        if (duplicateTempKey !== null) {
+          return failBatchSpec("epic.expand", `Duplicate temp key '${duplicateTempKey}' across --task and --subtask specs.`, {
+            tempKey: duplicateTempKey,
+          });
+        }
+
+        const created = mutations.expandEpic({
+          epicId,
+          taskSpecs: parsedTasks.specs,
+          subtaskSpecs: parsedSubtasks.specs,
+          dependencySpecs: parsedDeps.specs,
+        });
+        const result: CompactBatchResultContract & {
+          counts: { tasks: number; subtasks: number; dependencies: number };
+        } = created.result;
+        return okResult({
           command: "epic.expand",
-          human: "Epic expand grammar validated. Domain expansion is not implemented yet.",
+          human: `Expanded epic ${epicId} with ${created.tasks.length} task(s), ${created.subtasks.length} subtask(s), and ${created.dependencies.length} dependenc${created.dependencies.length === 1 ? "y" : "ies"}.`,
           data: {
             epicId,
-            tasks: parsedTasks.specs,
-            subtasks: parsedSubtasks.specs,
-            dependencies: parsedDeps.specs,
+            tasks: created.tasks,
+            subtasks: created.subtasks,
+            dependencies: created.dependencies,
             result,
-          },
-          error: {
-            code: "not_implemented",
-            message: "epic.expand domain workflow not implemented",
           },
         });
       }
