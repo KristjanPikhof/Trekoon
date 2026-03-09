@@ -146,6 +146,42 @@ trekoon task list --limit 25
 trekoon task list --all --view compact
 ```
 
+### 2a) Preferred one-shot epic creation
+
+When you already know the epic tree, create the epic, tasks, subtasks, and
+dependencies in one invocation.
+
+```bash
+trekoon epic create \
+  --title "Batch command rollout" \
+  --description "Ship one-shot planning workflows" \
+  --task "task-a|First task|First description|todo" \
+  --task "task-b|Second task|Second description|todo" \
+  --subtask "@task-a|sub-a|First subtask|Subtask description|todo" \
+  --dep "@task-b|@task-a" \
+  --dep "@sub-a|@task-a"
+```
+
+Use this when:
+
+- the epic does not exist yet
+- later records need to reference earlier created records via `@temp-key`
+- you want one atomic create step and one machine response with mappings/counts
+
+Compact machine output adds:
+
+```text
+command: epic.create
+data:
+  epic: created epic row
+  tasks[]: created tasks in input order
+  subtasks[]: created subtasks in input order
+  dependencies[]: created dependencies in input order
+  result:
+    mappings[]: { kind: task|subtask, tempKey, id }
+    counts: { tasks, subtasks, dependencies }
+```
+
 ### 3) Add dependencies
 
 ```bash
@@ -274,9 +310,9 @@ data:
 
 #### `epic expand`
 
-Expand one epic by creating tasks, subtasks, and dependencies in one
-transaction. This is the batch command to use when later specs need to refer to
-items created earlier in the same invocation.
+Expand one existing epic by creating tasks, subtasks, and dependencies in one
+transaction. Use this when the epic already exists and you want to add a linked
+batch later.
 
 ```bash
 trekoon epic expand <epic-id> \
@@ -323,8 +359,10 @@ When to choose which command:
 - use `task create-many` for sibling tasks under one known epic
 - use `subtask create-many` for sibling subtasks under one known task
 - use `dep add-many` only when every endpoint already has a persisted ID
-- use `epic expand` when one batch must create tasks/subtasks and link them
-  together with `@temp-key` references
+- use `epic create` with batch specs when the epic does not exist yet and the
+  whole graph is known up front
+- use `epic expand` when the epic already exists and one batch must add linked
+  tasks/subtasks/dependencies with `@temp-key` references
 
 ### 4) AI execution loop for agents
 
