@@ -319,6 +319,110 @@ describe("sync command", (): void => {
     expect((pullResult.data as { appliedEvents: number }).appliedEvents).toBeGreaterThanOrEqual(1);
   });
 
+  test("replayed create conflicts do not also create invalid apply conflicts", async (): Promise<void> => {
+    const workspace: string = createWorkspace();
+    initializeRepository(workspace);
+
+    const epicId = randomUUID();
+    const eventId = randomUUID();
+    const now = Date.now();
+
+    {
+      const storage = openTrekoonDatabase(workspace);
+      try {
+        storage.db
+          .query("INSERT INTO epics (id, title, description, status, created_at, updated_at, version) VALUES (?, ?, ?, ?, ?, ?, 1);")
+          .run(epicId, "Remote epic", "seed", "todo", now, now);
+      } finally {
+        storage.close();
+      }
+    }
+
+    commitDatabase(workspace, "seed replayed epic row");
+    runGit(workspace, ["checkout", "-b", "feature/replay-created-conflict"]);
+
+    {
+      const storage = openTrekoonDatabase(workspace);
+      try {
+        storage.db
+          .query("UPDATE epics SET title = ?, updated_at = ?, version = version + 1 WHERE id = ?;")
+          .run("Local epic", now + 1, epicId);
+
+        appendEventWithGitContext(storage.db, workspace, {
+          entityKind: "epic",
+          entityId: epicId,
+          operation: "upsert",
+          fields: {
+            title: "Local epic",
+          },
+        });
+      } finally {
+        storage.close();
+      }
+    }
+
+    commitDatabase(workspace, "seed local replay conflict event");
+
+    runGit(workspace, ["checkout", "main"]);
+
+    {
+      const storage = openTrekoonDatabase(workspace);
+      try {
+        storage.db
+          .query(
+            "INSERT INTO events (id, entity_kind, entity_id, operation, payload, git_branch, git_head, created_at, updated_at, version) VALUES (?, 'epic', ?, 'epic.created', ?, 'main', NULL, ?, ?, 1);",
+          )
+          .run(
+            eventId,
+            epicId,
+            JSON.stringify({
+              fields: {
+                title: "Remote epic",
+                description: "seed",
+                status: "todo",
+              },
+            }),
+            now + 2,
+            now + 2,
+          );
+      } finally {
+        storage.close();
+      }
+    }
+
+    commitDatabase(workspace, "seed replayed epic created event");
+    runGit(workspace, ["checkout", "feature/replay-created-conflict"]);
+
+    const pullResult = await runSync({
+      args: ["pull", "--from", "main"],
+      cwd: workspace,
+      mode: "toon",
+    });
+
+    expect(pullResult.ok).toBe(true);
+    expect((pullResult.data as { appliedEvents: number }).appliedEvents).toBe(1);
+    expect((pullResult.data as { createdConflicts: number }).createdConflicts).toBe(1);
+    expect((pullResult.data as { diagnostics: { conflictEvents: number } }).diagnostics.conflictEvents).toBe(1);
+    expect((pullResult.data as { diagnostics: { applyRejectedEvents: number } }).diagnostics.applyRejectedEvents).toBe(0);
+
+    const storage = openTrekoonDatabase(workspace);
+    try {
+      const conflicts = storage.db
+        .query("SELECT field_name, resolution FROM sync_conflicts WHERE event_id = ? ORDER BY field_name ASC;")
+        .all(eventId) as Array<{ field_name: string; resolution: string }>;
+      const epic = storage.db.query("SELECT title, description, status FROM epics WHERE id = ?;").get(epicId) as {
+        title: string;
+        description: string;
+        status: string;
+      } | null;
+
+      expect(conflicts).toEqual([{ field_name: "title", resolution: "pending" }]);
+      expect(epic).toEqual({ title: "Local epic", description: "seed", status: "todo" });
+    } finally {
+      storage.close();
+    }
+  });
+
   test("replays batched canonical replace updates without conflicts", async (): Promise<void> => {
     const workspace: string = createWorkspace();
     initializeRepository(workspace);
@@ -593,6 +697,78 @@ describe("sync command", (): void => {
         .query("SELECT id FROM dependencies WHERE source_id = ? AND depends_on_id = ? LIMIT 1;")
         .get(sourceId, dependsOnId) as { id: string } | null;
       expect(remaining).toBeNull();
+    } finally {
+      storage.close();
+    }
+  });
+
+  test("quarantines dependency.added replay when referenced nodes are missing", async (): Promise<void> => {
+    const workspace: string = createWorkspace();
+    initializeRepository(workspace);
+
+    const sourceId = randomUUID();
+    const dependsOnId = randomUUID();
+    const eventId = randomUUID();
+    const now = Date.now();
+
+    {
+      const storage = openTrekoonDatabase(workspace);
+      try {
+        storage.db
+          .query("INSERT INTO epics (id, title, description, status, created_at, updated_at, version) VALUES (?, ?, ?, ?, ?, ?, 1);")
+          .run("epic-a", "Epic", "seed", "todo", now, now);
+
+        storage.db
+          .query("INSERT INTO tasks (id, epic_id, title, description, status, created_at, updated_at, version) VALUES (?, 'epic-a', ?, ?, ?, ?, ?, 1);")
+          .run(sourceId, "Task A", "seed", "todo", now, now);
+
+        storage.db
+          .query(
+            "INSERT INTO events (id, entity_kind, entity_id, operation, payload, git_branch, git_head, created_at, updated_at, version) VALUES (?, 'dependency', ?, 'dependency.added', ?, 'main', NULL, ?, ?, 1);",
+          )
+          .run(
+            eventId,
+            `${sourceId}->${dependsOnId}`,
+            JSON.stringify({
+              fields: {
+                source_id: sourceId,
+                source_kind: "task",
+                depends_on_id: dependsOnId,
+                depends_on_kind: "task",
+              },
+            }),
+            now + 1,
+            now + 1,
+          );
+      } finally {
+        storage.close();
+      }
+    }
+
+    commitDatabase(workspace, "seed missing dependency node event");
+    runGit(workspace, ["checkout", "-b", "feature/dep-added-missing-node"]);
+
+    const pullResult = await runSync({
+      args: ["pull", "--from", "main"],
+      cwd: workspace,
+      mode: "toon",
+    });
+
+    expect(pullResult.ok).toBe(true);
+    expect((pullResult.data as { appliedEvents: number }).appliedEvents).toBe(0);
+    expect((pullResult.data as { diagnostics: { applyRejectedEvents: number } }).diagnostics.applyRejectedEvents).toBe(1);
+
+    const storage = openTrekoonDatabase(workspace);
+    try {
+      const dependency = storage.db
+        .query("SELECT id FROM dependencies WHERE source_id = ? AND depends_on_id = ? LIMIT 1;")
+        .get(sourceId, dependsOnId) as { id: string } | null;
+      const invalidConflict = storage.db
+        .query("SELECT resolution, field_name FROM sync_conflicts WHERE event_id = ? LIMIT 1;")
+        .get(eventId) as { resolution: string; field_name: string } | null;
+
+      expect(dependency).toBeNull();
+      expect(invalidConflict).toEqual({ resolution: "invalid", field_name: "__apply__" });
     } finally {
       storage.close();
     }
