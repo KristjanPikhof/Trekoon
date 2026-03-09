@@ -8,6 +8,7 @@ import { runDep } from "../../src/commands/dep";
 import { runEpic } from "../../src/commands/epic";
 import { runSubtask } from "../../src/commands/subtask";
 import { runTask } from "../../src/commands/task";
+import { executeShell, parseInvocation } from "../../src/runtime/cli-shell";
 
 const tempDirs: string[] = [];
 
@@ -79,6 +80,47 @@ describe("dep command", (): void => {
     expect((removed.data as { removed: number }).removed).toBe(1);
   });
 
+  test("cli dep add-many works after task create-many with --toon", async (): Promise<void> => {
+    const cwd = createWorkspace();
+
+    const initResult = await executeShell(parseInvocation(["init", "--title", "Temp Repo"]), cwd);
+    expect(initResult.ok).toBeTrue();
+
+    const epicCreated = await executeShell(
+      parseInvocation(["epic", "create", "--title", "Roadmap", "--description", "desc", "--toon"]),
+      cwd,
+    );
+    expect(epicCreated.ok).toBeTrue();
+    const epicId = (epicCreated.data as { epic: { id: string } }).epic.id;
+
+    const taskBatch = await executeShell(
+      parseInvocation([
+        "task",
+        "create-many",
+        "--epic",
+        epicId,
+        "--task",
+        "seed-1|First|Desc one|todo",
+        "--task",
+        "seed-2|Second|Desc two|todo",
+        "--toon",
+      ]),
+      cwd,
+    );
+    expect(taskBatch.ok).toBeTrue();
+    const tasks = (taskBatch.data as { tasks: Array<{ id: string }> }).tasks;
+
+    const added = await executeShell(
+      parseInvocation(["dep", "add-many", "--dep", `${tasks[1]?.id}|${tasks[0]?.id}`, "--toon"]),
+      cwd,
+    );
+
+    expect(added.ok).toBeTrue();
+    expect((added.data as { dependencies: Array<{ sourceId: string; dependsOnId: string }> }).dependencies).toMatchObject([
+      { sourceId: tasks[1]?.id, dependsOnId: tasks[0]?.id },
+    ]);
+  });
+
   test("add-many adds dependencies in declared order", async (): Promise<void> => {
     const cwd = createWorkspace();
     const nodes = await createTaskGraph(cwd);
@@ -140,6 +182,31 @@ describe("dep command", (): void => {
     expect((added.data as { issues: Array<{ index: number; type: string; details: { id: string } }> }).issues).toMatchObject([
       { index: 0, type: "missing_id", details: { id: "missing-node-id" } },
     ]);
+  });
+
+  test("add-many rejects unresolved temp keys without inserting dependencies", async (): Promise<void> => {
+    const cwd = createWorkspace();
+    const nodes = await createTaskGraph(cwd);
+
+    const added = await runDep({
+      cwd,
+      mode: "toon",
+      args: ["add-many", "--dep", `@seed-task|${nodes.taskA}`, "--dep", `${nodes.taskB}|@seed-subtask`],
+    });
+
+    expect(added.ok).toBeFalse();
+    expect(added.error?.code).toBe("invalid_dependency");
+    expect((added.data as {
+      issues: Array<{ index: number; type: string; sourceId: string; dependsOnId: string; details: { tempKey: string; field: string } }>;
+    }).issues).toMatchObject([
+      { index: 0, type: "missing_id", sourceId: "@seed-task", dependsOnId: "", details: { tempKey: "seed-task", field: "source" } },
+      { index: 1, type: "missing_id", sourceId: "", dependsOnId: "@seed-subtask", details: { tempKey: "seed-subtask", field: "dependsOn" } },
+    ]);
+
+    const listA = await runDep({ cwd, mode: "toon", args: ["list", nodes.taskA] });
+    const listB = await runDep({ cwd, mode: "toon", args: ["list", nodes.taskB] });
+    expect((listA.data as { dependencies: unknown[] }).dependencies).toEqual([]);
+    expect((listB.data as { dependencies: unknown[] }).dependencies).toEqual([]);
   });
 
   test("enforces referential checks for task/subtask nodes", async (): Promise<void> => {
