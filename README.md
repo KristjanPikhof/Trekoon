@@ -48,10 +48,10 @@ npm i -g trekoon
 - `trekoon init`
 - `trekoon help [command]`
 - `trekoon quickstart`
-- `trekoon epic <create|list|show|search|replace|update|delete>`
-- `trekoon task <create|list|show|ready|next|search|replace|update|delete>`
-- `trekoon subtask <create|list|search|replace|update|delete>`
-- `trekoon dep <add|remove|list|reverse>`
+- `trekoon epic <create|expand|list|show|search|replace|update|delete>`
+- `trekoon task <create|create-many|list|show|ready|next|search|replace|update|delete>`
+- `trekoon subtask <create|create-many|list|search|replace|update|delete>`
+- `trekoon dep <add|add-many|remove|list|reverse>`
 - `trekoon events prune [--dry-run] [--archive] [--retention-days <n>]`
 - `trekoon migrate <status|rollback> [--to-version <n>]`
 - `trekoon sync <status|pull|resolve|conflicts>`
@@ -152,6 +152,179 @@ trekoon task list --all --view compact
 trekoon dep add <task-id> <depends-on-id>
 trekoon dep list <task-id>
 ```
+
+### 3a) Batch planning commands
+
+Use compact batch commands when one invocation needs to create or link multiple
+items atomically. Use the single-item commands when you already have persisted
+UUIDs and only need one mutation.
+
+#### `task create-many`
+
+Create multiple tasks under one epic in declared order.
+
+```bash
+trekoon task create-many \
+  --epic <epic-id> \
+  --task "seed-api|Design API|Define batch grammar|todo" \
+  --task "seed-cli|Wire CLI|Hook parser and output|in_progress"
+```
+
+Compact spec:
+
+- `--task <temp-key>|<title>|<description>|<status>`
+- escape `\|`, `\\`, `\n`, `\r`, `\t`
+- repeated `--task` flags are preserved in the exact order provided
+- temp keys are local mapping labels, not persisted IDs
+
+Rollback semantics:
+
+- Trekoon validates the full batch before inserts
+- duplicate temp keys, empty required fields, or invalid input fail the whole
+  command
+- no partial task rows are kept on failure
+
+Compact machine output:
+
+```text
+command: task.create-many
+data:
+  epicId: <epic-id>
+  tasks[]: created task rows in input order
+  result:
+    mappings[]: { kind: task, tempKey, id }
+```
+
+#### `subtask create-many`
+
+Create multiple subtasks under one existing task.
+
+```bash
+trekoon subtask create-many <task-id> \
+  --subtask "seed-tests|Write tests|Cover happy path|todo" \
+  --subtask "seed-docs|Document flow|Add operator notes|todo"
+```
+
+Equivalent explicit parent form:
+
+```bash
+trekoon subtask create-many \
+  --task <task-id> \
+  --subtask "seed-tests|Write tests|Cover happy path|todo"
+```
+
+Rules:
+
+- positional `<task-id>` or `--task <task-id>` may be used
+- if both are provided, they must be identical or the command fails
+- repeated `--subtask` flags are applied in declared order
+
+Rollback semantics:
+
+- full batch prevalidation happens before inserts
+- duplicate temp keys, conflicting task ids, or invalid specs abort the whole
+  command
+- no partial subtasks are kept on failure
+
+Compact machine output:
+
+```text
+command: subtask.create-many
+data:
+  taskId: <task-id>
+  subtasks[]: created subtask rows in input order
+  result:
+    mappings[]: { kind: subtask, tempKey, id }
+```
+
+#### `dep add-many`
+
+Create multiple dependency edges in one ordered, transactional operation.
+
+```bash
+trekoon dep add-many \
+  --dep "<task-b>|<task-a>" \
+  --dep "<subtask-c>|<task-b>"
+```
+
+Compact spec:
+
+- `--dep <source-ref>|<depends-on-ref>`
+- repeated `--dep` flags are applied in declared order
+- standalone `dep add-many` resolves persisted IDs only
+- `@temp-key` refs are **not** resolved from earlier commands; they are reserved
+  for same-invocation workflows such as `epic expand`
+
+Rollback semantics:
+
+- validation covers the full dependency set before insert
+- missing ids, unresolved `@temp-key` refs, duplicates, or cycles fail the whole
+  batch
+- no partial dependency edges are inserted on failure
+
+Compact machine output:
+
+```text
+command: dep.add-many
+data:
+  dependencies[]: created dependency rows in input order
+  result:
+    mappings[]: []
+```
+
+#### `epic expand`
+
+Expand one epic by creating tasks, subtasks, and dependencies in one
+transaction. This is the batch command to use when later specs need to refer to
+items created earlier in the same invocation.
+
+```bash
+trekoon epic expand <epic-id> \
+  --task "task-api|Design API|Define compact grammar|todo" \
+  --task "task-cli|Wire CLI|Hook parser and output|todo" \
+  --subtask "@task-api|sub-tests|Write tests|Cover parser cases|todo" \
+  --dep "@task-cli|@task-api" \
+  --dep "@sub-tests|@task-api"
+```
+
+Compact specs:
+
+- `--task <temp-key>|<title>|<description>|<status>`
+- `--subtask <parent-ref>|<temp-key>|<title>|<description>|<status>`
+- `--dep <source-ref>|<depends-on-ref>`
+- `@temp-key` refs may target tasks/subtasks declared earlier in the same
+  `epic expand` invocation
+
+Background phases:
+
+1. validate all compact specs and duplicate temp keys
+2. create tasks transactionally
+3. resolve subtask parent temp keys and create subtasks
+4. resolve dependency refs and link dependencies
+5. append task, subtask, then dependency events
+6. roll back the full expansion if any phase fails
+
+Compact machine output:
+
+```text
+command: epic.expand
+data:
+  epicId: <epic-id>
+  tasks[]: created tasks in input order
+  subtasks[]: created subtasks in input order
+  dependencies[]: created dependencies in input order
+  result:
+    mappings[]: { kind: task|subtask, tempKey, id }
+    counts: { tasks, subtasks, dependencies }
+```
+
+When to choose which command:
+
+- use `task create-many` for sibling tasks under one known epic
+- use `subtask create-many` for sibling subtasks under one known task
+- use `dep add-many` only when every endpoint already has a persisted ID
+- use `epic expand` when one batch must create tasks/subtasks and link them
+  together with `@temp-key` references
 
 ### 4) AI execution loop for agents
 
