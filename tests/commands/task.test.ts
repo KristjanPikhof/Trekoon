@@ -79,6 +79,73 @@ describe("task command", (): void => {
     expect(afterDelete.error?.code).toBe("not_found");
   });
 
+  test("create-many creates tasks in input order with compact mappings", async (): Promise<void> => {
+    const cwd = createWorkspace();
+    const epicCreated = await runEpic({
+      cwd,
+      mode: "human",
+      args: ["create", "--title", "Roadmap", "--description", "desc"],
+    });
+    const epicId = (epicCreated.data as { epic: { id: string } }).epic.id;
+
+    const created = await runTask({
+      cwd,
+      mode: "toon",
+      args: [
+        "create-many",
+        "--epic",
+        epicId,
+        "--task",
+        "seed-1|First|Desc one|todo",
+        "--task",
+        "seed-2|Second|Desc two|in_progress",
+      ],
+    });
+
+    expect(created.ok).toBeTrue();
+    expect((created.data as { tasks: Array<{ title: string; status: string }> }).tasks).toMatchObject([
+      { title: "First", status: "todo" },
+      { title: "Second", status: "in_progress" },
+    ]);
+    expect((created.data as { result: { mappings: Array<{ kind: string; tempKey: string; id: string }> } }).result.mappings).toMatchObject([
+      { kind: "task", tempKey: "seed-1" },
+      { kind: "task", tempKey: "seed-2" },
+    ]);
+    expect(created.human).toContain("Created 2 task(s)");
+    expect(created.human.indexOf("First")).toBeLessThan(created.human.indexOf("Second"));
+  });
+
+  test("create-many prevalidates full batch before inserting tasks", async (): Promise<void> => {
+    const cwd = createWorkspace();
+    const epicCreated = await runEpic({
+      cwd,
+      mode: "human",
+      args: ["create", "--title", "Roadmap", "--description", "desc"],
+    });
+    const epicId = (epicCreated.data as { epic: { id: string } }).epic.id;
+
+    const created = await runTask({
+      cwd,
+      mode: "toon",
+      args: [
+        "create-many",
+        "--epic",
+        epicId,
+        "--task",
+        "seed-1|First|Desc one|todo",
+        "--task",
+        "seed-2|Second||todo",
+      ],
+    });
+
+    expect(created.ok).toBeFalse();
+    expect(created.error?.code).toBe("invalid_input");
+
+    const listed = await runTask({ cwd, mode: "toon", args: ["list", "--all", "--epic", epicId] });
+    expect(listed.ok).toBeTrue();
+    expect((listed.data as { tasks: unknown[] }).tasks).toEqual([]);
+  });
+
   test("task show --all returns subtasks with descriptions", async (): Promise<void> => {
     const cwd = createWorkspace();
     const epicCreated = await runEpic({
