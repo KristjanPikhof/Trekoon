@@ -74,7 +74,14 @@ const WIPE_HELP = [
 ].join("\n");
 
 const EPIC_HELP = [
-  "Usage: trekoon epic <create|list|show|search|replace|update|delete> [options]",
+  "Usage: trekoon epic <create|expand|list|show|search|replace|update|delete> [options]",
+  "",
+  "Expand behavior (grammar only for now):",
+  "  trekoon epic expand <epic-id> [--task <spec>] [--subtask <spec>] [--dep <spec>]",
+  "  --task <temp-key>|<title>|<description>|<status>",
+  `  --subtask <parent-ref>|<temp-key>|<title>|<description>|<status>  (use ${"@"}<temp-key> for newly declared parents)`,
+  `  --dep <source-ref>|<depends-on-ref>  (refs can be ids or ${"@"}<temp-key>)`,
+  "  Escapes inside compact specs: \\| for |, \\\\ for \\, \\n, \\r, \\t",
   "",
   "List behavior:",
   "  Defaults:",
@@ -115,7 +122,13 @@ const EPIC_HELP = [
 ].join("\n");
 
 const TASK_HELP = [
-  "Usage: trekoon task <create|list|show|ready|next|search|replace|update|delete> [options]",
+  "Usage: trekoon task <create|create-many|list|show|ready|next|search|replace|update|delete> [options]",
+  "",
+  "Create-many behavior (grammar only for now):",
+  "  trekoon task create-many --epic <epic-id> --task <spec> [--task <spec> ...]",
+  "  --task <temp-key>|<title>|<description>|<status>",
+  "  Repeated --task flags are applied in the order provided.",
+  "  Escapes inside compact specs: \\| for |, \\\\ for \\, \\n, \\r, \\t",
   "",
   "List behavior:",
   "  Defaults:",
@@ -165,7 +178,13 @@ const TASK_HELP = [
 ].join("\n");
 
 const SUBTASK_HELP = [
-  "Usage: trekoon subtask <create|list|search|replace|update|delete> [options]",
+  "Usage: trekoon subtask <create|create-many|list|search|replace|update|delete> [options]",
+  "",
+  "Create-many behavior (grammar only for now):",
+  "  trekoon subtask create-many --task <task-id> --subtask <spec> [--subtask <spec> ...]",
+  "  --subtask <temp-key>|<title>|<description>|<status>",
+  "  Repeated --subtask flags are applied in the order provided.",
+  "  Escapes inside compact specs: \\| for |, \\\\ for \\, \\n, \\r, \\t",
   "",
   "List behavior:",
   "  Defaults:",
@@ -197,11 +216,14 @@ const SUBTASK_HELP = [
 ].join("\n");
 
 const DEP_HELP = [
-  "Usage: trekoon dep <add|remove|list|reverse> [options]",
+  "Usage: trekoon dep <add|add-many|remove|list|reverse> [options]",
   "",
   "Subcommands:",
   "  add <source-id> <depends-on-id>",
   "      Create dependency edge: source depends on depends-on.",
+  "  add-many --dep <source-ref>|<depends-on-ref> [--dep <spec> ...]",
+  "      Validate compact dependency specs in order.",
+  "      Refs can be persisted ids or @<temp-key> placeholders.",
   "  remove <source-id> <depends-on-id>",
   "      Remove one dependency edge if it exists.",
   "  list <source-id>",
