@@ -73,6 +73,80 @@ describe("epic command", (): void => {
     expect(epic.status).toBe("todo");
   });
 
+  test("create accepts task, subtask, and dep specs in one invocation", async (): Promise<void> => {
+    const cwd = createWorkspace();
+    const result = await runEpic({
+      cwd,
+      mode: "toon",
+      args: [
+        "create",
+        "--title",
+        "Roadmap",
+        "--description",
+        "Top-level work",
+        "--task",
+        "task-1|Build parser|Parser desc|todo",
+        "--subtask",
+        "@task-1|sub-1|Write tests|Test desc|todo",
+        "--dep",
+        "@task-1|@sub-1",
+      ],
+    });
+
+    expect(result.ok).toBeTrue();
+    const data = result.data as {
+      epic: { id: string; title: string };
+      tasks: Array<{ id: string; epicId: string; title: string }>;
+      subtasks: Array<{ id: string; taskId: string; title: string }>;
+      dependencies: Array<{ sourceId: string; dependsOnId: string }>;
+      result: {
+        mappings: Array<{ kind: string; tempKey: string; id: string }>;
+        counts: { tasks: number; subtasks: number; dependencies: number };
+      };
+    };
+
+    expect(data.epic.title).toBe("Roadmap");
+    expect(data.tasks).toHaveLength(1);
+    expect(data.tasks[0]).toMatchObject({ epicId: data.epic.id, title: "Build parser" });
+    expect(data.subtasks).toHaveLength(1);
+    expect(data.subtasks[0]).toMatchObject({ taskId: data.tasks[0]?.id, title: "Write tests" });
+    expect(data.dependencies).toMatchObject([
+      { sourceId: data.tasks[0]?.id, dependsOnId: data.subtasks[0]?.id },
+    ]);
+    expect(data.result.mappings).toEqual([
+      { kind: "task", tempKey: "task-1", id: data.tasks[0]?.id ?? "" },
+      { kind: "subtask", tempKey: "sub-1", id: data.subtasks[0]?.id ?? "" },
+    ]);
+    expect(data.result.counts).toEqual({ tasks: 1, subtasks: 1, dependencies: 1 });
+  });
+
+  test("create rolls back epic when temp-key refs are invalid", async (): Promise<void> => {
+    const cwd = createWorkspace();
+    const result = await runEpic({
+      cwd,
+      mode: "toon",
+      args: [
+        "create",
+        "--title",
+        "Roadmap",
+        "--description",
+        "Top-level work",
+        "--task",
+        "task-1|Build parser|Parser desc|todo",
+        "--dep",
+        "@task-1|@missing-subtask",
+      ],
+    });
+
+    expect(result.ok).toBeFalse();
+    expect(result.error?.code).toBe("invalid_input");
+    expect(result.human).toContain("Unknown temp key @missing-subtask");
+
+    const listed = await runEpic({ cwd, mode: "toon", args: ["list", "--all"] });
+    expect(listed.ok).toBeTrue();
+    expect((listed.data as { epics: unknown[] }).epics).toEqual([]);
+  });
+
   test("epic show returns aggregate tree", async (): Promise<void> => {
     const cwd = createWorkspace();
     const createdEpic = await runEpic({
