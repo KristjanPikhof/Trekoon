@@ -11,6 +11,9 @@ All notable changes to Trekoon are documented in this file.
   - `subtask create-many`
   - `dep add-many`
   - `epic expand`
+- One-shot bulk epic creation via `epic create` with repeated `--task`,
+  `--subtask`, and `--dep` specs, so a full plan tree can be created without
+  a pre-existing epic id.
 - Temp-key based same-invocation planning for `epic expand`, including
   `@temp-key` references before UUIDs exist.
 - Compact result mappings so machine consumers can translate temp keys to
