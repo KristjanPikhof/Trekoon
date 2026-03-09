@@ -129,6 +129,7 @@ Dependencies define what must be completed before a task can start. A task/subta
 
 ```bash
 trekoon dep add <source-id> <depends-on-id> --toon
+trekoon dep add-many --dep "<source-id>|<depends-on-id>" --toon
 trekoon dep list <source-id> --toon
 trekoon dep remove <source-id> <depends-on-id> --toon
 trekoon dep reverse <task-or-subtask-id> --toon
@@ -155,6 +156,15 @@ The response `data.dependencies` array contains entries with:
 1. A task with dependencies should only be marked `in_progress` when ALL dependencies have status `done`
 2. Dependencies can only exist between tasks and subtasks (not epics)
 3. Cycles are automatically detected and rejected
+4. Standalone `dep add-many` resolves persisted IDs only; `@temp-key` refs do not carry across prior commands
+
+### Batch dependency rule of thumb
+
+- Use `dep add` for one known edge.
+- Use `dep add-many` when every dependency endpoint already has a persisted UUID
+  and you want one ordered transactional link step.
+- Use `epic expand` instead when dependency refs need to point at tasks or
+  subtasks being created in the same invocation via `@temp-key`.
 
 ## 3) Task Completion Flow
 
@@ -269,6 +279,152 @@ Notes:
 - `description` is required for epic/task create and it must be well written.
 - `status` defaults to `todo` if omitted.
 - `description` is optional for subtask create.
+
+### Batch create and expand workflows
+
+Use batch commands when one invocation should create multiple related records
+atomically. Use single-item commands when only one record is needed or when you
+already have persisted IDs and do not need temp-key linking.
+
+#### `task create-many`
+
+Use when:
+
+- creating several sibling tasks under one existing epic
+- you want one validation/create step and a temp-key → UUID mapping back
+
+```bash
+trekoon task create-many --epic <epic-id> \
+  --task "seed-api|Design API|Define grammar|todo" \
+  --task "seed-cli|Wire CLI|Hook command output|todo" \
+  --toon
+```
+
+Spec rules:
+
+- `--task <temp-key>|<title>|<description>|<status>`
+- repeated `--task` flags are preserved in declared order
+- temp keys are local labels used only in the returned mapping
+
+Result mapping to expect:
+
+```text
+data:
+  epicId: <epic-id>
+  tasks[]: created tasks in input order
+  result:
+    mappings[]: { kind: task, tempKey, id }
+```
+
+#### `subtask create-many`
+
+Use when:
+
+- creating several sibling subtasks under one existing task
+- no cross-parent linking is needed in the same invocation
+
+```bash
+trekoon subtask create-many <task-id> \
+  --subtask "seed-tests|Write tests|Cover parser cases|todo" \
+  --subtask "seed-docs|Document behavior|Add operator notes|todo" \
+  --toon
+```
+
+Task-id rules:
+
+- pass the parent either as positional `<task-id>` or `--task <task-id>`
+- if both are present, they must match exactly or Trekoon fails
+
+Result mapping to expect:
+
+```text
+data:
+  taskId: <task-id>
+  subtasks[]: created subtasks in input order
+  result:
+    mappings[]: { kind: subtask, tempKey, id }
+```
+
+#### `dep add-many`
+
+Use when:
+
+- adding multiple dependency edges after all referenced nodes already exist
+- you need ordered validation and linking in one transaction
+
+```bash
+trekoon dep add-many \
+  --dep "<task-b>|<task-a>" \
+  --dep "<subtask-c>|<task-b>" \
+  --toon
+```
+
+Important temp-key limitation:
+
+- standalone `dep add-many` does **not** resolve unresolved `@temp-key` refs
+  from earlier commands
+- `@temp-key` refs are for same-invocation workflows such as `epic expand`
+
+Result mapping to expect:
+
+```text
+data:
+  dependencies[]: created dependencies in input order
+  result:
+    mappings[]: []
+```
+
+#### `epic expand`
+
+Use when:
+
+- one invocation should create tasks, subtasks, and dependencies together
+- later specs need to refer to earlier created records before UUIDs exist
+
+```bash
+trekoon epic expand <epic-id> \
+  --task "task-api|Design API|Define grammar|todo" \
+  --subtask "@task-api|sub-tests|Write tests|Cover parser cases|todo" \
+  --dep "@task-api|@sub-tests" \
+  --toon
+```
+
+How temp keys work:
+
+- declare a task/subtask with a plain temp key like `task-api` or `sub-tests`
+- refer to it later in the same `epic expand` invocation as `@task-api` or
+  `@sub-tests`
+- temp keys are transient planning handles; UUIDs are returned only after create
+- if a referenced temp key is unknown, the entire expansion fails and rolls back
+
+Background phases Trekoon performs:
+
+1. validate compact specs, required fields, and duplicate temp keys
+2. create records transactionally
+3. resolve temp-key refs for subtask parents and dependency endpoints
+4. link dependencies
+5. append task events, then subtask events, then dependency events
+6. roll back the whole batch on any failure
+
+Result mapping to expect:
+
+```text
+data:
+  epicId: <epic-id>
+  tasks[]: created tasks in input order
+  subtasks[]: created subtasks in input order
+  dependencies[]: created dependencies in input order
+  result:
+    mappings[]: { kind: task|subtask, tempKey, id }
+    counts: { tasks, subtasks, dependencies }
+```
+
+### Batch rollback guarantees
+
+- batch commands validate the full request before partial success is exposed
+- invalid compact specs, unresolved temp keys, missing ids, duplicates, or
+  cycles fail the entire batch
+- on failure, Trekoon rolls back created rows and linked dependency/event work
 
 ## 6) Update work
 
