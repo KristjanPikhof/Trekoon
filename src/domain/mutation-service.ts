@@ -4,6 +4,7 @@ import { appendEventWithGitContext } from "../sync/event-writes";
 import { ENTITY_OPERATIONS } from "./mutation-operations";
 import { TrackerDomain } from "./tracker-domain";
 import {
+  type CompactEpicCreateResult,
   type CompactEpicExpandResult,
   type CompactDependencyBatchAddResult,
   type CompactDependencySpec,
@@ -108,6 +109,66 @@ export class MutationService {
         status: epic.status,
       });
       return epic;
+    })();
+  }
+
+  createEpicGraph(input: {
+    title: string;
+    description: string;
+    status?: string | undefined;
+    taskSpecs: readonly CompactTaskSpec[];
+    subtaskSpecs: readonly CompactSubtaskSpec[];
+    dependencySpecs: readonly CompactDependencySpec[];
+  }): CompactEpicCreateResult {
+    return this.#db.transaction((): CompactEpicCreateResult => {
+      const epic = this.#domain.createEpic(input);
+      const created = this.#domain.expandEpic({
+        epicId: epic.id,
+        taskSpecs: input.taskSpecs,
+        subtaskSpecs: input.subtaskSpecs,
+        dependencySpecs: input.dependencySpecs,
+      });
+
+      this.#appendEntityEvent("epic", epic.id, ENTITY_OPERATIONS.epic.created, {
+        title: epic.title,
+        description: epic.description,
+        status: epic.status,
+      });
+
+      for (const task of created.tasks) {
+        this.#appendEntityEvent("task", task.id, ENTITY_OPERATIONS.task.created, {
+          epic_id: task.epicId,
+          title: task.title,
+          description: task.description,
+          status: task.status,
+        });
+      }
+
+      for (const subtask of created.subtasks) {
+        this.#appendEntityEvent("subtask", subtask.id, ENTITY_OPERATIONS.subtask.created, {
+          task_id: subtask.taskId,
+          title: subtask.title,
+          description: subtask.description,
+          status: subtask.status,
+        });
+      }
+
+      for (const dependency of created.dependencies) {
+        this.#appendEntityEvent("dependency", dependency.id, ENTITY_OPERATIONS.dependency.added, {
+          source_id: dependency.sourceId,
+          source_kind: dependency.sourceKind,
+          depends_on_id: dependency.dependsOnId,
+          depends_on_kind: dependency.dependsOnKind,
+        });
+      }
+
+      return {
+        epic,
+        tasks: created.tasks,
+        subtasks: created.subtasks,
+        dependencies: created.dependencies,
+        result: created.result,
+      };
     })();
   }
 
