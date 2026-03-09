@@ -401,6 +401,18 @@ function rowExists(db: Database, tableName: string, id: string): boolean {
   return row !== null;
 }
 
+function dependencyNodeExists(db: Database, nodeKind: string, nodeId: string): boolean {
+  if (nodeKind === "task") {
+    return rowExists(db, "tasks", nodeId);
+  }
+
+  if (nodeKind === "subtask") {
+    return rowExists(db, "subtasks", nodeId);
+  }
+
+  return false;
+}
+
 function validateRequiredStringField(fields: Record<string, unknown>, fieldName: string): string | null {
   const value: unknown = fields[fieldName];
   if (typeof value !== "string" || value.length === 0) {
@@ -500,6 +512,10 @@ function applyCreate(db: Database, event: StoredEvent, fields: Record<string, un
   const dependsOnKind = validateRequiredStringField(fields, "depends_on_kind");
 
   if (!sourceId || !sourceKind || !dependsOnId || !dependsOnKind) {
+    return false;
+  }
+
+  if (!dependencyNodeExists(db, sourceKind, sourceId) || !dependencyNodeExists(db, dependsOnKind, dependsOnId)) {
     return false;
   }
 
@@ -625,6 +641,28 @@ function applyEntityFields(db: Database, event: StoredEvent, fields: Record<stri
   return false;
 }
 
+function applyReplayedCreateWithConflicts(
+  db: Database,
+  event: StoredEvent,
+  fields: Record<string, unknown>,
+  withheldConflictCount: number,
+): boolean {
+  if (withheldConflictCount === 0 || !event.operation.endsWith(".created")) {
+    return false;
+  }
+
+  const tableName = tableForEntityKind(event.entity_kind);
+  if (!tableName || !rowExists(db, tableName, event.entity_id)) {
+    return false;
+  }
+
+  if (Object.keys(fields).length === 0) {
+    return true;
+  }
+
+  return applyUpdatePatch(db, event, fields);
+}
+
 function storeEvent(db: Database, event: StoredEvent): void {
   db.query(
     `
@@ -727,11 +765,13 @@ export function syncPull(cwd: string, sourceBranch: string): PullSummary {
 
         const payload: EventPayload = { fields: payloadValidation.fields };
         const fieldsToApply: Record<string, unknown> = {};
+        let withheldConflictCount = 0;
 
         for (const [fieldName, value] of Object.entries(payload.fields)) {
           const conflict = entityFieldConflict(storage.db, sourceBranch, incoming, fieldName, value);
 
           if (conflict) {
+            withheldConflictCount += 1;
             conflictEvents += 1;
             createConflict(storage.db, incoming, fieldName, conflict.oursValue, conflict.theirsValue);
             createdConflicts += 1;
@@ -742,6 +782,8 @@ export function syncPull(cwd: string, sourceBranch: string): PullSummary {
         }
 
         if (applyEntityFields(storage.db, incoming, fieldsToApply)) {
+          appliedEvents += 1;
+        } else if (applyReplayedCreateWithConflicts(storage.db, incoming, fieldsToApply, withheldConflictCount)) {
           appliedEvents += 1;
         } else if (incoming.operation !== "resolve_conflict") {
           applyRejectedEvents += 1;
