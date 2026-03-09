@@ -12,6 +12,7 @@ import {
   readMissingOptionValue,
   readOption,
   readOptions,
+  readUnexpectedPositionals,
   resolvePreviewApplyMode,
   suggestOptions,
 } from "./arg-parser";
@@ -228,6 +229,29 @@ function failBatchSpec(command: string, human: string, data: Record<string, unkn
   });
 }
 
+function failUnexpectedPositionals(command: string, unexpected: readonly string[]): CliResult {
+  return failBatchSpec(command, `Unexpected positional arguments: ${unexpected.join(", ")}.`, {
+    unexpectedPositionals: unexpected,
+  });
+}
+
+function failConflictingTaskIds(optionTaskId: string, positionalTaskId: string): CliResult {
+  return failBatchSpec("subtask.create-many", "Conflicting task ids for subtask create-many: positional task id must match --task.", {
+    option: "task",
+    optionTaskId,
+    positionalTaskId,
+  });
+}
+
+function failEmptyCompactField(command: string, option: string, index: number, rawSpec: string, field: string): CliResult {
+  return failBatchSpec(command, `${option === "subtask" ? "Subtask" : "Spec"} spec ${index + 1} is missing a ${field}.`, {
+    option,
+    index,
+    rawSpec,
+    field,
+  });
+}
+
 function parseSubtaskCreateManySpecs(parentTaskId: string, rawSpecs: readonly string[]): { specs: CompactSubtaskSpec[]; error?: CliResult } {
   const specs: CompactSubtaskSpec[] = [];
   const seenTempKeys = new Set<string>();
@@ -308,6 +332,13 @@ function parseSubtaskCreateManySpecs(parentTaskId: string, rawSpecs: readonly st
       };
     }
 
+    if (description.trim().length === 0) {
+      return {
+        specs: [],
+        error: failEmptyCompactField("subtask.create-many", "subtask", index, rawSpec, "description"),
+      };
+    }
+
     seenTempKeys.add(tempKey);
     const spec: CompactSubtaskSpec = status.length > 0
       ? {
@@ -382,7 +413,24 @@ export async function runSubtask(context: CliContext): Promise<CliResult> {
           return failMissingOptionValue("subtask.create-many", missingCreateManyOption);
         }
 
-        const taskId = readOption(parsed.options, "task", "t") ?? parsed.positional[1];
+        const optionTaskId = readOption(parsed.options, "task", "t");
+        const positionalTaskId = parsed.positional[1];
+        const unexpectedPositionals = readUnexpectedPositionals(parsed, positionalTaskId === undefined ? 1 : 2);
+        if (unexpectedPositionals.length > 0) {
+          return failUnexpectedPositionals("subtask.create-many", unexpectedPositionals);
+        }
+
+        if (
+          optionTaskId !== undefined
+          && positionalTaskId !== undefined
+          && optionTaskId.trim().length > 0
+          && positionalTaskId.trim().length > 0
+          && optionTaskId !== positionalTaskId
+        ) {
+          return failConflictingTaskIds(optionTaskId, positionalTaskId);
+        }
+
+        const taskId = optionTaskId ?? positionalTaskId;
         if (taskId === undefined || taskId.trim().length === 0) {
           return failBatchSpec("subtask.create-many", "Provide --task (or positional task id) for subtask create-many.", {
             option: "task",
