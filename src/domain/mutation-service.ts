@@ -4,6 +4,12 @@ import { appendEventWithGitContext } from "../sync/event-writes";
 import { ENTITY_OPERATIONS } from "./mutation-operations";
 import { TrackerDomain } from "./tracker-domain";
 import {
+  type CompactDependencyBatchAddResult,
+  type CompactDependencySpec,
+  type CompactSubtaskBatchCreateResult,
+  type CompactSubtaskSpec,
+  type CompactTaskBatchCreateResult,
+  type CompactTaskSpec,
   type DependencyRecord,
   type EpicRecord,
   type SearchEntityMatch,
@@ -139,6 +145,21 @@ export class MutationService {
     })();
   }
 
+  createTaskBatch(input: { epicId: string; specs: readonly CompactTaskSpec[] }): CompactTaskBatchCreateResult {
+    return this.#db.transaction((): CompactTaskBatchCreateResult => {
+      const created = this.#domain.createTaskBatch(input);
+      for (const task of created.tasks) {
+        this.#appendEntityEvent("task", task.id, ENTITY_OPERATIONS.task.created, {
+          epic_id: task.epicId,
+          title: task.title,
+          description: task.description,
+          status: task.status,
+        });
+      }
+      return created;
+    })();
+  }
+
   updateTask(
     id: string,
     input: { title?: string | undefined; description?: string | undefined; status?: string | undefined },
@@ -180,6 +201,21 @@ export class MutationService {
     })();
   }
 
+  createSubtaskBatch(input: { taskId: string; specs: readonly CompactSubtaskSpec[] }): CompactSubtaskBatchCreateResult {
+    return this.#db.transaction((): CompactSubtaskBatchCreateResult => {
+      const created = this.#domain.createSubtaskBatch(input);
+      for (const subtask of created.subtasks) {
+        this.#appendEntityEvent("subtask", subtask.id, ENTITY_OPERATIONS.subtask.created, {
+          task_id: subtask.taskId,
+          title: subtask.title,
+          description: subtask.description,
+          status: subtask.status,
+        });
+      }
+      return created;
+    })();
+  }
+
   updateSubtask(
     id: string,
     input: { title?: string | undefined; description?: string | undefined; status?: string | undefined },
@@ -213,6 +249,21 @@ export class MutationService {
         depends_on_kind: dependency.dependsOnKind,
       });
       return dependency;
+    })();
+  }
+
+  addDependencyBatch(input: { specs: readonly CompactDependencySpec[] }): CompactDependencyBatchAddResult {
+    return this.#db.transaction((): CompactDependencyBatchAddResult => {
+      const created = this.#domain.addDependencyBatch(input);
+      for (const dependency of created.dependencies) {
+        this.#appendEntityEvent("dependency", dependency.id, ENTITY_OPERATIONS.dependency.added, {
+          source_id: dependency.sourceId,
+          source_kind: dependency.sourceKind,
+          depends_on_id: dependency.dependsOnId,
+          depends_on_kind: dependency.dependsOnKind,
+        });
+      }
+      return created;
     })();
   }
 
