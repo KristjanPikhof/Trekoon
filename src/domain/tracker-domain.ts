@@ -100,6 +100,11 @@ interface DependencyBatchValidationIssue {
   readonly details: Record<string, unknown>;
 }
 
+interface DependencyBatchResolution {
+  readonly spec?: ResolvedDependencyBatchSpec;
+  readonly issues: readonly DependencyBatchValidationIssue[];
+}
+
 function assertNonEmpty(field: string, value: string | undefined | null): string {
   const normalized: string = (value ?? "").trim();
   if (!normalized) {
@@ -752,10 +757,12 @@ export class TrackerDomain {
   }
 
   addDependencyBatch(input: { specs: readonly CompactDependencySpec[] }): CompactDependencyBatchAddResult {
-    const resolvedSpecs = input.specs.map((spec, index) => this.#resolveDependencyBatchSpec(index, spec));
-    const issues = this.#collectDependencyBatchIssues(resolvedSpecs);
+    const resolutions = input.specs.map((spec, index) => this.#resolveDependencyBatchSpec(index, spec));
+    const resolvedSpecs = resolutions.flatMap((resolution) => (resolution.spec === undefined ? [] : [resolution.spec]));
+    const issues = resolutions.flatMap((resolution) => resolution.issues).concat(this.#collectDependencyBatchIssues(resolvedSpecs));
     if (issues.length > 0) {
-      const firstIssue = issues[0] ?? null;
+      const orderedIssues = issues.sort((left, right) => left.index - right.index || left.type.localeCompare(right.type));
+      const firstIssue = orderedIssues[0] ?? null;
       throw new DomainError({
         code: "invalid_dependency",
         message:
@@ -765,7 +772,7 @@ export class TrackerDomain {
               ? "dependency batch contains duplicate edges"
               : "dependency batch contains cycles",
         details: {
-          issues,
+          issues: orderedIssues,
           firstIssue,
         },
       });
@@ -881,64 +888,55 @@ export class TrackerDomain {
     return row ? mapDependency(row) : null;
   }
 
-  #resolveDependencyBatchSpec(index: number, spec: CompactDependencySpec): ResolvedDependencyBatchSpec {
-    const sourceId = this.#resolveDependencyBatchId(spec.source, "source", index);
-    const dependsOnId = this.#resolveDependencyBatchId(spec.dependsOn, "dependsOn", index);
+  #resolveDependencyBatchSpec(index: number, spec: CompactDependencySpec): DependencyBatchResolution {
+    const sourceResolution = this.#resolveDependencyBatchId(spec.source, "source", index);
+    const dependsOnResolution = this.#resolveDependencyBatchId(spec.dependsOn, "dependsOn", index);
+    const issues = [...sourceResolution.issues, ...dependsOnResolution.issues];
+    const sourceId = sourceResolution.id;
+    const dependsOnId = dependsOnResolution.id;
+
+    if (sourceId === undefined || dependsOnId === undefined) {
+      return {
+        issues,
+      };
+    }
 
     if (sourceId === dependsOnId) {
-      throw new DomainError({
-        code: "invalid_dependency",
-        message: "dependency batch contains cycles",
-        details: {
-          issues: [
-            {
-              index,
-              type: "cycle",
-              sourceId,
-              dependsOnId,
-              details: { sourceId, dependsOnId, reason: "self_reference" },
-            },
-          ],
-          firstIssue: {
+      return {
+        issues: [
+          ...issues,
+          {
             index,
             type: "cycle",
             sourceId,
             dependsOnId,
             details: { sourceId, dependsOnId, reason: "self_reference" },
           },
-        },
-      });
+        ],
+      };
     }
 
     return {
-      index,
-      sourceId,
-      sourceKind: this.resolveNodeKind(sourceId),
-      dependsOnId,
-      dependsOnKind: this.resolveNodeKind(dependsOnId),
+      spec: {
+        index,
+        sourceId,
+        sourceKind: this.resolveNodeKind(sourceId),
+        dependsOnId,
+        dependsOnKind: this.resolveNodeKind(dependsOnId),
+      },
+      issues,
     };
   }
 
-  #resolveDependencyBatchId(reference: CompactEntityRef, field: "source" | "dependsOn", index: number): string {
+  #resolveDependencyBatchId(
+    reference: CompactEntityRef,
+    field: "source" | "dependsOn",
+    index: number,
+  ): { readonly id?: string; readonly issues: readonly DependencyBatchValidationIssue[] } {
     if (reference.kind === "temp_key") {
-      throw new DomainError({
-        code: "invalid_dependency",
-        message: "dependency batch contains missing ids",
-        details: {
-          issues: [
-            {
-              index,
-              type: "missing_id",
-              sourceId: field === "source" ? `@${reference.tempKey}` : "",
-              dependsOnId: field === "dependsOn" ? `@${reference.tempKey}` : "",
-              details: {
-                field,
-                tempKey: reference.tempKey,
-                message: `Unresolved temp key @${reference.tempKey}`,
-              },
-            },
-          ],
-          firstIssue: {
+      return {
+        issues: [
+          {
             index,
             type: "missing_id",
             sourceId: field === "source" ? `@${reference.tempKey}` : "",
@@ -949,32 +947,17 @@ export class TrackerDomain {
               message: `Unresolved temp key @${reference.tempKey}`,
             },
           },
-        },
-      });
+        ],
+      };
     }
 
     const id = assertNonEmpty(field === "source" ? "sourceId" : "dependsOnId", reference.id);
     const task = this.getTask(id);
     const subtask = this.getSubtask(id);
     if (!task && !subtask) {
-      throw new DomainError({
-        code: "invalid_dependency",
-        message: "dependency batch contains missing ids",
-        details: {
-          issues: [
-            {
-              index,
-              type: "missing_id",
-              sourceId: field === "source" ? id : "",
-              dependsOnId: field === "dependsOn" ? id : "",
-              details: {
-                field,
-                id,
-                message: `Node not found: ${id}`,
-              },
-            },
-          ],
-          firstIssue: {
+      return {
+        issues: [
+          {
             index,
             type: "missing_id",
             sourceId: field === "source" ? id : "",
@@ -985,11 +968,11 @@ export class TrackerDomain {
               message: `Node not found: ${id}`,
             },
           },
-        },
-      });
+        ],
+      };
     }
 
-    return id;
+    return { id, issues: [] };
   }
 
   #collectDependencyBatchIssues(specs: readonly ResolvedDependencyBatchSpec[]): DependencyBatchValidationIssue[] {
