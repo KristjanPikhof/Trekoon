@@ -1,5 +1,66 @@
 export type NodeKind = "epic" | "task" | "subtask";
 
+export const COMPACT_TEMP_KEY_PREFIX = "@";
+
+export type CompactTempKey = string;
+
+export interface CompactTempKeyRef {
+  readonly kind: "temp_key";
+  readonly tempKey: CompactTempKey;
+}
+
+export interface CompactEntityIdRef {
+  readonly kind: "id";
+  readonly id: string;
+}
+
+export type CompactEntityRef = CompactTempKeyRef | CompactEntityIdRef;
+
+export interface CompactTaskSpec {
+  readonly tempKey: CompactTempKey;
+  readonly title: string;
+  readonly description: string;
+  readonly status?: string;
+}
+
+export interface CompactSubtaskSpec {
+  readonly parent: CompactEntityRef;
+  readonly tempKey: CompactTempKey;
+  readonly title: string;
+  readonly description: string;
+  readonly status?: string;
+}
+
+export interface CompactDependencySpec {
+  readonly source: CompactEntityRef;
+  readonly dependsOn: CompactEntityRef;
+}
+
+export interface CompactTempKeyMapping<TKind extends Extract<NodeKind, "task" | "subtask"> = Extract<NodeKind, "task" | "subtask">> {
+  readonly kind: TKind;
+  readonly tempKey: CompactTempKey;
+  readonly id: string;
+}
+
+export interface CompactBatchResultContract {
+  readonly mappings: ReadonlyArray<CompactTempKeyMapping>;
+}
+
+export interface CompactTaskBatchCreateResult {
+  readonly tasks: ReadonlyArray<TaskRecord>;
+  readonly result: CompactBatchResultContract;
+}
+
+export interface CompactSubtaskBatchCreateResult {
+  readonly subtasks: ReadonlyArray<SubtaskRecord>;
+  readonly result: CompactBatchResultContract;
+}
+
+export interface CompactDependencyBatchAddResult {
+  readonly dependencies: ReadonlyArray<DependencyRecord>;
+  readonly result: CompactBatchResultContract;
+}
+
 export interface EpicRecord {
   readonly id: string;
   readonly title: string;
