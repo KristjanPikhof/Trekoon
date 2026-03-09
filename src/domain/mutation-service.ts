@@ -4,6 +4,7 @@ import { appendEventWithGitContext } from "../sync/event-writes";
 import { ENTITY_OPERATIONS } from "./mutation-operations";
 import { TrackerDomain } from "./tracker-domain";
 import {
+  type CompactEpicExpandResult,
   type CompactDependencyBatchAddResult,
   type CompactDependencySpec,
   type CompactSubtaskBatchCreateResult,
@@ -156,6 +157,45 @@ export class MutationService {
           status: task.status,
         });
       }
+      return created;
+    })();
+  }
+
+  expandEpic(input: {
+    epicId: string;
+    taskSpecs: readonly CompactTaskSpec[];
+    subtaskSpecs: readonly CompactSubtaskSpec[];
+    dependencySpecs: readonly CompactDependencySpec[];
+  }): CompactEpicExpandResult {
+    return this.#db.transaction((): CompactEpicExpandResult => {
+      const created = this.#domain.expandEpic(input);
+      for (const task of created.tasks) {
+        this.#appendEntityEvent("task", task.id, ENTITY_OPERATIONS.task.created, {
+          epic_id: task.epicId,
+          title: task.title,
+          description: task.description,
+          status: task.status,
+        });
+      }
+
+      for (const subtask of created.subtasks) {
+        this.#appendEntityEvent("subtask", subtask.id, ENTITY_OPERATIONS.subtask.created, {
+          task_id: subtask.taskId,
+          title: subtask.title,
+          description: subtask.description,
+          status: subtask.status,
+        });
+      }
+
+      for (const dependency of created.dependencies) {
+        this.#appendEntityEvent("dependency", dependency.id, ENTITY_OPERATIONS.dependency.added, {
+          source_id: dependency.sourceId,
+          source_kind: dependency.sourceKind,
+          depends_on_id: dependency.dependsOnId,
+          depends_on_kind: dependency.dependsOnKind,
+        });
+      }
+
       return created;
     })();
   }
