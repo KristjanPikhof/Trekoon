@@ -195,6 +195,21 @@ describe("epic command", (): void => {
     expect((shown.data as { tree: { tasks: unknown[] } }).tree.tasks).toEqual([]);
   });
 
+  test("expand rejects unexpected positional args before parsing specs", async (): Promise<void> => {
+    const cwd = createWorkspace();
+    const epic = await createEpic(cwd, { title: "Roadmap", description: "Top-level work" });
+
+    const expanded = await runEpic({
+      cwd,
+      mode: "toon",
+      args: ["expand", epic.id, "extra", "--task", "task-1|Build parser|Parser desc|todo"],
+    });
+
+    expect(expanded.ok).toBeFalse();
+    expect(expanded.error?.code).toBe("invalid_input");
+    expect(expanded.human).toContain("Unexpected positional arguments: extra.");
+  });
+
   test("show defaults to table and handles empty task tree", async (): Promise<void> => {
     const cwd = createWorkspace();
     const createdEpic = await runEpic({
