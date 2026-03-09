@@ -79,6 +79,69 @@ describe("dep command", (): void => {
     expect((removed.data as { removed: number }).removed).toBe(1);
   });
 
+  test("add-many adds dependencies in declared order", async (): Promise<void> => {
+    const cwd = createWorkspace();
+    const nodes = await createTaskGraph(cwd);
+
+    const added = await runDep({
+      cwd,
+      mode: "toon",
+      args: ["add-many", "--dep", `${nodes.taskA}|${nodes.taskB}`, "--dep", `${nodes.subtask}|${nodes.taskA}`],
+    });
+
+    expect(added.ok).toBeTrue();
+    expect((added.data as { dependencies: Array<{ sourceId: string; dependsOnId: string }> }).dependencies).toMatchObject([
+      { sourceId: nodes.taskA, dependsOnId: nodes.taskB },
+      { sourceId: nodes.subtask, dependsOnId: nodes.taskA },
+    ]);
+  });
+
+  test("add-many reports deterministic duplicate and cycle issues without partial inserts", async (): Promise<void> => {
+    const cwd = createWorkspace();
+    const nodes = await createTaskGraph(cwd);
+
+    const existing = await runDep({ cwd, mode: "human", args: ["add", nodes.taskA, nodes.taskB] });
+    expect(existing.ok).toBeTrue();
+
+    const added = await runDep({
+      cwd,
+      mode: "toon",
+      args: ["add-many", "--dep", `${nodes.taskA}|${nodes.taskB}`, "--dep", `${nodes.taskB}|${nodes.taskA}`],
+    });
+
+    expect(added.ok).toBeFalse();
+    expect(added.error?.code).toBe("invalid_dependency");
+    expect((added.data as { issues: Array<{ index: number; type: string; sourceId: string; dependsOnId: string }> }).issues).toMatchObject([
+      { index: 0, type: "duplicate", sourceId: nodes.taskA, dependsOnId: nodes.taskB },
+      { index: 1, type: "cycle", sourceId: nodes.taskB, dependsOnId: nodes.taskA },
+    ]);
+
+    const listA = await runDep({ cwd, mode: "toon", args: ["list", nodes.taskA] });
+    const listB = await runDep({ cwd, mode: "toon", args: ["list", nodes.taskB] });
+    expect((listA.data as { dependencies: Array<{ sourceId: string; dependsOnId: string }> }).dependencies).toMatchObject([
+      { sourceId: nodes.taskA, dependsOnId: nodes.taskB },
+    ]);
+    expect((listB.data as { dependencies: unknown[] }).dependencies).toEqual([]);
+  });
+
+  test("add-many reports missing ids deterministically", async (): Promise<void> => {
+    const cwd = createWorkspace();
+    const nodes = await createTaskGraph(cwd);
+
+    const added = await runDep({
+      cwd,
+      mode: "toon",
+      args: ["add-many", "--dep", `${nodes.taskA}|missing-node-id`],
+    });
+
+    expect(added.ok).toBeFalse();
+    expect(added.error?.code).toBe("invalid_dependency");
+    expect((added.data as { firstIssue: { type: string }; issues: Array<{ index: number; type: string; details: { id: string } }> }).firstIssue.type).toBe("missing_id");
+    expect((added.data as { issues: Array<{ index: number; type: string; details: { id: string } }> }).issues).toMatchObject([
+      { index: 0, type: "missing_id", details: { id: "missing-node-id" } },
+    ]);
+  });
+
   test("enforces referential checks for task/subtask nodes", async (): Promise<void> => {
     const cwd = createWorkspace();
     const nodes = await createTaskGraph(cwd);
