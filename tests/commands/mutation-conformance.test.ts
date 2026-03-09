@@ -234,17 +234,178 @@ describe("mutation conformance", (): void => {
     });
     expect(addedDeps.ok).toBeTrue();
 
-    expect(eventOperationsForEntity(cwd, "task", taskAId ?? "")).toEqual([ENTITY_OPERATIONS.task.created]);
-    expect(eventOperationsForEntity(cwd, "task", taskBId ?? "")).toEqual([ENTITY_OPERATIONS.task.created]);
-    expect(eventOperationsForEntity(cwd, "subtask", subtaskAId ?? "")).toEqual([ENTITY_OPERATIONS.subtask.created]);
-    expect(eventOperationsForEntity(cwd, "subtask", subtaskBId ?? "")).toEqual([ENTITY_OPERATIONS.subtask.created]);
+    expect(eventRowsForEntity(cwd, "task", taskAId ?? "")).toEqual([
+      {
+        operation: ENTITY_OPERATIONS.task.created,
+        payload: {
+          fields: {
+            epic_id: epicId,
+            title: "Task A",
+            description: "A",
+            status: "todo",
+          },
+        },
+      },
+    ]);
+    expect(eventRowsForEntity(cwd, "task", taskBId ?? "")).toEqual([
+      {
+        operation: ENTITY_OPERATIONS.task.created,
+        payload: {
+          fields: {
+            epic_id: epicId,
+            title: "Task B",
+            description: "B",
+            status: "todo",
+          },
+        },
+      },
+    ]);
+    expect(eventRowsForEntity(cwd, "subtask", subtaskAId ?? "")).toEqual([
+      {
+        operation: ENTITY_OPERATIONS.subtask.created,
+        payload: {
+          fields: {
+            task_id: taskAId,
+            title: "Subtask A",
+            description: "desc",
+            status: "todo",
+          },
+        },
+      },
+    ]);
+    expect(eventRowsForEntity(cwd, "subtask", subtaskBId ?? "")).toEqual([
+      {
+        operation: ENTITY_OPERATIONS.subtask.created,
+        payload: {
+          fields: {
+            task_id: taskAId,
+            title: "Subtask B",
+            description: "desc",
+            status: "done",
+          },
+        },
+      },
+    ]);
 
     const storage = openTrekoonDatabase(cwd);
     try {
+      const dependencyIds = (addedDeps.data as { dependencies: Array<{ id: string }> }).dependencies.map((dependency) => dependency.id);
       const addedRows = storage.db
-        .query("SELECT payload FROM events WHERE entity_kind = 'dependency' AND operation = ? ORDER BY created_at ASC;")
-        .all(ENTITY_OPERATIONS.dependency.added) as Array<{ payload: string }>;
-      expect(addedRows).toHaveLength(2);
+        .query("SELECT entity_id, payload FROM events WHERE entity_kind = 'dependency' AND operation = ? ORDER BY created_at ASC, id ASC;")
+        .all(ENTITY_OPERATIONS.dependency.added) as Array<{ entity_id: string; payload: string }>;
+      expect(addedRows.map((row) => ({ entityId: row.entity_id, payload: JSON.parse(row.payload) }))).toEqual([
+        {
+          entityId: dependencyIds[0] ?? "",
+          payload: {
+            fields: {
+              source_id: taskBId,
+              source_kind: "task",
+              depends_on_id: taskAId,
+              depends_on_kind: "task",
+            },
+          },
+        },
+        {
+          entityId: dependencyIds[1] ?? "",
+          payload: {
+            fields: {
+              source_id: subtaskBId,
+              source_kind: "subtask",
+              depends_on_id: subtaskAId,
+              depends_on_kind: "subtask",
+            },
+          },
+        },
+      ]);
+    } finally {
+      storage.close();
+    }
+  });
+
+  test("epic expand rolls back task and subtask creates when dependency refs are unresolved", async (): Promise<void> => {
+    const cwd = createWorkspace();
+
+    const epic = await runEpic({
+      cwd,
+      mode: "toon",
+      args: ["create", "--title", "Roadmap", "--description", "Scope"],
+    });
+    const epicId = (epic.data as { epic: { id: string } }).epic.id;
+
+    const expanded = await runEpic({
+      cwd,
+      mode: "toon",
+      args: [
+        "expand",
+        epicId,
+        "--task",
+        "task-1|Task A|A|todo",
+        "--subtask",
+        "@task-1|sub-1|Subtask A|desc|todo",
+        "--dep",
+        "@task-1|@missing-subtask",
+      ],
+    });
+
+    expect(expanded.ok).toBeFalse();
+    expect(expanded.error?.code).toBe("invalid_input");
+    expect(expanded.human).toContain("Unknown temp key @missing-subtask");
+
+    const storage = openTrekoonDatabase(cwd);
+    try {
+      const tasks = storage.db.query("SELECT COUNT(*) AS count FROM tasks WHERE epic_id = ?;").get(epicId) as { count: number };
+      const subtasks = storage.db.query("SELECT COUNT(*) AS count FROM subtasks;").get() as { count: number };
+      const deps = storage.db.query("SELECT COUNT(*) AS count FROM dependencies;").get() as { count: number };
+      const nonEpicEvents = storage.db
+        .query("SELECT entity_kind FROM events WHERE entity_kind IN ('task', 'subtask', 'dependency');")
+        .all() as Array<{ entity_kind: string }>;
+
+      expect(tasks.count).toBe(0);
+      expect(subtasks.count).toBe(0);
+      expect(deps.count).toBe(0);
+      expect(nonEpicEvents).toEqual([]);
+    } finally {
+      storage.close();
+    }
+  });
+
+  test("epic expand appends task, subtask, then dependency events", async (): Promise<void> => {
+    const cwd = createWorkspace();
+
+    const epic = await runEpic({
+      cwd,
+      mode: "toon",
+      args: ["create", "--title", "Roadmap", "--description", "Scope"],
+    });
+    const epicId = (epic.data as { epic: { id: string } }).epic.id;
+
+    const expanded = await runEpic({
+      cwd,
+      mode: "toon",
+      args: [
+        "expand",
+        epicId,
+        "--task",
+        "task-1|Task A|A|todo",
+        "--subtask",
+        "@task-1|sub-1|Subtask A|desc|todo",
+        "--dep",
+        "@task-1|@sub-1",
+      ],
+    });
+    expect(expanded.ok).toBeTrue();
+
+    const storage = openTrekoonDatabase(cwd);
+    try {
+      const rows = storage.db
+        .query("SELECT entity_kind, operation FROM events WHERE entity_kind IN ('task', 'subtask', 'dependency') ORDER BY created_at ASC;")
+        .all() as Array<{ entity_kind: string; operation: string }>;
+
+      expect(rows).toEqual([
+        { entity_kind: "task", operation: ENTITY_OPERATIONS.task.created },
+        { entity_kind: "subtask", operation: ENTITY_OPERATIONS.subtask.created },
+        { entity_kind: "dependency", operation: ENTITY_OPERATIONS.dependency.added },
+      ]);
     } finally {
       storage.close();
     }
