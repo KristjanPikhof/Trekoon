@@ -7,586 +7,255 @@ description: Use Trekoon to create issues/tasks, plan backlog and sprints, creat
 
 Trekoon is a local-first issue tracker for epics, tasks, and subtasks.
 
-## CRITICAL: Always Use --toon Flag
+This skill is the agent operating guide, not the full CLI reference. Use it to
+pick the right command with the fewest reads and mutations.
 
-**Every trekoon command MUST include `--toon` for machine-readable output.**
+## Non-negotiable defaults
 
-The `--toon` flag outputs structured YAML-like data that is easy to parse. Never run trekoon commands without it.
+- Always include `--toon` on every Trekoon command.
+- Prefer the smallest sufficient scope.
+- Prefer transactional bulk commands over many single-item commands.
+- Prefer `--append` for progress notes, completion notes, and blocker notes.
+- Preview replace before `--apply`.
+- Prefer `--ids` over `--all` for bulk updates.
+- Never edit `.trekoon/trekoon.db` directly.
+- Never run `trekoon wipe --yes --toon` unless the user explicitly asks for it.
 
-### TOON Output Format
+## Default agent loop
 
-All `--toon` output follows this structure:
+Run this loop each session:
 
-```yaml
-ok: true
-command: task.list
-data:
-  tasks[0]:
-    id: abc-123
-    epicId: epic-456
-    title: Implement feature X
-    status: todo
-    createdAt: 1700000000000
-    updatedAt: 1700000000000
-  tasks[1]:
-    id: def-789
-    epicId: epic-456
-    title: Write tests
-    status: in_progress
-    createdAt: 1700000001000
-    updatedAt: 1700000001000
-metadata:
-  contractVersion: 1.0.0
-  requestId: req-abc12345
-```
+1. Check sync baseline:
 
-On error:
-
-```yaml
-ok: false
-command: task.show
-data: {}
-metadata:
-  contractVersion: 1.0.0
-  requestId: req-def67890
-error:
-  code: not_found
-  message: task not found: invalid-id
-```
-
-### Key Fields
-
-| Field | Meaning |
-|-------|---------|
-| `ok` | `true` if command succeeded, `false` on error |
-| `command` | The command that was executed (e.g., `task.list`, `epic.create`) |
-| `data` | The response payload (tasks, epics, dependencies, etc.) |
-| `metadata` | Contract metadata (`contractVersion`, `requestId`) |
-| `meta` | Optional command-specific metadata (pagination/defaults/filters/diagnostics) |
-| `error` | Present only on failure, contains `code` and `message` |
-
-Use long flags (`--status`, `--description`, etc.) and ALWAYS append `--toon` to every command.
-
-### Contract details to rely on
-
-- Machine responses include `metadata.contractVersion` and `metadata.requestId`.
-- Command IDs are stable and typically dot namespaced (`task.list`, `sync.status`).
-- Some root commands use single-token IDs (`help`, `init`, `quickstart`, `wipe`, `version`).
-- Unknown options fail fast with deterministic `unknown_option` errors and may include:
-  - `data.option`
-  - `data.allowedOptions`
-  - `data.suggestions`
-
-### Compatibility mode (legacy sync consumers)
-
-Default behavior is strict canonical IDs (for example `sync.status`).
-
-If a legacy consumer still expects underscore sync IDs, compatibility mode can be used:
-
-```bash
-trekoon --toon --compat legacy-sync-command-ids sync status
-```
-
-When enabled, output includes `metadata.compatibility` with migration/deprecation details.
-
-## 1) Status Management
-
-### Status values
-
-Trekoon accepts any non-empty status string.
-
-Recommended statuses for consistent workflows:
-
-| Status | Meaning |
-|--------|---------|
-| `todo` | Work not started (default for new items) |
-| `in_progress` | Actively being worked on |
-| `done` | Completed successfully |
-
-Note: `in-progress` (hyphenated) is treated the same as `in_progress` for default list ordering/filtering.
-
-### When to Change Status
-
-| Transition | When to apply |
-|------------|---------------|
-| `todo → in_progress` | When you START working on a task/subtask/epic |
-| `in_progress → done` | When you COMPLETE the work and it is ready |
-
-### Status Change Commands
-
-```bash
-trekoon task update <task-id> --status in_progress --toon
-trekoon task update <task-id> --status done --toon
-trekoon subtask update <subtask-id> --status done --toon
-trekoon epic update <epic-id> --status done --toon
-```
-
-## 2) Dependency Management
-
-Dependencies define what must be completed before a task can start. A task/subtask can depend on other tasks/subtasks.
-
-### Commands
-
-```bash
-trekoon dep add <source-id> <depends-on-id> --toon
-trekoon dep add-many --dep "<source-id>|<depends-on-id>" --toon
-trekoon dep list <source-id> --toon
-trekoon dep remove <source-id> <depends-on-id> --toon
-trekoon dep reverse <task-or-subtask-id> --toon
-```
-
-- `<source-id>`: The task/subtask that has the dependency
-- `<depends-on-id>`: The task/subtask that must be completed first
-
-### Checking Dependencies
-
-Before starting any task, always check its dependencies:
-
-```bash
-trekoon dep list <task-id> --toon
-```
-
-The response `data.dependencies` array contains entries with:
-- `sourceId`: the task you're checking
-- `dependsOnId`: what must be done first
-- `dependsOnKind`: "task" or "subtask"
-
-### Dependency Rules
-
-1. A task with dependencies should only be marked `in_progress` when ALL dependencies have status `done`
-2. Dependencies can only exist between tasks and subtasks (not epics)
-3. Cycles are automatically detected and rejected
-4. Standalone `dep add-many` resolves persisted IDs only; `@temp-key` refs do not carry across prior commands
-
-### Batch dependency rule of thumb
-
-- Use `dep add` for one known edge.
-- Use `dep add-many` when every dependency endpoint already has a persisted UUID
-  and you want one ordered transactional link step.
-- Use `epic expand` instead when dependency refs need to point at tasks or
-  subtasks being created in the same invocation via `@temp-key`.
-
-## 3) Task Completion Flow
-
-### Canonical dependency-aware execution loop
-
-Run this sequence every session:
-
-1. Sync branch/worktree status:
    ```bash
-   trekoon sync status --toon
-   ```
-2. Pull deterministic ready candidates (or next candidate):
-   ```bash
-   trekoon task ready --limit 5 --toon
-   trekoon task next --toon
-   ```
-3. Inspect downstream impact before changes:
-   ```bash
-   trekoon dep reverse <task-or-subtask-id> --toon
-   ```
-4. Start work with explicit status updates:
-   ```bash
-   trekoon task update <task-id> --status in_progress --toon
-   ```
-5. Finish or block with appended context + final status:
-   ```bash
-   trekoon task update <task-id> --append "Completed implementation" --status done --toon
-   trekoon task update <task-id> --append "Blocked by <reason>" --status blocked --toon
+   trekoon --toon sync status
    ```
 
-### When Completing a Task
+   If this returns `missing_branch_db` on a fresh branch or worktree, continue
+   with local task selection and treat sync as unavailable for now.
 
-1. Mark the task as done:
+2. Pick the next item deterministically:
+
    ```bash
-   trekoon task update <task-id> --status done --toon
+   trekoon --toon task next
+   trekoon --toon task ready --limit 5
    ```
 
-2. To find the next task that was blocked by this one:
-   - Inspect downstream nodes: `trekoon dep reverse <task-id> --toon`
-   - Pull ready queue: `trekoon task ready --limit 5 --toon`
-   - Pick one deterministically: `trekoon task next --toon`
+3. Inspect dependencies or downstream impact when needed:
 
-### Finding Next Work
+   ```bash
+   trekoon --toon dep list <task-id>
+   trekoon --toon dep reverse <task-or-subtask-id>
+   ```
 
-```bash
-trekoon task ready --limit 5 --toon
-trekoon task next --toon
-trekoon dep reverse <task-or-subtask-id> --toon
-```
+4. Claim work explicitly:
 
-Use `task ready` for ranked candidates and `task next` for the top deterministic pick.
+   ```bash
+   trekoon --toon task update <task-id> --status in_progress
+   ```
 
-## 4) Load existing work first
+5. Finish or report a block with appended context:
 
-Before creating or changing anything, inspect current context:
+   ```bash
+   trekoon --toon task update <task-id> --append "Completed implementation and checks" --status done
+   trekoon --toon task update <task-id> --append "Blocked by <reason>" --status blocked
+   ```
 
-```bash
-trekoon epic list --toon
-trekoon task list --toon
-trekoon epic show <id> --all --toon
-trekoon task show <id> --all --toon
-```
+Recommended statuses for consistent workflows: `todo`, `in_progress`, `done`.
 
-- `epic list` / `task list` / `subtask list` defaults:
-  - open work only (`in_progress`, `in-progress`, `todo`)
-  - prioritized as `in_progress`/`in-progress` first, then `todo`
-  - default limit `10`
-  - `--cursor <n>` is offset-like pagination for list endpoints
-- Filter list explicitly when needed:
+## Read policy: use the smallest sufficient read
 
-```bash
-trekoon task list --status in_progress,todo --limit 20 --toon
-trekoon epic list --status done --toon
-trekoon task list --all --toon
-```
+Use the narrowest command that answers the question.
 
-- `--all` cannot be combined with `--status` or `--limit`.
-- `--all` cannot be combined with `--cursor`.
-- Machine pagination contract is in `meta.pagination.hasMore` and
-  `meta.pagination.nextCursor`.
-- Machine list/show responses may also include:
-  - `meta.defaults`
-  - `meta.filters`
-  - `meta.truncation`
-- `epic show <id> --all --toon`: full epic tree (tasks + subtasks)
-- `task show <id> --all --toon`: task plus its subtasks
+| Need | Preferred command |
+|---|---|
+| Next task | `trekoon --toon task next` |
+| A few ready options | `trekoon --toon task ready --limit 5` |
+| Direct blockers for one task | `trekoon --toon dep list <task-id>` |
+| What this item unblocks | `trekoon --toon dep reverse <task-or-subtask-id>` |
+| One full task payload | `trekoon --toon task show <task-id> --all` |
+| One full epic tree | `trekoon --toon epic show <epic-id> --all` |
+| Repeated text in one scope | `trekoon --toon epic|task|subtask search ...` |
 
-### Canonical storage root behavior
+Avoid broad scans such as `task list --all` or `epic show --all` when
+`task next`, `task ready`, `dep list`, `dep reverse`, or `search` can answer the
+question more cheaply.
 
-- In git repos/worktrees, Trekoon resolves storage from repository top-level so
-  nested cwd invocations use one canonical `.trekoon/trekoon.db`.
-- In non-git directories, Trekoon falls back to invocation cwd.
-- If invocation cwd differs from canonical root, machine output may include
-  `meta.storageRootDiagnostics`.
+## Creation policy: prefer bulk planning workflows
 
-### View Options
+When creating multiple related records, do not loop through repeated single-item
+creates unless only one record is needed.
 
-| Command | `--view` options |
-|---------|------------------|
-| `list` | `table` (default), `compact` |
-| `show` | `table` (default), `compact`, `tree`, `detail` |
+### Which command to use
 
-## 5) Create work (epic/task/subtask)
+| Situation | Preferred command |
+|---|---|
+| New epic and full graph already known | `trekoon --toon epic create ... --task ... --subtask ... --dep ...` |
+| Existing epic needs linked additions | `trekoon --toon epic expand <epic-id> ...` |
+| Multiple sibling tasks under one epic | `trekoon --toon task create-many --epic <epic-id> --task ...` |
+| Multiple sibling subtasks under one task | `trekoon --toon subtask create-many <task-id> --subtask ...` |
+| Multiple dependency edges across existing IDs | `trekoon --toon dep add-many --dep ...` |
+| One record only | `epic create`, `task create`, or `subtask create` |
 
-```bash
-trekoon epic create --title "..." --description "..." --status todo --toon
-trekoon epic create --title "..." --description "..." --task "<spec>" [--subtask "<spec>"] [--dep "<spec>"] --toon
-trekoon task create --epic <epic-id> --title "..." --description "..." --status todo --toon
-trekoon subtask create --task <task-id> --title "..." --description "..." --status todo --toon
-```
+### Critical temp-key rule
 
-Notes:
-- `description` is required for epic/task create and it must be well written.
-- `status` defaults to `todo` if omitted.
-- `description` is optional for subtask create.
-- `epic create` can run in one-shot planning mode with repeated `--task`,
-  `--subtask`, and `--dep` flags so a full executable tree is created without
-  needing a pre-existing epic id.
+- Use plain temp keys when declaring records in compact specs, for example
+  `task-api` or `sub-tests`.
+- Refer to those records later in the same invocation as `@task-api` or
+  `@sub-tests`.
+- `@temp-key` references work in same-invocation graph workflows such as
+  one-shot `epic create` and `epic expand`.
+- `dep add-many` does **not** resolve temp keys from earlier commands. Use real
+  persisted IDs there.
 
-### Batch create and expand workflows
+### Compact examples
 
-Use batch commands when one invocation should create multiple related records
-atomically. Use single-item commands when only one record is needed or when you
-already have persisted IDs and do not need temp-key linking.
+#### One-shot epic creation
 
-#### `epic create` (one-shot bulk mode)
-
-Use when:
-
-- you do not have an epic id yet
-- one invocation should create the epic plus tasks/subtasks/dependencies
-- dependency links need temp-key resolution inside the same command
+Use this when the epic does not exist yet and you already know the tree.
 
 ```bash
-trekoon epic create \
-  --title "Sprint 42" \
-  --description "Plan + execution tree" \
-  --task "task-api|Design API|Define grammar|todo" \
+trekoon --toon epic create \
+  --title "Batch command rollout" \
+  --description "Ship linked planning in one transaction" \
+  --task "task-api|Design API|Define compact grammar|todo" \
+  --task "task-cli|Wire CLI|Hook parser and output|todo" \
   --subtask "@task-api|sub-tests|Write tests|Cover parser cases|todo" \
-  --dep "@task-api|@sub-tests" \
-  --toon
+  --dep "@task-cli|@task-api"
 ```
 
-How this differs from `epic expand`:
+#### Expand an existing epic
 
-- `epic create` one-shot mode creates the epic and full tree together
-- `epic expand` adds a full tree to an already existing epic id
-
-Result mapping to expect:
-
-```text
-data:
-  epic: created epic
-  tasks[]: created tasks in input order
-  subtasks[]: created subtasks in input order
-  dependencies[]: created dependencies in input order
-  result:
-    mappings[]: { kind: task|subtask, tempKey, id }
-    counts: { tasks, subtasks, dependencies }
-```
-
-Rollback behavior:
-
-- same transactional guarantees as `epic expand`
-- malformed specs, unresolved temp keys, missing ids, duplicates, or cycles
-  fail the entire create request
-
-#### `task create-many`
-
-Use when:
-
-- creating several sibling tasks under one existing epic
-- you want one validation/create step and a temp-key → UUID mapping back
+Use this when the epic already exists and the new batch needs internal links.
 
 ```bash
-trekoon task create-many --epic <epic-id> \
+trekoon --toon epic expand <epic-id> \
+  --task "task-docs|Document workflow|Write operator guide|todo" \
+  --subtask "@task-docs|sub-examples|Add examples|Show canonical flows|todo" \
+  --dep "@sub-examples|@task-docs"
+```
+
+#### Create sibling tasks or subtasks
+
+```bash
+trekoon --toon task create-many --epic <epic-id> \
   --task "seed-api|Design API|Define grammar|todo" \
-  --task "seed-cli|Wire CLI|Hook command output|todo" \
-  --toon
+  --task "seed-cli|Wire CLI|Hook output|todo"
+
+trekoon --toon subtask create-many <task-id> \
+  --subtask "seed-tests|Write tests|Cover happy path|todo" \
+  --subtask "seed-docs|Document flow|Add notes|todo"
 ```
 
-Spec rules:
-
-- `--task <temp-key>|<title>|<description>|<status>`
-- repeated `--task` flags are preserved in declared order
-- temp keys are local labels used only in the returned mapping
-
-Result mapping to expect:
-
-```text
-data:
-  epicId: <epic-id>
-  tasks[]: created tasks in input order
-  result:
-    mappings[]: { kind: task, tempKey, id }
-```
-
-#### `subtask create-many`
-
-Use when:
-
-- creating several sibling subtasks under one existing task
-- no cross-parent linking is needed in the same invocation
+#### Add dependencies after records already exist
 
 ```bash
-trekoon subtask create-many <task-id> \
-  --subtask "seed-tests|Write tests|Cover parser cases|todo" \
-  --subtask "seed-docs|Document behavior|Add operator notes|todo" \
-  --toon
-```
-
-Task-id rules:
-
-- pass the parent either as positional `<task-id>` or `--task <task-id>`
-- if both are present, they must match exactly or Trekoon fails
-
-Result mapping to expect:
-
-```text
-data:
-  taskId: <task-id>
-  subtasks[]: created subtasks in input order
-  result:
-    mappings[]: { kind: subtask, tempKey, id }
-```
-
-#### `dep add-many`
-
-Use when:
-
-- adding multiple dependency edges after all referenced nodes already exist
-- you need ordered validation and linking in one transaction
-
-```bash
-trekoon dep add-many \
+trekoon --toon dep add-many \
   --dep "<task-b>|<task-a>" \
-  --dep "<subtask-c>|<task-b>" \
-  --toon
+  --dep "<subtask-c>|<task-b>"
 ```
 
-Important temp-key limitation:
+## Update policy: prefer append-based progress logging
 
-- standalone `dep add-many` does **not** resolve unresolved `@temp-key` refs
-  from earlier commands
-- `@temp-key` refs are for same-invocation workflows such as `epic expand`
+Use descriptions as the durable work log. For progress updates, append instead
+of rewriting full descriptions.
 
-Result mapping to expect:
-
-```text
-data:
-  dependencies[]: created dependencies in input order
-  result:
-    mappings[]: []
-```
-
-#### `epic expand`
-
-Use when:
-
-- the epic already exists
-- one invocation should add tasks, subtasks, and dependencies together
-- later specs need to refer to earlier created records before UUIDs exist
+### Preferred patterns
 
 ```bash
-trekoon epic expand <epic-id> \
-  --task "task-api|Design API|Define grammar|todo" \
-  --subtask "@task-api|sub-tests|Write tests|Cover parser cases|todo" \
-  --dep "@task-api|@sub-tests" \
-  --toon
+trekoon --toon task update <task-id> --append "Started implementation" --status in_progress
+trekoon --toon task update <task-id> --append "Completed implementation and checks" --status done
+trekoon --toon task update <task-id> --append "Blocked by <reason>" --status blocked
 ```
 
-How temp keys work:
+### Bulk update rules
 
-- declare a task/subtask with a plain temp key like `task-api` or `sub-tests`
-- refer to it later in the same `epic expand` invocation as `@task-api` or
-  `@sub-tests`
-- temp keys are transient planning handles; UUIDs are returned only after create
-- if a referenced temp key is unknown, the entire expansion fails and rolls back
+- Bulk update is available for `epic update`, `task update`, and
+  `subtask update`.
+- Bulk mode uses `--ids <csv>` or `--all`.
+- Bulk mode supports only `--append` and/or `--status`.
+- Do not pass a positional ID in bulk mode.
+- `--append` and `--description` are mutually exclusive.
+- Prefer `--ids` for narrow, explicit updates.
+- Use `--all` only for clear maintenance sweeps or when the user explicitly wants
+  a broad update.
 
-Background phases Trekoon performs:
-
-1. validate compact specs, required fields, and duplicate temp keys
-2. create records transactionally
-3. resolve temp-key refs for subtask parents and dependency endpoints
-4. link dependencies
-5. append task events, then subtask events, then dependency events
-6. roll back the whole batch on any failure
-
-Result mapping to expect:
-
-```text
-data:
-  epicId: <epic-id>
-  tasks[]: created tasks in input order
-  subtasks[]: created subtasks in input order
-  dependencies[]: created dependencies in input order
-  result:
-    mappings[]: { kind: task|subtask, tempKey, id }
-    counts: { tasks, subtasks, dependencies }
-```
-
-### Batch rollback guarantees
-
-- batch commands validate the full request before partial success is exposed
-- invalid compact specs, unresolved temp keys, missing ids, duplicates, or
-  cycles fail the entire batch
-- on failure, Trekoon rolls back created rows and linked dependency/event work
-- one-shot `epic create` also rolls back the epic row itself on failure
-
-## 6) Update work
-
-### Single-item update
+Examples:
 
 ```bash
-trekoon epic update <epic-id> --title "..." --description "..." --status in_progress --toon
-trekoon task update <task-id> --title "..." --description "..." --status in_progress --toon
-trekoon subtask update <subtask-id> --title "..." --description "..." --status in_progress --toon
+trekoon --toon task update --ids id1,id2 --append "Waiting on release" --status blocked
+trekoon --toon epic update --ids epic1,epic2 --append "Sprint planning refreshed" --status in_progress
 ```
 
-### Bulk update (task/epic)
+## Search and replace policy
+
+Use scoped search before manual tree reads when you need to locate repeated
+paths, labels, owners, or migration targets.
+
+### Scope choice
+
+Prefer the narrowest valid root:
+
+1. `subtask search` or `subtask replace`
+2. `task search` or `task replace`
+3. `epic search` or `epic replace`
+
+Scope behavior:
+
+- `subtask` scope scans only that subtask.
+- `task` scope scans the task plus descendant subtasks.
+- `epic` scope scans the epic plus descendant tasks and subtasks.
+
+### Safe replace workflow
+
+1. Search first.
+2. Preview replace.
+3. Apply only after preview matches the intended scope.
 
 ```bash
-trekoon task update --all --append "..." --status in_progress --toon
-trekoon task update --ids id1,id2 --append "..." --status in_progress --toon
-
-trekoon epic update --all --append "..." --status in_progress --toon
-trekoon epic update --ids id1,id2 --append "..." --status in_progress --toon
-```
-
-Rules:
-- `--all` and `--ids` are mutually exclusive.
-- In bulk mode, do not pass a positional ID.
-- Bulk update supports `--append` and/or `--status`.
-
-## 7) Scoped search/replace recipes for agents
-
-Use scoped search/replace instead of repeated `show` scans when you need to
-locate or migrate repeated text inside one issue tree.
-
-```bash
-trekoon epic search <epic-id> "path/to/somewhere" --toon
-trekoon task search <task-id> "path/to/somewhere" --toon
-trekoon subtask search <subtask-id> "path/to/somewhere" --toon
-
-trekoon epic replace <epic-id> --search "path/to/somewhere" --replace "path/to/new-path" --toon
-trekoon epic replace <epic-id> --search "path/to/somewhere" --replace "path/to/new-path" --apply --toon
+trekoon --toon epic search <epic-id> "path/to/somewhere"
+trekoon --toon epic replace <epic-id> --search "path/to/somewhere" --replace "path/to/new-path"
+trekoon --toon epic replace <epic-id> --search "path/to/somewhere" --replace "path/to/new-path" --apply
 ```
 
 Guardrails:
 
-- Use `search` first when you only need to confirm whether the text exists.
-- Use preview `replace` next to confirm the exact candidate set.
-- Use `--apply` only after preview matches the intended scope.
-- Prefer the narrowest root that satisfies the task: `subtask` → `task` →
-  `epic`.
-- Keep prompts deterministic: literal search text, explicit IDs, no regex
-  assumptions.
+- Use literal, explicit search text.
+- Narrow fields when useful: `--fields title`, `--fields description`, or
+  `--fields title,description`.
+- Do not jump straight to `--apply`.
+- Prefer scoped search/replace over manually reading a whole tree and editing
+  many records one by one.
 
-Agent contract for epic-scoped replace:
+## Setup and fallback
 
-- Exact search command:
-  `trekoon epic search <epic-id> "path/to/somewhere" --toon`
-- Exact replace command:
-  `trekoon epic replace <epic-id> --search "path/to/somewhere" --replace "path/to/new-path" --toon`
-- Apply command:
-  `trekoon epic replace <epic-id> --search "path/to/somewhere" --replace "path/to/new-path" --apply --toon`
-- Epic scope includes the epic title/description plus every task and subtask
-  title/description in that epic tree.
-
-Compact TOON fields to expect:
-
-```text
-ok: true
-command: epic.search
-data:
-  scope: epic
-  query: { search, fields[], mode: preview }
-  matches[]: { kind, id, fields[]: { field, count, snippet } }
-  summary: { matchedEntities, matchedFields, totalMatches }
-metadata:
-  contractVersion: 1.0.0
-  requestId: req-<id>
-```
-
-```text
-ok: true
-command: epic.replace
-data:
-  scope: epic
-  query: { search, replace, fields[], mode: preview|apply }
-  matches[]: { kind, id, fields[]: { field, count, snippet } }
-  summary: { matchedEntities, matchedFields, totalMatches, mode }
-metadata:
-  contractVersion: 1.0.0
-  requestId: req-<id>
-```
-
-Background behavior to assume:
-
-- Scope traversal is deterministic: epic first, then descendant tasks, then
-  descendant subtasks.
-- Field traversal is deterministic: `title` before `description`.
-- Preview reads and summarizes candidates without mutation.
-- `--apply` reuses the same scoped traversal, mutates only rows with real text
-  changes, and returns matched rows with `query.mode` and `summary.mode` set
-  to `"apply"`.
-
-## 8) Setup/install/init (if `trekoon` is unavailable)
-
-1. Install Trekoon (or make sure it is on `PATH`).
-2. In the target repository/worktree, initialize tracker state:
+If Trekoon is unavailable or state is missing:
 
 ```bash
-trekoon init --toon
+trekoon --toon init
+trekoon --toon quickstart
+trekoon --help --toon
 ```
 
-3. You can always run `trekoon quickstart --toon` or `trekoon --help --toon` to
-   get more information.
+Use `quickstart` for the canonical execution loop. Use `--help --toon` when you
+need exact syntax.
 
-If `.trekoon/trekoon.db` is missing, initialize before any create/update commands.
+## Sync reminders
 
-## 9) Safety
+- Run `trekoon --toon sync status` at session start and before PR or merge.
+- Before merge, pull tracker events from the base branch:
 
-- Never edit `.trekoon/trekoon.db` directly.
-- `trekoon wipe --yes --toon` is prohibited unless the user explicitly confirms they want a destructive wipe.
+  ```bash
+  trekoon --toon sync pull --from main
+  ```
+
+- If conflicts exist, inspect and resolve them explicitly:
+
+  ```bash
+  trekoon --toon sync conflicts list
+  trekoon --toon sync conflicts show <conflict-id>
+  trekoon --toon sync resolve <conflict-id> --use ours
+  ```
+
+Trekoon stores local state in `.trekoon/trekoon.db`. In git repos and
+worktrees, storage resolves from the repository root.
