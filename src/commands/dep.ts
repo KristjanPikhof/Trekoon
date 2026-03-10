@@ -9,44 +9,24 @@ import {
   readUnexpectedPositionals,
   suggestOptions,
 } from "./arg-parser";
+import { unexpectedFailureResult } from "./error-utils";
 
 import { MutationService } from "../domain/mutation-service";
 import { TrackerDomain } from "../domain/tracker-domain";
 import {
   COMPACT_TEMP_KEY_PREFIX,
-  DomainError,
   type CompactBatchResultContract,
   type CompactDependencySpec,
   type CompactEntityRef,
 } from "../domain/types";
 import { failResult, okResult } from "../io/output";
 import { type CliContext, type CliResult } from "../runtime/command-types";
-import { openTrekoonDatabase } from "../storage/database";
+import { openTrekoonDatabase, type TrekoonDatabase } from "../storage/database";
 
 function failFromError(error: unknown): CliResult {
-  if (error instanceof DomainError) {
-    return failResult({
-      command: "dep",
-      human: error.message,
-      data: {
-        code: error.code,
-        ...(error.details ?? {}),
-      },
-      error: {
-        code: error.code,
-        message: error.message,
-      },
-    });
-  }
-
-  return failResult({
+  return unexpectedFailureResult(error, {
     command: "dep",
     human: "Unexpected dep command failure",
-    data: {},
-    error: {
-      code: "internal_error",
-      message: "Unexpected dep command failure",
-    },
   });
 }
 
@@ -183,9 +163,10 @@ function parseDependencySpecs(rawSpecs: readonly string[]): { specs: CompactDepe
 }
 
 export async function runDep(context: CliContext): Promise<CliResult> {
-  const database = openTrekoonDatabase(context.cwd);
+  let database: TrekoonDatabase | undefined;
 
   try {
+    database = openTrekoonDatabase(context.cwd);
     const parsed = parseArgs(context.args);
     const subcommand: string | undefined = parsed.positional[0];
     const sourceId: string = parsed.positional[1] ?? "";
@@ -312,6 +293,6 @@ export async function runDep(context: CliContext): Promise<CliResult> {
   } catch (error: unknown) {
     return failFromError(error);
   } finally {
-    database.close();
+    database?.close();
   }
 }

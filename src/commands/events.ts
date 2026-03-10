@@ -1,8 +1,9 @@
 import { hasFlag, parseArgs, parseStrictPositiveInt, readMissingOptionValue, readOption } from "./arg-parser";
+import { safeErrorMessage, sqliteBusyFailure } from "./error-utils";
 
 import { failResult, okResult } from "../io/output";
 import { type CliContext, type CliResult } from "../runtime/command-types";
-import { openTrekoonDatabase } from "../storage/database";
+import { openTrekoonDatabase, type TrekoonDatabase } from "../storage/database";
 import { DEFAULT_EVENT_RETENTION_DAYS, pruneEvents } from "../storage/events-retention";
 
 const EVENTS_USAGE = "Usage: trekoon events prune [--dry-run] [--archive] [--retention-days <n>]";
@@ -62,9 +63,10 @@ export async function runEvents(context: CliContext): Promise<CliResult> {
   const retentionDays: number = parsedRetentionDays ?? DEFAULT_EVENT_RETENTION_DAYS;
   const dryRun: boolean = hasFlag(parsed.flags, "dry-run");
   const archive: boolean = hasFlag(parsed.flags, "archive");
-  const storage = openTrekoonDatabase(context.cwd);
+  let storage: TrekoonDatabase | undefined;
 
   try {
+    storage = openTrekoonDatabase(context.cwd);
     const summary = pruneEvents(storage.db, {
       retentionDays,
       dryRun,
@@ -82,7 +84,25 @@ export async function runEvents(context: CliContext): Promise<CliResult> {
       ].join("\n"),
       data: summary,
     });
+  } catch (error: unknown) {
+    const busyFailure = sqliteBusyFailure("events.prune", error);
+    if (busyFailure !== null) {
+      return busyFailure;
+    }
+
+    const message = safeErrorMessage(error, "Unknown events prune failure.");
+    return failResult({
+      command: "events.prune",
+      human: message,
+      data: {
+        reason: "events_failed",
+      },
+      error: {
+        code: "events_failed",
+        message,
+      },
+    });
   } finally {
-    storage.close();
+    storage?.close();
   }
 }

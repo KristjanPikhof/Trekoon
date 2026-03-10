@@ -16,14 +16,15 @@ import {
   resolvePreviewApplyMode,
   suggestOptions,
 } from "./arg-parser";
+import { unexpectedFailureResult } from "./error-utils";
 
 import { MutationService } from "../domain/mutation-service";
 import { TrackerDomain } from "../domain/tracker-domain";
-import { DomainError, type CompactBatchResultContract, type CompactTaskSpec, type SearchEntityMatch, type TaskRecord } from "../domain/types";
+import { type CompactBatchResultContract, type CompactTaskSpec, type SearchEntityMatch, type TaskRecord } from "../domain/types";
 import { formatHumanTable } from "../io/human-table";
 import { failResult, okResult } from "../io/output";
 import { type CliContext, type CliResult } from "../runtime/command-types";
-import { openTrekoonDatabase } from "../storage/database";
+import { openTrekoonDatabase, type TrekoonDatabase } from "../storage/database";
 
 function formatTask(task: TaskRecord): string {
   return `${task.id} | epic=${task.epicId} | ${task.title} | ${task.status}`;
@@ -388,29 +389,9 @@ function formatTaskShowTable(taskTree: {
 }
 
 function failFromError(error: unknown): CliResult {
-  if (error instanceof DomainError) {
-    return failResult({
-      command: "task",
-      human: error.message,
-      data: {
-        code: error.code,
-        ...(error.details ?? {}),
-      },
-      error: {
-        code: error.code,
-        message: error.message,
-      },
-    });
-  }
-
-  return failResult({
+  return unexpectedFailureResult(error, {
     command: "task",
     human: "Unexpected task command failure",
-    data: {},
-    error: {
-      code: "internal_error",
-      message: "Unexpected task command failure",
-    },
   });
 }
 
@@ -564,9 +545,10 @@ function parseTaskCreateManySpecs(rawSpecs: readonly string[]): { specs: Compact
 }
 
 export async function runTask(context: CliContext): Promise<CliResult> {
-  const database = openTrekoonDatabase(context.cwd);
+  let database: TrekoonDatabase | undefined;
 
   try {
+    database = openTrekoonDatabase(context.cwd);
     const parsed = parseArgs(context.args);
     const subcommand: string | undefined = parsed.positional[0];
     const domain = new TrackerDomain(database.db);
@@ -1286,6 +1268,6 @@ export async function runTask(context: CliContext): Promise<CliResult> {
   } catch (error: unknown) {
     return failFromError(error);
   } finally {
-    database.close();
+    database?.close();
   }
 }

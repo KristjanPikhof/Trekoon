@@ -1,8 +1,9 @@
 import { parseArgs, readMissingOptionValue, readOption } from "./arg-parser";
+import { safeErrorMessage, sqliteBusyFailure } from "./error-utils";
 
 import { failResult, okResult } from "../io/output";
 import { type CliContext, type CliResult } from "../runtime/command-types";
-import { openTrekoonDatabase } from "../storage/database";
+import { openTrekoonDatabase, type TrekoonDatabase } from "../storage/database";
 import { describeMigrations, rollbackDatabase } from "../storage/migrations";
 
 const MIGRATE_USAGE = "Usage: trekoon migrate <status|rollback> [--to-version <n>]";
@@ -54,9 +55,10 @@ export async function runMigrate(context: CliContext): Promise<CliResult> {
     });
   }
 
-  const storage = openTrekoonDatabase(context.cwd, { autoMigrate: false });
+  let storage: TrekoonDatabase | undefined;
 
   try {
+    storage = openTrekoonDatabase(context.cwd, { autoMigrate: false });
     if (subcommand === "status") {
       const status = describeMigrations(storage.db);
 
@@ -104,7 +106,12 @@ export async function runMigrate(context: CliContext): Promise<CliResult> {
 
     return usage(`Unknown migrate subcommand '${subcommand}'.`);
   } catch (error: unknown) {
-    const message = error instanceof Error ? error.message : "Unknown migration failure.";
+    const busyFailure = sqliteBusyFailure("migrate", error);
+    if (busyFailure !== null) {
+      return busyFailure;
+    }
+
+    const message = safeErrorMessage(error, "Unknown migration failure.");
 
     return failResult({
       command: "migrate",
@@ -118,6 +125,6 @@ export async function runMigrate(context: CliContext): Promise<CliResult> {
       },
     });
   } finally {
-    storage.close();
+    storage?.close();
   }
 }

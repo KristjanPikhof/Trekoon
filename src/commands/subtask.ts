@@ -16,14 +16,15 @@ import {
   resolvePreviewApplyMode,
   suggestOptions,
 } from "./arg-parser";
+import { unexpectedFailureResult } from "./error-utils";
 
 import { MutationService } from "../domain/mutation-service";
 import { TrackerDomain } from "../domain/tracker-domain";
-import { DomainError, type CompactBatchResultContract, type CompactSubtaskSpec, type SearchEntityMatch, type SubtaskRecord } from "../domain/types";
+import { type CompactBatchResultContract, type CompactSubtaskSpec, type SearchEntityMatch, type SubtaskRecord } from "../domain/types";
 import { formatHumanTable } from "../io/human-table";
 import { failResult, okResult } from "../io/output";
 import { type CliContext, type CliResult } from "../runtime/command-types";
-import { openTrekoonDatabase } from "../storage/database";
+import { openTrekoonDatabase, type TrekoonDatabase } from "../storage/database";
 
 function formatSubtask(subtask: SubtaskRecord): string {
   return `${subtask.id} | task=${subtask.taskId} | ${subtask.title} | ${subtask.status}`;
@@ -176,29 +177,9 @@ function formatSubtaskListTable(subtasks: readonly SubtaskRecord[]): string {
 }
 
 function failFromError(error: unknown): CliResult {
-  if (error instanceof DomainError) {
-    return failResult({
-      command: "subtask",
-      human: error.message,
-      data: {
-        code: error.code,
-        ...(error.details ?? {}),
-      },
-      error: {
-        code: error.code,
-        message: error.message,
-      },
-    });
-  }
-
-  return failResult({
+  return unexpectedFailureResult(error, {
     command: "subtask",
     human: "Unexpected subtask command failure",
-    data: {},
-    error: {
-      code: "internal_error",
-      message: "Unexpected subtask command failure",
-    },
   });
 }
 
@@ -367,9 +348,10 @@ function parseSubtaskCreateManySpecs(parentTaskId: string, rawSpecs: readonly st
 }
 
 export async function runSubtask(context: CliContext): Promise<CliResult> {
-  const database = openTrekoonDatabase(context.cwd);
+  let database: TrekoonDatabase | undefined;
 
   try {
+    database = openTrekoonDatabase(context.cwd);
     const parsed = parseArgs(context.args);
     const subcommand: string | undefined = parsed.positional[0];
     const domain = new TrackerDomain(database.db);
@@ -898,6 +880,6 @@ export async function runSubtask(context: CliContext): Promise<CliResult> {
   } catch (error: unknown) {
     return failFromError(error);
   } finally {
-    database.close();
+    database?.close();
   }
 }

@@ -17,12 +17,12 @@ import {
   resolvePreviewApplyMode,
   suggestOptions,
 } from "./arg-parser";
+import { unexpectedFailureResult } from "./error-utils";
 
 import { MutationService } from "../domain/mutation-service";
 import { TrackerDomain } from "../domain/tracker-domain";
 import {
   COMPACT_TEMP_KEY_PREFIX,
-  DomainError,
   type CompactBatchResultContract,
   type CompactDependencySpec,
   type CompactEntityRef,
@@ -34,7 +34,7 @@ import {
 import { formatHumanTable } from "../io/human-table";
 import { failResult, okResult } from "../io/output";
 import { type CliContext, type CliResult } from "../runtime/command-types";
-import { openTrekoonDatabase } from "../storage/database";
+import { openTrekoonDatabase, type TrekoonDatabase } from "../storage/database";
 
 function formatEpic(epic: EpicRecord): string {
   return `${epic.id} | ${epic.title} | ${epic.status}`;
@@ -321,29 +321,9 @@ function formatEpicShowTable(tree: {
 }
 
 function failFromError(error: unknown, command: string): CliResult {
-  if (error instanceof DomainError) {
-    return failResult({
-      command,
-      human: error.message,
-      data: {
-        code: error.code,
-        ...(error.details ?? {}),
-      },
-      error: {
-        code: error.code,
-        message: error.message,
-      },
-    });
-  }
-
-  return failResult({
+  return unexpectedFailureResult(error, {
     command,
     human: "Unexpected epic command failure",
-    data: {},
-    error: {
-      code: "internal_error",
-      message: "Unexpected epic command failure",
-    },
   });
 }
 
@@ -677,9 +657,10 @@ function findDuplicateExpandTempKey(tasks: readonly CompactTaskSpec[], subtasks:
 }
 
 export async function runEpic(context: CliContext): Promise<CliResult> {
-  const database = openTrekoonDatabase(context.cwd);
+  let database: TrekoonDatabase | undefined;
 
   try {
+    database = openTrekoonDatabase(context.cwd);
     const parsed = parseArgs(context.args);
     const subcommand: string | undefined = parsed.positional[0];
     const domain = new TrackerDomain(database.db);
@@ -1335,6 +1316,6 @@ export async function runEpic(context: CliContext): Promise<CliResult> {
   } catch (error: unknown) {
     return failFromError(error, "epic");
   } finally {
-    database.close();
+    database?.close();
   }
 }

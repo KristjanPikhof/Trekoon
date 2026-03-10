@@ -1,4 +1,5 @@
 import { findUnknownOption, parseArgs, readMissingOptionValue, readOption, suggestOptions } from "./arg-parser";
+import { safeErrorMessage, sqliteBusyFailure } from "./error-utils";
 
 import { failResult, okResult } from "../io/output";
 import { type CliContext, type CliResult } from "../runtime/command-types";
@@ -288,7 +289,12 @@ export async function runSync(context: CliContext): Promise<CliResult> {
       });
     }
 
-    const message = error instanceof Error ? error.message : "Unknown sync error.";
+    const busyFailure = sqliteBusyFailure(resolvedCommand, error);
+    if (busyFailure !== null) {
+      return busyFailure;
+    }
+
+    const message = safeErrorMessage(error, "Unknown sync error.");
 
     return failResult({
       command: resolvedCommand,
