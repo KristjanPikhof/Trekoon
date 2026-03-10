@@ -2,12 +2,14 @@ import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
+import { Database } from "bun:sqlite";
 import { afterEach, describe, expect, test } from "bun:test";
 
 import { runDep } from "../../src/commands/dep";
 import { runEpic } from "../../src/commands/epic";
 import { runSubtask } from "../../src/commands/subtask";
 import { runTask } from "../../src/commands/task";
+import { resolveStoragePaths } from "../../src/storage/path";
 
 const tempDirs: string[] = [];
 
@@ -566,6 +568,52 @@ describe("subtask command", (): void => {
     expect(subtasks[1]?.description).toContain("follow policy");
     expect(subtasks[0]?.status).toBe("blocked");
     expect(subtasks[1]?.status).toBe("blocked");
+  });
+
+  test("returns database_busy when bulk update hits a SQLite lock", async (): Promise<void> => {
+    const cwd = createWorkspace();
+    const epicCreated = await runEpic({
+      cwd,
+      mode: "human",
+      args: ["create", "--title", "Roadmap", "--description", "desc"],
+    });
+    const epicId = (epicCreated.data as { epic: { id: string } }).epic.id;
+    const taskCreated = await runTask({
+      cwd,
+      mode: "human",
+      args: ["create", "--epic", epicId, "--title", "Implement", "--description", "task desc"],
+    });
+    const taskId = (taskCreated.data as { task: { id: string } }).task.id;
+
+    const created = await runSubtask({ cwd, mode: "human", args: ["create", "--task", taskId, "--title", "A subtask"] });
+    const subtaskId = (created.data as { subtask: { id: string } }).subtask.id;
+    const lockHolder = new Database(resolveStoragePaths(cwd).databaseFile);
+
+    try {
+      lockHolder.query("PRAGMA busy_timeout = 1;").run();
+      lockHolder.query("BEGIN EXCLUSIVE;").run();
+
+      const updated = await runSubtask({
+        cwd,
+        mode: "toon",
+        args: ["update", "--ids", subtaskId, "--append", "follow policy"],
+      });
+
+      expect(updated.ok).toBeFalse();
+      expect(updated.error?.code).toBe("database_busy");
+      expect(updated.error?.message).toContain("Trekoon database is busy:");
+      expect(updated.error?.message).toMatch(/locked|busy/i);
+      expect(updated.data).toEqual(
+        expect.objectContaining({
+          code: "database_busy",
+          reason: "database_busy",
+          databaseMessage: expect.stringMatching(/locked|busy/i),
+        }),
+      );
+    } finally {
+      lockHolder.query("ROLLBACK;").run();
+      lockHolder.close(false);
+    }
   });
 
   test("bulk update rejects --all with --ids", async (): Promise<void> => {
