@@ -10,6 +10,14 @@ import {
   type StoragePaths,
 } from "./path";
 
+function formatShellPath(filePath: string): string {
+  return `'${filePath.replaceAll("'", `'\\''`)}'`;
+}
+
+function formatSqliteDotCommandPath(filePath: string): string {
+  return `"${filePath.replaceAll('"', '""')}"`;
+}
+
 export type WorktreeRecoveryStatus =
   | "no_legacy_state"
   | "safe_auto_migrate"
@@ -142,7 +150,7 @@ function createBackupFilePath(filePath: string): string {
 }
 
 function createDatabaseSnapshot(sourcePath: string, targetPath: string): void {
-  const backupResult = spawnSync("sqlite3", [sourcePath, `.backup ${targetPath}`], {
+  const backupResult = spawnSync("sqlite3", [sourcePath, `.backup ${formatSqliteDotCommandPath(targetPath)}`], {
     cwd: dirname(sourcePath),
     encoding: "utf8",
     stdio: ["ignore", "pipe", "pipe"],
@@ -178,11 +186,12 @@ function formatTrackedMismatchAction(paths: StoragePaths): string {
 function formatAmbiguousRecoveryAction(paths: StoragePaths, legacyFiles: readonly string[]): string {
   const sharedDatabaseFile: string = paths.databaseFile;
   const firstLegacyFile: string = legacyFiles[0] ?? sharedDatabaseFile;
+  const sharedDatabaseDirectory: string = dirname(sharedDatabaseFile);
 
   return [
     "Multiple divergent legacy databases were found.",
-    `Choose one source database, back it up, then copy it to ${sharedDatabaseFile}.`,
-    `Example: cp ${firstLegacyFile} ${sharedDatabaseFile}`,
+    `Choose one source database, ensure ${sharedDatabaseDirectory} exists, then use sqlite3 .backup to create a WAL-safe snapshot at ${sharedDatabaseFile}.`,
+    `Example: mkdir -p ${formatShellPath(sharedDatabaseDirectory)} && sqlite3 ${formatShellPath(firstLegacyFile)} '.backup ${formatSqliteDotCommandPath(sharedDatabaseFile)}'`,
     "Rerun trekoon init after selecting the authoritative database.",
   ].join(" ");
 }
