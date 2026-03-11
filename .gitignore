@@ -6,7 +6,9 @@
 /dist/
 /bun.lock
 
-# Trekoon local state
+# Trekoon shared operational state
+# Keep the repo-scoped SQLite DB out of Git. In worktrees this storage is shared
+# across checkouts, so committing it would snapshot live machine-local state.
 /.trekoon/*
 /.opencode/
 /.claude/
