@@ -17,8 +17,8 @@ import {
 
 const tempDirs: string[] = [];
 
-function createWorkspace(): string {
-  const workspace: string = mkdtempSync(join(tmpdir(), "trekoon-storage-"));
+function createWorkspace(prefix = "trekoon-storage-"): string {
+  const workspace: string = mkdtempSync(join(tmpdir(), prefix));
   tempDirs.push(workspace);
   return workspace;
 }
@@ -308,6 +308,36 @@ describe("storage lifecycle", (): void => {
     }
   });
 
+  test("imports legacy state when worktree paths contain spaces", (): void => {
+    const workspace: string = createWorkspace("trekoon storage root ");
+    createCommittedGitRepository(workspace);
+    const linkedWorktree: string = createWorkspace("trekoon linked worktree ");
+
+    execFileSync("git", ["worktree", "add", "-b", "storage-import-spaces", linkedWorktree, "HEAD"], {
+      cwd: workspace,
+      stdio: "ignore",
+    });
+
+    const legacyDatabaseFile: string = createLegacyDatabaseFile(linkedWorktree, "spaced-worktree");
+    const sharedDatabaseFile: string = resolveStoragePaths(linkedWorktree).databaseFile;
+
+    expect(legacyDatabaseFile).toContain(" ");
+    expect(sharedDatabaseFile).toContain(" ");
+
+    const storage = openTrekoonDatabase(linkedWorktree);
+
+    try {
+      expect(storage.diagnostics.recoveryStatus).toBe("safe_auto_migrate");
+      expect(storage.diagnostics.autoMigratedLegacyState).toBe(true);
+      expect(storage.diagnostics.importedFromLegacyDatabase).toBe(legacyDatabaseFile);
+      expect(storage.diagnostics.backupFiles).toHaveLength(1);
+      expect(existsSync(storage.diagnostics.backupFiles[0]!)).toBe(true);
+      expect(listEpicTitles(storage.paths.databaseFile)).toEqual(["spaced-worktree"]);
+    } finally {
+      storage.close();
+    }
+  });
+
   test("reports importable legacy state without mutating storage", (): void => {
     const workspace: string = createWorkspace();
     createCommittedGitRepository(workspace);
@@ -404,6 +434,9 @@ describe("storage lifecycle", (): void => {
       );
       expect(domainError.details?.trackedStorageFiles).toEqual([]);
       expect(domainError.details?.operatorAction).toContain("Choose one source database");
+      expect(domainError.details?.operatorAction).toContain("sqlite3 .backup");
+      expect(domainError.details?.operatorAction).toContain("mkdir -p");
+      expect(domainError.details?.operatorAction).not.toContain("Example: cp ");
       expect(domainError.details?.operatorAction).toContain(resolveStoragePaths(linkedWorktreeA).databaseFile);
     }
   });
