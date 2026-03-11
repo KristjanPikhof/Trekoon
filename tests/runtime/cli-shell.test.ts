@@ -343,7 +343,7 @@ describe("cli shell dispatch", (): void => {
     expect(meta.storageRootDiagnostics?.worktreeRoot).toBe(storagePaths.worktreeRoot);
     expect(meta.storageRootDiagnostics?.sharedStorageRoot).toBe(storagePaths.sharedStorageRoot);
     expect(meta.storageRootDiagnostics?.databaseFile).toBe(storagePaths.databaseFile);
-    expect(meta.storageRootDiagnostics?.warnings).toEqual([]);
+    expect(meta.storageRootDiagnostics?.warnings.map((warning) => warning.code)).toEqual(["storage_root_diverged_from_cwd"]);
   });
 
   test("returns shared wipe scope data without parsing text", async (): Promise<void> => {
