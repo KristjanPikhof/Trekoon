@@ -273,7 +273,7 @@ describe("cli shell dispatch", (): void => {
 
     expect(data.invocationCwd).toBe(nestedCwd);
     expect(data.storageMode).toBe("git_common_dir");
-    expect(data.repoCommonDir).toBe(join(workspace, ".git"));
+    expect(data.repoCommonDir).toBe(storagePaths.repoCommonDir);
     expect(data.worktreeRoot).toBe(storagePaths.worktreeRoot);
     expect(data.sharedStorageRoot).toBe(storagePaths.sharedStorageRoot);
     expect(data.databaseFile).toBe(storagePaths.databaseFile);
@@ -282,7 +282,7 @@ describe("cli shell dispatch", (): void => {
 
     expect(meta.storageRootDiagnostics?.invocationCwd).toBe(nestedCwd);
     expect(meta.storageRootDiagnostics?.storageMode).toBe("git_common_dir");
-    expect(meta.storageRootDiagnostics?.repoCommonDir).toBe(join(workspace, ".git"));
+    expect(meta.storageRootDiagnostics?.repoCommonDir).toBe(storagePaths.repoCommonDir);
     expect(meta.storageRootDiagnostics?.worktreeRoot).toBe(storagePaths.worktreeRoot);
     expect(meta.storageRootDiagnostics?.sharedStorageRoot).toBe(storagePaths.sharedStorageRoot);
     expect(meta.storageRootDiagnostics?.databaseFile).toBe(storagePaths.databaseFile);
