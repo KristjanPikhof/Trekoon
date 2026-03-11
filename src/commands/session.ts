@@ -1,8 +1,9 @@
+import type { Database } from "bun:sqlite";
+
 import { unexpectedFailureResult } from "./error-utils";
 import { buildTaskReadiness, type DependencyBlocker } from "./task-readiness";
 
 import { TrackerDomain } from "../domain/tracker-domain";
-import { DomainError } from "../domain/types";
 import { okResult } from "../io/output";
 import { type CliContext, type CliResult } from "../runtime/command-types";
 import { openTrekoonDatabase, type TrekoonDatabase } from "../storage/database";
