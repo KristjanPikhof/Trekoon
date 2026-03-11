@@ -40,7 +40,7 @@ npm i -g trekoon
 
 1. Make issue tracking fast enough for daily terminal use.
 2. Make issue data deterministic and machine-readable for AI automation.
-3. Keep branch/worktree-aware state so parallel execution can be coordinated safely.
+3. Keep one repo-scoped state store that every worktree can coordinate through safely.
 4. Stay minimal in code size while preserving robustness and clear boundaries.
 
 ## Command surface
@@ -117,15 +117,23 @@ trekoon epic update --ids <epic-1>,<epic-2> --status done
 
 ## Quickstart
 
-Trekoon is local-first: in git repos/worktrees, Trekoon resolves state to one
-canonical repository root (`git rev-parse --show-toplevel`) so nested
-invocations share the same `.trekoon/trekoon.db`.
+Trekoon is local-first, but in git repos and worktrees it is **repo-shared**:
+every worktree for the same repository resolves to one shared `.trekoon`
+directory and one shared `.trekoon/trekoon.db`.
+
+- `worktreeRoot` identifies the current checkout.
+- `sharedStorageRoot` identifies the repository root that owns `.trekoon`.
+- `databaseFile` points at the shared SQLite database.
+- `.trekoon` stays gitignored on purpose because the DB is operational state,
+  not source code.
+- Committing `.trekoon/trekoon.db` is the wrong fix for drift because it bakes
+  machine-local state and stale snapshots into Git.
 
 Outside git repos, Trekoon falls back to the invocation cwd.
 
 When machine output is enabled (`--json`/`--toon`) and a command resolves
 storage from a non-canonical cwd, Trekoon emits
-`meta.storageRootDiagnostics` to make the divergence explicit for automation.
+`meta.storageRootDiagnostics` so automation can verify the storage contract.
 
 ### 1) Initialize
 
@@ -133,6 +141,15 @@ storage from a non-canonical cwd, Trekoon emits
 trekoon init
 trekoon --version
 ```
+
+Bootstrap expectations:
+
+- Run `trekoon --toon init` once per repository to create or re-bootstrap the
+  shared storage root.
+- Run `trekoon --toon sync status` before agent work to inspect diagnostics.
+- If diagnostics report `recoveryRequired`, a tracked/ignored mismatch, or an
+  ambiguous recovery path, stop and repair setup before continuing.
+- Do **not** continue with task selection after broken bootstrap warnings.
 
 ### 2) Create epic → task → subtask
 
@@ -369,12 +386,24 @@ When to choose which command:
 Run this loop each session to pick next work deterministically:
 
 ```bash
+trekoon --toon init
 trekoon --toon sync status
 trekoon --toon task ready --limit 5
 trekoon --toon task next
 trekoon --toon dep reverse <task-or-subtask-id>
 trekoon --toon task update <task-id> --status in_progress
 ```
+
+Fail-fast rules:
+
+- Treat `meta.storageRootDiagnostics` as the source of truth for worktree
+  storage.
+- In linked worktrees, `sharedStorageRoot` may differ from `worktreeRoot`; that
+  is expected.
+- If `recoveryRequired` is `true`, stop and follow the reported bootstrap or
+  recovery action.
+- Do not fall back to a separate per-worktree DB or continue after missing
+  shared storage.
 
 When done or blocked, append context and update final status:
 
@@ -501,6 +530,19 @@ react deterministically:
 - `diagnostics.conflictEvents`
 - `diagnostics.errorHints`
 
+Worktree diagnostics and recovery:
+
+- Inspect `storageMode`, `repoCommonDir`, `worktreeRoot`, `sharedStorageRoot`,
+  and `databaseFile` in machine output when debugging worktree behavior.
+- If a worktree resolves shared storage outside its checkout, that is expected
+  for linked worktrees and should not be “fixed” by committing `.trekoon`.
+- If Git contains a tracked `.trekoon/trekoon.db`, remove it from Git history or
+  the index as appropriate, keep `.trekoon` ignored, and re-run
+  `trekoon --toon init`.
+- Use `trekoon wipe --yes` only for explicit destructive recovery; it deletes
+  the shared storage root for the entire repository, not just the current
+  worktree.
+
 Compatibility mode for legacy sync command IDs:
 
 ```bash
@@ -590,6 +632,7 @@ Trekoon does not mutate global editor config directories.
 - [ ] done tasks/subtasks are marked completed
 - [ ] dependency graph has no stale blockers
 - [ ] final AI check: `trekoon --toon epic show <epic-id>`
+- [ ] no one tried to commit `.trekoon/trekoon.db` as a worktree fix
 
 ## Machine-contract recipes (--toon)
 
