@@ -26,6 +26,10 @@ export interface WorktreeRecoveryDiagnostics {
   readonly operatorAction: string;
 }
 
+interface WorktreeRecoveryOptions {
+  readonly applyRecovery?: boolean;
+}
+
 function readGitLines(workingDirectory: string, args: readonly string[]): string[] {
   const result = spawnSync("git", args, {
     cwd: workingDirectory,
@@ -165,6 +169,14 @@ function formatAmbiguousRecoveryAction(paths: StoragePaths, legacyFiles: readonl
 }
 
 export function recoverWorktreeDatabaseState(paths: StoragePaths): WorktreeRecoveryDiagnostics {
+  return inspectWorktreeDatabaseState(paths, { applyRecovery: true });
+}
+
+export function inspectWorktreeDatabaseState(
+  paths: StoragePaths,
+  options: WorktreeRecoveryOptions = {},
+): WorktreeRecoveryDiagnostics {
+  const applyRecovery: boolean = options.applyRecovery ?? false;
   const trackedStorageFiles: string[] = listTrackedStorageFiles(paths);
   const legacyDatabaseFiles: string[] = listLegacyDatabaseFiles(paths);
 
@@ -226,6 +238,18 @@ export function recoverWorktreeDatabaseState(paths: StoragePaths): WorktreeRecov
       code: "legacy_import_failed",
       message: "Legacy import could not determine a source database.",
     });
+  }
+
+  if (!applyRecovery) {
+    return {
+      status: "safe_auto_migrate",
+      legacyDatabaseFiles,
+      backupFiles: [],
+      trackedStorageFiles,
+      autoMigrated: false,
+      importedFrom: null,
+      operatorAction: `Legacy worktree database can be imported into shared storage during init/open. Source: ${importSource}`,
+    };
   }
 
   const backupFiles: string[] = legacyDatabaseFiles.map(backupLegacyDatabaseFile);
