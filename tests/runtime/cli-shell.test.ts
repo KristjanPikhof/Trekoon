@@ -314,6 +314,7 @@ describe("cli shell dispatch", (): void => {
     execFileSync("git", ["add", "-f", trackedFile], { cwd: workspace, stdio: "ignore" });
 
     const result = await executeShell(parseInvocation(["init", "--toon"], { stdoutIsTTY: false }), workspace);
+    const storagePaths = resolveStoragePaths(workspace);
 
     expect(result.ok).toBeFalse();
     expect(result.command).toBe("init");
@@ -339,9 +340,9 @@ describe("cli shell dispatch", (): void => {
       };
     };
 
-    expect(meta.storageRootDiagnostics?.worktreeRoot).toBe(workspace);
-    expect(meta.storageRootDiagnostics?.sharedStorageRoot).toBe(workspace);
-    expect(meta.storageRootDiagnostics?.databaseFile).toBe(join(workspace, ".trekoon", "trekoon.db"));
+    expect(meta.storageRootDiagnostics?.worktreeRoot).toBe(storagePaths.worktreeRoot);
+    expect(meta.storageRootDiagnostics?.sharedStorageRoot).toBe(storagePaths.sharedStorageRoot);
+    expect(meta.storageRootDiagnostics?.databaseFile).toBe(storagePaths.databaseFile);
     expect(meta.storageRootDiagnostics?.warnings).toEqual([]);
   });
 
