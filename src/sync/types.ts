@@ -12,6 +12,7 @@ export interface SyncStatusSummary {
   readonly ahead: number;
   readonly behind: number;
   readonly pendingConflicts: number;
+  readonly sameBranch: boolean;
   readonly git: GitContextSnapshot;
 }
 
