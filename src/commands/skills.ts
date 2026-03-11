@@ -226,6 +226,18 @@ function resolveDefaultLinkPath(cwd: string, editor: EditorName): string {
   return join(resolveLinkRoot(cwd, editor, undefined), "trekoon");
 }
 
+function resolveEditorConfigDir(cwd: string, editor: EditorName): string {
+  if (editor === "opencode") {
+    return join(cwd, ".opencode");
+  }
+
+  if (editor === "claude") {
+    return join(cwd, ".claude");
+  }
+
+  return join(cwd, ".pi");
+}
+
 function installCanonicalSkill(cwd: string): CliResult | { sourcePath: string; installedPath: string; installedDir: string } {
   const sourcePath: string = resolveBundledSkillFilePath();
   if (!existsSync(sourcePath)) {
