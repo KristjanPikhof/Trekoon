@@ -31,13 +31,22 @@ Run this loop each session:
 
    ```bash
    trekoon --toon init
-   trekoon --toon sync status
    ```
 
    Fail fast if machine output reports `recoveryRequired`, tracked/ignored
    storage mismatch, ambiguous recovery, or any other bootstrap/storage error.
    In linked worktrees, `sharedStorageRoot` may differ from `worktreeRoot`; that
    is expected because the repo shares one DB across checkouts.
+
+   On a feature branch, also check sync status to see if you are behind the
+   base branch:
+
+   ```bash
+   trekoon --toon sync status
+   ```
+
+   Same-branch sync status (e.g., on `main` checking `main`) always returns
+   `behind=0` and requires no action.
 
 2. Pick the next item deterministically once diagnostics are clean:
 
