@@ -41,11 +41,22 @@ interface LinkState {
   readonly conflictCode: "non_link" | "wrong_target" | null;
 }
 
+type UpdateLinkAction = "created" | "refreshed" | "skipped_conflict" | "skipped_no_editor_dir";
+
+interface UpdateLinkEntry {
+  readonly editor: EditorName;
+  readonly linkPath: string;
+  readonly expectedTarget: string;
+  readonly action: UpdateLinkAction;
+  readonly conflictCode: "non_link" | "wrong_target" | null;
+  readonly existingTarget: string | null;
+}
+
 interface UpdateOutcome {
   readonly sourcePath: string;
   readonly installedPath: string;
   readonly installedDir: string;
-  readonly links: readonly LinkState[];
+  readonly links: readonly UpdateLinkEntry[];
 }
 
 function invalidArgs(message: string): CliResult {
