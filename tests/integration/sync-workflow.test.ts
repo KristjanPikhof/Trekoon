@@ -48,13 +48,15 @@ function seedRepository(workspace: string): void {
   runGit(workspace, ["config", "user.email", "tests@trekoon.local"]);
   runGit(workspace, ["config", "user.name", "Trekoon Tests"]);
   writeFileSync(join(workspace, "README.md"), "# integration repo\n");
-  runGit(workspace, ["add", "README.md"]);
+  writeFileSync(join(workspace, ".gitignore"), ".trekoon/\n");
+  runGit(workspace, ["add", "README.md", ".gitignore"]);
   runGit(workspace, ["commit", "-m", "seed repo"]);
 }
 
-function commitDb(workspace: string, message: string): void {
-  runGit(workspace, ["add", ".trekoon/trekoon.db"]);
-  runGit(workspace, ["commit", "-m", message]);
+function createBranchWorktree(workspace: string, branch: string): string {
+  const worktreePath: string = createWorkspace();
+  runGit(workspace, ["worktree", "add", "-b", branch, worktreePath, "main"]);
+  return worktreePath;
 }
 
 interface WorkflowIds {
@@ -163,8 +165,6 @@ describe("integration sync workflow", (): void => {
     expect(initResult.ok).toBe(true);
 
     const ids = seedTrackerRows(workspace);
-    commitDb(workspace, "add main tracker records");
-
     runGit(workspace, ["checkout", "-b", "feature/integration-sync"]);
 
     {
@@ -338,7 +338,6 @@ describe("integration sync workflow", (): void => {
       }
     }
 
-    commitDb(workspace, "seed mixed valid and malformed events");
     runGit(workspace, ["checkout", "-b", "feature/replay-resilience"]);
 
     const pullResult = await runSync({
@@ -377,8 +376,6 @@ describe("integration sync workflow", (): void => {
       mode: "human",
     });
     expect(initResult.ok).toBe(true);
-    commitDb(workspace, "init tracker db");
-
     runGit(workspace, ["checkout", "-b", "feature/canonical-replay"]);
     runGit(workspace, ["checkout", "main"]);
 
@@ -429,7 +426,6 @@ describe("integration sync workflow", (): void => {
     });
     expect(depBatch.ok).toBe(true);
 
-    commitDb(workspace, "seed canonical batch events");
     runGit(workspace, ["checkout", "feature/canonical-replay"]);
 
     const firstPull = await runSync({
@@ -475,8 +471,6 @@ describe("integration sync workflow", (): void => {
       mode: "human",
     });
     expect(initResult.ok).toBe(true);
-    commitDb(workspace, "init tracker db");
-
     runGit(workspace, ["checkout", "-b", "feature/one-shot-create-replay"]);
     runGit(workspace, ["checkout", "main"]);
 
@@ -500,7 +494,6 @@ describe("integration sync workflow", (): void => {
     expect(created.ok).toBe(true);
     const epicId = (created.data as { epic: { id: string } }).epic.id;
 
-    commitDb(workspace, "seed one-shot create events");
     runGit(workspace, ["checkout", "feature/one-shot-create-replay"]);
 
     const firstPull = await runSync({
@@ -534,5 +527,51 @@ describe("integration sync workflow", (): void => {
     expect((secondPull.data as { scannedEvents: number }).scannedEvents).toBe(0);
     expect((secondPull.data as { appliedEvents: number }).appliedEvents).toBe(0);
     expect((secondPull.data as { createdConflicts: number }).createdConflicts).toBe(0);
+  });
+
+  test("fresh worktree sees shared tracker state and can pull main", async (): Promise<void> => {
+    const workspace: string = createWorkspace();
+    seedRepository(workspace);
+
+    const initResult = await runInit({
+      args: [],
+      cwd: workspace,
+      mode: "human",
+    });
+    expect(initResult.ok).toBe(true);
+
+    const created = await runEpic({
+      cwd: workspace,
+      mode: "toon",
+      args: ["create", "--title", "Shared epic", "--description", "fresh worktree"],
+    });
+    expect(created.ok).toBe(true);
+    const epicId = (created.data as { epic: { id: string } }).epic.id;
+
+    const featureWorktree: string = createBranchWorktree(workspace, "feature/shared-worktree-sync");
+
+    const statusBefore = await runSync({
+      args: ["status", "--from", "main"],
+      cwd: featureWorktree,
+      mode: "toon",
+    });
+    expect(statusBefore.ok).toBe(true);
+    expect((statusBefore.data as { behind: number }).behind).toBeGreaterThanOrEqual(1);
+
+    const pullResult = await runSync({
+      args: ["pull", "--from", "main"],
+      cwd: featureWorktree,
+      mode: "toon",
+    });
+    expect(pullResult.ok).toBe(true);
+    expect((pullResult.data as { scannedEvents: number }).scannedEvents).toBeGreaterThanOrEqual(1);
+
+    const storage = openTrekoonDatabase(featureWorktree);
+    try {
+      const epic = storage.db.query("SELECT id, title FROM epics WHERE id = ?;").get(epicId) as { id: string; title: string } | null;
+      expect(epic).toEqual({ id: epicId, title: "Shared epic" });
+    } finally {
+      storage.close();
+    }
   });
 });
