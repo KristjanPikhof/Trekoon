@@ -1,4 +1,5 @@
 import { unexpectedFailureResult } from "./error-utils";
+import { buildTaskReadiness, type DependencyBlocker } from "./task-readiness";
 
 import { TrackerDomain } from "../domain/tracker-domain";
 import { DomainError } from "../domain/types";
@@ -10,12 +11,6 @@ import { persistGitContext, resolveGitContext } from "../sync/git-context";
 import { type GitContextSnapshot, type SyncStatusSummary } from "../sync/types";
 
 const DEFAULT_SOURCE_BRANCH = "main";
-
-interface DependencyBlocker {
-  readonly id: string;
-  readonly kind: "task" | "subtask";
-  readonly status: string;
-}
 
 function taskStatusPriority(status: string): number {
   if (status === "in_progress" || status === "in-progress") {
