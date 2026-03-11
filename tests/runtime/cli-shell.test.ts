@@ -140,16 +140,20 @@ describe("cli shell dispatch", (): void => {
 
     expect(initData.topic).toBe("init");
     expect(initData.text).toContain("Purpose:");
-    expect(initData.text).toContain("Initialize local Trekoon storage");
+    expect(initData.text).toContain("Initialize repo-scoped Trekoon storage");
+    expect(initData.text).toContain("Keep .trekoon gitignored");
 
     expect(quickstartData.topic).toBe("quickstart");
     expect(quickstartData.text).toContain("Flow:");
+    expect(quickstartData.text).toContain("trekoon --toon init");
+    expect(quickstartData.text).toContain("Fail fast on recoveryRequired");
     expect(quickstartData.text).toContain("trekoon --toon task next");
 
     expect(wipeData.topic).toBe("wipe");
-    expect(wipeData.text).toContain("shared repo-wide");
-    expect(wipeData.text).toContain("not isolated per worktree");
+    expect(wipeData.text).toContain("shared Trekoon storage directory");
+    expect(wipeData.text).toContain("same .trekoon state for every linked worktree");
     expect(wipeData.text).toContain("--yes  Required confirmation for destructive repo-wide removal");
+    expect(wipeData.text).toContain("Do not use wipe to fix gitignore mistakes");
   });
 
   test("dispatches skills install and creates project-local artifact", async (): Promise<void> => {
