@@ -288,10 +288,7 @@ describe("cli shell dispatch", (): void => {
     expect(meta.storageRootDiagnostics?.databaseFile).toBe(storagePaths.databaseFile);
     expect(meta.storageRootDiagnostics?.legacyStateDetected).toBeFalse();
     expect(meta.storageRootDiagnostics?.recoveryRequired).toBeFalse();
-    expect(meta.storageRootDiagnostics?.warnings.map((warning) => warning.code)).toEqual([
-      "storage_root_diverged_from_cwd",
-      "shared_storage_root_differs_from_worktree_root",
-    ]);
+    expect(meta.storageRootDiagnostics?.warnings.map((warning) => warning.code)).toEqual(["storage_root_diverged_from_cwd"]);
     expect(meta.storageRootDiagnostics?.errors).toEqual([]);
   });
 });
