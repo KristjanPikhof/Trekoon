@@ -2,6 +2,26 @@
 
 All notable changes to Trekoon are documented in this file.
 
+## 0.2.4
+
+### Added
+
+- `trekoon session` command: single-call agent orientation that returns
+  diagnostics, sync status, next ready task with subtasks, blocker list, and
+  readiness counts. Replaces the five-call bootstrap sequence
+  (init + sync status + task next + dep list + task show).
+- `trekoon task done <id>` subcommand: marks a task done and returns the next
+  ready task with dependencies inline. Replaces the three-call task transition
+  sequence (update status + task next + dep list).
+- Shared `task-readiness.ts` module extracted from task.ts so session and task
+  done reuse the same readiness logic.
+
+### Changed
+
+- SKILL.md agent loop updated to use `session → work → task done → repeat`.
+- Quickstart output updated to reflect session and task done as primary flow.
+- Help text includes session command documentation.
+
 ## 0.2.1
 
 ### Added
