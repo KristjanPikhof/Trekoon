@@ -3,11 +3,13 @@ import { existsSync, mkdirSync, mkdtempSync, realpathSync, rmSync, writeFileSync
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
+import { Database } from "bun:sqlite";
 import { afterEach, describe, expect, test } from "bun:test";
 
 import { executeShell, parseInvocation } from "../../src/runtime/cli-shell";
 import { CLI_VERSION } from "../../src/runtime/version";
-import { resolveStoragePaths } from "../../src/storage/path";
+import { migrateDatabase } from "../../src/storage/migrations";
+import { resolveLegacyWorktreeDatabaseFile, resolveStoragePaths } from "../../src/storage/path";
 
 const tempDirs: string[] = [];
 
@@ -31,6 +33,30 @@ function createCommittedGitRepository(workspace: string): void {
     ["-c", "user.name=Trekoon Tests", "-c", "user.email=tests@trekoon.local", "commit", "-m", "Initial commit"],
     { cwd: workspace, stdio: "ignore" },
   );
+}
+
+function createLegacyDatabaseFile(workspace: string, title: string): string {
+  const databaseFile = resolveLegacyWorktreeDatabaseFile(workspace);
+  mkdirSync(join(workspace, ".trekoon"), { recursive: true });
+  const db = new Database(databaseFile, { create: true });
+
+  try {
+    migrateDatabase(db);
+    db.exec("PRAGMA foreign_keys = ON;");
+    db.query("INSERT INTO epics (id, title, description, status, created_at, updated_at, version) VALUES (?, ?, ?, ?, ?, ?, ?);").run(
+      `epic-${title}`,
+      title,
+      `Legacy ${title}`,
+      "todo",
+      1,
+      1,
+      1,
+    );
+  } finally {
+    db.close(false);
+  }
+
+  return realpathSync(databaseFile);
 }
 
 afterEach((): void => {
@@ -447,6 +473,72 @@ describe("cli shell dispatch", (): void => {
     expect(meta.storageRootDiagnostics?.backupFiles).toEqual([]);
     expect(existsSync(sharedDatabaseFile)).toBeFalse();
     expect(existsSync(`${legacyDatabaseFile}.pre-shared-import.bak`)).toBeFalse();
+  });
+
+  test("init meta reflects automatic legacy migration results", async (): Promise<void> => {
+    const workspace = createWorkspace();
+    createCommittedGitRepository(workspace);
+    const linkedWorktree = createWorkspace();
+
+    execFileSync("git", ["worktree", "add", "-b", "shell-init-auto-migrate", linkedWorktree, "HEAD"], {
+      cwd: workspace,
+      stdio: "ignore",
+    });
+
+    const legacyDatabaseFile = createLegacyDatabaseFile(linkedWorktree, "cli-auto-migrate");
+    const sharedDatabaseFile = resolveStoragePaths(linkedWorktree).databaseFile;
+
+    const result = await executeShell(parseInvocation(["init", "--toon"], { stdoutIsTTY: false }), linkedWorktree);
+
+    expect(result.ok).toBeTrue();
+    expect(result.command).toBe("init");
+
+    const data = result.data as {
+      recoveryStatus: string;
+      legacyStateDetected: boolean;
+      recoveryRequired: boolean;
+      legacyDatabaseFiles: string[];
+      backupFiles: string[];
+      autoMigratedLegacyState: boolean;
+      importedFromLegacyDatabase: string | null;
+      operatorAction: string;
+    };
+    const meta = result.meta as {
+      storageRootDiagnostics?: {
+        recoveryStatus: string;
+        legacyStateDetected: boolean;
+        recoveryRequired: boolean;
+        legacyDatabaseFiles: string[];
+        backupFiles: string[];
+        autoMigratedLegacyState: boolean;
+        importedFromLegacyDatabase: string | null;
+        operatorAction: string;
+      };
+    };
+
+    expect(existsSync(sharedDatabaseFile)).toBeTrue();
+    expect(data.recoveryStatus).toBe("safe_auto_migrate");
+    expect(data.legacyStateDetected).toBeTrue();
+    expect(data.recoveryRequired).toBeFalse();
+    expect(data.legacyDatabaseFiles).toEqual([legacyDatabaseFile]);
+    expect(data.backupFiles).toHaveLength(1);
+    expect(data.autoMigratedLegacyState).toBeTrue();
+    expect(data.importedFromLegacyDatabase).toBe(legacyDatabaseFile);
+    expect(data.operatorAction).toContain("Imported legacy worktree database into shared storage");
+
+    expect(meta.storageRootDiagnostics).toEqual({
+      ...meta.storageRootDiagnostics,
+      recoveryStatus: data.recoveryStatus,
+      legacyStateDetected: data.legacyStateDetected,
+      recoveryRequired: data.recoveryRequired,
+      legacyDatabaseFiles: data.legacyDatabaseFiles,
+      backupFiles: data.backupFiles,
+      autoMigratedLegacyState: data.autoMigratedLegacyState,
+      importedFromLegacyDatabase: data.importedFromLegacyDatabase,
+      operatorAction: data.operatorAction,
+    });
+    expect(meta.storageRootDiagnostics?.backupFiles).toHaveLength(1);
+    expect(existsSync(meta.storageRootDiagnostics?.backupFiles[0] ?? "")).toBeTrue();
   });
 
   test("returns shared wipe scope data without parsing text", async (): Promise<void> => {
