@@ -1,5 +1,5 @@
 import { randomUUID } from "node:crypto";
-import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { existsSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
@@ -8,6 +8,7 @@ import { afterEach, describe, expect, test } from "bun:test";
 import { runSync } from "../../src/commands/sync";
 import { appendEventWithGitContext } from "../../src/sync/event-writes";
 import { openTrekoonDatabase } from "../../src/storage/database";
+import { resolveStoragePaths } from "../../src/storage/path";
 
 const tempDirs: string[] = [];
 
@@ -925,6 +926,25 @@ describe("sync command", (): void => {
     }
 
     const featureWorktree: string = createBranchWorktree(workspace, "feature/fresh-worktree");
+    const primaryPaths = resolveStoragePaths(workspace);
+    const featurePaths = resolveStoragePaths(featureWorktree);
+
+    expect(existsSync(join(featureWorktree, ".trekoon"))).toBe(false);
+    expect(featurePaths.databaseFile).toBe(primaryPaths.databaseFile);
+    expect(featurePaths.sharedStorageRoot).toBe(primaryPaths.sharedStorageRoot);
+    expect(featurePaths.worktreeRoot).toBe(featureWorktree);
+
+    const primaryStatus = await runSync({
+      args: ["status", "--from", "main"],
+      cwd: workspace,
+      mode: "toon",
+    });
+
+    expect(primaryStatus.ok).toBe(true);
+    expect((primaryStatus.data as { git: { worktreePath: string; branchName: string } }).git).toEqual({
+      worktreePath: workspace,
+      branchName: "main",
+    });
 
     const statusBefore = await runSync({
       args: ["status", "--from", "main"],
@@ -936,6 +956,10 @@ describe("sync command", (): void => {
     expect(statusBefore.error).toBeUndefined();
     expect((statusBefore.data as { behind: number }).behind).toBe(1);
     expect((statusBefore.data as { ahead: number }).ahead).toBe(0);
+    expect((statusBefore.data as { git: { worktreePath: string; branchName: string } }).git).toEqual({
+      worktreePath: featureWorktree,
+      branchName: "feature/fresh-worktree",
+    });
 
     const pullResult = await runSync({
       args: ["pull", "--from", "main"],
@@ -946,6 +970,7 @@ describe("sync command", (): void => {
     expect(pullResult.ok).toBe(true);
     expect((pullResult.data as { scannedEvents: number }).scannedEvents).toBe(1);
     expect((pullResult.data as { createdConflicts: number }).createdConflicts).toBe(0);
+    expect(existsSync(join(featureWorktree, ".trekoon"))).toBe(false);
 
     const statusAfter = await runSync({
       args: ["status", "--from", "main"],
@@ -955,5 +980,35 @@ describe("sync command", (): void => {
 
     expect(statusAfter.ok).toBe(true);
     expect((statusAfter.data as { behind: number }).behind).toBe(0);
+
+    const storage = openTrekoonDatabase(featureWorktree);
+    try {
+      const gitContexts = storage.db
+        .query("SELECT worktree_path, branch_name FROM git_context ORDER BY worktree_path ASC;")
+        .all() as Array<{ worktree_path: string; branch_name: string }>;
+      const cursor = storage.db
+        .query(
+          "SELECT owner_scope, owner_worktree_path, source_branch, cursor_token FROM sync_cursors WHERE id = ? LIMIT 1;",
+        )
+        .get(`${featureWorktree}::main`) as {
+          owner_scope: string;
+          owner_worktree_path: string;
+          source_branch: string;
+          cursor_token: string;
+        } | null;
+
+      expect(gitContexts).toEqual([
+        { worktree_path: featureWorktree, branch_name: "feature/fresh-worktree" },
+        { worktree_path: workspace, branch_name: "main" },
+      ]);
+      expect(cursor).toEqual({
+        owner_scope: "worktree",
+        owner_worktree_path: featureWorktree,
+        source_branch: "main",
+        cursor_token: expect.stringContaining(":"),
+      });
+    } finally {
+      storage.close();
+    }
   });
 });
