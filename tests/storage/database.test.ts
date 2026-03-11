@@ -78,14 +78,15 @@ describe("storage lifecycle", (): void => {
     initGitRepository(workspace);
     const nestedCwd: string = join(workspace, "apps", "cli", "nested");
     mkdirSync(nestedCwd, { recursive: true });
+    const rootPaths = resolveStoragePaths(workspace);
 
     const rootStorage = openTrekoonDatabase(workspace);
     const nestedStorage = openTrekoonDatabase(nestedCwd);
 
     try {
       expect(rootStorage.paths.storageMode).toBe("git_common_dir");
-      expect(rootStorage.paths.repoCommonDir).toBe(join(workspace, ".git"));
-      expect(rootStorage.paths.sharedStorageRoot).toBe(join(workspace, ".git"));
+      expect(rootStorage.paths.repoCommonDir).toBe(rootPaths.repoCommonDir);
+      expect(rootStorage.paths.sharedStorageRoot).toBe(rootPaths.sharedStorageRoot);
       expect(rootStorage.paths.databaseFile).toBe(join(rootStorage.paths.sharedStorageRoot, ".trekoon", "trekoon.db"));
       expect(nestedStorage.paths.databaseFile).toBe(rootStorage.paths.databaseFile);
       expect(nestedStorage.paths.worktreeRoot).toBe(rootStorage.paths.worktreeRoot);
@@ -112,12 +113,14 @@ describe("storage lifecycle", (): void => {
 
     const primaryStorage = openTrekoonDatabase(workspace);
     const secondaryStorage = openTrekoonDatabase(linkedWorktree);
+    const primaryPaths = resolveStoragePaths(workspace);
+    const linkedPaths = resolveStoragePaths(linkedWorktree);
 
     try {
       expect(primaryStorage.paths.databaseFile).toBe(secondaryStorage.paths.databaseFile);
       expect(primaryStorage.paths.sharedStorageRoot).toBe(secondaryStorage.paths.sharedStorageRoot);
-      expect(primaryStorage.paths.worktreeRoot).toBe(workspace);
-      expect(secondaryStorage.paths.worktreeRoot).toBe(linkedWorktree);
+      expect(primaryStorage.paths.worktreeRoot).toBe(primaryPaths.worktreeRoot);
+      expect(secondaryStorage.paths.worktreeRoot).toBe(linkedPaths.worktreeRoot);
       expect(secondaryStorage.paths.repoCommonDir).toBe(primaryStorage.paths.repoCommonDir);
     } finally {
       secondaryStorage.close();
