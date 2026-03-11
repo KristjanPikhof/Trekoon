@@ -1,5 +1,5 @@
 import { execFileSync } from "node:child_process";
-import { existsSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, mkdtempSync, realpathSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
@@ -318,12 +318,17 @@ describe("cli shell dispatch", (): void => {
     expect(result.ok).toBeFalse();
     expect(result.command).toBe("init");
     expect(result.error?.code).toBe("tracked_ignored_mismatch");
-    expect(result.data).toEqual({
-      status: "tracked_ignored_mismatch",
-      legacyDatabaseFiles: [],
-      trackedStorageFiles: [trackedFile],
-      operatorAction: expect.stringContaining("git rm --cached -r --"),
-    });
+    const data = result.data as {
+      status: string;
+      legacyDatabaseFiles: string[];
+      trackedStorageFiles: string[];
+      operatorAction: string;
+    };
+
+    expect(data.status).toBe("tracked_ignored_mismatch");
+    expect(data.legacyDatabaseFiles).toEqual([]);
+    expect(data.trackedStorageFiles).toEqual([realpathSync(trackedFile)]);
+    expect(data.operatorAction).toContain("git rm --cached -r --");
 
     const meta = result.meta as {
       storageRootDiagnostics?: {
