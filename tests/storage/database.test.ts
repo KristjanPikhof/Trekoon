@@ -84,17 +84,42 @@ function createLegacyDatabaseFile(workspace: string, title: string): string {
   return realpathSync(databaseFile);
 }
 
-function createLegacyWalBackedDatabaseFile(workspace: string, title: string): string {
+interface LegacyWalBackedDatabase {
+  readonly databaseFile: string;
+  readonly walFrames: number;
+}
+
+function createLegacyWalBackedDatabaseFile(
+  workspace: string,
+  title: string,
+): LegacyWalBackedDatabase {
   const databaseFile: string = resolveLegacyWorktreeDatabaseFile(workspace);
   mkdirSync(join(workspace, TREKOON_STORAGE_DIRNAME), { recursive: true });
-  const db = new Database(databaseFile, { create: true });
+  const initializer = new Database(databaseFile, { create: true });
 
   try {
-    db.exec("PRAGMA journal_mode = WAL;");
-    db.exec("PRAGMA wal_autocheckpoint = 0;");
-    migrateDatabase(db);
-    db.exec("PRAGMA foreign_keys = ON;");
-    db.query("INSERT INTO epics (id, title, description, status, created_at, updated_at, version) VALUES (?, ?, ?, ?, ?, ?, ?);").run(
+    initializer.exec("PRAGMA journal_mode = WAL;");
+    initializer.exec("PRAGMA wal_autocheckpoint = 0;");
+    migrateDatabase(initializer);
+  } finally {
+    initializer.close(false);
+  }
+
+  let walFrames = 0;
+  const blocker = new Database(databaseFile);
+
+  try {
+    blocker.exec("PRAGMA journal_mode = WAL;");
+    blocker.exec("BEGIN;");
+    blocker.query("SELECT COUNT(*) AS count FROM epics;").get();
+
+    const writer = new Database(databaseFile);
+
+    try {
+      writer.exec("PRAGMA journal_mode = WAL;");
+      writer.exec("PRAGMA wal_autocheckpoint = 0;");
+      writer.exec("PRAGMA foreign_keys = ON;");
+      writer.query("INSERT INTO epics (id, title, description, status, created_at, updated_at, version) VALUES (?, ?, ?, ?, ?, ?, ?);").run(
       `epic-${title}`,
       title,
       `Legacy ${title}`,
@@ -102,12 +127,25 @@ function createLegacyWalBackedDatabaseFile(workspace: string, title: string): st
       1,
       1,
       1,
-    );
+      );
+    } finally {
+      writer.close(false);
+    }
+
+    const checkpointResult: string = execFileSync("sqlite3", [databaseFile, "PRAGMA wal_checkpoint(NOOP);"], {
+      encoding: "utf8",
+    }).trim();
+    const checkpointFields: string[] = checkpointResult.split("|");
+    walFrames = Number.parseInt(checkpointFields[1] ?? "0", 10);
   } finally {
-    db.close(false);
+    blocker.exec("ROLLBACK;");
+    blocker.close(false);
   }
 
-  return realpathSync(databaseFile);
+  return {
+    databaseFile: realpathSync(databaseFile),
+    walFrames,
+  };
 }
 
 function listEpicTitles(databaseFile: string): string[] {
@@ -252,15 +290,16 @@ describe("storage lifecycle", (): void => {
       stdio: "ignore",
     });
 
-    const legacyDatabaseFile: string = createLegacyWalBackedDatabaseFile(linkedWorktree, "wal-backed");
-    expect(existsSync(`${legacyDatabaseFile}-wal`)).toBe(true);
+    const legacyWalDatabase: LegacyWalBackedDatabase = createLegacyWalBackedDatabaseFile(linkedWorktree, "wal-backed");
+    expect(existsSync(`${legacyWalDatabase.databaseFile}-wal`)).toBe(true);
+    expect(legacyWalDatabase.walFrames).toBeGreaterThan(0);
 
     const storage = openTrekoonDatabase(linkedWorktree);
 
     try {
       expect(storage.diagnostics.recoveryStatus).toBe("safe_auto_migrate");
       expect(storage.diagnostics.autoMigratedLegacyState).toBe(true);
-      expect(storage.diagnostics.importedFromLegacyDatabase).toBe(legacyDatabaseFile);
+      expect(storage.diagnostics.importedFromLegacyDatabase).toBe(legacyWalDatabase.databaseFile);
       expect(storage.diagnostics.backupFiles).toHaveLength(1);
       expect(existsSync(storage.diagnostics.backupFiles[0]!)).toBe(true);
       expect(listEpicTitles(storage.paths.databaseFile)).toEqual(["wal-backed"]);
