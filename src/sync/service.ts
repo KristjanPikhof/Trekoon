@@ -666,12 +666,14 @@ export function syncStatus(cwd: string, sourceBranch: string): SyncStatusSummary
 
     const cursor = loadCursor(storage.db, git.worktreePath, sourceBranch);
     const cursorToken: string = cursor?.cursor_token ?? "0:";
+    const onSourceBranch: boolean = git.branchName !== null && git.branchName === sourceBranch;
 
     return {
       sourceBranch,
       ahead: countAhead(storage.db, git.branchName, sourceBranch),
-      behind: countBranchEventsSince(storage.db, sourceBranch, cursorToken),
+      behind: onSourceBranch ? 0 : countBranchEventsSince(storage.db, sourceBranch, cursorToken),
       pendingConflicts: countPendingConflicts(storage.db),
+      sameBranch: onSourceBranch,
       git,
     };
   } finally {
