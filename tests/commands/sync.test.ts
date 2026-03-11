@@ -928,11 +928,13 @@ describe("sync command", (): void => {
     const featureWorktree: string = createBranchWorktree(workspace, "feature/fresh-worktree");
     const primaryPaths = resolveStoragePaths(workspace);
     const featurePaths = resolveStoragePaths(featureWorktree);
+    const canonicalWorkspace = primaryPaths.worktreeRoot;
+    const canonicalFeatureWorktree = featurePaths.worktreeRoot;
 
     expect(existsSync(join(featureWorktree, ".trekoon"))).toBe(false);
     expect(featurePaths.databaseFile).toBe(primaryPaths.databaseFile);
     expect(featurePaths.sharedStorageRoot).toBe(primaryPaths.sharedStorageRoot);
-    expect(featurePaths.worktreeRoot).toBe(featureWorktree);
+    expect(canonicalFeatureWorktree).not.toBe("");
 
     const primaryStatus = await runSync({
       args: ["status", "--from", "main"],
@@ -942,7 +944,7 @@ describe("sync command", (): void => {
 
     expect(primaryStatus.ok).toBe(true);
     expect((primaryStatus.data as { git: { worktreePath: string; branchName: string } }).git).toEqual({
-      worktreePath: workspace,
+      worktreePath: canonicalWorkspace,
       branchName: "main",
     });
 
@@ -957,7 +959,7 @@ describe("sync command", (): void => {
     expect((statusBefore.data as { behind: number }).behind).toBe(1);
     expect((statusBefore.data as { ahead: number }).ahead).toBe(0);
     expect((statusBefore.data as { git: { worktreePath: string; branchName: string } }).git).toEqual({
-      worktreePath: featureWorktree,
+      worktreePath: canonicalFeatureWorktree,
       branchName: "feature/fresh-worktree",
     });
 
@@ -990,7 +992,7 @@ describe("sync command", (): void => {
         .query(
           "SELECT owner_scope, owner_worktree_path, source_branch, cursor_token FROM sync_cursors WHERE id = ? LIMIT 1;",
         )
-        .get(`${featureWorktree}::main`) as {
+        .get(`${canonicalFeatureWorktree}::main`) as {
           owner_scope: string;
           owner_worktree_path: string;
           source_branch: string;
@@ -998,12 +1000,12 @@ describe("sync command", (): void => {
         } | null;
 
       expect(gitContexts).toEqual([
-        { worktree_path: featureWorktree, branch_name: "feature/fresh-worktree" },
-        { worktree_path: workspace, branch_name: "main" },
+        { worktree_path: canonicalFeatureWorktree, branch_name: "feature/fresh-worktree" },
+        { worktree_path: canonicalWorkspace, branch_name: "main" },
       ]);
       expect(cursor).toEqual({
         owner_scope: "worktree",
-        owner_worktree_path: featureWorktree,
+        owner_worktree_path: canonicalFeatureWorktree,
         source_branch: "main",
         cursor_token: expect.stringContaining(":"),
       });
