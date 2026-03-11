@@ -322,6 +322,28 @@ const SYNC_HELP = [
   "  trekoon sync resolve <conflict-id> --use ours",
 ].join("\n");
 
+const SESSION_HELP = [
+  "Usage: trekoon session [--json|--toon]",
+  "",
+  "Purpose:",
+  "  One-call agent orientation. Opens DB once and returns:",
+  "    - diagnostics: storageMode, recoveryRequired, recoveryStatus",
+  "    - sync: ahead/behind counts and pendingConflicts vs main",
+  "    - next: full task tree with subtasks for the top ready candidate (null if none)",
+  "    - nextDeps: blocker list with statuses for the next task (empty if none)",
+  "    - readiness: readyCount and blockedCount across all open tasks",
+  "",
+  "Output modes:",
+  "  human  Multi-section summary (default in TTY)",
+  "  toon   Compact pipe-encoded envelope",
+  "  json   Full structured JSON envelope",
+  "",
+  "Examples:",
+  "  trekoon session",
+  "  trekoon --toon session",
+  "  trekoon --json session",
+].join("\n");
+
 const SKILLS_HELP = [
   "Usage:",
   "  trekoon skills install [--link --editor opencode|claude|pi] [--to <path>] [--allow-outside-repo]",
