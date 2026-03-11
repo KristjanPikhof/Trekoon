@@ -86,6 +86,8 @@ describe("integration worktree shared state", (): void => {
     const sidepanelWorktree: string = createBranchWorktree(workspace, "feature/sidepanel");
     const mainPaths = resolveStoragePaths(workspace);
     const sidepanelPaths = resolveStoragePaths(sidepanelWorktree);
+    const canonicalWorkspace = mainPaths.worktreeRoot;
+    const canonicalSidepanelWorktree = sidepanelPaths.worktreeRoot;
 
     expect(existsSync(join(sidepanelWorktree, ".trekoon"))).toBe(false);
     expect(sidepanelPaths.databaseFile).toBe(mainPaths.databaseFile);
@@ -107,9 +109,11 @@ describe("integration worktree shared state", (): void => {
     expect(sidepanelTask.ok).toBe(true);
     const sidepanelTaskId = (sidepanelTask.data as { tasks: Array<{ id: string }> }).tasks[0]?.id;
     expect(typeof sidepanelTaskId).toBe("string");
+    const resolvedSidepanelTaskId = sidepanelTaskId ?? "";
 
     const popupWorktree: string = createBranchWorktree(workspace, "feature/popup-fresh");
     const popupPaths = resolveStoragePaths(popupWorktree);
+    const canonicalPopupWorktree = popupPaths.worktreeRoot;
 
     expect(existsSync(join(popupWorktree, ".trekoon"))).toBe(false);
     expect(popupPaths.databaseFile).toBe(mainPaths.databaseFile);
@@ -134,7 +138,7 @@ describe("integration worktree shared state", (): void => {
     expect(wipeWithoutYes.data).toEqual({
       confirmed: false,
       storageDir: mainPaths.storageDir,
-      worktreeRoot: popupWorktree,
+      worktreeRoot: canonicalPopupWorktree,
       sharedStorageRoot: mainPaths.sharedStorageRoot,
       repoScoped: true,
     });
@@ -161,7 +165,7 @@ describe("integration worktree shared state", (): void => {
     expect(statusPopupBefore.ok).toBe(true);
     expect((statusPopupBefore.data as { behind: number }).behind).toBeGreaterThanOrEqual(1);
     expect((statusPopupBefore.data as { git: { worktreePath: string; branchName: string } }).git).toEqual({
-      worktreePath: popupWorktree,
+      worktreePath: canonicalPopupWorktree,
       branchName: "feature/popup-fresh",
     });
 
@@ -187,7 +191,7 @@ describe("integration worktree shared state", (): void => {
         id: string;
         title: string;
       } | null;
-      const task = storage.db.query("SELECT id, title FROM tasks WHERE id = ? LIMIT 1;").get(sidepanelTaskId) as {
+      const task = storage.db.query("SELECT id, title FROM tasks WHERE id = ? LIMIT 1;").get(resolvedSidepanelTaskId) as {
         id: string;
         title: string;
       } | null;
@@ -199,16 +203,16 @@ describe("integration worktree shared state", (): void => {
         .all() as Array<{ owner_worktree_path: string; source_branch: string }>;
 
       expect(epic).toEqual({ id: epicId, title: "Shared epic" });
-      expect(task).toEqual({ id: sidepanelTaskId ?? "", title: "Sidepanel task" });
+      expect(task).toEqual({ id: resolvedSidepanelTaskId, title: "Sidepanel task" });
       expect(gitContexts).toEqual([
-        { worktree_path: popupWorktree, branch_name: "feature/popup-fresh" },
-        { worktree_path: sidepanelWorktree, branch_name: "feature/sidepanel" },
-        { worktree_path: workspace, branch_name: "main" },
+        { worktree_path: canonicalPopupWorktree, branch_name: "feature/popup-fresh" },
+        { worktree_path: canonicalSidepanelWorktree, branch_name: "feature/sidepanel" },
+        { worktree_path: canonicalWorkspace, branch_name: "main" },
       ]);
       expect(cursors).toEqual([
-        { owner_worktree_path: popupWorktree, source_branch: "main" },
-        { owner_worktree_path: sidepanelWorktree, source_branch: "main" },
-        { owner_worktree_path: workspace, source_branch: "main" },
+        { owner_worktree_path: canonicalPopupWorktree, source_branch: "main" },
+        { owner_worktree_path: canonicalSidepanelWorktree, source_branch: "main" },
+        { owner_worktree_path: canonicalWorkspace, source_branch: "main" },
       ]);
     } finally {
       storage.close();
