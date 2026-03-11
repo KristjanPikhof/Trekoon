@@ -102,6 +102,16 @@ function listLegacyDatabaseFiles(paths: StoragePaths): string[] {
 }
 
 function fingerprintDatabaseFile(filePath: string): string {
+  const dumpResult = spawnSync("sqlite3", [filePath, ".dump"], {
+    cwd: dirname(filePath),
+    encoding: "utf8",
+    stdio: ["ignore", "pipe", "ignore"],
+  });
+
+  if (dumpResult.status === 0 && typeof dumpResult.stdout === "string") {
+    return createHash("sha256").update(dumpResult.stdout).digest("hex");
+  }
+
   const content = readFileSync(filePath);
   return createHash("sha256").update(content).digest("hex");
 }
