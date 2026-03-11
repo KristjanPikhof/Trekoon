@@ -384,16 +384,25 @@ When to choose which command:
 
 ### 4) AI execution loop for agents
 
-Run this loop each session to pick next work deterministically:
+The primary loop is: **session → work → task done → repeat**.
+
+Orient with a single call that returns diagnostics, sync status, next ready
+task with subtasks, blocker list, and readiness counts:
 
 ```bash
-trekoon --toon init
-trekoon --toon sync status
-trekoon --toon task ready --limit 5
-trekoon --toon task next
-trekoon --toon dep reverse <task-or-subtask-id>
-trekoon --toon task update <task-id> --status in_progress
+trekoon --toon session
 ```
+
+Claim work, then finish or report a block:
+
+```bash
+trekoon --toon task update <task-id> --status in_progress
+trekoon --toon task done <task-id>
+trekoon --toon task update <task-id> --append "Blocked by <reason>" --status blocked
+```
+
+`task done` marks the task done and returns the next ready task with
+dependencies inline, replacing the old multi-step transition.
 
 Fail-fast rules:
 
@@ -406,12 +415,20 @@ Fail-fast rules:
 - Do not fall back to a separate per-worktree DB or continue after missing
   shared storage.
 
-When done or blocked, append context and update final status:
+<details>
+<summary>Legacy manual bootstrap (use <code>session</code> instead)</summary>
 
 ```bash
+trekoon --toon init
+trekoon --toon sync status
+trekoon --toon task ready --limit 5
+trekoon --toon task next
+trekoon --toon dep reverse <task-or-subtask-id>
+trekoon --toon task update <task-id> --status in_progress
 trekoon --toon task update <task-id> --append "Completed implementation and checks" --status done
-trekoon --toon task update <task-id> --append "Blocked by <reason>" --status blocked
 ```
+
+</details>
 
 ### 5) Use TOON output for agent workflows
 
