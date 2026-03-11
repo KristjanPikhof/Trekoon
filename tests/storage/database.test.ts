@@ -91,10 +91,7 @@ describe("storage lifecycle", (): void => {
       expect(nestedStorage.paths.databaseFile).toBe(rootStorage.paths.databaseFile);
       expect(nestedStorage.paths.worktreeRoot).toBe(rootStorage.paths.worktreeRoot);
       expect(nestedStorage.paths.sharedStorageRoot).toBe(rootStorage.paths.sharedStorageRoot);
-      expect(nestedStorage.paths.diagnostics.warnings.map((warning) => warning.code)).toEqual([
-        "storage_root_diverged_from_cwd",
-        "shared_storage_root_differs_from_worktree_root",
-      ]);
+      expect(nestedStorage.paths.diagnostics.warnings.map((warning) => warning.code)).toEqual(["storage_root_diverged_from_cwd"]);
     } finally {
       nestedStorage.close();
       rootStorage.close();
@@ -121,7 +118,11 @@ describe("storage lifecycle", (): void => {
       expect(primaryStorage.paths.sharedStorageRoot).toBe(secondaryStorage.paths.sharedStorageRoot);
       expect(primaryStorage.paths.worktreeRoot).toBe(primaryPaths.worktreeRoot);
       expect(secondaryStorage.paths.worktreeRoot).toBe(linkedPaths.worktreeRoot);
+      expect(secondaryStorage.paths.sharedStorageRoot).toBe(primaryPaths.worktreeRoot);
       expect(secondaryStorage.paths.repoCommonDir).toBe(primaryStorage.paths.repoCommonDir);
+      expect(secondaryStorage.paths.diagnostics.warnings.map((warning) => warning.code)).toContain(
+        "shared_storage_root_differs_from_worktree_root",
+      );
     } finally {
       secondaryStorage.close();
       primaryStorage.close();
