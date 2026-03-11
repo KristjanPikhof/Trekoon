@@ -102,6 +102,28 @@ creates unless only one record is needed.
 | Multiple dependency edges across existing IDs | `trekoon --toon dep add-many --dep ...` |
 | One record only | `epic create`, `task create`, or `subtask create` |
 
+### Compact spec escaping rules
+
+Compact specs (pipe-delimited `--task`, `--subtask`, `--dep` values) use `\` as
+the escape character. Only these sequences are valid:
+
+| Sequence | Produces |
+|---|---|
+| `\|` | literal `|` (not a field separator) |
+| `\\` | literal `\` |
+| `\n` | newline |
+| `\r` | carriage return |
+| `\t` | tab |
+
+Any other `\X` combination (e.g., `\!`, `\=`, `\$`) is rejected with
+`Invalid escape sequence`. To avoid accidental escapes:
+
+- Do not use `!=` or similar operators in description text; rephrase instead
+  (e.g., "null does not equal sourceBranch" instead of "null !== sourceBranch").
+- If a literal backslash is needed, double it: `\\`.
+- When using shell line continuations (`\` at end of line), ensure the next
+  line's first character is not one that forms an invalid escape with `\`.
+
 ### Critical temp-key rule
 
 - Use plain temp keys when declaring records in compact specs, for example
