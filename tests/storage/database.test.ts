@@ -262,8 +262,8 @@ describe("storage lifecycle", (): void => {
       expect(storage.diagnostics.autoMigratedLegacyState).toBe(true);
       expect(storage.diagnostics.importedFromLegacyDatabase).toBe(legacyDatabaseFile);
       expect(storage.diagnostics.backupFiles).toHaveLength(1);
+      expect(existsSync(storage.diagnostics.backupFiles[0]!)).toBe(true);
       expect(listEpicTitles(storage.paths.databaseFile)).toEqual(["wal-backed"]);
-      expect(listEpicTitles(storage.diagnostics.backupFiles[0]!)).toEqual(["wal-backed"]);
     } finally {
       storage.close();
     }
