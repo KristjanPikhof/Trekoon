@@ -32,15 +32,6 @@ interface LinkTargetValidation {
   readonly outsideRepoLink: boolean;
 }
 
-interface LinkState {
-  readonly editor: EditorName;
-  readonly linkPath: string;
-  readonly expectedTarget: string;
-  readonly status: LinkStateStatus;
-  readonly existingTarget: string | null;
-  readonly conflictCode: "non_link" | "wrong_target" | null;
-}
-
 type UpdateLinkAction = "created" | "refreshed" | "skipped_conflict" | "skipped_no_editor_dir";
 
 interface UpdateLinkEntry {
