@@ -84,6 +84,32 @@ function createLegacyDatabaseFile(workspace: string, title: string): string {
   return realpathSync(databaseFile);
 }
 
+function createLegacyWalBackedDatabaseFile(workspace: string, title: string): string {
+  const databaseFile: string = resolveLegacyWorktreeDatabaseFile(workspace);
+  mkdirSync(join(workspace, TREKOON_STORAGE_DIRNAME), { recursive: true });
+  const db = new Database(databaseFile, { create: true });
+
+  try {
+    db.exec("PRAGMA journal_mode = WAL;");
+    db.exec("PRAGMA wal_autocheckpoint = 0;");
+    migrateDatabase(db);
+    db.exec("PRAGMA foreign_keys = ON;");
+    db.query("INSERT INTO epics (id, title, description, status, created_at, updated_at, version) VALUES (?, ?, ?, ?, ?, ?, ?);").run(
+      `epic-${title}`,
+      title,
+      `Legacy ${title}`,
+      "todo",
+      1,
+      1,
+      1,
+    );
+  } finally {
+    db.close(false);
+  }
+
+  return realpathSync(databaseFile);
+}
+
 function listEpicTitles(databaseFile: string): string[] {
   const db = new Database(databaseFile, { create: false, readonly: true });
 
@@ -211,6 +237,37 @@ describe("storage lifecycle", (): void => {
       expect(storage.diagnostics.backupFiles).toHaveLength(1);
       expect(existsSync(storage.diagnostics.backupFiles[0]!)).toBe(true);
       expect(listEpicTitles(storage.paths.databaseFile)).toEqual(["linked-worktree"]);
+    } finally {
+      storage.close();
+    }
+  });
+
+  test("imports committed legacy WAL state into shared storage", (): void => {
+    const workspace: string = createWorkspace();
+    createCommittedGitRepository(workspace);
+    const linkedWorktree: string = createWorkspace();
+
+    execFileSync("git", ["worktree", "add", "-b", "storage-import-wal", linkedWorktree, "HEAD"], {
+      cwd: workspace,
+      stdio: "ignore",
+    });
+
+    const legacyDatabaseFile: string = createLegacyWalBackedDatabaseFile(linkedWorktree, "wal-backed");
+    const detachedCopy: string = join(createWorkspace(), "legacy-main-only.db");
+    copyFileSync(legacyDatabaseFile, detachedCopy);
+
+    expect(existsSync(`${legacyDatabaseFile}-wal`)).toBe(true);
+    expect(listEpicTitles(detachedCopy)).toEqual([]);
+
+    const storage = openTrekoonDatabase(linkedWorktree);
+
+    try {
+      expect(storage.diagnostics.recoveryStatus).toBe("safe_auto_migrate");
+      expect(storage.diagnostics.autoMigratedLegacyState).toBe(true);
+      expect(storage.diagnostics.importedFromLegacyDatabase).toBe(legacyDatabaseFile);
+      expect(storage.diagnostics.backupFiles).toHaveLength(1);
+      expect(listEpicTitles(storage.paths.databaseFile)).toEqual(["wal-backed"]);
+      expect(listEpicTitles(storage.diagnostics.backupFiles[0]!)).toEqual(["wal-backed"]);
     } finally {
       storage.close();
     }
