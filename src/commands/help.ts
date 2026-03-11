@@ -27,6 +27,7 @@ const ROOT_HELP = [
   "  dep          Dependency graph commands",
   "  events       Event retention and cleanup commands",
   "  migrate      Migration status and rollback commands",
+  "  session      One-call agent orientation (diagnostics + sync + next task)",
   "  sync         Cross-branch sync commands",
   "  skills       Project-local skill install/update/link",
 ].join("\n");
