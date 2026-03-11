@@ -22,6 +22,10 @@ All notable changes to Trekoon are documented in this file.
 - Quickstart output updated to reflect session and task done as primary flow.
 - Help text includes session command documentation.
 
+## 0.2.2 - 0.2.3
+
+Bug fixes with worktrees
+
 ## 0.2.1
 
 ### Added
