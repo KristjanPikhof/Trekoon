@@ -3,7 +3,7 @@ import { randomUUID } from "node:crypto";
 import { type Database } from "bun:sqlite";
 
 import { openTrekoonDatabase } from "../storage/database";
-import { openBranchDatabaseSnapshot } from "./branch-db";
+import { countBranchEventsSince, queryBranchEventsSince } from "./branch-db";
 import { persistGitContext, resolveGitContext } from "./git-context";
 import {
   type PullSummary,
@@ -29,6 +29,8 @@ interface StoredEvent {
 }
 
 interface CursorRow {
+  readonly owner_scope: string;
+  readonly owner_worktree_path: string;
   readonly source_branch: string;
   readonly cursor_token: string;
   readonly last_event_at: number | null;
@@ -116,40 +118,45 @@ function tableForEntityKind(entityKind: string): "epics" | "tasks" | "subtasks" 
   }
 }
 
-function parseCursorToken(token: string): { createdAt: number; id: string | null } {
-  const [createdAtRaw, idRaw] = token.split(":");
-  const createdAt: number = Number.parseInt(createdAtRaw ?? "0", 10);
-
-  return {
-    createdAt: Number.isFinite(createdAt) ? createdAt : 0,
-    id: idRaw && idRaw.length > 0 ? idRaw : null,
-  };
-}
-
 function cursorTokenFromEvent(event: StoredEvent): string {
   return `${event.created_at}:${event.id}`;
 }
 
-function loadCursor(db: Database, sourceBranch: string): CursorRow | null {
+function cursorIdForWorktree(worktreePath: string, sourceBranch: string): string {
+  return `${worktreePath}::${sourceBranch}`;
+}
+
+function loadCursor(db: Database, worktreePath: string, sourceBranch: string): CursorRow | null {
   return db
     .query(
       `
-      SELECT source_branch, cursor_token, last_event_at
+      SELECT owner_scope, owner_worktree_path, source_branch, cursor_token, last_event_at
       FROM sync_cursors
-      WHERE source_branch = ?
+      WHERE owner_scope = 'worktree'
+        AND owner_worktree_path = ?
+        AND source_branch = ?
       LIMIT 1;
       `,
     )
-    .get(sourceBranch) as CursorRow | null;
+    .get(worktreePath, sourceBranch) as CursorRow | null;
 }
 
-function saveCursor(db: Database, sourceBranch: string, cursorToken: string, lastEventAt: number | null): void {
+function saveCursor(
+  db: Database,
+  worktreePath: string,
+  sourceBranch: string,
+  cursorToken: string,
+  lastEventAt: number | null,
+): void {
   const now: number = Date.now();
+  const cursorId = cursorIdForWorktree(worktreePath, sourceBranch);
 
   db.query(
     `
     INSERT INTO sync_cursors (
       id,
+      owner_scope,
+      owner_worktree_path,
       source_branch,
       cursor_token,
       last_event_at,
@@ -157,7 +164,9 @@ function saveCursor(db: Database, sourceBranch: string, cursorToken: string, las
       updated_at,
       version
     ) VALUES (
-      @sourceBranch,
+      @cursorId,
+      'worktree',
+      @worktreePath,
       @sourceBranch,
       @cursorToken,
       @lastEventAt,
@@ -166,36 +175,21 @@ function saveCursor(db: Database, sourceBranch: string, cursorToken: string, las
       1
     )
     ON CONFLICT(id) DO UPDATE SET
+      owner_scope = excluded.owner_scope,
+      owner_worktree_path = excluded.owner_worktree_path,
       cursor_token = excluded.cursor_token,
       last_event_at = excluded.last_event_at,
       updated_at = excluded.updated_at,
       version = sync_cursors.version + 1;
     `,
   ).run({
+    "@cursorId": cursorId,
+    "@worktreePath": worktreePath,
     "@sourceBranch": sourceBranch,
     "@cursorToken": cursorToken,
     "@lastEventAt": lastEventAt,
     "@now": now,
   });
-}
-
-function queryNewEvents(remoteDb: Database, cursorToken: string): StoredEvent[] {
-  const cursor = parseCursorToken(cursorToken);
-
-  return remoteDb
-    .query(
-      `
-      SELECT id, entity_kind, entity_id, operation, payload, git_branch, git_head, created_at, updated_at, version
-      FROM events
-      WHERE created_at > @createdAt
-         OR (created_at = @createdAt AND id > @id)
-      ORDER BY created_at ASC, id ASC;
-      `,
-    )
-    .all({
-      "@createdAt": cursor.createdAt,
-      "@id": cursor.id ?? "",
-    }) as StoredEvent[];
 }
 
 function countPendingConflicts(db: Database): number {
@@ -206,52 +200,22 @@ function countPendingConflicts(db: Database): number {
   return row?.count ?? 0;
 }
 
-function countBehind(remoteDb: Database, cursorToken: string): number {
-  const cursor = parseCursorToken(cursorToken);
-  const row = remoteDb
+function countAhead(localDb: Database, currentBranch: string | null, sourceBranch: string): number {
+  if (!currentBranch || currentBranch === sourceBranch) {
+    return 0;
+  }
+
+  const row = localDb
     .query(
       `
       SELECT COUNT(*) AS count
       FROM events
-      WHERE created_at > @createdAt
-         OR (created_at = @createdAt AND id > @id);
+      WHERE git_branch = @branch;
       `,
     )
-    .get({
-      "@createdAt": cursor.createdAt,
-      "@id": cursor.id ?? "",
-    }) as { count: number } | null;
+    .get({ "@branch": currentBranch }) as { count: number } | null;
 
   return row?.count ?? 0;
-}
-
-function countAhead(localDb: Database, currentBranch: string | null, remoteDbPath: string): number {
-  if (!currentBranch) {
-    return 0;
-  }
-
-  localDb.query("ATTACH DATABASE ? AS sync_remote;").run(remoteDbPath);
-
-  try {
-    const row = localDb
-      .query(
-        `
-        SELECT COUNT(*) AS count
-        FROM events AS local_events
-        WHERE local_events.git_branch = @branch
-          AND NOT EXISTS (
-            SELECT 1
-            FROM sync_remote.events AS remote_events
-            WHERE remote_events.id = local_events.id
-          );
-        `,
-      )
-      .get({ "@branch": currentBranch }) as { count: number } | null;
-
-    return row?.count ?? 0;
-  } finally {
-    localDb.query("DETACH DATABASE sync_remote;").run();
-  }
 }
 
 function buildSyncErrorHints(diagnostics: {
@@ -700,21 +664,16 @@ export function syncStatus(cwd: string, sourceBranch: string): SyncStatusSummary
   try {
     persistGitContext(storage.db, git);
 
-    const cursor = loadCursor(storage.db, sourceBranch);
+    const cursor = loadCursor(storage.db, git.worktreePath, sourceBranch);
     const cursorToken: string = cursor?.cursor_token ?? "0:";
-    const remote = openBranchDatabaseSnapshot(sourceBranch, cwd);
 
-    try {
-      return {
-        sourceBranch,
-        ahead: countAhead(storage.db, git.branchName, remote.path),
-        behind: countBehind(remote.db, cursorToken),
-        pendingConflicts: countPendingConflicts(storage.db),
-        git,
-      };
-    } finally {
-      remote.close();
-    }
+    return {
+      sourceBranch,
+      ahead: countAhead(storage.db, git.branchName, sourceBranch),
+      behind: countBranchEventsSince(storage.db, sourceBranch, cursorToken),
+      pendingConflicts: countPendingConflicts(storage.db),
+      git,
+    };
   } finally {
     storage.close();
   }
@@ -725,12 +684,10 @@ export function syncPull(cwd: string, sourceBranch: string): PullSummary {
   const git = resolveGitContext(cwd);
   persistGitContext(storage.db, git);
 
-  const remote = openBranchDatabaseSnapshot(sourceBranch, cwd);
-
   try {
-    const cursor = loadCursor(storage.db, sourceBranch);
+    const cursor = loadCursor(storage.db, git.worktreePath, sourceBranch);
     const cursorToken = cursor?.cursor_token ?? "0:";
-    const incomingEvents: StoredEvent[] = queryNewEvents(remote.db, cursorToken);
+    const incomingEvents: StoredEvent[] = queryBranchEventsSince(storage.db, sourceBranch, cursorToken) as StoredEvent[];
 
     let appliedEvents = 0;
     let createdConflicts = 0;
@@ -805,7 +762,7 @@ export function syncPull(cwd: string, sourceBranch: string): PullSummary {
       }
 
       if (lastToken) {
-        saveCursor(storage.db, sourceBranch, lastToken, lastEventAt);
+        saveCursor(storage.db, git.worktreePath, sourceBranch, lastToken, lastEventAt);
       }
     })();
 
@@ -828,7 +785,6 @@ export function syncPull(cwd: string, sourceBranch: string): PullSummary {
       },
     };
   } finally {
-    remote.close();
     storage.close();
   }
 }
