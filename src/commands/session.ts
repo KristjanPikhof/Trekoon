@@ -177,11 +177,12 @@ export async function runSession(context: CliContext): Promise<CliResult> {
 
     const syncSummary = resolveSyncStatus(database, context.cwd, DEFAULT_SOURCE_BRANCH);
     const domain = new TrackerDomain(database.db);
-    const readinessInfo = buildSessionReadiness(domain);
+    const readiness = buildTaskReadiness(domain, undefined);
+    const topCandidate = readiness.candidates[0] ?? null;
 
     let nextTask: NextCandidate | null = null;
-    if (readinessInfo.nextTaskId !== null) {
-      const tree = domain.buildTaskTreeDetailed(readinessInfo.nextTaskId);
+    if (topCandidate !== null) {
+      const tree = domain.buildTaskTreeDetailed(topCandidate.task.id);
       nextTask = tree;
     }
 
