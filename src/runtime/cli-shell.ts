@@ -120,12 +120,68 @@ export function renderShellResult(result: CliResult, mode: OutputMode, compatibi
   return renderResult(result, mode, { compatibilityMode: effectiveCompatibilityMode });
 }
 
+function isStringArray(value: unknown): value is string[] {
+  return Array.isArray(value) && value.every((entry: unknown) => typeof entry === "string");
+}
+
+function readResultStorageResolutionDiagnostics(result: CliResult) {
+  const data: unknown = result.data;
+  if (!data || typeof data !== "object") {
+    return null;
+  }
+
+  const candidate: Record<string, unknown> = data as Record<string, unknown>;
+  if (
+    typeof candidate.invocationCwd !== "string"
+    || typeof candidate.storageMode !== "string"
+    || (candidate.repoCommonDir !== null && typeof candidate.repoCommonDir !== "string")
+    || typeof candidate.worktreeRoot !== "string"
+    || typeof candidate.sharedStorageRoot !== "string"
+    || typeof candidate.databaseFile !== "string"
+    || typeof candidate.legacyStateDetected !== "boolean"
+    || typeof candidate.recoveryRequired !== "boolean"
+    || typeof candidate.recoveryStatus !== "string"
+    || !isStringArray(candidate.legacyDatabaseFiles)
+    || !isStringArray(candidate.backupFiles)
+    || !isStringArray(candidate.trackedStorageFiles)
+    || typeof candidate.autoMigratedLegacyState !== "boolean"
+    || (candidate.importedFromLegacyDatabase !== null && typeof candidate.importedFromLegacyDatabase !== "string")
+    || typeof candidate.operatorAction !== "string"
+  ) {
+    return null;
+  }
+
+  return {
+    invocationCwd: candidate.invocationCwd,
+    storageMode: candidate.storageMode,
+    repoCommonDir: candidate.repoCommonDir,
+    worktreeRoot: candidate.worktreeRoot,
+    sharedStorageRoot: candidate.sharedStorageRoot,
+    databaseFile: candidate.databaseFile,
+    legacyStateDetected: candidate.legacyStateDetected,
+    recoveryRequired: candidate.recoveryRequired,
+    recoveryStatus: candidate.recoveryStatus,
+    legacyDatabaseFiles: candidate.legacyDatabaseFiles,
+    backupFiles: candidate.backupFiles,
+    trackedStorageFiles: candidate.trackedStorageFiles,
+    autoMigratedLegacyState: candidate.autoMigratedLegacyState,
+    importedFromLegacyDatabase: candidate.importedFromLegacyDatabase,
+    operatorAction: candidate.operatorAction,
+  };
+}
+
 function withStorageRootDiagnostics(result: CliResult, cwd: string): CliResult {
   const paths = resolveStoragePaths(cwd);
   const diagnostics = paths.diagnostics;
-  const resolutionDiagnostics = resolveStorageResolutionDiagnostics(cwd);
+  const resultDiagnostics = readResultStorageResolutionDiagnostics(result);
+  const resolutionDiagnostics = resultDiagnostics ?? resolveStorageResolutionDiagnostics(cwd);
 
-  if (!resolutionDiagnostics.legacyStateDetected && diagnostics.warnings.length === 0 && diagnostics.errors.length === 0) {
+  if (
+    !resolutionDiagnostics.legacyStateDetected
+    && diagnostics.warnings.length === 0
+    && diagnostics.errors.length === 0
+    && resultDiagnostics === null
+  ) {
     return result;
   }
 
