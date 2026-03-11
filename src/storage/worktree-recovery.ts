@@ -185,14 +185,18 @@ function formatTrackedMismatchAction(paths: StoragePaths): string {
 
 function formatAmbiguousRecoveryAction(paths: StoragePaths, legacyFiles: readonly string[]): string {
   const sharedDatabaseFile: string = paths.databaseFile;
-  const firstLegacyFile: string = legacyFiles[0] ?? sharedDatabaseFile;
+  const firstLegacyFile: string = legacyFiles[0] ?? resolveLegacyWorktreeDatabaseFile(paths.worktreeRoot);
   const sharedDatabaseDirectory: string = dirname(sharedDatabaseFile);
+  const remainingLegacyFiles: string[] = legacyFiles.filter((filePath: string) => filePath !== firstLegacyFile);
+  const reconciliationStep: string = remainingLegacyFiles.length === 0
+    ? `After verifying ${sharedDatabaseFile}, remove the remaining divergent legacy database before rerunning trekoon init.`
+    : `After verifying ${sharedDatabaseFile}, remove or reconcile the other divergent legacy database files before rerunning trekoon init: ${remainingLegacyFiles.map(formatShellPath).join(", ")}.`;
 
   return [
     "Multiple divergent legacy databases were found.",
     `Choose one source database, ensure ${sharedDatabaseDirectory} exists, then use sqlite3 .backup to create a WAL-safe snapshot at ${sharedDatabaseFile}.`,
     `Example: mkdir -p ${formatShellPath(sharedDatabaseDirectory)} && sqlite3 ${formatShellPath(firstLegacyFile)} '.backup ${formatSqliteDotCommandPath(sharedDatabaseFile)}'`,
-    "Rerun trekoon init after selecting the authoritative database.",
+    reconciliationStep,
   ].join(" ");
 }
 
@@ -221,7 +225,7 @@ function assertNoSplitState(
       status: "ambiguous_recovery",
       legacyDatabaseFiles,
       trackedStorageFiles,
-      operatorAction: formatAmbiguousRecoveryAction(paths, [paths.databaseFile, ...divergentLegacyFiles]),
+      operatorAction: formatAmbiguousRecoveryAction(paths, divergentLegacyFiles),
     },
   });
 }
