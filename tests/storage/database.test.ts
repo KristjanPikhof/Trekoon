@@ -509,26 +509,35 @@ describe("storage lifecycle", (): void => {
     });
 
     const primaryStorage = openTrekoonDatabase(workspace);
-    primaryStorage.close();
+    try {
+      primaryStorage.db
+        .query("INSERT INTO epics (id, title, description, status, created_at, updated_at, version) VALUES (?, ?, ?, ?, ?, ?, ?);")
+        .run("epic-shared-state", "shared-state", "Shared state", "todo", 1, 1, 1);
+    } finally {
+      primaryStorage.close();
+    }
 
     const legacyDatabaseFile: string = createLegacyDatabaseFile(linkedWorktree, "stale-linked-worktree");
-    const storage = openTrekoonDatabase(linkedWorktree);
+
+    expect((): void => {
+      openTrekoonDatabase(linkedWorktree);
+    }).toThrow(DomainError);
 
     try {
-      expect(storage.paths.databaseFile).toBe(resolveStoragePaths(workspace).databaseFile);
-      expect(storage.diagnostics.recoveryStatus).toBe("safe_auto_migrate");
-      expect(storage.diagnostics.legacyStateDetected).toBe(true);
-      expect(storage.diagnostics.recoveryRequired).toBe(false);
-      expect(storage.diagnostics.autoMigratedLegacyState).toBe(false);
-      expect(storage.diagnostics.importedFromLegacyDatabase).toBeNull();
-      expect(storage.diagnostics.backupFiles).toEqual([]);
-      expect(storage.diagnostics.legacyDatabaseFiles).toEqual([legacyDatabaseFile]);
-      expect(storage.diagnostics.operatorAction).toContain("Shared database already exists");
-      expect(listEpicTitles(storage.paths.databaseFile)).toEqual([]);
-      expect(listEpicTitles(legacyDatabaseFile)).toEqual(["stale-linked-worktree"]);
-    } finally {
-      storage.close();
+      openTrekoonDatabase(linkedWorktree);
+    } catch (error: unknown) {
+      expect(error).toBeInstanceOf(DomainError);
+      const domainError = error as DomainError;
+      expect(domainError.code).toBe("ambiguous_legacy_state");
+      expect(domainError.details?.status).toBe("ambiguous_recovery");
+      expect(domainError.details?.legacyDatabaseFiles).toEqual([legacyDatabaseFile]);
+      expect(domainError.details?.trackedStorageFiles).toEqual([]);
+      expect(domainError.details?.operatorAction).toContain("Choose one source database");
+      expect(domainError.details?.operatorAction).toContain(resolveStoragePaths(workspace).databaseFile);
     }
+
+    expect(listEpicTitles(resolveStoragePaths(workspace).databaseFile)).toEqual(["shared-state"]);
+    expect(listEpicTitles(legacyDatabaseFile)).toEqual(["stale-linked-worktree"]);
   });
 
   test("bootstraps required sync tables", (): void => {
