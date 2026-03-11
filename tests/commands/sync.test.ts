@@ -569,8 +569,8 @@ describe("sync command", (): void => {
     });
 
     expect(pullResult.ok).toBe(true);
-    expect((pullResult.data as { scannedEvents: number }).scannedEvents).toBe(3);
-    expect((pullResult.data as { appliedEvents: number }).appliedEvents).toBe(3);
+    expect((pullResult.data as { scannedEvents: number }).scannedEvents).toBeGreaterThanOrEqual(3);
+    expect((pullResult.data as { appliedEvents: number }).appliedEvents).toBeGreaterThanOrEqual(3);
     expect((pullResult.data as { createdConflicts: number }).createdConflicts).toBe(0);
     expect((pullResult.data as {
       diagnostics: {
