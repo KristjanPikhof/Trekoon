@@ -76,23 +76,28 @@ export const BASE_SCHEMA_STATEMENTS: readonly string[] = [
   `
   CREATE TABLE IF NOT EXISTS git_context (
     id TEXT PRIMARY KEY,
+    metadata_scope TEXT NOT NULL DEFAULT 'worktree',
     worktree_path TEXT NOT NULL,
     branch_name TEXT,
     head_sha TEXT,
     created_at INTEGER NOT NULL,
     updated_at INTEGER NOT NULL,
-    version INTEGER NOT NULL DEFAULT 1
+    version INTEGER NOT NULL DEFAULT 1,
+    UNIQUE (metadata_scope, worktree_path)
   );
   `,
   `
   CREATE TABLE IF NOT EXISTS sync_cursors (
     id TEXT PRIMARY KEY,
+    owner_scope TEXT NOT NULL DEFAULT 'worktree',
+    owner_worktree_path TEXT NOT NULL,
     source_branch TEXT NOT NULL,
     cursor_token TEXT NOT NULL,
     last_event_at INTEGER,
     created_at INTEGER NOT NULL,
     updated_at INTEGER NOT NULL,
-    version INTEGER NOT NULL DEFAULT 1
+    version INTEGER NOT NULL DEFAULT 1,
+    UNIQUE (owner_scope, owner_worktree_path, source_branch)
   );
   `,
   `
@@ -113,5 +118,7 @@ export const BASE_SCHEMA_STATEMENTS: readonly string[] = [
   `CREATE INDEX IF NOT EXISTS idx_tasks_epic_id ON tasks(epic_id);`,
   `CREATE INDEX IF NOT EXISTS idx_subtasks_task_id ON subtasks(task_id);`,
   `CREATE INDEX IF NOT EXISTS idx_events_entity ON events(entity_kind, entity_id);`,
+  `CREATE INDEX IF NOT EXISTS idx_git_context_scope_path ON git_context(metadata_scope, worktree_path);`,
+  `CREATE INDEX IF NOT EXISTS idx_sync_cursors_owner ON sync_cursors(owner_scope, owner_worktree_path, source_branch);`,
   `CREATE INDEX IF NOT EXISTS idx_conflicts_resolution ON sync_conflicts(resolution);`,
 ];
