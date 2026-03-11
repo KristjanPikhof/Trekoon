@@ -178,18 +178,23 @@ export async function runSync(context: CliContext): Promise<CliResult> {
       assertValidSourceRef(context.cwd, sourceBranch);
       const summary = syncPull(context.cwd, sourceBranch);
 
+      const humanLines = [
+        `Pulled from '${summary.sourceBranch}'`,
+        `Scanned events: ${summary.scannedEvents}`,
+        `Applied events: ${summary.appliedEvents}`,
+        `Created conflicts: ${summary.createdConflicts}`,
+        `Malformed payloads: ${summary.diagnostics.malformedPayloadEvents}`,
+        `Quarantined events: ${summary.diagnostics.quarantinedEvents}`,
+        `Conflict events: ${summary.diagnostics.conflictEvents}`,
+        ...summary.diagnostics.errorHints,
+      ];
+      if (summary.sameBranch) {
+        humanLines.push(`Same-branch mode: already on '${summary.sourceBranch}', no sync needed`);
+      }
+
       return okResult({
         command: "sync.pull",
-        human: [
-          `Pulled from '${summary.sourceBranch}'`,
-          `Scanned events: ${summary.scannedEvents}`,
-          `Applied events: ${summary.appliedEvents}`,
-          `Created conflicts: ${summary.createdConflicts}`,
-          `Malformed payloads: ${summary.diagnostics.malformedPayloadEvents}`,
-          `Quarantined events: ${summary.diagnostics.quarantinedEvents}`,
-          `Conflict events: ${summary.diagnostics.conflictEvents}`,
-          ...summary.diagnostics.errorHints,
-        ].join("\n"),
+        human: humanLines.join("\n"),
         data: summary,
       });
     }

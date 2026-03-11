@@ -279,7 +279,12 @@ syntax.
 
 ## Sync reminders
 
-- Run `trekoon --toon sync status` at session start and before PR or merge.
+Same-branch sync is a no-op: `sync pull --from main` while on `main` produces
+zero conflicts and simply advances the cursor. `sync status` returns `behind=0`
+on the source branch. No action is needed.
+
+Cross-branch sync matters before merging a feature branch back:
+
 - Before merge, pull tracker events from the base branch:
 
   ```bash
