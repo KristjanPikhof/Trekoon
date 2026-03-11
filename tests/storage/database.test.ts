@@ -1,5 +1,5 @@
 import { execFileSync } from "node:child_process";
-import { existsSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, mkdtempSync, realpathSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
@@ -81,7 +81,7 @@ function createLegacyDatabaseFile(workspace: string, title: string): string {
     db.close(false);
   }
 
-  return databaseFile;
+  return realpathSync(databaseFile);
 }
 
 function listEpicTitles(databaseFile: string): string[] {
@@ -93,6 +93,10 @@ function listEpicTitles(databaseFile: string): string[] {
   } finally {
     db.close(false);
   }
+}
+
+function canonicalPath(filePath: string): string {
+  return realpathSync(filePath);
 }
 
 describe("storage lifecycle", (): void => {
@@ -206,7 +210,7 @@ describe("storage lifecycle", (): void => {
       expect(storage.diagnostics.importedFromLegacyDatabase).toBe(legacyDatabaseFile);
       expect(storage.diagnostics.backupFiles).toHaveLength(1);
       expect(existsSync(storage.diagnostics.backupFiles[0]!)).toBe(true);
-      expect(listEpicTitles(sharedDatabaseFile)).toEqual(["linked-worktree"]);
+      expect(listEpicTitles(storage.paths.databaseFile)).toEqual(["linked-worktree"]);
     } finally {
       storage.close();
     }
@@ -293,7 +297,7 @@ describe("storage lifecycle", (): void => {
       expect(error).toBeInstanceOf(DomainError);
       const domainError = error as DomainError;
       expect(domainError.code).toBe("tracked_ignored_mismatch");
-      expect(domainError.details?.trackedStorageFiles).toEqual([trackedFile]);
+      expect(domainError.details?.trackedStorageFiles).toEqual([canonicalPath(trackedFile)]);
     }
   });
 
