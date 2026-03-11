@@ -1,5 +1,5 @@
 import { randomUUID } from "node:crypto";
-import { existsSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
@@ -267,6 +267,7 @@ describe("sync command", (): void => {
     const workspace: string = createWorkspace();
     initializeRepository(workspace);
 
+    mkdirSync(join(workspace, ".trekoon"), { recursive: true });
     writeFileSync(join(workspace, ".trekoon", "tracked.txt"), "tracked state\n");
     runGit(workspace, ["add", "-f", ".trekoon/tracked.txt"]);
 
