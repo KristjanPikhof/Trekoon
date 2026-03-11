@@ -14,6 +14,7 @@ import { runSync } from "../commands/sync";
 import { runTask } from "../commands/task";
 import { runWipe } from "../commands/wipe";
 import { failResult, okResult, renderResult } from "../io/output";
+import { resolveStorageResolutionDiagnostics } from "../storage/database";
 import { type CliContext, type CliResult, type CompatibilityMode, type OutputMode } from "./command-types";
 import { CLI_VERSION } from "./version";
 import { resolveStoragePaths } from "../storage/path";
@@ -125,12 +126,9 @@ export function renderShellResult(result: CliResult, mode: OutputMode, compatibi
 function withStorageRootDiagnostics(result: CliResult, cwd: string): CliResult {
   const paths = resolveStoragePaths(cwd);
   const diagnostics = paths.diagnostics;
-  const legacyDatabaseFile: string = resolve(paths.worktreeRoot, ".trekoon", "trekoon.db");
-  const legacyStateDetected: boolean =
-    legacyDatabaseFile !== paths.databaseFile && existsSync(legacyDatabaseFile);
-  const recoveryRequired: boolean = legacyStateDetected && !existsSync(paths.databaseFile);
+  const resolutionDiagnostics = resolveStorageResolutionDiagnostics(cwd);
 
-  if (!legacyStateDetected && diagnostics.warnings.length === 0 && diagnostics.errors.length === 0) {
+  if (!resolutionDiagnostics.legacyStateDetected && diagnostics.warnings.length === 0 && diagnostics.errors.length === 0) {
     return result;
   }
 
@@ -145,8 +143,15 @@ function withStorageRootDiagnostics(result: CliResult, cwd: string): CliResult {
         worktreeRoot: diagnostics.worktreeRoot,
         sharedStorageRoot: diagnostics.sharedStorageRoot,
         databaseFile: diagnostics.databaseFile,
-        legacyStateDetected,
-        recoveryRequired,
+        legacyStateDetected: resolutionDiagnostics.legacyStateDetected,
+        recoveryRequired: resolutionDiagnostics.recoveryRequired,
+        recoveryStatus: resolutionDiagnostics.recoveryStatus,
+        legacyDatabaseFiles: resolutionDiagnostics.legacyDatabaseFiles,
+        backupFiles: resolutionDiagnostics.backupFiles,
+        trackedStorageFiles: resolutionDiagnostics.trackedStorageFiles,
+        autoMigratedLegacyState: resolutionDiagnostics.autoMigratedLegacyState,
+        importedFromLegacyDatabase: resolutionDiagnostics.importedFromLegacyDatabase,
+        operatorAction: resolutionDiagnostics.operatorAction,
         warnings: diagnostics.warnings,
         errors: diagnostics.errors,
       },
