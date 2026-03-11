@@ -26,11 +26,6 @@ export interface WorktreeRecoveryDiagnostics {
   readonly operatorAction: string;
 }
 
-interface LegacyDatabaseFingerprint {
-  readonly path: string;
-  readonly hash: string;
-}
-
 function readGitLines(workingDirectory: string, args: readonly string[]): string[] {
   const result = spawnSync("git", args, {
     cwd: workingDirectory,
@@ -42,10 +37,12 @@ function readGitLines(workingDirectory: string, args: readonly string[]): string
     return [];
   }
 
-  return result.stdout
+  const stdout: string = typeof result.stdout === "string" ? result.stdout : "";
+
+  return stdout
     .split(/\r?\n/u)
-    .map((line) => line.trim())
-    .filter((line) => line.length > 0);
+    .map((line: string) => line.trim())
+    .filter((line: string) => line.length > 0);
 }
 
 function listWorktreeRoots(paths: StoragePaths): string[] {
@@ -104,13 +101,9 @@ function listLegacyDatabaseFiles(paths: StoragePaths): string[] {
   return [...files].sort();
 }
 
-function fingerprintDatabaseFile(filePath: string): LegacyDatabaseFingerprint {
+function fingerprintDatabaseFile(filePath: string): string {
   const content = readFileSync(filePath);
-  const hash = createHash("sha256").update(content).digest("hex");
-  return {
-    path: filePath,
-    hash,
-  };
+  return createHash("sha256").update(content).digest("hex");
 }
 
 function createBackupFilePath(filePath: string): string {
@@ -159,15 +152,16 @@ export function recoverWorktreeDatabaseState(paths: StoragePaths): WorktreeRecov
   const legacyDatabaseFiles: string[] = listLegacyDatabaseFiles(paths);
 
   if (trackedStorageFiles.length > 0) {
-    return {
-      status: "tracked_ignored_mismatch",
-      legacyDatabaseFiles,
-      backupFiles: [],
-      trackedStorageFiles,
-      autoMigrated: false,
-      importedFrom: null,
-      operatorAction: formatTrackedMismatchAction(paths),
-    };
+    throw new DomainError({
+      code: "tracked_ignored_mismatch",
+      message: "Tracked .trekoon files conflict with ignored shared storage.",
+      details: {
+        status: "tracked_ignored_mismatch",
+        legacyDatabaseFiles,
+        trackedStorageFiles,
+        operatorAction: formatTrackedMismatchAction(paths),
+      },
+    });
   }
 
   if (legacyDatabaseFiles.length === 0) {
@@ -194,8 +188,7 @@ export function recoverWorktreeDatabaseState(paths: StoragePaths): WorktreeRecov
     };
   }
 
-  const fingerprints: LegacyDatabaseFingerprint[] = legacyDatabaseFiles.map(fingerprintDatabaseFile);
-  const distinctHashes: string[] = [...new Set(fingerprints.map((entry) => entry.hash))];
+  const distinctHashes: string[] = [...new Set(legacyDatabaseFiles.map(fingerprintDatabaseFile))];
 
   if (distinctHashes.length !== 1) {
     throw new DomainError({
@@ -210,9 +203,17 @@ export function recoverWorktreeDatabaseState(paths: StoragePaths): WorktreeRecov
     });
   }
 
+  const importSource: string | undefined = legacyDatabaseFiles[0];
+  if (importSource === undefined) {
+    throw new DomainError({
+      code: "legacy_import_failed",
+      message: "Legacy import could not determine a source database.",
+    });
+  }
+
   const backupFiles: string[] = legacyDatabaseFiles.map(backupLegacyDatabaseFile);
   mkdirSync(dirname(paths.databaseFile), { recursive: true });
-  copyFileSync(legacyDatabaseFiles[0], paths.databaseFile);
+  copyFileSync(importSource, paths.databaseFile);
 
   return {
     status: "safe_auto_migrate",
@@ -220,7 +221,7 @@ export function recoverWorktreeDatabaseState(paths: StoragePaths): WorktreeRecov
     backupFiles,
     trackedStorageFiles,
     autoMigrated: true,
-    importedFrom: legacyDatabaseFiles[0],
+    importedFrom: importSource,
     operatorAction: `Imported legacy worktree database into shared storage and backed up ${legacyDatabaseFiles.length} original file(s).`,
   };
 }
