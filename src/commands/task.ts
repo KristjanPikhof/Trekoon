@@ -45,9 +45,6 @@ function formatTask(task: TaskRecord): string {
 const VIEW_MODES = ["table", "compact", "tree", "detail"] as const;
 const LIST_VIEW_MODES = ["table", "compact"] as const;
 const DEFAULT_TASK_LIST_LIMIT = 10;
-const DEFAULT_OPEN_TASK_STATUSES = ["in_progress", "in-progress", "todo"] as const;
-const READY_REASON_READY = "all_dependencies_done";
-const READY_REASON_BLOCKED = "blocked_by_dependencies";
 const SEARCH_OPTIONS = ["fields", "preview"] as const;
 const REPLACE_OPTIONS = ["search", "replace", "fields", "preview", "apply"] as const;
 const CREATE_MANY_OPTIONS = ["epic", "e", "task"] as const;
