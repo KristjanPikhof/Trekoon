@@ -227,6 +227,66 @@ describe("sync command", (): void => {
     });
   });
 
+  test("rejects nonexistent or deleted source refs", async (): Promise<void> => {
+    const workspace: string = createWorkspace();
+    initializeRepository(workspace);
+
+    runGit(workspace, ["branch", "stale/source"]);
+    runGit(workspace, ["branch", "-D", "stale/source"]);
+
+    const nonexistentStatus = await runSync({
+      args: ["status", "--from", "missing/source"],
+      cwd: workspace,
+      mode: "toon",
+    });
+
+    expect(nonexistentStatus.ok).toBe(false);
+    expect(nonexistentStatus.error?.code).toBe("invalid_source");
+    expect(nonexistentStatus.data).toMatchObject({
+      reason: "invalid_source",
+      status: "invalid_source",
+      sourceBranch: "missing/source",
+    });
+
+    const deletedPull = await runSync({
+      args: ["pull", "--from", "stale/source"],
+      cwd: workspace,
+      mode: "toon",
+    });
+
+    expect(deletedPull.ok).toBe(false);
+    expect(deletedPull.error?.code).toBe("invalid_source");
+    expect(deletedPull.data).toMatchObject({
+      reason: "invalid_source",
+      status: "invalid_source",
+      sourceBranch: "stale/source",
+    });
+  });
+
+  test("surfaces recovery diagnostics when sync bootstrap is blocked", async (): Promise<void> => {
+    const workspace: string = createWorkspace();
+    initializeRepository(workspace);
+
+    writeFileSync(join(workspace, ".trekoon", "tracked.txt"), "tracked state\n");
+    runGit(workspace, ["add", "-f", ".trekoon/tracked.txt"]);
+
+    const result = await runSync({
+      args: ["status", "--from", "main"],
+      cwd: workspace,
+      mode: "toon",
+    });
+
+    expect(result.ok).toBe(false);
+    expect(result.error?.code).toBe("tracked_ignored_mismatch");
+    expect(result.data).toMatchObject({
+      reason: "storage_bootstrap_blocked",
+      recoveryRequired: true,
+      recoveryStatus: "tracked_ignored_mismatch",
+      trackedStorageFiles: [join(workspace, ".trekoon", "tracked.txt")],
+    });
+    expect((result.data as { operatorAction: string }).operatorAction).toContain("git rm --cached -r --");
+  });
+
   test("quarantines malformed payloads and continues", async (): Promise<void> => {
     const workspace: string = createWorkspace();
     initializeRepository(workspace);
