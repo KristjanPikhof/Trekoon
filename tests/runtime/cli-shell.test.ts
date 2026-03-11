@@ -372,6 +372,83 @@ describe("cli shell dispatch", (): void => {
     expect(meta.storageRootDiagnostics?.warnings.map((warning) => warning.code)).toEqual(["storage_root_diverged_from_cwd"]);
   });
 
+  test("help diagnostics do not create shared storage or import legacy state", async (): Promise<void> => {
+    const workspace = createWorkspace();
+    createCommittedGitRepository(workspace);
+    const linkedWorktree = createWorkspace();
+
+    execFileSync("git", ["worktree", "add", "-b", "shell-help-readonly", linkedWorktree, "HEAD"], {
+      cwd: workspace,
+      stdio: "ignore",
+    });
+
+    const legacyDatabaseFile = join(linkedWorktree, ".trekoon", "trekoon.db");
+    mkdirSync(join(linkedWorktree, ".trekoon"), { recursive: true });
+    writeFileSync(legacyDatabaseFile, "legacy shell state", "utf8");
+    const sharedDatabaseFile = resolveStoragePaths(linkedWorktree).databaseFile;
+
+    const result = await executeShell(parseInvocation(["--help", "--toon"], { stdoutIsTTY: false }), linkedWorktree);
+
+    expect(result.ok).toBeTrue();
+    const meta = result.meta as {
+      storageRootDiagnostics?: {
+        legacyStateDetected: boolean;
+        recoveryStatus: string;
+        autoMigratedLegacyState: boolean;
+        importedFromLegacyDatabase: string | null;
+        legacyDatabaseFiles: string[];
+        backupFiles: string[];
+      };
+    };
+
+    expect(meta.storageRootDiagnostics?.legacyStateDetected).toBeTrue();
+    expect(meta.storageRootDiagnostics?.recoveryStatus).toBe("safe_auto_migrate");
+    expect(meta.storageRootDiagnostics?.autoMigratedLegacyState).toBeFalse();
+    expect(meta.storageRootDiagnostics?.importedFromLegacyDatabase).toBeNull();
+    expect(meta.storageRootDiagnostics?.legacyDatabaseFiles).toEqual([realpathSync(legacyDatabaseFile)]);
+    expect(meta.storageRootDiagnostics?.backupFiles).toEqual([]);
+    expect(existsSync(sharedDatabaseFile)).toBeFalse();
+    expect(existsSync(`${legacyDatabaseFile}.pre-shared-import.bak`)).toBeFalse();
+  });
+
+  test("unknown command diagnostics stay read-only", async (): Promise<void> => {
+    const workspace = createWorkspace();
+    createCommittedGitRepository(workspace);
+    const linkedWorktree = createWorkspace();
+
+    execFileSync("git", ["worktree", "add", "-b", "shell-unknown-readonly", linkedWorktree, "HEAD"], {
+      cwd: workspace,
+      stdio: "ignore",
+    });
+
+    const legacyDatabaseFile = join(linkedWorktree, ".trekoon", "trekoon.db");
+    mkdirSync(join(linkedWorktree, ".trekoon"), { recursive: true });
+    writeFileSync(legacyDatabaseFile, "legacy shell state", "utf8");
+    const sharedDatabaseFile = resolveStoragePaths(linkedWorktree).databaseFile;
+
+    const result = await executeShell(parseInvocation(["unknown", "--toon"], { stdoutIsTTY: false }), linkedWorktree);
+
+    expect(result.ok).toBeFalse();
+    expect(result.error?.code).toBe("unknown_command");
+    const meta = result.meta as {
+      storageRootDiagnostics?: {
+        legacyStateDetected: boolean;
+        recoveryStatus: string;
+        autoMigratedLegacyState: boolean;
+        importedFromLegacyDatabase: string | null;
+        backupFiles: string[];
+      };
+    };
+
+    expect(meta.storageRootDiagnostics?.legacyStateDetected).toBeTrue();
+    expect(meta.storageRootDiagnostics?.recoveryStatus).toBe("safe_auto_migrate");
+    expect(meta.storageRootDiagnostics?.autoMigratedLegacyState).toBeFalse();
+    expect(meta.storageRootDiagnostics?.importedFromLegacyDatabase).toBeNull();
+    expect(meta.storageRootDiagnostics?.backupFiles).toEqual([]);
+    expect(existsSync(sharedDatabaseFile)).toBeFalse();
+    expect(existsSync(`${legacyDatabaseFile}.pre-shared-import.bak`)).toBeFalse();
+  });
+
   test("returns shared wipe scope data without parsing text", async (): Promise<void> => {
     const workspace = createWorkspace();
     createCommittedGitRepository(workspace);
