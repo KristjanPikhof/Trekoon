@@ -1,6 +1,3 @@
-import { existsSync } from "node:fs";
-import { resolve } from "node:path";
-
 import { runHelp } from "../commands/help";
 import { runDep } from "../commands/dep";
 import { runEpic } from "../commands/epic";
