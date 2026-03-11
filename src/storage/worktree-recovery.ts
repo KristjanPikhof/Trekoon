@@ -141,10 +141,29 @@ function createBackupFilePath(filePath: string): string {
   }
 }
 
+function createDatabaseSnapshot(sourcePath: string, targetPath: string): void {
+  const backupResult = spawnSync("sqlite3", [sourcePath, `.backup ${targetPath}`], {
+    cwd: dirname(sourcePath),
+    encoding: "utf8",
+    stdio: ["ignore", "pipe", "pipe"],
+  });
+
+  if (backupResult.status !== 0) {
+    const stderr: string = typeof backupResult.stderr === "string" ? backupResult.stderr.trim() : "";
+    const stdout: string = typeof backupResult.stdout === "string" ? backupResult.stdout.trim() : "";
+    const detail: string = stderr || stdout || `sqlite3 exited with status ${backupResult.status ?? "unknown"}`;
+
+    throw new DomainError({
+      code: "legacy_import_failed",
+      message: `Failed to snapshot legacy database state from ${sourcePath} to ${targetPath}: ${detail}`,
+    });
+  }
+}
+
 function backupLegacyDatabaseFile(filePath: string): string {
   const backupPath: string = createBackupFilePath(filePath);
   mkdirSync(dirname(backupPath), { recursive: true });
-  copyFileSync(filePath, backupPath);
+  createDatabaseSnapshot(filePath, backupPath);
   return backupPath;
 }
 
@@ -254,7 +273,7 @@ export function inspectWorktreeDatabaseState(
 
   const backupFiles: string[] = legacyDatabaseFiles.map(backupLegacyDatabaseFile);
   mkdirSync(dirname(paths.databaseFile), { recursive: true });
-  copyFileSync(importSource, paths.databaseFile);
+  createDatabaseSnapshot(importSource, paths.databaseFile);
 
   return {
     status: "safe_auto_migrate",
