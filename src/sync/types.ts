@@ -21,6 +21,7 @@ export interface PullSummary {
   readonly appliedEvents: number;
   readonly createdConflicts: number;
   readonly cursorToken: string | null;
+  readonly sameBranch: boolean;
   readonly diagnostics: SyncPullDiagnostics;
 }
 
