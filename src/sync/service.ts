@@ -807,6 +807,7 @@ export function syncPull(cwd: string, sourceBranch: string): PullSummary {
       appliedEvents,
       createdConflicts,
       cursorToken: lastToken,
+      sameBranch: false,
       diagnostics: {
         malformedPayloadEvents,
         applyRejectedEvents,
