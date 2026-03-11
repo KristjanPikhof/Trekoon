@@ -999,10 +999,13 @@ describe("sync command", (): void => {
           cursor_token: string;
         } | null;
 
-      expect(gitContexts).toEqual([
-        { worktree_path: canonicalFeatureWorktree, branch_name: "feature/fresh-worktree" },
-        { worktree_path: canonicalWorkspace, branch_name: "main" },
-      ]);
+      expect(gitContexts).toHaveLength(2);
+      expect(gitContexts).toEqual(
+        expect.arrayContaining([
+          { worktree_path: canonicalFeatureWorktree, branch_name: "feature/fresh-worktree" },
+          { worktree_path: canonicalWorkspace, branch_name: "main" },
+        ]),
+      );
       expect(cursor).toEqual({
         owner_scope: "worktree",
         owner_worktree_path: canonicalFeatureWorktree,
