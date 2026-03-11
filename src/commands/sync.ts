@@ -3,7 +3,6 @@ import { safeErrorMessage, sqliteBusyFailure } from "./error-utils";
 
 import { failResult, okResult } from "../io/output";
 import { type CliContext, type CliResult } from "../runtime/command-types";
-import { MissingBranchDatabaseError } from "../sync/branch-db";
 import { getSyncConflict, listSyncConflicts, syncPull, syncResolve, syncStatus } from "../sync/service";
 import { type SyncResolution } from "../sync/types";
 
@@ -275,20 +274,6 @@ export async function runSync(context: CliContext): Promise<CliResult> {
 
     return usage(`Unknown sync subcommand '${subcommand}'.`);
   } catch (error) {
-    if (error instanceof MissingBranchDatabaseError) {
-      return failResult({
-        command: resolvedCommand,
-        human: error.message,
-        data: {
-          reason: "missing_branch_db",
-        },
-        error: {
-          code: "missing_branch_db",
-          message: error.message,
-        },
-      });
-    }
-
     const busyFailure = sqliteBusyFailure(resolvedCommand, error);
     if (busyFailure !== null) {
       return busyFailure;
