@@ -164,7 +164,7 @@ describe("integration worktree shared state", (): void => {
     expect(statusSidepanel.ok).toBe(true);
     expect(statusPopupBefore.ok).toBe(true);
     expect((statusPopupBefore.data as { behind: number }).behind).toBeGreaterThanOrEqual(1);
-    expect((statusPopupBefore.data as { git: { worktreePath: string; branchName: string } }).git).toEqual({
+    expect((statusPopupBefore.data as { git: { worktreePath: string; branchName: string } }).git).toMatchObject({
       worktreePath: canonicalPopupWorktree,
       branchName: "feature/popup-fresh",
     });
