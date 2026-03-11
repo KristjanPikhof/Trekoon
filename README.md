@@ -49,7 +49,8 @@ npm i -g trekoon
 - `trekoon help [command]`
 - `trekoon quickstart`
 - `trekoon epic <create|expand|list|show|search|replace|update|delete>`
-- `trekoon task <create|create-many|list|show|ready|next|search|replace|update|delete>`
+- `trekoon session`
+- `trekoon task <create|create-many|list|show|ready|next|done|search|replace|update|delete>`
 - `trekoon subtask <create|create-many|list|search|replace|update|delete>`
 - `trekoon dep <add|add-many|remove|list|reverse>`
 - `trekoon events prune [--dry-run] [--archive] [--retention-days <n>]`
