@@ -529,6 +529,60 @@ describe("integration sync workflow", (): void => {
     expect((secondPull.data as { createdConflicts: number }).createdConflicts).toBe(0);
   });
 
+  test("same-branch sync pull stores events and advances cursor without conflicts", async (): Promise<void> => {
+    const workspace: string = createWorkspace();
+    seedRepository(workspace);
+
+    const initResult = await runInit({
+      args: [],
+      cwd: workspace,
+      mode: "human",
+    });
+    expect(initResult.ok).toBe(true);
+
+    const created = await runEpic({
+      cwd: workspace,
+      mode: "toon",
+      args: ["create", "--title", "Same-branch epic", "--description", "same-branch test"],
+    });
+    expect(created.ok).toBe(true);
+    const epicId = (created.data as { epic: { id: string } }).epic.id;
+
+    // Pull from main while on main (same-branch)
+    const pullResult = await runSync({
+      args: ["pull", "--from", "main"],
+      cwd: workspace,
+      mode: "toon",
+    });
+
+    expect(pullResult.ok).toBe(true);
+    expect((pullResult.data as { sameBranch: boolean }).sameBranch).toBe(true);
+    expect((pullResult.data as { appliedEvents: number }).appliedEvents).toBe(0);
+    expect((pullResult.data as { createdConflicts: number }).createdConflicts).toBe(0);
+    expect((pullResult.data as { scannedEvents: number }).scannedEvents).toBeGreaterThanOrEqual(1);
+
+    // Switch to feature branch and pull from main; events before the cursor should not appear
+    runGit(workspace, ["checkout", "-b", "feature/same-branch-cursor"]);
+
+    const crossPull = await runSync({
+      args: ["pull", "--from", "main"],
+      cwd: workspace,
+      mode: "toon",
+    });
+
+    expect(crossPull.ok).toBe(true);
+    expect((crossPull.data as { sameBranch: boolean }).sameBranch).toBe(false);
+    expect((crossPull.data as { scannedEvents: number }).scannedEvents).toBe(0);
+
+    const storage = openTrekoonDatabase(workspace);
+    try {
+      const epic = storage.db.query("SELECT id, title FROM epics WHERE id = ?;").get(epicId) as { id: string; title: string } | null;
+      expect(epic).toEqual({ id: epicId, title: "Same-branch epic" });
+    } finally {
+      storage.close();
+    }
+  });
+
   test("fresh worktree sees shared tracker state and can pull main", async (): Promise<void> => {
     const workspace: string = createWorkspace();
     seedRepository(workspace);
