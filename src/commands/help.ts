@@ -376,6 +376,7 @@ const SKILLS_HELP = [
 const COMMAND_HELP: Record<string, string> = {
   init: INIT_HELP,
   quickstart: QUICKSTART_HELP,
+  session: SESSION_HELP,
   wipe: WIPE_HELP,
   epic: EPIC_HELP,
   task: TASK_HELP,
