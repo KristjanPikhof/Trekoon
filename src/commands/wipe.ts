@@ -7,13 +7,14 @@ import { resolveStoragePaths } from "../storage/path";
 export async function runWipe(context: CliContext): Promise<CliResult> {
   const confirmed: boolean = context.args.includes("--yes");
   const paths = resolveStoragePaths(context.cwd);
-  const repoScoped: boolean = paths.sharedStorageRoot !== paths.worktreeRoot;
-  const scopeLabel: string = repoScoped ? "shared repository Trekoon state" : "repository Trekoon state";
+  const repoScoped: boolean = paths.storageMode === "git_common_dir";
+  const sharedAcrossWorktrees: boolean = repoScoped && paths.sharedStorageRoot !== paths.worktreeRoot;
+  const scopeLabel: string = repoScoped ? "repo-wide Trekoon state" : "local Trekoon state";
 
   if (!confirmed) {
     return failResult({
       command: "wipe",
-      human: `Refusing to wipe ${scopeLabel} without --yes. This deletes ${paths.storageDir} for the entire repository${repoScoped ? ", including other worktrees that share this storage" : ""}.`,
+      human: `Refusing to wipe ${scopeLabel} without --yes. This deletes ${paths.storageDir}${repoScoped ? " for the entire repository, including any linked worktrees that share this storage" : " for this working directory"}.`,
       data: {
         confirmed,
         storageDir: paths.storageDir,
@@ -35,8 +36,8 @@ export async function runWipe(context: CliContext): Promise<CliResult> {
   return okResult({
     command: "wipe",
     human: existed
-      ? `Removed ${scopeLabel} at ${paths.storageDir}${repoScoped ? ` for repository ${paths.sharedStorageRoot}` : ""}.`
-      : `No ${scopeLabel} found at ${paths.storageDir}${repoScoped ? ` for repository ${paths.sharedStorageRoot}` : ""}.`,
+      ? `Removed ${scopeLabel} at ${paths.storageDir}${repoScoped ? ` for repository ${paths.sharedStorageRoot}` : ""}${sharedAcrossWorktrees ? ", which is shared with linked worktrees" : ""}.`
+      : `No ${scopeLabel} found at ${paths.storageDir}${repoScoped ? ` for repository ${paths.sharedStorageRoot}` : ""}${sharedAcrossWorktrees ? ", which is shared with linked worktrees" : ""}.`,
     data: {
       storageDir: paths.storageDir,
       worktreeRoot: paths.worktreeRoot,
