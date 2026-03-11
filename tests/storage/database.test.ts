@@ -278,6 +278,13 @@ describe("storage lifecycle", (): void => {
       const domainError = error as DomainError;
       expect(domainError.code).toBe("ambiguous_legacy_state");
       expect(domainError.details?.status).toBe("ambiguous_recovery");
+      expect(domainError.details?.legacyDatabaseFiles).toEqual([
+        canonicalPath(resolveLegacyWorktreeDatabaseFile(linkedWorktreeA)),
+        canonicalPath(resolveLegacyWorktreeDatabaseFile(linkedWorktreeB)),
+      ]);
+      expect(domainError.details?.trackedStorageFiles).toEqual([]);
+      expect(domainError.details?.operatorAction).toContain("Choose one source database");
+      expect(domainError.details?.operatorAction).toContain(resolveStoragePaths(linkedWorktreeA).databaseFile);
     }
   });
 
@@ -299,7 +306,44 @@ describe("storage lifecycle", (): void => {
       expect(error).toBeInstanceOf(DomainError);
       const domainError = error as DomainError;
       expect(domainError.code).toBe("tracked_ignored_mismatch");
+      expect(domainError.details?.status).toBe("tracked_ignored_mismatch");
+      expect(domainError.details?.legacyDatabaseFiles).toEqual([]);
       expect(domainError.details?.trackedStorageFiles).toEqual([canonicalPath(trackedFile)]);
+      expect(domainError.details?.operatorAction).toContain("git rm --cached -r --");
+      expect(domainError.details?.operatorAction).toContain(join(workspace, ".trekoon"));
+    }
+  });
+
+  test("reports stale legacy worktree files once shared storage exists", (): void => {
+    const workspace: string = createWorkspace();
+    createCommittedGitRepository(workspace);
+    const linkedWorktree: string = createWorkspace();
+
+    execFileSync("git", ["worktree", "add", "-b", "storage-stale-legacy", linkedWorktree, "HEAD"], {
+      cwd: workspace,
+      stdio: "ignore",
+    });
+
+    const primaryStorage = openTrekoonDatabase(workspace);
+    primaryStorage.close();
+
+    const legacyDatabaseFile: string = createLegacyDatabaseFile(linkedWorktree, "stale-linked-worktree");
+    const storage = openTrekoonDatabase(linkedWorktree);
+
+    try {
+      expect(storage.paths.databaseFile).toBe(resolveStoragePaths(workspace).databaseFile);
+      expect(storage.diagnostics.recoveryStatus).toBe("safe_auto_migrate");
+      expect(storage.diagnostics.legacyStateDetected).toBe(true);
+      expect(storage.diagnostics.recoveryRequired).toBe(false);
+      expect(storage.diagnostics.autoMigratedLegacyState).toBe(false);
+      expect(storage.diagnostics.importedFromLegacyDatabase).toBeNull();
+      expect(storage.diagnostics.backupFiles).toEqual([]);
+      expect(storage.diagnostics.legacyDatabaseFiles).toEqual([legacyDatabaseFile]);
+      expect(storage.diagnostics.operatorAction).toContain("Shared database already exists");
+      expect(listEpicTitles(storage.paths.databaseFile)).toEqual([]);
+      expect(listEpicTitles(legacyDatabaseFile)).toEqual(["stale-linked-worktree"]);
+    } finally {
+      storage.close();
     }
   });
 
