@@ -49,49 +49,6 @@ const SEARCH_OPTIONS = ["fields", "preview"] as const;
 const REPLACE_OPTIONS = ["search", "replace", "fields", "preview", "apply"] as const;
 const CREATE_MANY_OPTIONS = ["epic", "e", "task"] as const;
 
-interface DependencyBlocker {
-  readonly id: string;
-  readonly kind: "task" | "subtask";
-  readonly status: string;
-}
-
-interface TaskReadyCandidate {
-  readonly task: TaskRecord;
-  readonly readiness: {
-    readonly isReady: boolean;
-    readonly reason: typeof READY_REASON_READY | typeof READY_REASON_BLOCKED;
-  };
-  readonly blockerSummary: {
-    readonly totalDependencies: number;
-    readonly blockedByCount: number;
-    readonly blockedBy: ReadonlyArray<DependencyBlocker>;
-  };
-  readonly ranking: {
-    readonly statusPriority: number;
-    readonly blockerCount: number;
-    readonly createdAt: number;
-    readonly id: string;
-    readonly rank: number;
-  };
-}
-
-type ReadyReason = typeof READY_REASON_READY | typeof READY_REASON_BLOCKED;
-
-interface TaskReadinessSummary {
-  readonly totalOpenTasks: number;
-  readonly readyCount: number;
-  readonly returnedCount: number;
-  readonly appliedLimit: number | null;
-  readonly blockedCount: number;
-  readonly unresolvedDependencyCount: number;
-}
-
-interface TaskReadinessResult {
-  readonly candidates: readonly TaskReadyCandidate[];
-  readonly blocked: readonly TaskReadyCandidate[];
-  readonly summary: TaskReadinessSummary;
-}
-
 function parseIdsOption(rawIds: string | undefined): string[] {
   if (rawIds === undefined) {
     return [];
