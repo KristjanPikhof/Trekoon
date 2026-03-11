@@ -1,3 +1,6 @@
+import { existsSync } from "node:fs";
+import { resolve } from "node:path";
+
 import { runHelp } from "../commands/help";
 import { runDep } from "../commands/dep";
 import { runEpic } from "../commands/epic";
@@ -120,8 +123,14 @@ export function renderShellResult(result: CliResult, mode: OutputMode, compatibi
 }
 
 function withStorageRootDiagnostics(result: CliResult, cwd: string): CliResult {
-  const diagnostics = resolveStoragePaths(cwd).diagnostics;
-  if (diagnostics.warnings.length === 0 && diagnostics.errors.length === 0) {
+  const paths = resolveStoragePaths(cwd);
+  const diagnostics = paths.diagnostics;
+  const legacyDatabaseFile: string = resolve(paths.worktreeRoot, ".trekoon", "trekoon.db");
+  const legacyStateDetected: boolean =
+    legacyDatabaseFile !== paths.databaseFile && existsSync(legacyDatabaseFile);
+  const recoveryRequired: boolean = legacyStateDetected && !existsSync(paths.databaseFile);
+
+  if (!legacyStateDetected && diagnostics.warnings.length === 0 && diagnostics.errors.length === 0) {
     return result;
   }
 
@@ -131,9 +140,15 @@ function withStorageRootDiagnostics(result: CliResult, cwd: string): CliResult {
       ...(result.meta ?? {}),
       storageRootDiagnostics: {
         invocationCwd: diagnostics.invocationCwd,
-        canonicalRoot: diagnostics.canonicalRoot,
-        warning: diagnostics.warnings[0] ?? null,
-        error: diagnostics.errors[0] ?? null,
+        storageMode: diagnostics.storageMode,
+        repoCommonDir: diagnostics.repoCommonDir,
+        worktreeRoot: diagnostics.worktreeRoot,
+        sharedStorageRoot: diagnostics.sharedStorageRoot,
+        databaseFile: diagnostics.databaseFile,
+        legacyStateDetected,
+        recoveryRequired,
+        warnings: diagnostics.warnings,
+        errors: diagnostics.errors,
       },
     },
   };
