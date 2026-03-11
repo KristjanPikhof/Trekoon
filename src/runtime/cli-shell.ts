@@ -364,6 +364,9 @@ export async function executeShell(parsed: ParsedInvocation, cwd: string = proce
     case "sync":
       result = await runSync(context);
       break;
+    case "session":
+      result = await runSession(context);
+      break;
     case "skills":
       result = await runSkills(context);
       break;
