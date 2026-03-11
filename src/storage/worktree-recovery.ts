@@ -136,9 +136,10 @@ function fingerprintDatabaseFile(filePath: string): string {
 }
 
 function createBackupFilePath(filePath: string): string {
+  const maxAttempts = 1000;
   let attempt = 0;
 
-  while (true) {
+  while (attempt < maxAttempts) {
     const suffix = attempt === 0 ? ".pre-shared-import.bak" : `.pre-shared-import.${attempt}.bak`;
     const candidate = `${filePath}${suffix}`;
     if (!existsSync(candidate)) {
@@ -147,6 +148,11 @@ function createBackupFilePath(filePath: string): string {
 
     attempt += 1;
   }
+
+  throw new DomainError({
+    code: "legacy_import_failed",
+    message: `Unable to find available backup path after ${maxAttempts} attempts for ${filePath}`,
+  });
 }
 
 function createDatabaseSnapshot(sourcePath: string, targetPath: string): void {
