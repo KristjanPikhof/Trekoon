@@ -241,23 +241,57 @@ describe("cli shell dispatch", (): void => {
     initGitRepository(workspace);
     const nestedCwd = join(workspace, "pkg", "tools", "cli");
     mkdirSync(nestedCwd, { recursive: true });
-    const canonicalWorkspace = resolveStoragePaths(nestedCwd).worktreeRoot;
+    const storagePaths = resolveStoragePaths(nestedCwd);
 
     const result = await executeShell(parseInvocation(["init", "--toon"], { stdoutIsTTY: false }), nestedCwd);
 
     expect(result.ok).toBeTrue();
+    const data = result.data as {
+      invocationCwd: string;
+      storageMode: string;
+      repoCommonDir: string | null;
+      worktreeRoot: string;
+      sharedStorageRoot: string;
+      databaseFile: string;
+      legacyStateDetected: boolean;
+      recoveryRequired: boolean;
+    };
     const meta = result.meta as {
       storageRootDiagnostics?: {
         invocationCwd: string;
-        canonicalRoot: string;
-        warning: { code: string } | null;
-        error: unknown;
+        storageMode: string;
+        repoCommonDir: string | null;
+        worktreeRoot: string;
+        sharedStorageRoot: string;
+        databaseFile: string;
+        legacyStateDetected: boolean;
+        recoveryRequired: boolean;
+        warnings: Array<{ code: string }>;
+        errors: unknown[];
       };
     };
 
+    expect(data.invocationCwd).toBe(nestedCwd);
+    expect(data.storageMode).toBe("git_common_dir");
+    expect(data.repoCommonDir).toBe(join(workspace, ".git"));
+    expect(data.worktreeRoot).toBe(storagePaths.worktreeRoot);
+    expect(data.sharedStorageRoot).toBe(storagePaths.sharedStorageRoot);
+    expect(data.databaseFile).toBe(storagePaths.databaseFile);
+    expect(data.legacyStateDetected).toBeFalse();
+    expect(data.recoveryRequired).toBeFalse();
+
     expect(meta.storageRootDiagnostics?.invocationCwd).toBe(nestedCwd);
-    expect(meta.storageRootDiagnostics?.canonicalRoot).toBe(canonicalWorkspace);
-    expect(meta.storageRootDiagnostics?.warning?.code).toBe("storage_root_diverged_from_cwd");
-    expect(meta.storageRootDiagnostics?.error).toBeNull();
+    expect(meta.storageRootDiagnostics?.storageMode).toBe("git_common_dir");
+    expect(meta.storageRootDiagnostics?.repoCommonDir).toBe(join(workspace, ".git"));
+    expect(meta.storageRootDiagnostics?.worktreeRoot).toBe(storagePaths.worktreeRoot);
+    expect(meta.storageRootDiagnostics?.sharedStorageRoot).toBe(storagePaths.sharedStorageRoot);
+    expect(meta.storageRootDiagnostics?.databaseFile).toBe(storagePaths.databaseFile);
+    expect(meta.storageRootDiagnostics?.legacyStateDetected).toBeFalse();
+    expect(meta.storageRootDiagnostics?.recoveryRequired).toBeFalse();
+    expect(meta.storageRootDiagnostics?.warnings.map((warning) => warning.code)).toEqual([
+      "storage_root_diverged_from_cwd",
+      "shared_storage_root_differs_from_worktree_root",
+    ]);
+    expect(meta.storageRootDiagnostics?.errors).toEqual([]);
   });
 });
