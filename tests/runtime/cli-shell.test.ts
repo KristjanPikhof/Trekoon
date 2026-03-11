@@ -373,7 +373,10 @@ describe("cli shell dispatch", (): void => {
     expect(data.status).toBe("tracked_ignored_mismatch");
     expect(data.legacyDatabaseFiles).toEqual([]);
     expect(data.trackedStorageFiles).toEqual([realpathSync(trackedFile)]);
-    expect(data.operatorAction).toContain("git rm --cached -r --");
+    expect(data.operatorAction).toContain(`Tracked path(s): '${realpathSync(trackedFile)}'`);
+    expect(data.operatorAction).toContain(
+      `git -C '${realpathSync(workspace)}' rm --cached -- '.trekoon/tracked.txt'`,
+    );
 
     const meta = result.meta as {
       storageRootDiagnostics?: {
@@ -394,7 +397,10 @@ describe("cli shell dispatch", (): void => {
     expect(meta.storageRootDiagnostics?.recoveryRequired).toBeTrue();
     expect(meta.storageRootDiagnostics?.recoveryStatus).toBe("tracked_ignored_mismatch");
     expect(meta.storageRootDiagnostics?.trackedStorageFiles).toEqual([realpathSync(trackedFile)]);
-    expect(meta.storageRootDiagnostics?.operatorAction).toContain("git rm --cached -r --");
+    expect(meta.storageRootDiagnostics?.operatorAction).toContain(`Tracked path(s): '${realpathSync(trackedFile)}'`);
+    expect(meta.storageRootDiagnostics?.operatorAction).toContain(
+      `git -C '${realpathSync(workspace)}' rm --cached -- '.trekoon/tracked.txt'`,
+    );
     expect(meta.storageRootDiagnostics?.warnings.map((warning) => warning.code)).toEqual(["storage_root_diverged_from_cwd"]);
   });
 
