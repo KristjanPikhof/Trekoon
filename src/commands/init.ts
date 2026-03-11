@@ -9,16 +9,37 @@ export async function runInit(context: CliContext): Promise<CliResult> {
 
   try {
     database = openTrekoonDatabase(context.cwd);
+    const diagnostics = database.diagnostics;
+    const humanLines: string[] = [
+      "Trekoon initialized.",
+      `Storage mode: ${diagnostics.storageMode}`,
+      `Worktree root: ${diagnostics.worktreeRoot}`,
+      `Shared storage root: ${diagnostics.sharedStorageRoot}`,
+      `Storage directory: ${database.paths.storageDir}`,
+      `Database file: ${database.paths.databaseFile}`,
+    ];
+
+    if (diagnostics.legacyStateDetected) {
+      humanLines.push(`Legacy worktree-local state detected at ${diagnostics.worktreeRoot}/.trekoon/trekoon.db.`);
+    }
+
+    if (diagnostics.recoveryRequired) {
+      humanLines.push("Recovery required before using shared storage to avoid splitting state.");
+    }
+
     return okResult({
       command: "init",
-      human: [
-        "Trekoon initialized.",
-        `Storage directory: ${database.paths.storageDir}`,
-        `Database file: ${database.paths.databaseFile}`,
-      ].join("\n"),
+      human: humanLines.join("\n"),
       data: {
+        invocationCwd: diagnostics.invocationCwd,
+        storageMode: diagnostics.storageMode,
+        repoCommonDir: diagnostics.repoCommonDir,
+        worktreeRoot: diagnostics.worktreeRoot,
+        sharedStorageRoot: diagnostics.sharedStorageRoot,
         storageDir: database.paths.storageDir,
         databaseFile: database.paths.databaseFile,
+        legacyStateDetected: diagnostics.legacyStateDetected,
+        recoveryRequired: diagnostics.recoveryRequired,
       },
     });
   } catch (error: unknown) {
