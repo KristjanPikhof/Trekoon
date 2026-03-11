@@ -21,6 +21,7 @@ const SUPPORTED_ROOT_COMMANDS: readonly string[] = [
   "help",
   "init",
   "quickstart",
+  "session",
   "epic",
   "task",
   "subtask",
