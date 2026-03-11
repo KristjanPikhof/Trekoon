@@ -147,9 +147,14 @@ export async function runSync(context: CliContext): Promise<CliResult> {
       assertValidSourceRef(context.cwd, sourceBranch);
       const summary = syncStatus(context.cwd, sourceBranch);
 
+      const humanLines = [statusMessage(summary.sourceBranch, summary.ahead, summary.behind, summary.pendingConflicts)];
+      if (summary.sameBranch) {
+        humanLines.push(`Same-branch mode: already on '${summary.sourceBranch}', no sync needed`);
+      }
+
       return okResult({
         command: "sync.status",
-        human: statusMessage(summary.sourceBranch, summary.ahead, summary.behind, summary.pendingConflicts),
+        human: humanLines.join("\n"),
         data: summary,
       });
     }
