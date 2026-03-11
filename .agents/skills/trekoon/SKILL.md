@@ -19,22 +19,27 @@ pick the right command with the fewest reads and mutations.
 - Preview replace before `--apply`.
 - Prefer `--ids` over `--all` for bulk updates.
 - Never edit `.trekoon/trekoon.db` directly.
+- Treat `.trekoon` as shared repo-scoped operational state in git worktrees.
+- Keep `.trekoon` gitignored; do not commit the SQLite DB as a recovery fix.
 - Never run `trekoon wipe --yes --toon` unless the user explicitly asks for it.
 
 ## Default agent loop
 
 Run this loop each session:
 
-1. Check sync baseline:
+1. Bootstrap and inspect storage diagnostics:
 
    ```bash
+   trekoon --toon init
    trekoon --toon sync status
    ```
 
-   If this returns `missing_branch_db` on a fresh branch or worktree, continue
-   with local task selection and treat sync as unavailable for now.
+   Fail fast if machine output reports `recoveryRequired`, tracked/ignored
+   storage mismatch, ambiguous recovery, or any other bootstrap/storage error.
+   In linked worktrees, `sharedStorageRoot` may differ from `worktreeRoot`; that
+   is expected because the repo shares one DB across checkouts.
 
-2. Pick the next item deterministically:
+2. Pick the next item deterministically once diagnostics are clean:
 
    ```bash
    trekoon --toon task next
@@ -229,16 +234,26 @@ Guardrails:
 
 ## Setup and fallback
 
-If Trekoon is unavailable or state is missing:
+If Trekoon is unavailable or storage diagnostics require repair:
 
 ```bash
 trekoon --toon init
+trekoon --toon sync status
 trekoon --toon quickstart
-trekoon --help --toon
+trekoon --toon help sync
 ```
 
-Use `quickstart` for the canonical execution loop. Use `--help --toon` when you
-need exact syntax.
+Rules:
+
+- Re-bootstrap first, then re-read diagnostics.
+- Stop if `recoveryRequired` stays true or diagnostics report storage mismatch.
+- Do not continue with task selection after missing shared storage or broken
+  bootstrap.
+- Do not commit `.trekoon/trekoon.db`; remove the tracked DB and keep
+  `.trekoon` ignored instead.
+
+Use `quickstart` for the canonical execution loop. Use help when you need exact
+syntax.
 
 ## Sync reminders
 
@@ -257,5 +272,18 @@ need exact syntax.
   trekoon --toon sync resolve <conflict-id> --use ours
   ```
 
+## Worktree diagnostics and destructive scope
+
+- Inspect machine-readable storage fields when debugging worktrees:
+  `storageMode`, `repoCommonDir`, `worktreeRoot`, `sharedStorageRoot`, and
+  `databaseFile`.
+- `sharedStorageRoot` is the repo-scoped source of truth for `.trekoon` in git
+  worktrees.
+- If `trekoon wipe --yes --toon` is explicitly requested, warn that it deletes
+  shared storage for the entire repository and every linked worktree.
+- Wipe is destructive recovery only; it is never the right fix for a tracked DB
+  or gitignore mistake.
+
 Trekoon stores local state in `.trekoon/trekoon.db`. In git repos and
-worktrees, storage resolves from the repository root.
+worktrees, storage resolves from the shared repository root rather than each
+worktree independently.
