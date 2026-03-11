@@ -135,8 +135,9 @@ describe("cli shell dispatch", (): void => {
     expect(quickstartData.text).toContain("trekoon --toon task next");
 
     expect(wipeData.topic).toBe("wipe");
-    expect(wipeData.text).toContain("Options:");
-    expect(wipeData.text).toContain("--yes  Required safety confirmation");
+    expect(wipeData.text).toContain("shared repo-wide");
+    expect(wipeData.text).toContain("not isolated per worktree");
+    expect(wipeData.text).toContain("--yes  Required confirmation for destructive repo-wide removal");
   });
 
   test("dispatches skills install and creates project-local artifact", async (): Promise<void> => {
