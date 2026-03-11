@@ -1,49 +1,75 @@
-import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
-import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { type Database } from "bun:sqlite";
 
-import { Database } from "bun:sqlite";
-
-export interface BranchDatabaseSnapshot {
-  readonly branch: string;
-  readonly path: string;
-  readonly db: Database;
-  close(): void;
+export interface BranchEventRow {
+  readonly id: string;
+  readonly entity_kind: string;
+  readonly entity_id: string;
+  readonly operation: string;
+  readonly payload: string;
+  readonly git_branch: string | null;
+  readonly git_head: string | null;
+  readonly created_at: number;
+  readonly updated_at: number;
+  readonly version: number;
 }
 
-export class MissingBranchDatabaseError extends Error {
-  constructor(branch: string) {
-    super(`Unable to read .trekoon/trekoon.db from branch '${branch}'.`);
-    this.name = "MissingBranchDatabaseError";
-  }
+interface ParsedCursorToken {
+  readonly createdAt: number;
+  readonly id: string | null;
 }
 
-export function openBranchDatabaseSnapshot(branch: string, cwd: string): BranchDatabaseSnapshot {
-  const show = Bun.spawnSync({
-    cmd: ["git", "show", `${branch}:.trekoon/trekoon.db`],
-    cwd,
-    stdout: "pipe",
-    stderr: "pipe",
-  });
-
-  if (show.exitCode !== 0 || show.stdout.byteLength === 0) {
-    throw new MissingBranchDatabaseError(branch);
-  }
-
-  const tempDir: string = mkdtempSync(join(tmpdir(), "trekoon-sync-branch-"));
-  const tempDbPath: string = join(tempDir, "remote.db");
-
-  writeFileSync(tempDbPath, show.stdout);
-
-  const db: Database = new Database(tempDbPath);
+function parseCursorToken(token: string): ParsedCursorToken {
+  const [createdAtRaw, idRaw] = token.split(":");
+  const createdAt: number = Number.parseInt(createdAtRaw ?? "0", 10);
 
   return {
-    branch,
-    path: tempDbPath,
-    db,
-    close(): void {
-      db.close(false);
-      rmSync(tempDir, { recursive: true, force: true });
-    },
+    createdAt: Number.isFinite(createdAt) ? createdAt : 0,
+    id: idRaw && idRaw.length > 0 ? idRaw : null,
   };
+}
+
+export function queryBranchEventsSince(db: Database, branch: string, cursorToken: string): BranchEventRow[] {
+  const cursor = parseCursorToken(cursorToken);
+
+  return db
+    .query(
+      `
+      SELECT id, entity_kind, entity_id, operation, payload, git_branch, git_head, created_at, updated_at, version
+      FROM events
+      WHERE git_branch = @branch
+        AND (
+          created_at > @createdAt
+          OR (created_at = @createdAt AND id > @id)
+        )
+      ORDER BY created_at ASC, id ASC;
+      `,
+    )
+    .all({
+      "@branch": branch,
+      "@createdAt": cursor.createdAt,
+      "@id": cursor.id ?? "",
+    }) as BranchEventRow[];
+}
+
+export function countBranchEventsSince(db: Database, branch: string, cursorToken: string): number {
+  const cursor = parseCursorToken(cursorToken);
+  const row = db
+    .query(
+      `
+      SELECT COUNT(*) AS count
+      FROM events
+      WHERE git_branch = @branch
+        AND (
+          created_at > @createdAt
+          OR (created_at = @createdAt AND id > @id)
+        );
+      `,
+    )
+    .get({
+      "@branch": branch,
+      "@createdAt": cursor.createdAt,
+      "@id": cursor.id ?? "",
+    }) as { count: number } | null;
+
+  return row?.count ?? 0;
 }
