@@ -464,8 +464,10 @@ describe("storage lifecycle", (): void => {
       expect(domainError.details?.status).toBe("tracked_ignored_mismatch");
       expect(domainError.details?.legacyDatabaseFiles).toEqual([]);
       expect(domainError.details?.trackedStorageFiles).toEqual([canonicalPath(trackedFile)]);
-      expect(domainError.details?.operatorAction).toContain("git rm --cached -r --");
-      expect(domainError.details?.operatorAction).toContain(join(workspace, ".trekoon"));
+      expect(domainError.details?.operatorAction).toContain(`Tracked path(s): '${canonicalPath(trackedFile)}'`);
+      expect(domainError.details?.operatorAction).toContain(
+        `git -C '${canonicalPath(workspace)}' rm --cached -- '.trekoon/tracked.txt'`,
+      );
     }
   });
 
@@ -497,6 +499,13 @@ describe("storage lifecycle", (): void => {
       expect(domainError.details?.status).toBe("tracked_ignored_mismatch");
       expect(domainError.details?.legacyDatabaseFiles).toEqual([]);
       expect(domainError.details?.trackedStorageFiles).toEqual([canonicalPath(trackedFile)]);
+      expect(domainError.details?.operatorAction).toContain(`Tracked path(s): '${canonicalPath(trackedFile)}'`);
+      expect(domainError.details?.operatorAction).toContain(
+        `git -C '${canonicalPath(linkedWorktree)}' rm --cached -- '.trekoon/tracked.txt'`,
+      );
+      expect(domainError.details?.operatorAction).not.toContain(
+        `git -C '${canonicalPath(workspace)}' rm --cached -- '.trekoon/tracked.txt'`,
+      );
     }
   });
 
