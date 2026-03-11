@@ -2,6 +2,15 @@
 
 All notable changes to Trekoon are documented in this file.
 
+## 0.2.5
+
+### Fixed
+
+- `trekoon skills update` now auto-creates and refreshes editor symlinks for
+  editors whose config directories exist (`.claude/`, `.opencode/`, `.pi/`).
+  Previously it only refreshed the canonical file and passively reported link
+  states, leaving editors with stale or missing links.
+
 ## 0.2.4
 
 ### Added
