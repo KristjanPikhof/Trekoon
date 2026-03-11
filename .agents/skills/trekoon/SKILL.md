@@ -80,7 +80,8 @@ Use the narrowest command that answers the question.
 
 | Need | Preferred command |
 |---|---|
-| Next task | `trekoon --toon task next` |
+| Session startup (diagnostics + sync + next task) | `trekoon --toon session` |
+| Next task only | `trekoon --toon task next` |
 | A few ready options | `trekoon --toon task ready --limit 5` |
 | Direct blockers for one task | `trekoon --toon dep list <task-id>` |
 | What this item unblocks | `trekoon --toon dep reverse <task-or-subtask-id>` |
