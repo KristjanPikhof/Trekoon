@@ -199,10 +199,10 @@ export async function runSession(context: CliContext): Promise<CliResult> {
         git: syncSummary.git,
       },
       next: nextTask,
-      nextDeps: readinessInfo.nextTaskBlockers,
+      nextDeps: topCandidate?.blockerSummary.blockedBy ?? [],
       readiness: {
-        readyCount: readinessInfo.readyCount,
-        blockedCount: readinessInfo.blockedCount,
+        readyCount: readiness.summary.readyCount,
+        blockedCount: readiness.summary.blockedCount,
       },
     };
 
