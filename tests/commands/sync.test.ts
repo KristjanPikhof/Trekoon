@@ -40,13 +40,15 @@ function initializeRepository(workspace: string): void {
   runGit(workspace, ["config", "user.email", "tests@trekoon.local"]);
   runGit(workspace, ["config", "user.name", "Trekoon Tests"]);
   writeFileSync(join(workspace, "README.md"), "# test repo\n");
-  runGit(workspace, ["add", "README.md"]);
+  writeFileSync(join(workspace, ".gitignore"), ".trekoon/\n");
+  runGit(workspace, ["add", "README.md", ".gitignore"]);
   runGit(workspace, ["commit", "-m", "init repository"]);
 }
 
-function commitDatabase(workspace: string, subject: string): void {
-  runGit(workspace, ["add", ".trekoon/trekoon.db"]);
-  runGit(workspace, ["commit", "-m", subject]);
+function createBranchWorktree(workspace: string, branch: string): string {
+  const worktreePath: string = createWorkspace();
+  runGit(workspace, ["worktree", "add", "-b", branch, worktreePath, "main"]);
+  return worktreePath;
 }
 
 afterEach((): void => {
@@ -88,8 +90,6 @@ describe("sync command", (): void => {
         storage.close();
       }
     }
-
-    commitDatabase(workspace, "store main tracker event");
 
     runGit(workspace, ["checkout", "-b", "feature/sync"]);
 
@@ -247,7 +247,6 @@ describe("sync command", (): void => {
       }
     }
 
-    commitDatabase(workspace, "seed malformed payload event");
     runGit(workspace, ["checkout", "-b", "feature/malformed-payload"]);
 
     const pullResult = await runSync({
@@ -306,7 +305,6 @@ describe("sync command", (): void => {
       }
     }
 
-    commitDatabase(workspace, "seed replay create event");
     runGit(workspace, ["checkout", "-b", "feature/replay-idempotent"]);
 
     const pullResult = await runSync({
@@ -338,7 +336,6 @@ describe("sync command", (): void => {
       }
     }
 
-    commitDatabase(workspace, "seed replayed epic row");
     runGit(workspace, ["checkout", "-b", "feature/replay-created-conflict"]);
 
     {
@@ -360,8 +357,6 @@ describe("sync command", (): void => {
         storage.close();
       }
     }
-
-    commitDatabase(workspace, "seed local replay conflict event");
 
     runGit(workspace, ["checkout", "main"]);
 
@@ -390,7 +385,6 @@ describe("sync command", (): void => {
       }
     }
 
-    commitDatabase(workspace, "seed replayed epic created event");
     runGit(workspace, ["checkout", "feature/replay-created-conflict"]);
 
     const pullResult = await runSync({
@@ -490,7 +484,6 @@ describe("sync command", (): void => {
       }
     }
 
-    commitDatabase(workspace, "seed replace base events");
     runGit(workspace, ["checkout", "-b", "feature/replace-batch-replay"]);
     runGit(workspace, ["checkout", "main"]);
 
@@ -544,7 +537,6 @@ describe("sync command", (): void => {
       }
     }
 
-    commitDatabase(workspace, "seed replace batch update events");
     runGit(workspace, ["checkout", "feature/replace-batch-replay"]);
 
     {
@@ -552,9 +544,9 @@ describe("sync command", (): void => {
       try {
         storage.db
           .query(
-            "INSERT INTO sync_cursors (id, source_branch, cursor_token, last_event_at, created_at, updated_at, version) VALUES (?, ?, ?, ?, ?, ?, 1) ON CONFLICT(id) DO UPDATE SET cursor_token = excluded.cursor_token, last_event_at = excluded.last_event_at, updated_at = excluded.updated_at, version = sync_cursors.version + 1;",
+            "INSERT INTO sync_cursors (id, owner_scope, owner_worktree_path, source_branch, cursor_token, last_event_at, created_at, updated_at, version) VALUES (?, 'worktree', ?, ?, ?, ?, ?, ?, 1) ON CONFLICT(id) DO UPDATE SET cursor_token = excluded.cursor_token, last_event_at = excluded.last_event_at, updated_at = excluded.updated_at, version = sync_cursors.version + 1;",
           )
-          .run("main", "main", baseCursorToken, now, now, now);
+          .run(`${workspace}::main`, workspace, "main", baseCursorToken, now, now, now);
 
         storage.db
           .query("UPDATE epics SET title = ?, description = ?, updated_at = ?, version = version + 1 WHERE id = ?;")
@@ -680,7 +672,6 @@ describe("sync command", (): void => {
       }
     }
 
-    commitDatabase(workspace, "seed dependency removal event");
     runGit(workspace, ["checkout", "-b", "feature/dep-removal"]);
 
     const pullResult = await runSync({
@@ -745,7 +736,6 @@ describe("sync command", (): void => {
       }
     }
 
-    commitDatabase(workspace, "seed missing dependency node event");
     runGit(workspace, ["checkout", "-b", "feature/dep-added-missing-node"]);
 
     const pullResult = await runSync({
@@ -822,7 +812,6 @@ describe("sync command", (): void => {
       }
     }
 
-    commitDatabase(workspace, "seed epic delete replay event");
     runGit(workspace, ["checkout", "-b", "feature/delete-idempotent"]);
 
     const pullResult = await runSync({
@@ -874,7 +863,6 @@ describe("sync command", (): void => {
       }
     }
 
-    commitDatabase(workspace, "seed main remote title event");
     runGit(workspace, ["checkout", "-b", "feature/current-value-match"]);
 
     {
@@ -905,5 +893,67 @@ describe("sync command", (): void => {
 
     expect(pullResult.ok).toBe(true);
     expect((pullResult.data as { createdConflicts: number }).createdConflicts).toBe(0);
+  });
+
+  test("fresh same-repo worktrees sync without branch db snapshots", async (): Promise<void> => {
+    const workspace: string = createWorkspace();
+    initializeRepository(workspace);
+
+    const epicId: string = randomUUID();
+    const now: number = Date.now();
+
+    {
+      const storage = openTrekoonDatabase(workspace);
+      try {
+        storage.db
+          .query("INSERT INTO epics (id, title, description, status, created_at, updated_at, version) VALUES (?, ?, ?, ?, ?, ?, 1);")
+          .run(epicId, "Shared epic", "seed", "todo", now, now);
+
+        appendEventWithGitContext(storage.db, workspace, {
+          entityKind: "epic",
+          entityId: epicId,
+          operation: "epic.created",
+          fields: {
+            title: "Shared epic",
+            description: "seed",
+            status: "todo",
+          },
+        });
+      } finally {
+        storage.close();
+      }
+    }
+
+    const featureWorktree: string = createBranchWorktree(workspace, "feature/fresh-worktree");
+
+    const statusBefore = await runSync({
+      args: ["status", "--from", "main"],
+      cwd: featureWorktree,
+      mode: "toon",
+    });
+
+    expect(statusBefore.ok).toBe(true);
+    expect(statusBefore.error).toBeUndefined();
+    expect((statusBefore.data as { behind: number }).behind).toBe(1);
+    expect((statusBefore.data as { ahead: number }).ahead).toBe(0);
+
+    const pullResult = await runSync({
+      args: ["pull", "--from", "main"],
+      cwd: featureWorktree,
+      mode: "toon",
+    });
+
+    expect(pullResult.ok).toBe(true);
+    expect((pullResult.data as { scannedEvents: number }).scannedEvents).toBe(1);
+    expect((pullResult.data as { createdConflicts: number }).createdConflicts).toBe(0);
+
+    const statusAfter = await runSync({
+      args: ["status", "--from", "main"],
+      cwd: featureWorktree,
+      mode: "toon",
+    });
+
+    expect(statusAfter.ok).toBe(true);
+    expect((statusAfter.data as { behind: number }).behind).toBe(0);
   });
 });
