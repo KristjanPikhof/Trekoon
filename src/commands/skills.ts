@@ -335,56 +335,6 @@ function replaceOrCreateSymlink(
   return null;
 }
 
-function inspectDefaultLink(cwd: string, editor: EditorName, installedDir: string): LinkState {
-  const linkPath: string = resolveDefaultLinkPath(cwd, editor);
-  const expectedTarget: string = resolve(installedDir);
-
-  if (!existsSync(linkPath)) {
-    return {
-      editor,
-      linkPath,
-      expectedTarget,
-      status: "missing",
-      existingTarget: null,
-      conflictCode: null,
-    };
-  }
-
-  const entry = lstatSync(linkPath);
-  if (!entry.isSymbolicLink()) {
-    return {
-      editor,
-      linkPath,
-      expectedTarget,
-      status: "conflict",
-      existingTarget: null,
-      conflictCode: "non_link",
-    };
-  }
-
-  const existingRawTarget: string = readlinkSync(linkPath);
-  const existingTarget: string = toAbsolutePath(dirname(linkPath), existingRawTarget);
-  if (existingTarget !== expectedTarget) {
-    return {
-      editor,
-      linkPath,
-      expectedTarget,
-      status: "conflict",
-      existingTarget,
-      conflictCode: "wrong_target",
-    };
-  }
-
-  return {
-    editor,
-    linkPath,
-    expectedTarget,
-    status: "valid",
-    existingTarget,
-    conflictCode: null,
-  };
-}
-
 function runSkillsInstall(context: CliContext): CliResult {
   const parsed = parseArgs(context.args);
   const missingValue = readMissingOptionValue(parsed.missingOptionValues, "editor", "to");
