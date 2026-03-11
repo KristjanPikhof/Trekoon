@@ -266,6 +266,7 @@ describe("sync command", (): void => {
   test("surfaces recovery diagnostics when sync bootstrap is blocked", async (): Promise<void> => {
     const workspace: string = createWorkspace();
     initializeRepository(workspace);
+    const storagePaths = resolveStoragePaths(workspace);
 
     mkdirSync(join(workspace, ".trekoon"), { recursive: true });
     writeFileSync(join(workspace, ".trekoon", "tracked.txt"), "tracked state\n");
@@ -283,7 +284,7 @@ describe("sync command", (): void => {
       reason: "storage_bootstrap_blocked",
       recoveryRequired: true,
       recoveryStatus: "tracked_ignored_mismatch",
-      trackedStorageFiles: [join(workspace, ".trekoon", "tracked.txt")],
+      trackedStorageFiles: [join(storagePaths.sharedStorageRoot, ".trekoon", "tracked.txt")],
     });
     expect((result.data as { operatorAction: string }).operatorAction).toContain("git rm --cached -r --");
   });
