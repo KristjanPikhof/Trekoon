@@ -1,8 +1,11 @@
 import { findUnknownOption, parseArgs, readMissingOptionValue, readOption, suggestOptions } from "./arg-parser";
 import { safeErrorMessage, sqliteBusyFailure } from "./error-utils";
 
+import { DomainError } from "../domain/types";
 import { failResult, okResult } from "../io/output";
 import { type CliContext, type CliResult } from "../runtime/command-types";
+import { resolveStorageResolutionDiagnostics } from "../storage/database";
+import { assertValidSourceRef } from "../sync/branch-db";
 import { getSyncConflict, listSyncConflicts, syncPull, syncResolve, syncStatus } from "../sync/service";
 import { type SyncResolution } from "../sync/types";
 
@@ -109,6 +112,15 @@ function formatConflictList(
     .join("\n");
 }
 
+function formatDomainErrorHuman(message: string, details: Record<string, unknown> | undefined): string {
+  const operatorAction = typeof details?.operatorAction === "string" ? details.operatorAction : null;
+  return operatorAction ? `${message}\n${operatorAction}` : message;
+}
+
+function isStorageBootstrapError(code: string): boolean {
+  return code === "tracked_ignored_mismatch" || code === "ambiguous_legacy_state" || code === "legacy_import_failed";
+}
+
 export async function runSync(context: CliContext): Promise<CliResult> {
   const parsed = parseArgs(context.args);
   const subcommand: string | undefined = parsed.positional[0];
@@ -132,6 +144,7 @@ export async function runSync(context: CliContext): Promise<CliResult> {
       }
 
       const sourceBranch: string = readOption(parsed.options, "from") ?? "main";
+      assertValidSourceRef(context.cwd, sourceBranch);
       const summary = syncStatus(context.cwd, sourceBranch);
 
       return okResult({
@@ -157,6 +170,7 @@ export async function runSync(context: CliContext): Promise<CliResult> {
         return usage("sync pull requires --from <branch>.", "sync.pull");
       }
 
+      assertValidSourceRef(context.cwd, sourceBranch);
       const summary = syncPull(context.cwd, sourceBranch);
 
       return okResult({
@@ -277,6 +291,38 @@ export async function runSync(context: CliContext): Promise<CliResult> {
     const busyFailure = sqliteBusyFailure(resolvedCommand, error);
     if (busyFailure !== null) {
       return busyFailure;
+    }
+
+    if (error instanceof DomainError) {
+      if (isStorageBootstrapError(error.code)) {
+        const storageDiagnostics = resolveStorageResolutionDiagnostics(context.cwd);
+
+        return failResult({
+          command: resolvedCommand,
+          human: formatDomainErrorHuman(error.message, error.details),
+          data: {
+            reason: "storage_bootstrap_blocked",
+            ...storageDiagnostics,
+          },
+          error: {
+            code: error.code,
+            message: error.message,
+          },
+        });
+      }
+
+      return failResult({
+        command: resolvedCommand,
+        human: formatDomainErrorHuman(error.message, error.details),
+        data: {
+          ...(error.details ?? {}),
+          reason: error.code,
+        },
+        error: {
+          code: error.code,
+          message: error.message,
+        },
+      });
     }
 
     const message = safeErrorMessage(error, "Unknown sync error.");
