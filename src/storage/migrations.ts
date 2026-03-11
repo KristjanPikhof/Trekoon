@@ -58,6 +58,43 @@ const EVENT_ARCHIVE_MIGRATION_DOWN_STATEMENTS: readonly string[] = [
   "DROP TABLE IF EXISTS event_archive;",
 ];
 
+function tableHasColumn(db: Database, tableName: string, columnName: string): boolean {
+  const columns = db.query(`PRAGMA table_info(${tableName});`).all() as Array<{ name: string }>;
+  return columns.some((column) => column.name === columnName);
+}
+
+function migrateWorktreeScopedSyncMetadata(db: Database): void {
+  if (!tableHasColumn(db, "git_context", "metadata_scope")) {
+    db.exec("ALTER TABLE git_context ADD COLUMN metadata_scope TEXT NOT NULL DEFAULT 'worktree';");
+  }
+
+  db.exec("UPDATE git_context SET metadata_scope = 'worktree' WHERE metadata_scope IS NULL OR metadata_scope = ''; ");
+  db.exec("UPDATE git_context SET id = worktree_path WHERE id = 'current' AND worktree_path <> ''; ");
+  db.exec("CREATE UNIQUE INDEX IF NOT EXISTS idx_git_context_scope_path ON git_context(metadata_scope, worktree_path);");
+
+  if (!tableHasColumn(db, "sync_cursors", "owner_scope")) {
+    db.exec("ALTER TABLE sync_cursors ADD COLUMN owner_scope TEXT NOT NULL DEFAULT 'worktree';");
+  }
+
+  if (!tableHasColumn(db, "sync_cursors", "owner_worktree_path")) {
+    db.exec("ALTER TABLE sync_cursors ADD COLUMN owner_worktree_path TEXT NOT NULL DEFAULT ''; ");
+  }
+
+  db.exec("UPDATE sync_cursors SET owner_scope = 'worktree' WHERE owner_scope IS NULL OR owner_scope = ''; ");
+  db.exec(`
+    UPDATE sync_cursors
+    SET owner_worktree_path = COALESCE(
+      NULLIF(owner_worktree_path, ''),
+      (SELECT worktree_path FROM git_context ORDER BY updated_at DESC LIMIT 1),
+      ''
+    );
+  `);
+  db.exec("UPDATE sync_cursors SET id = owner_worktree_path || '::' || source_branch;");
+  db.exec(
+    "CREATE UNIQUE INDEX IF NOT EXISTS idx_sync_cursors_owner ON sync_cursors(owner_scope, owner_worktree_path, source_branch);",
+  );
+}
+
 interface Migration {
   readonly version: number;
   readonly name: string;
@@ -132,6 +169,17 @@ const MIGRATIONS: readonly Migration[] = [
       for (const statement of EVENT_ARCHIVE_MIGRATION_DOWN_STATEMENTS) {
         db.exec(statement);
       }
+    },
+  },
+  {
+    version: 4,
+    name: "0004_worktree_scoped_sync_metadata",
+    up(db: Database): void {
+      migrateWorktreeScopedSyncMetadata(db);
+    },
+    down(db: Database): void {
+      db.exec("DROP INDEX IF EXISTS idx_sync_cursors_owner;");
+      db.exec("DROP INDEX IF EXISTS idx_git_context_scope_path;");
     },
   },
 ];
