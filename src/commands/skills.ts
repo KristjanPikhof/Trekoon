@@ -543,6 +543,77 @@ function runSkillsInstall(context: CliContext): CliResult {
   });
 }
 
+function updateEditorLink(
+  cwd: string,
+  editor: EditorName,
+  installedDir: string,
+): UpdateLinkEntry {
+  const linkPath: string = resolveDefaultLinkPath(cwd, editor);
+  const expectedTarget: string = resolve(installedDir);
+  const editorConfigDir: string = resolveEditorConfigDir(cwd, editor);
+
+  if (!existsSync(editorConfigDir)) {
+    return {
+      editor,
+      linkPath,
+      expectedTarget,
+      action: "skipped_no_editor_dir",
+      conflictCode: null,
+      existingTarget: null,
+    };
+  }
+
+  if (!existsSync(linkPath)) {
+    mkdirSync(dirname(linkPath), { recursive: true });
+    symlinkSync(expectedTarget, linkPath, "dir");
+    return {
+      editor,
+      linkPath,
+      expectedTarget,
+      action: "created",
+      conflictCode: null,
+      existingTarget: null,
+    };
+  }
+
+  const entry = lstatSync(linkPath);
+  if (!entry.isSymbolicLink()) {
+    return {
+      editor,
+      linkPath,
+      expectedTarget,
+      action: "skipped_conflict",
+      conflictCode: "non_link",
+      existingTarget: null,
+    };
+  }
+
+  const existingRawTarget: string = readlinkSync(linkPath);
+  const existingTarget: string = toAbsolutePath(dirname(linkPath), existingRawTarget);
+
+  if (existingTarget !== expectedTarget) {
+    return {
+      editor,
+      linkPath,
+      expectedTarget,
+      action: "skipped_conflict",
+      conflictCode: "wrong_target",
+      existingTarget,
+    };
+  }
+
+  rmSync(linkPath, { force: true });
+  symlinkSync(expectedTarget, linkPath, "dir");
+  return {
+    editor,
+    linkPath,
+    expectedTarget,
+    action: "refreshed",
+    conflictCode: null,
+    existingTarget,
+  };
+}
+
 function runSkillsUpdate(context: CliContext): CliResult {
   const parsed = parseArgs(context.args);
   if (parsed.positional.length > 1) {
@@ -567,8 +638,8 @@ function runSkillsUpdate(context: CliContext): CliResult {
     });
   }
 
-  const links: readonly LinkState[] = EDITOR_NAMES.map((editor) =>
-    inspectDefaultLink(context.cwd, editor, installResult.installedDir),
+  const links: readonly UpdateLinkEntry[] = EDITOR_NAMES.map((editor) =>
+    updateEditorLink(context.cwd, editor, installResult.installedDir),
   );
 
   const outcome: UpdateOutcome = {
@@ -580,12 +651,16 @@ function runSkillsUpdate(context: CliContext): CliResult {
 
   const linkSummary: string = outcome.links
     .map((entry) => {
-      if (entry.status === "missing") {
-        return `- ${entry.editor}: missing (${entry.linkPath})`;
+      if (entry.action === "created") {
+        return `- ${entry.editor}: created (${entry.linkPath} -> ${entry.expectedTarget})`;
       }
 
-      if (entry.status === "valid") {
-        return `- ${entry.editor}: valid (${entry.linkPath} -> ${entry.expectedTarget})`;
+      if (entry.action === "refreshed") {
+        return `- ${entry.editor}: refreshed (${entry.linkPath} -> ${entry.expectedTarget})`;
+      }
+
+      if (entry.action === "skipped_no_editor_dir") {
+        return `- ${entry.editor}: skipped (no editor config dir)`;
       }
 
       if (entry.conflictCode === "non_link") {
@@ -602,7 +677,7 @@ function runSkillsUpdate(context: CliContext): CliResult {
       "Updated Trekoon skill in canonical path.",
       `Source: ${outcome.sourcePath}`,
       `Installed file: ${outcome.installedPath}`,
-      "Default link states:",
+      "Editor links:",
       linkSummary,
     ].join("\n"),
     data: {
