@@ -286,7 +286,8 @@ describe("sync command", (): void => {
       recoveryStatus: "tracked_ignored_mismatch",
       trackedStorageFiles: [join(storagePaths.sharedStorageRoot, ".trekoon", "tracked.txt")],
     });
-    expect((result.data as { operatorAction: string }).operatorAction).toContain("git rm --cached -r --");
+    expect((result.data as { operatorAction: string }).operatorAction).toContain("git -C");
+    expect((result.data as { operatorAction: string }).operatorAction).toContain(".trekoon/tracked.txt");
   });
 
   test("quarantines malformed payloads and continues", async (): Promise<void> => {
