@@ -12,18 +12,6 @@ import { type GitContextSnapshot, type SyncStatusSummary } from "../sync/types";
 
 const DEFAULT_SOURCE_BRANCH = "main";
 
-function taskStatusPriority(status: string): number {
-  if (status === "in_progress" || status === "in-progress") {
-    return 0;
-  }
-
-  if (status === "todo") {
-    return 1;
-  }
-
-  return 2;
-}
-
 interface SessionReadiness {
   readonly readyCount: number;
   readonly blockedCount: number;
