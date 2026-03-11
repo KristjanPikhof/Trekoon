@@ -1,4 +1,8 @@
+import { spawnSync } from "node:child_process";
+
 import { type Database } from "bun:sqlite";
+
+import { DomainError } from "../domain/types";
 
 export interface BranchEventRow {
   readonly id: string;
@@ -26,6 +30,28 @@ function parseCursorToken(token: string): ParsedCursorToken {
     createdAt: Number.isFinite(createdAt) ? createdAt : 0,
     id: idRaw && idRaw.length > 0 ? idRaw : null,
   };
+}
+
+export function assertValidSourceRef(workingDirectory: string, sourceRef: string): void {
+  const verification = spawnSync("git", ["rev-parse", "--verify", "--quiet", `${sourceRef}^{commit}`], {
+    cwd: workingDirectory,
+    encoding: "utf8",
+    stdio: ["ignore", "pipe", "pipe"],
+  });
+
+  if (verification.status === 0) {
+    return;
+  }
+
+  throw new DomainError({
+    code: "invalid_source",
+    message: `Source ref '${sourceRef}' was not found.`,
+    details: {
+      status: "invalid_source",
+      sourceBranch: sourceRef,
+      operatorAction: `Verify '${sourceRef}' exists with git rev-parse --verify --quiet ${sourceRef}^{commit} and rerun sync.`,
+    },
+  });
 }
 
 export function queryBranchEventsSince(db: Database, branch: string, cursorToken: string): BranchEventRow[] {
