@@ -1,8 +1,78 @@
 import { unexpectedFailureResult } from "./error-utils";
 
-import { okResult } from "../io/output";
+import { DomainError } from "../domain/types";
+import { failResult, okResult } from "../io/output";
 import { type CliContext, type CliResult } from "../runtime/command-types";
 import { openTrekoonDatabase, type TrekoonDatabase } from "../storage/database";
+
+function buildRecoverySummary(database: TrekoonDatabase): string[] {
+  const diagnostics = database.diagnostics;
+  const lines: string[] = [];
+
+  if (diagnostics.recoveryStatus === "no_legacy_state") {
+    lines.push("Recovery status: no legacy worktree-local state detected.");
+    return lines;
+  }
+
+  if (diagnostics.recoveryStatus === "safe_auto_migrate") {
+    if (diagnostics.autoMigratedLegacyState) {
+      lines.push("Recovery status: safe auto-migrate completed.");
+      lines.push(`Imported from: ${diagnostics.importedFromLegacyDatabase}`);
+      lines.push(`Backups created: ${diagnostics.backupFiles.join(", ")}`);
+    } else {
+      lines.push("Recovery status: legacy worktree-local state detected.");
+      lines.push("Shared storage already exists; no import was required.");
+    }
+
+    lines.push(`Operator action: ${diagnostics.operatorAction}`);
+    return lines;
+  }
+
+  lines.push(`Recovery status: ${diagnostics.recoveryStatus}`);
+  lines.push(`Operator action: ${diagnostics.operatorAction}`);
+  return lines;
+}
+
+function recoveryFailureResult(error: DomainError): CliResult | null {
+  if (error.code !== "ambiguous_legacy_state" && error.code !== "tracked_ignored_mismatch") {
+    return null;
+  }
+
+  const details = error.details ?? {};
+  const status = typeof details.status === "string" ? details.status : error.code;
+  const operatorAction = typeof details.operatorAction === "string" ? details.operatorAction : error.message;
+  const legacyDatabaseFiles = Array.isArray(details.legacyDatabaseFiles) ? details.legacyDatabaseFiles : [];
+  const trackedStorageFiles = Array.isArray(details.trackedStorageFiles) ? details.trackedStorageFiles : [];
+  const humanLines: string[] = [
+    "Trekoon init requires operator action.",
+    `Recovery status: ${status}`,
+    error.message,
+    `Operator action: ${operatorAction}`,
+  ];
+
+  if (legacyDatabaseFiles.length > 0) {
+    humanLines.push(`Legacy databases: ${legacyDatabaseFiles.join(", ")}`);
+  }
+
+  if (trackedStorageFiles.length > 0) {
+    humanLines.push(`Tracked storage files: ${trackedStorageFiles.join(", ")}`);
+  }
+
+  return failResult({
+    command: "init",
+    human: humanLines.join("\n"),
+    data: {
+      status,
+      legacyDatabaseFiles,
+      trackedStorageFiles,
+      operatorAction,
+    },
+    error: {
+      code: error.code,
+      message: error.message,
+    },
+  });
+}
 
 export async function runInit(context: CliContext): Promise<CliResult> {
   let database: TrekoonDatabase | undefined;
@@ -17,15 +87,8 @@ export async function runInit(context: CliContext): Promise<CliResult> {
       `Shared storage root: ${diagnostics.sharedStorageRoot}`,
       `Storage directory: ${database.paths.storageDir}`,
       `Database file: ${database.paths.databaseFile}`,
+      ...buildRecoverySummary(database),
     ];
-
-    if (diagnostics.legacyStateDetected) {
-      humanLines.push(`Legacy worktree-local state detected at ${diagnostics.worktreeRoot}/.trekoon/trekoon.db.`);
-    }
-
-    if (diagnostics.recoveryRequired) {
-      humanLines.push("Recovery required before using shared storage to avoid splitting state.");
-    }
 
     return okResult({
       command: "init",
@@ -40,9 +103,23 @@ export async function runInit(context: CliContext): Promise<CliResult> {
         databaseFile: database.paths.databaseFile,
         legacyStateDetected: diagnostics.legacyStateDetected,
         recoveryRequired: diagnostics.recoveryRequired,
+        recoveryStatus: diagnostics.recoveryStatus,
+        legacyDatabaseFiles: diagnostics.legacyDatabaseFiles,
+        backupFiles: diagnostics.backupFiles,
+        trackedStorageFiles: diagnostics.trackedStorageFiles,
+        autoMigratedLegacyState: diagnostics.autoMigratedLegacyState,
+        importedFromLegacyDatabase: diagnostics.importedFromLegacyDatabase,
+        operatorAction: diagnostics.operatorAction,
       },
     });
   } catch (error: unknown) {
+    if (error instanceof DomainError) {
+      const recoveryFailure = recoveryFailureResult(error);
+      if (recoveryFailure !== null) {
+        return recoveryFailure;
+      }
+    }
+
     return unexpectedFailureResult(error, {
       command: "init",
       human: "Unexpected init command failure",
