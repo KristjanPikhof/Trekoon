@@ -268,7 +268,7 @@ describe("skills command", (): void => {
     expect(allowedData.outsideRepoOverrideFlag).toBe("--allow-outside-repo");
   });
 
-  test("skills update refreshes canonical skill and reports link states", async (): Promise<void> => {
+  test("skills update refreshes canonical skill and auto-links editors with config dirs", async (): Promise<void> => {
     const cwd = createWorkspace();
 
     const installForTargets = await runSkills({
@@ -279,10 +279,13 @@ describe("skills command", (): void => {
     expect(installForTargets.ok).toBeTrue();
     const installData = installForTargets.data as { installedPath: string; installedDir: string };
 
-    rmSync(join(cwd, ".claude", "skills", "trekoon"), { recursive: true, force: true });
+    // Create .claude config dir so update auto-creates the link
+    mkdirSync(join(cwd, ".claude"), { recursive: true });
+
+    // Create .pi config dir with a non-link conflict at the skills path
     const piLinkPath = join(cwd, ".pi", "skills", "trekoon");
-    mkdirSync(dirname(piLinkPath), { recursive: true });
-    writeFileSync(piLinkPath, "not a symlink", "utf8");
+    mkdirSync(piLinkPath, { recursive: true });
+    writeFileSync(join(piLinkPath, "SKILL.md"), "not a symlink", "utf8");
 
     writeFileSync(installData.installedPath, "stale content\n", "utf8");
 
@@ -300,7 +303,7 @@ describe("skills command", (): void => {
       installedDir: string;
       links: Array<{
         editor: string;
-        status: string;
+        action: string;
         linkPath: string;
         expectedTarget: string;
         existingTarget: string | null;
@@ -315,16 +318,22 @@ describe("skills command", (): void => {
     const claudeState = updatedData.links.find((entry) => entry.editor === "claude");
     const piState = updatedData.links.find((entry) => entry.editor === "pi");
 
+    // opencode had a valid link, should be refreshed
     expect(opencodeState).toBeDefined();
-    expect(opencodeState?.status).toBe("valid");
+    expect(opencodeState?.action).toBe("refreshed");
     expect(opencodeState?.existingTarget).toBe(updatedData.installedDir);
+    expect(lstatSync(opencodeState!.linkPath).isSymbolicLink()).toBeTrue();
 
+    // claude had config dir but no link, should be created
     expect(claudeState).toBeDefined();
-    expect(claudeState?.status).toBe("missing");
+    expect(claudeState?.action).toBe("created");
     expect(claudeState?.existingTarget).toBeNull();
+    expect(lstatSync(claudeState!.linkPath).isSymbolicLink()).toBeTrue();
+    expect(resolve(dirname(claudeState!.linkPath), readlinkSync(claudeState!.linkPath))).toBe(updatedData.installedDir);
 
+    // pi had non-link conflict, should be skipped
     expect(piState).toBeDefined();
-    expect(piState?.status).toBe("conflict");
+    expect(piState?.action).toBe("skipped_conflict");
     expect(piState?.conflictCode).toBe("non_link");
     expect(piState?.existingTarget).toBeNull();
 
@@ -337,6 +346,34 @@ describe("skills command", (): void => {
     expect(secondUpdate.ok).toBeTrue();
     const secondData = secondUpdate.data as { installedPath: string; sourcePath: string };
     expect(readFileSync(secondData.installedPath, "utf8")).toBe(readFileSync(secondData.sourcePath, "utf8"));
+  });
+
+  test("skills update skips editors with no config dir", async (): Promise<void> => {
+    const cwd = createWorkspace();
+
+    // Just install canonical, no editor dirs exist
+    const installResult = await runSkills({
+      cwd,
+      mode: "json",
+      args: ["install"],
+    });
+    expect(installResult.ok).toBeTrue();
+
+    const updated = await runSkills({
+      cwd,
+      mode: "json",
+      args: ["update"],
+    });
+
+    expect(updated.ok).toBeTrue();
+    const updatedData = updated.data as {
+      links: Array<{ editor: string; action: string }>;
+    };
+
+    // All editors should be skipped since no config dirs exist
+    for (const link of updatedData.links) {
+      expect(link.action).toBe("skipped_no_editor_dir");
+    }
   });
 
   test("returns deterministic machine errors for invalid args", async (): Promise<void> => {
