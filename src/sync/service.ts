@@ -689,6 +689,41 @@ export function syncPull(cwd: string, sourceBranch: string): PullSummary {
     const cursorToken = cursor?.cursor_token ?? "0:";
     const incomingEvents: StoredEvent[] = queryBranchEventsSince(storage.db, sourceBranch, cursorToken) as StoredEvent[];
 
+    // Same-branch fast path: skip conflict detection when already on sourceBranch.
+    // Null branchName (detached HEAD) falls through to the normal path.
+    if (git.branchName !== null && git.branchName === sourceBranch) {
+      let lastToken: string | null = null;
+      let lastEventAt: number | null = cursor?.last_event_at ?? null;
+
+      storage.db.transaction((): void => {
+        for (const incoming of incomingEvents) {
+          storeEvent(storage.db, incoming);
+          lastToken = cursorTokenFromEvent(incoming);
+          lastEventAt = incoming.created_at;
+        }
+
+        if (lastToken) {
+          saveCursor(storage.db, git.worktreePath, sourceBranch, lastToken, lastEventAt);
+        }
+      })();
+
+      return {
+        sourceBranch,
+        scannedEvents: incomingEvents.length,
+        appliedEvents: 0,
+        createdConflicts: 0,
+        cursorToken: lastToken,
+        sameBranch: true,
+        diagnostics: {
+          malformedPayloadEvents: 0,
+          applyRejectedEvents: 0,
+          quarantinedEvents: 0,
+          conflictEvents: 0,
+          errorHints: [],
+        },
+      };
+    }
+
     let appliedEvents = 0;
     let createdConflicts = 0;
     let malformedPayloadEvents = 0;
