@@ -5,6 +5,7 @@ import { runEvents } from "../commands/events";
 import { runInit } from "../commands/init";
 import { runMigrate } from "../commands/migrate";
 import { runQuickstart } from "../commands/quickstart";
+import { runSession } from "../commands/session";
 import { runSkills } from "../commands/skills";
 import { runSubtask } from "../commands/subtask";
 import { runSync } from "../commands/sync";
