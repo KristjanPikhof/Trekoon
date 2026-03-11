@@ -50,7 +50,7 @@ interface SessionResult {
   readonly readiness: SessionReadiness;
 }
 
-function countAheadLocal(db: import("bun:sqlite").Database, currentBranch: string | null, sourceBranch: string): number {
+function countAheadLocal(db: Database, currentBranch: string | null, sourceBranch: string): number {
   if (!currentBranch || currentBranch === sourceBranch) {
     return 0;
   }
@@ -68,7 +68,7 @@ function countAheadLocal(db: import("bun:sqlite").Database, currentBranch: strin
   return row?.count ?? 0;
 }
 
-function countPendingConflictsLocal(db: import("bun:sqlite").Database): number {
+function countPendingConflictsLocal(db: Database): number {
   const row = db
     .query("SELECT COUNT(*) AS count FROM sync_conflicts WHERE resolution = 'pending';")
     .get() as { count: number } | null;
@@ -77,7 +77,7 @@ function countPendingConflictsLocal(db: import("bun:sqlite").Database): number {
 }
 
 function loadCursorLocal(
-  db: import("bun:sqlite").Database,
+  db: Database,
   worktreePath: string,
   sourceBranch: string,
 ): { cursor_token: string } | null {
