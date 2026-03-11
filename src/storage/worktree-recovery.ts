@@ -1,7 +1,7 @@
 import { spawnSync } from "node:child_process";
 import { createHash } from "node:crypto";
 import { existsSync, mkdirSync, readFileSync, realpathSync } from "node:fs";
-import { dirname, resolve } from "node:path";
+import { dirname, relative, resolve, sep } from "node:path";
 
 import { DomainError } from "../domain/types";
 import {
@@ -175,10 +175,43 @@ function backupLegacyDatabaseFile(filePath: string): string {
   return backupPath;
 }
 
-function formatTrackedMismatchAction(paths: StoragePaths): string {
+function resolveTrackedFileWorktreeRoot(paths: StoragePaths, trackedFilePath: string): string {
+  const worktreeRoots: string[] = listWorktreeRoots(paths).sort(
+    (left: string, right: string) => right.length - left.length,
+  );
+
+  for (const worktreeRoot of worktreeRoots) {
+    if (trackedFilePath === worktreeRoot || trackedFilePath.startsWith(`${worktreeRoot}${sep}`)) {
+      return worktreeRoot;
+    }
+  }
+
+  return paths.worktreeRoot;
+}
+
+function formatTrackedMismatchAction(paths: StoragePaths, trackedStorageFiles: readonly string[]): string {
+  const commandsByWorktree = new Map<string, string[]>();
+
+  for (const trackedFilePath of trackedStorageFiles) {
+    const worktreeRoot: string = resolveTrackedFileWorktreeRoot(paths, trackedFilePath);
+    const relativeTrackedPath: string = relative(worktreeRoot, trackedFilePath);
+    const trackedPathsForWorktree: string[] = commandsByWorktree.get(worktreeRoot) ?? [];
+    trackedPathsForWorktree.push(relativeTrackedPath);
+    commandsByWorktree.set(worktreeRoot, trackedPathsForWorktree);
+  }
+
+  const suggestedCommands: string = [...commandsByWorktree.entries()]
+    .map(([worktreeRoot, trackedPaths]: [string, string[]]) => (
+      `git -C ${formatShellPath(worktreeRoot)} rm --cached -- ${trackedPaths
+        .map((trackedPath: string) => formatShellPath(trackedPath))
+        .join(" ")}`
+    ))
+    .join(" ; ");
+
   return [
     "Remove tracked .trekoon files from every worktree index before continuing.",
-    `Suggested action: git rm --cached -r -- ${resolve(paths.worktreeRoot, ".trekoon")}`,
+    `Tracked path(s): ${trackedStorageFiles.map(formatShellPath).join(", ")}`,
+    `Suggested action: ${suggestedCommands}`,
     "Commit the index cleanup, keep .trekoon ignored, then rerun trekoon init.",
   ].join(" ");
 }
@@ -250,9 +283,9 @@ export function inspectWorktreeDatabaseState(
         status: "tracked_ignored_mismatch",
         legacyDatabaseFiles,
         trackedStorageFiles,
-        operatorAction: formatTrackedMismatchAction(paths),
-      },
-    });
+          operatorAction: formatTrackedMismatchAction(paths, trackedStorageFiles),
+        },
+      });
   }
 
   if (legacyDatabaseFiles.length === 0) {
