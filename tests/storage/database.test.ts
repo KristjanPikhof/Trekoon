@@ -1,5 +1,5 @@
 import { execFileSync } from "node:child_process";
-import { mkdirSync, mkdtempSync, rmSync } from "node:fs";
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
@@ -20,6 +20,17 @@ function createWorkspace(): string {
 
 function initGitRepository(workspace: string): void {
   execFileSync("git", ["init"], { cwd: workspace, stdio: "ignore" });
+}
+
+function createCommittedGitRepository(workspace: string): void {
+  initGitRepository(workspace);
+  writeFileSync(join(workspace, "README.md"), "# Trekoon\n", "utf8");
+  execFileSync("git", ["add", "README.md"], { cwd: workspace, stdio: "ignore" });
+  execFileSync(
+    "git",
+    ["-c", "user.name=Trekoon Tests", "-c", "user.email=tests@trekoon.local", "commit", "-m", "Initial commit"],
+    { cwd: workspace, stdio: "ignore" },
+  );
 }
 
 afterEach((): void => {
@@ -72,13 +83,45 @@ describe("storage lifecycle", (): void => {
     const nestedStorage = openTrekoonDatabase(nestedCwd);
 
     try {
-      expect(rootStorage.paths.databaseFile).toBe(join(rootStorage.paths.worktreeRoot, ".trekoon", "trekoon.db"));
+      expect(rootStorage.paths.storageMode).toBe("git_common_dir");
+      expect(rootStorage.paths.repoCommonDir).toBe(join(workspace, ".git"));
+      expect(rootStorage.paths.sharedStorageRoot).toBe(join(workspace, ".git"));
+      expect(rootStorage.paths.databaseFile).toBe(join(rootStorage.paths.sharedStorageRoot, ".trekoon", "trekoon.db"));
       expect(nestedStorage.paths.databaseFile).toBe(rootStorage.paths.databaseFile);
       expect(nestedStorage.paths.worktreeRoot).toBe(rootStorage.paths.worktreeRoot);
-      expect(nestedStorage.paths.diagnostics.warnings[0]?.code).toBe("storage_root_diverged_from_cwd");
+      expect(nestedStorage.paths.sharedStorageRoot).toBe(rootStorage.paths.sharedStorageRoot);
+      expect(nestedStorage.paths.diagnostics.warnings.map((warning) => warning.code)).toEqual([
+        "storage_root_diverged_from_cwd",
+        "shared_storage_root_differs_from_worktree_root",
+      ]);
     } finally {
       nestedStorage.close();
       rootStorage.close();
+    }
+  });
+
+  test("reuses one shared database across linked worktrees", (): void => {
+    const workspace: string = createWorkspace();
+    createCommittedGitRepository(workspace);
+    const linkedWorktree: string = createWorkspace();
+
+    execFileSync("git", ["worktree", "add", "-b", "storage-shared-test", linkedWorktree, "HEAD"], {
+      cwd: workspace,
+      stdio: "ignore",
+    });
+
+    const primaryStorage = openTrekoonDatabase(workspace);
+    const secondaryStorage = openTrekoonDatabase(linkedWorktree);
+
+    try {
+      expect(primaryStorage.paths.databaseFile).toBe(secondaryStorage.paths.databaseFile);
+      expect(primaryStorage.paths.sharedStorageRoot).toBe(secondaryStorage.paths.sharedStorageRoot);
+      expect(primaryStorage.paths.worktreeRoot).toBe(workspace);
+      expect(secondaryStorage.paths.worktreeRoot).toBe(linkedWorktree);
+      expect(secondaryStorage.paths.repoCommonDir).toBe(primaryStorage.paths.repoCommonDir);
+    } finally {
+      secondaryStorage.close();
+      primaryStorage.close();
     }
   });
 
