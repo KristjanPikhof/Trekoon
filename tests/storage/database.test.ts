@@ -278,10 +278,12 @@ describe("storage lifecycle", (): void => {
       const domainError = error as DomainError;
       expect(domainError.code).toBe("ambiguous_legacy_state");
       expect(domainError.details?.status).toBe("ambiguous_recovery");
-      expect(domainError.details?.legacyDatabaseFiles).toEqual([
-        canonicalPath(resolveLegacyWorktreeDatabaseFile(linkedWorktreeA)),
-        canonicalPath(resolveLegacyWorktreeDatabaseFile(linkedWorktreeB)),
-      ]);
+      expect(domainError.details?.legacyDatabaseFiles).toEqual(
+        [
+          canonicalPath(resolveLegacyWorktreeDatabaseFile(linkedWorktreeA)),
+          canonicalPath(resolveLegacyWorktreeDatabaseFile(linkedWorktreeB)),
+        ].sort(),
+      );
       expect(domainError.details?.trackedStorageFiles).toEqual([]);
       expect(domainError.details?.operatorAction).toContain("Choose one source database");
       expect(domainError.details?.operatorAction).toContain(resolveStoragePaths(linkedWorktreeA).databaseFile);
