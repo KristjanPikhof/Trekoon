@@ -82,8 +82,15 @@ function listTrackedStorageFiles(paths: StoragePaths): string[] {
     return [];
   }
 
-  return readGitLines(paths.sharedStorageRoot, ["ls-files", "--cached", "--", ".trekoon"])
-    .map((entry) => resolve(paths.sharedStorageRoot, entry));
+  const trackedFiles = new Set<string>();
+
+  for (const worktreeRoot of listWorktreeRoots(paths)) {
+    for (const entry of readGitLines(worktreeRoot, ["ls-files", "--cached", "--", ".trekoon"])) {
+      trackedFiles.add(resolve(worktreeRoot, entry));
+    }
+  }
+
+  return [...trackedFiles].sort();
 }
 
 function listLegacyDatabaseFiles(paths: StoragePaths): string[] {
@@ -139,8 +146,8 @@ function backupLegacyDatabaseFile(filePath: string): string {
 
 function formatTrackedMismatchAction(paths: StoragePaths): string {
   return [
-    "Remove tracked .trekoon files from git before continuing.",
-    `Suggested action: git rm --cached -r -- ${resolve(paths.sharedStorageRoot, ".trekoon")}`,
+    "Remove tracked .trekoon files from every worktree index before continuing.",
+    `Suggested action: git rm --cached -r -- ${resolve(paths.worktreeRoot, ".trekoon")}`,
     "Commit the index cleanup, keep .trekoon ignored, then rerun trekoon init.",
   ].join(" ");
 }
