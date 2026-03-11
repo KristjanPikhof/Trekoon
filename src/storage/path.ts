@@ -2,8 +2,16 @@ import { spawnSync } from "node:child_process";
 import { realpathSync } from "node:fs";
 import { resolve } from "node:path";
 
-const DB_DIRNAME = ".trekoon";
-const DB_FILENAME = "trekoon.db";
+export const TREKOON_STORAGE_DIRNAME = ".trekoon";
+export const TREKOON_DATABASE_FILENAME = "trekoon.db";
+
+export function resolveLegacyWorktreeStorageDir(worktreeRoot: string): string {
+  return resolve(worktreeRoot, TREKOON_STORAGE_DIRNAME);
+}
+
+export function resolveLegacyWorktreeDatabaseFile(worktreeRoot: string): string {
+  return resolve(resolveLegacyWorktreeStorageDir(worktreeRoot), TREKOON_DATABASE_FILENAME);
+}
 
 export type StorageMode = "cwd" | "git_common_dir";
 
@@ -66,8 +74,8 @@ export function resolveStoragePaths(workingDirectory: string = process.cwd()): S
   const repoCommonDir: string | null = repoCommonDirRaw ? realpathSync(repoCommonDirRaw) : null;
   const storageMode: StorageMode = repoCommonDir ? "git_common_dir" : "cwd";
   const sharedStorageRoot: string = repoCommonDir ? realpathSync(resolve(repoCommonDir, "..")) : invocationCwd;
-  const storageDir: string = resolve(sharedStorageRoot, DB_DIRNAME);
-  const databaseFile: string = resolve(storageDir, DB_FILENAME);
+  const storageDir: string = resolve(sharedStorageRoot, TREKOON_STORAGE_DIRNAME);
+  const databaseFile: string = resolve(storageDir, TREKOON_DATABASE_FILENAME);
   const warnings: StoragePathIssue[] = [];
 
   const createIssue = (code: string, message: string): StoragePathIssue => ({
