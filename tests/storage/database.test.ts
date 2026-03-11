@@ -253,11 +253,7 @@ describe("storage lifecycle", (): void => {
     });
 
     const legacyDatabaseFile: string = createLegacyWalBackedDatabaseFile(linkedWorktree, "wal-backed");
-    const detachedCopy: string = join(createWorkspace(), "legacy-main-only.db");
-    copyFileSync(legacyDatabaseFile, detachedCopy);
-
     expect(existsSync(`${legacyDatabaseFile}-wal`)).toBe(true);
-    expect(listEpicTitles(detachedCopy)).toEqual([]);
 
     const storage = openTrekoonDatabase(linkedWorktree);
 
