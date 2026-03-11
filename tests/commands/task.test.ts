@@ -948,6 +948,109 @@ describe("task command", (): void => {
     expect((noneReady.data as { summary: { blockedCount: number } }).summary.blockedCount).toBe(1);
   });
 
+  test("done marks task as done and returns next ready task", async (): Promise<void> => {
+    const cwd = createWorkspace();
+    const epicCreated = await runEpic({
+      cwd,
+      mode: "toon",
+      args: ["create", "--title", "Roadmap", "--description", "desc"],
+    });
+    const epicId = (epicCreated.data as { epic: { id: string } }).epic.id;
+
+    const first = await runTask({
+      cwd,
+      mode: "toon",
+      args: ["create", "--epic", epicId, "--title", "First", "--description", "do first", "--status", "in_progress"],
+    });
+    const second = await runTask({
+      cwd,
+      mode: "toon",
+      args: ["create", "--epic", epicId, "--title", "Second", "--description", "do second", "--status", "todo"],
+    });
+    const firstId = (first.data as { task: { id: string } }).task.id;
+    const secondId = (second.data as { task: { id: string } }).task.id;
+
+    const result = await runTask({ cwd, mode: "toon", args: ["done", firstId] });
+
+    expect(result.ok).toBeTrue();
+
+    const data = result.data as {
+      completed: { id: string; status: string };
+      next: { id: string } | null;
+      nextDeps: unknown[] | null;
+      readiness: { readyCount: number; blockedCount: number };
+    };
+
+    expect(data.completed.id).toBe(firstId);
+    expect(data.completed.status).toBe("done");
+    expect(data.next).not.toBeNull();
+    expect(data.next?.id).toBe(secondId);
+    expect(result.human).toContain("marked done");
+  });
+
+  test("done returns null next when no more ready tasks remain", async (): Promise<void> => {
+    const cwd = createWorkspace();
+    const epicCreated = await runEpic({
+      cwd,
+      mode: "toon",
+      args: ["create", "--title", "Roadmap", "--description", "desc"],
+    });
+    const epicId = (epicCreated.data as { epic: { id: string } }).epic.id;
+
+    const created = await runTask({
+      cwd,
+      mode: "toon",
+      args: ["create", "--epic", epicId, "--title", "Only task", "--description", "sole work", "--status", "in_progress"],
+    });
+    const taskId = (created.data as { task: { id: string } }).task.id;
+
+    const result = await runTask({ cwd, mode: "toon", args: ["done", taskId] });
+
+    expect(result.ok).toBeTrue();
+
+    const data = result.data as {
+      completed: { id: string; status: string };
+      next: unknown;
+      readiness: { readyCount: number };
+    };
+
+    expect(data.completed.id).toBe(taskId);
+    expect(data.completed.status).toBe("done");
+    expect(data.next).toBeNull();
+    expect(data.readiness.readyCount).toBe(0);
+  });
+
+  test("done fails with error on nonexistent task id", async (): Promise<void> => {
+    const cwd = createWorkspace();
+
+    const result = await runTask({ cwd, mode: "toon", args: ["done", "00000000-0000-0000-0000-000000000000"] });
+
+    expect(result.ok).toBeFalse();
+    expect(result.error?.code).toBe("not_found");
+  });
+
+  test("done fails with error when task is already done", async (): Promise<void> => {
+    const cwd = createWorkspace();
+    const epicCreated = await runEpic({
+      cwd,
+      mode: "toon",
+      args: ["create", "--title", "Roadmap", "--description", "desc"],
+    });
+    const epicId = (epicCreated.data as { epic: { id: string } }).epic.id;
+
+    const created = await runTask({
+      cwd,
+      mode: "toon",
+      args: ["create", "--epic", epicId, "--title", "Already done", "--description", "finished", "--status", "done"],
+    });
+    const taskId = (created.data as { task: { id: string } }).task.id;
+
+    const result = await runTask({ cwd, mode: "toon", args: ["done", taskId] });
+
+    expect(result.ok).toBeFalse();
+    expect(result.error?.code).toBe("already_done");
+  });
+
   test("search and replace keep task scope boundaries literal", async (): Promise<void> => {
     const cwd = createWorkspace();
     const literalSearch = "$alpha?";
