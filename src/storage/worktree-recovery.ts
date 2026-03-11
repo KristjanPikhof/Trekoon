@@ -283,9 +283,9 @@ export function inspectWorktreeDatabaseState(
         status: "tracked_ignored_mismatch",
         legacyDatabaseFiles,
         trackedStorageFiles,
-          operatorAction: formatTrackedMismatchAction(paths, trackedStorageFiles),
-        },
-      });
+        operatorAction: formatTrackedMismatchAction(paths, trackedStorageFiles),
+      },
+    });
   }
 
   if (legacyDatabaseFiles.length === 0) {
