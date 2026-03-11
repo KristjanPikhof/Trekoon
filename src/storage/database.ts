@@ -5,7 +5,11 @@ import { Database } from "bun:sqlite";
 import { DomainError } from "../domain/types";
 import { migrateDatabase } from "./migrations";
 import { resolveStoragePaths, type StoragePaths } from "./path";
-import { recoverWorktreeDatabaseState, type WorktreeRecoveryDiagnostics } from "./worktree-recovery";
+import {
+  inspectWorktreeDatabaseState,
+  recoverWorktreeDatabaseState,
+  type WorktreeRecoveryDiagnostics,
+} from "./worktree-recovery";
 
 export interface StorageResolutionDiagnostics {
   readonly invocationCwd: string;
@@ -69,7 +73,7 @@ export function resolveStorageResolutionDiagnostics(
   const paths: StoragePaths = resolveStoragePaths(workingDirectory);
 
   try {
-    return buildStorageResolutionDiagnostics(paths, recoverWorktreeDatabaseState(paths));
+    return buildStorageResolutionDiagnostics(paths, inspectWorktreeDatabaseState(paths));
   } catch (error) {
     if (!(error instanceof DomainError)) {
       throw error;
