@@ -436,6 +436,8 @@ describe("storage lifecycle", (): void => {
       expect(domainError.details?.operatorAction).toContain("Choose one source database");
       expect(domainError.details?.operatorAction).toContain("sqlite3 .backup");
       expect(domainError.details?.operatorAction).toContain("mkdir -p");
+      expect(domainError.details?.operatorAction).toContain(canonicalPath(resolveLegacyWorktreeDatabaseFile(linkedWorktreeA)));
+      expect(domainError.details?.operatorAction).toContain("remove or reconcile the other divergent legacy database files before rerunning trekoon init");
       expect(domainError.details?.operatorAction).not.toContain("Example: cp ");
       expect(domainError.details?.operatorAction).toContain(resolveStoragePaths(linkedWorktreeA).databaseFile);
     }
@@ -533,6 +535,9 @@ describe("storage lifecycle", (): void => {
       expect(domainError.details?.legacyDatabaseFiles).toEqual([legacyDatabaseFile]);
       expect(domainError.details?.trackedStorageFiles).toEqual([]);
       expect(domainError.details?.operatorAction).toContain("Choose one source database");
+      expect(domainError.details?.operatorAction).toContain(`sqlite3 '${legacyDatabaseFile}' '.backup`);
+      expect(domainError.details?.operatorAction).toContain("remove the remaining divergent legacy database before rerunning trekoon init");
+      expect(domainError.details?.operatorAction).not.toContain(`sqlite3 '${resolveStoragePaths(workspace).databaseFile}' '.backup`);
       expect(domainError.details?.operatorAction).toContain(resolveStoragePaths(workspace).databaseFile);
     }
 
