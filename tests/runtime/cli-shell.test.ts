@@ -1,5 +1,5 @@
 import { execFileSync } from "node:child_process";
-import { existsSync, mkdirSync, mkdtempSync, rmSync } from "node:fs";
+import { existsSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
@@ -19,6 +19,18 @@ function createWorkspace(): string {
 
 function initGitRepository(workspace: string): void {
   execFileSync("git", ["init"], { cwd: workspace, stdio: "ignore" });
+}
+
+function createCommittedGitRepository(workspace: string): void {
+  initGitRepository(workspace);
+  writeFileSync(join(workspace, "README.md"), "# Trekoon\n", "utf8");
+  writeFileSync(join(workspace, ".gitignore"), ".trekoon/\n", "utf8");
+  execFileSync("git", ["add", "README.md", ".gitignore"], { cwd: workspace, stdio: "ignore" });
+  execFileSync(
+    "git",
+    ["-c", "user.name=Trekoon Tests", "-c", "user.email=tests@trekoon.local", "commit", "-m", "Initial commit"],
+    { cwd: workspace, stdio: "ignore" },
+  );
 }
 
 afterEach((): void => {
@@ -291,5 +303,65 @@ describe("cli shell dispatch", (): void => {
     expect(meta.storageRootDiagnostics?.recoveryRequired).toBeFalse();
     expect(meta.storageRootDiagnostics?.warnings.map((warning) => warning.code)).toEqual(["storage_root_diverged_from_cwd"]);
     expect(meta.storageRootDiagnostics?.errors).toEqual([]);
+  });
+
+  test("surfaces machine-readable tracked storage mismatch data", async (): Promise<void> => {
+    const workspace = createWorkspace();
+    createCommittedGitRepository(workspace);
+    mkdirSync(join(workspace, ".trekoon"), { recursive: true });
+    const trackedFile = join(workspace, ".trekoon", "tracked.txt");
+    writeFileSync(trackedFile, "tracked state\n", "utf8");
+    execFileSync("git", ["add", "-f", trackedFile], { cwd: workspace, stdio: "ignore" });
+
+    const result = await executeShell(parseInvocation(["init", "--toon"], { stdoutIsTTY: false }), workspace);
+
+    expect(result.ok).toBeFalse();
+    expect(result.command).toBe("init");
+    expect(result.error?.code).toBe("tracked_ignored_mismatch");
+    expect(result.data).toEqual({
+      status: "tracked_ignored_mismatch",
+      legacyDatabaseFiles: [],
+      trackedStorageFiles: [trackedFile],
+      operatorAction: expect.stringContaining("git rm --cached -r --"),
+    });
+
+    const meta = result.meta as {
+      storageRootDiagnostics?: {
+        worktreeRoot: string;
+        sharedStorageRoot: string;
+        databaseFile: string;
+        warnings: Array<{ code: string }>;
+      };
+    };
+
+    expect(meta.storageRootDiagnostics?.worktreeRoot).toBe(workspace);
+    expect(meta.storageRootDiagnostics?.sharedStorageRoot).toBe(workspace);
+    expect(meta.storageRootDiagnostics?.databaseFile).toBe(join(workspace, ".trekoon", "trekoon.db"));
+    expect(meta.storageRootDiagnostics?.warnings).toEqual([]);
+  });
+
+  test("returns shared wipe scope data without parsing text", async (): Promise<void> => {
+    const workspace = createWorkspace();
+    createCommittedGitRepository(workspace);
+    const linkedWorktree = createWorkspace();
+
+    execFileSync("git", ["worktree", "add", "-b", "shell-wipe-scope", linkedWorktree, "HEAD"], {
+      cwd: workspace,
+      stdio: "ignore",
+    });
+
+    const result = await executeShell(parseInvocation(["wipe"], { stdoutIsTTY: false }), linkedWorktree);
+    const sharedPaths = resolveStoragePaths(linkedWorktree);
+
+    expect(result.ok).toBeFalse();
+    expect(result.command).toBe("wipe");
+    expect(result.error?.code).toBe("confirmation_required");
+    expect(result.data).toEqual({
+      confirmed: false,
+      storageDir: sharedPaths.storageDir,
+      worktreeRoot: sharedPaths.worktreeRoot,
+      sharedStorageRoot: sharedPaths.sharedStorageRoot,
+      repoScoped: true,
+    });
   });
 });
