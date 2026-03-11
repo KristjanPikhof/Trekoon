@@ -316,6 +316,37 @@ describe("storage lifecycle", (): void => {
     }
   });
 
+  test("blocks linked-worktree tracked .trekoon files", (): void => {
+    const workspace: string = createWorkspace();
+    createCommittedGitRepository(workspace);
+    const linkedWorktree: string = createWorkspace();
+
+    execFileSync("git", ["worktree", "add", "-b", "storage-tracked-linked", linkedWorktree, "HEAD"], {
+      cwd: workspace,
+      stdio: "ignore",
+    });
+
+    mkdirSync(join(linkedWorktree, TREKOON_STORAGE_DIRNAME), { recursive: true });
+    const trackedFile: string = join(linkedWorktree, TREKOON_STORAGE_DIRNAME, "tracked.txt");
+    writeFileSync(trackedFile, "linked tracked state\n", "utf8");
+    execFileSync("git", ["add", "-f", trackedFile], { cwd: linkedWorktree, stdio: "ignore" });
+
+    expect((): void => {
+      openTrekoonDatabase(workspace);
+    }).toThrow(DomainError);
+
+    try {
+      openTrekoonDatabase(workspace);
+    } catch (error: unknown) {
+      expect(error).toBeInstanceOf(DomainError);
+      const domainError = error as DomainError;
+      expect(domainError.code).toBe("tracked_ignored_mismatch");
+      expect(domainError.details?.status).toBe("tracked_ignored_mismatch");
+      expect(domainError.details?.legacyDatabaseFiles).toEqual([]);
+      expect(domainError.details?.trackedStorageFiles).toEqual([canonicalPath(trackedFile)]);
+    }
+  });
+
   test("reports stale legacy worktree files once shared storage exists", (): void => {
     const workspace: string = createWorkspace();
     createCommittedGitRepository(workspace);
