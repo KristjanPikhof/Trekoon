@@ -7,7 +7,7 @@ import { Database } from "bun:sqlite";
 import { afterEach, describe, expect, test } from "bun:test";
 
 import { DomainError } from "../../src/domain/types";
-import { openTrekoonDatabase } from "../../src/storage/database";
+import { openTrekoonDatabase, resolveStorageResolutionDiagnostics } from "../../src/storage/database";
 import { migrateDatabase, rollbackDatabase } from "../../src/storage/migrations";
 import {
   resolveLegacyWorktreeDatabaseFile,
@@ -214,6 +214,32 @@ describe("storage lifecycle", (): void => {
     } finally {
       storage.close();
     }
+  });
+
+  test("reports importable legacy state without mutating storage", (): void => {
+    const workspace: string = createWorkspace();
+    createCommittedGitRepository(workspace);
+    const linkedWorktree: string = createWorkspace();
+
+    execFileSync("git", ["worktree", "add", "-b", "storage-readonly-probe", linkedWorktree, "HEAD"], {
+      cwd: workspace,
+      stdio: "ignore",
+    });
+
+    const legacyDatabaseFile: string = createLegacyDatabaseFile(linkedWorktree, "linked-worktree");
+    const sharedDatabaseFile: string = resolveStoragePaths(linkedWorktree).databaseFile;
+
+    const diagnostics = resolveStorageResolutionDiagnostics(linkedWorktree);
+
+    expect(diagnostics.recoveryStatus).toBe("safe_auto_migrate");
+    expect(diagnostics.legacyStateDetected).toBe(true);
+    expect(diagnostics.autoMigratedLegacyState).toBe(false);
+    expect(diagnostics.importedFromLegacyDatabase).toBeNull();
+    expect(diagnostics.legacyDatabaseFiles).toEqual([legacyDatabaseFile]);
+    expect(diagnostics.backupFiles).toEqual([]);
+    expect(diagnostics.operatorAction).toContain("can be imported into shared storage during init/open");
+    expect(existsSync(sharedDatabaseFile)).toBe(false);
+    expect(listEpicTitles(legacyDatabaseFile)).toEqual(["linked-worktree"]);
   });
 
   test("imports identical legacy databases from multiple worktrees once", (): void => {
