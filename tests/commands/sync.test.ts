@@ -959,6 +959,233 @@ describe("sync command", (): void => {
     expect((pullResult.data as { createdConflicts: number }).createdConflicts).toBe(0);
   });
 
+  test("sync pull from own branch with events present produces zero conflicts", async (): Promise<void> => {
+    const workspace: string = createWorkspace();
+    initializeRepository(workspace);
+
+    const epicId: string = randomUUID();
+    const now: number = Date.now();
+
+    {
+      const storage = openTrekoonDatabase(workspace);
+      try {
+        storage.db
+          .query("INSERT INTO epics (id, title, description, status, created_at, updated_at, version) VALUES (?, ?, ?, ?, ?, ?, 1);")
+          .run(epicId, "Same branch epic", "seed", "todo", now, now);
+
+        appendEventWithGitContext(storage.db, workspace, {
+          entityKind: "epic",
+          entityId: epicId,
+          operation: "upsert",
+          fields: {
+            title: "Same branch epic",
+            description: "seed",
+            status: "todo",
+          },
+        });
+      } finally {
+        storage.close();
+      }
+    }
+
+    const pullResult = await runSync({
+      args: ["pull", "--from", "main"],
+      cwd: workspace,
+      mode: "toon",
+    });
+
+    expect(pullResult.ok).toBe(true);
+    expect(pullResult.command).toBe("sync.pull");
+    expect((pullResult.data as { sameBranch: boolean }).sameBranch).toBe(true);
+    expect((pullResult.data as { appliedEvents: number }).appliedEvents).toBe(0);
+    expect((pullResult.data as { createdConflicts: number }).createdConflicts).toBe(0);
+    expect((pullResult.data as { scannedEvents: number }).scannedEvents).toBeGreaterThanOrEqual(1);
+    expect((pullResult.data as { diagnostics: { conflictEvents: number } }).diagnostics.conflictEvents).toBe(0);
+    expect((pullResult.data as { diagnostics: { quarantinedEvents: number } }).diagnostics.quarantinedEvents).toBe(0);
+  });
+
+  test("sync status on own branch shows behind=0 and ahead=0 with sameBranch=true", async (): Promise<void> => {
+    const workspace: string = createWorkspace();
+    initializeRepository(workspace);
+
+    const epicId: string = randomUUID();
+    const now: number = Date.now();
+
+    {
+      const storage = openTrekoonDatabase(workspace);
+      try {
+        storage.db
+          .query("INSERT INTO epics (id, title, description, status, created_at, updated_at, version) VALUES (?, ?, ?, ?, ?, ?, 1);")
+          .run(epicId, "Same branch status epic", "seed", "todo", now, now);
+
+        appendEventWithGitContext(storage.db, workspace, {
+          entityKind: "epic",
+          entityId: epicId,
+          operation: "upsert",
+          fields: {
+            title: "Same branch status epic",
+            description: "seed",
+            status: "todo",
+          },
+        });
+      } finally {
+        storage.close();
+      }
+    }
+
+    const statusResult = await runSync({
+      args: ["status", "--from", "main"],
+      cwd: workspace,
+      mode: "toon",
+    });
+
+    expect(statusResult.ok).toBe(true);
+    expect(statusResult.command).toBe("sync.status");
+    expect((statusResult.data as { sameBranch: boolean }).sameBranch).toBe(true);
+    expect((statusResult.data as { behind: number }).behind).toBe(0);
+    expect((statusResult.data as { ahead: number }).ahead).toBe(0);
+  });
+
+  test("cursor advances on same-branch pull so subsequent cross-branch pull starts from correct position", async (): Promise<void> => {
+    const workspace: string = createWorkspace();
+    initializeRepository(workspace);
+
+    const epicId: string = randomUUID();
+    const now: number = Date.now();
+
+    {
+      const storage = openTrekoonDatabase(workspace);
+      try {
+        storage.db
+          .query("INSERT INTO epics (id, title, description, status, created_at, updated_at, version) VALUES (?, ?, ?, ?, ?, ?, 1);")
+          .run(epicId, "Cursor epic", "seed", "todo", now, now);
+
+        appendEventWithGitContext(storage.db, workspace, {
+          entityKind: "epic",
+          entityId: epicId,
+          operation: "upsert",
+          fields: {
+            title: "Cursor epic",
+            description: "seed",
+            status: "todo",
+          },
+        });
+      } finally {
+        storage.close();
+      }
+    }
+
+    // Same-branch pull to advance the cursor
+    const sameBranchPull = await runSync({
+      args: ["pull", "--from", "main"],
+      cwd: workspace,
+      mode: "toon",
+    });
+
+    expect(sameBranchPull.ok).toBe(true);
+    expect((sameBranchPull.data as { sameBranch: boolean }).sameBranch).toBe(true);
+    expect((sameBranchPull.data as { scannedEvents: number }).scannedEvents).toBeGreaterThanOrEqual(1);
+
+    // Now switch to feature branch
+    runGit(workspace, ["checkout", "-b", "feature/cursor-advance"]);
+
+    // Add a new event on main after the cursor was advanced
+    runGit(workspace, ["checkout", "main"]);
+
+    const newEpicId: string = randomUUID();
+    {
+      const storage = openTrekoonDatabase(workspace);
+      try {
+        storage.db
+          .query("INSERT INTO epics (id, title, description, status, created_at, updated_at, version) VALUES (?, ?, ?, ?, ?, ?, 1);")
+          .run(newEpicId, "Post-cursor epic", "new", "todo", now + 100, now + 100);
+
+        appendEventWithGitContext(storage.db, workspace, {
+          entityKind: "epic",
+          entityId: newEpicId,
+          operation: "upsert",
+          fields: {
+            title: "Post-cursor epic",
+            description: "new",
+            status: "todo",
+          },
+        });
+      } finally {
+        storage.close();
+      }
+    }
+
+    runGit(workspace, ["checkout", "feature/cursor-advance"]);
+
+    // Cross-branch pull should only see the new event, not the old one
+    const crossBranchPull = await runSync({
+      args: ["pull", "--from", "main"],
+      cwd: workspace,
+      mode: "toon",
+    });
+
+    expect(crossBranchPull.ok).toBe(true);
+    expect((crossBranchPull.data as { sameBranch: boolean }).sameBranch).toBe(false);
+    expect((crossBranchPull.data as { scannedEvents: number }).scannedEvents).toBe(1);
+    expect((crossBranchPull.data as { createdConflicts: number }).createdConflicts).toBe(0);
+  });
+
+  test("detached HEAD falls through to normal conflict detection path", async (): Promise<void> => {
+    const workspace: string = createWorkspace();
+    initializeRepository(workspace);
+
+    const epicId: string = randomUUID();
+    const now: number = Date.now();
+
+    {
+      const storage = openTrekoonDatabase(workspace);
+      try {
+        storage.db
+          .query("INSERT INTO epics (id, title, description, status, created_at, updated_at, version) VALUES (?, ?, ?, ?, ?, ?, 1);")
+          .run(epicId, "Detached epic", "seed", "todo", now, now);
+
+        appendEventWithGitContext(storage.db, workspace, {
+          entityKind: "epic",
+          entityId: epicId,
+          operation: "upsert",
+          fields: {
+            title: "Detached epic",
+            description: "seed",
+            status: "todo",
+          },
+        });
+      } finally {
+        storage.close();
+      }
+    }
+
+    // Detach HEAD at the current commit
+    const headSha = runGit(workspace, ["rev-parse", "HEAD"]);
+    runGit(workspace, ["checkout", headSha]);
+
+    // Pull from main while in detached HEAD state
+    const pullResult = await runSync({
+      args: ["pull", "--from", "main"],
+      cwd: workspace,
+      mode: "toon",
+    });
+
+    expect(pullResult.ok).toBe(true);
+    expect((pullResult.data as { sameBranch: boolean }).sameBranch).toBe(false);
+    // Normal path applies events (not the same-branch fast path which sets appliedEvents=0)
+    expect((pullResult.data as { appliedEvents: number }).appliedEvents).toBeGreaterThanOrEqual(1);
+
+    // Status should also fall through
+    const statusResult = await runSync({
+      args: ["status", "--from", "main"],
+      cwd: workspace,
+      mode: "toon",
+    });
+
+    expect(statusResult.ok).toBe(true);
+    expect((statusResult.data as { sameBranch: boolean }).sameBranch).toBe(false);
+  });
+
   test("fresh same-repo worktrees sync without branch db snapshots", async (): Promise<void> => {
     const workspace: string = createWorkspace();
     initializeRepository(workspace);
