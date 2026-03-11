@@ -196,6 +196,36 @@ function formatAmbiguousRecoveryAction(paths: StoragePaths, legacyFiles: readonl
   ].join(" ");
 }
 
+function assertNoSplitState(
+  paths: StoragePaths,
+  legacyDatabaseFiles: readonly string[],
+  trackedStorageFiles: readonly string[],
+): void {
+  if (!existsSync(paths.databaseFile)) {
+    return;
+  }
+
+  const sharedFingerprint: string = fingerprintDatabaseFile(paths.databaseFile);
+  const divergentLegacyFiles: string[] = legacyDatabaseFiles.filter(
+    (legacyDatabaseFile: string) => fingerprintDatabaseFile(legacyDatabaseFile) !== sharedFingerprint,
+  );
+
+  if (divergentLegacyFiles.length === 0) {
+    return;
+  }
+
+  throw new DomainError({
+    code: "ambiguous_legacy_state",
+    message: "Shared storage conflicts with divergent legacy worktree databases.",
+    details: {
+      status: "ambiguous_recovery",
+      legacyDatabaseFiles,
+      trackedStorageFiles,
+      operatorAction: formatAmbiguousRecoveryAction(paths, [paths.databaseFile, ...divergentLegacyFiles]),
+    },
+  });
+}
+
 export function recoverWorktreeDatabaseState(paths: StoragePaths): WorktreeRecoveryDiagnostics {
   return inspectWorktreeDatabaseState(paths, { applyRecovery: true });
 }
@@ -234,6 +264,8 @@ export function inspectWorktreeDatabaseState(
   }
 
   if (existsSync(paths.databaseFile)) {
+    assertNoSplitState(paths, legacyDatabaseFiles, trackedStorageFiles);
+
     return {
       status: "safe_auto_migrate",
       legacyDatabaseFiles,
@@ -241,7 +273,7 @@ export function inspectWorktreeDatabaseState(
       trackedStorageFiles,
       autoMigrated: false,
       importedFrom: null,
-      operatorAction: "Shared database already exists. Review and remove stale legacy worktree-local databases after verification.",
+      operatorAction: "Shared database already exists and matches legacy worktree-local databases. Review and remove stale legacy worktree-local databases after verification.",
     };
   }
 
