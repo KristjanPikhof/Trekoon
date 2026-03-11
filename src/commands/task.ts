@@ -1156,7 +1156,7 @@ export async function runTask(context: CliContext): Promise<CliResult> {
         const nextCandidate = readiness.candidates[0] ?? null;
 
         const nextTree = nextCandidate !== null ? domain.buildTaskTreeDetailed(nextCandidate.task.id) : null;
-        const nextDeps = nextCandidate !== null ? domain.listDependencies(nextCandidate.task.id) : null;
+        const nextDeps = nextCandidate?.blockerSummary.blockedBy ?? [];
 
         const readinessStats = {
           readyCount: readiness.summary.readyCount,
