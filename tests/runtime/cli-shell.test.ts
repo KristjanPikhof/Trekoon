@@ -283,6 +283,13 @@ describe("cli shell dispatch", (): void => {
         databaseFile: string;
         legacyStateDetected: boolean;
         recoveryRequired: boolean;
+        recoveryStatus: string;
+        legacyDatabaseFiles: string[];
+        backupFiles: string[];
+        trackedStorageFiles: string[];
+        autoMigratedLegacyState: boolean;
+        importedFromLegacyDatabase: string | null;
+        operatorAction: string;
         warnings: Array<{ code: string }>;
         errors: unknown[];
       };
@@ -305,6 +312,13 @@ describe("cli shell dispatch", (): void => {
     expect(meta.storageRootDiagnostics?.databaseFile).toBe(storagePaths.databaseFile);
     expect(meta.storageRootDiagnostics?.legacyStateDetected).toBeFalse();
     expect(meta.storageRootDiagnostics?.recoveryRequired).toBeFalse();
+    expect(meta.storageRootDiagnostics?.recoveryStatus).toBe("no_legacy_state");
+    expect(meta.storageRootDiagnostics?.legacyDatabaseFiles).toEqual([]);
+    expect(meta.storageRootDiagnostics?.backupFiles).toEqual([]);
+    expect(meta.storageRootDiagnostics?.trackedStorageFiles).toEqual([]);
+    expect(meta.storageRootDiagnostics?.autoMigratedLegacyState).toBeFalse();
+    expect(meta.storageRootDiagnostics?.importedFromLegacyDatabase).toBeNull();
+    expect(meta.storageRootDiagnostics?.operatorAction).toBe("No legacy worktree-local database detected.");
     expect(meta.storageRootDiagnostics?.warnings.map((warning) => warning.code)).toEqual(["storage_root_diverged_from_cwd"]);
     expect(meta.storageRootDiagnostics?.errors).toEqual([]);
   });
@@ -340,6 +354,10 @@ describe("cli shell dispatch", (): void => {
         worktreeRoot: string;
         sharedStorageRoot: string;
         databaseFile: string;
+        recoveryRequired: boolean;
+        recoveryStatus: string;
+        trackedStorageFiles: string[];
+        operatorAction: string;
         warnings: Array<{ code: string }>;
       };
     };
@@ -347,6 +365,10 @@ describe("cli shell dispatch", (): void => {
     expect(meta.storageRootDiagnostics?.worktreeRoot).toBe(storagePaths.worktreeRoot);
     expect(meta.storageRootDiagnostics?.sharedStorageRoot).toBe(storagePaths.sharedStorageRoot);
     expect(meta.storageRootDiagnostics?.databaseFile).toBe(storagePaths.databaseFile);
+    expect(meta.storageRootDiagnostics?.recoveryRequired).toBeTrue();
+    expect(meta.storageRootDiagnostics?.recoveryStatus).toBe("tracked_ignored_mismatch");
+    expect(meta.storageRootDiagnostics?.trackedStorageFiles).toEqual([realpathSync(trackedFile)]);
+    expect(meta.storageRootDiagnostics?.operatorAction).toContain("git rm --cached -r --");
     expect(meta.storageRootDiagnostics?.warnings.map((warning) => warning.code)).toEqual(["storage_root_diverged_from_cwd"]);
   });
 
