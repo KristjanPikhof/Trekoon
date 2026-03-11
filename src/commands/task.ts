@@ -1242,6 +1242,74 @@ export async function runTask(context: CliContext): Promise<CliResult> {
           data: { task },
         });
       }
+      case "done": {
+        const taskId: string = parsed.positional[1] ?? "";
+        if (taskId.length === 0) {
+          return failResult({
+            command: "task.done",
+            human: "Provide a task id. Usage: trekoon task done <id>",
+            data: { code: "invalid_input" },
+            error: {
+              code: "invalid_input",
+              message: "Missing task id",
+            },
+          });
+        }
+
+        const existingTask = domain.getTask(taskId);
+        if (!existingTask) {
+          return failResult({
+            command: "task.done",
+            human: `Task not found: ${taskId}`,
+            data: { code: "not_found", id: taskId },
+            error: {
+              code: "not_found",
+              message: `Task not found: ${taskId}`,
+            },
+          });
+        }
+
+        if (existingTask.status === "done") {
+          return failResult({
+            command: "task.done",
+            human: "Task is already done",
+            data: { code: "already_done", id: taskId },
+            error: {
+              code: "already_done",
+              message: "Task is already done",
+            },
+          });
+        }
+
+        const completed = mutations.updateTask(taskId, { status: "done" });
+        const readiness = buildTaskReadiness(domain, completed.epicId);
+        const nextCandidate = readiness.candidates[0] ?? null;
+
+        const nextTree = nextCandidate !== null ? domain.buildTaskTreeDetailed(nextCandidate.task.id) : null;
+        const nextDeps = nextCandidate !== null ? domain.listDependencies(nextCandidate.task.id) : null;
+
+        const readinessStats = {
+          readyCount: readiness.summary.readyCount,
+          blockedCount: readiness.summary.blockedCount,
+        };
+
+        let human = `Task ${completed.title} marked done.`;
+        if (nextTree !== null && nextCandidate !== null) {
+          human += `\nNext: ${formatTask(nextCandidate.task)}`;
+        }
+        human += `\nReadiness: ready=${readinessStats.readyCount}, blocked=${readinessStats.blockedCount}.`;
+
+        return okResult({
+          command: "task.done",
+          human,
+          data: {
+            completed,
+            next: nextTree,
+            nextDeps,
+            readiness: readinessStats,
+          },
+        });
+      }
       case "delete": {
         const taskId: string = parsed.positional[1] ?? "";
         mutations.deleteTask(taskId);
@@ -1255,7 +1323,7 @@ export async function runTask(context: CliContext): Promise<CliResult> {
       default:
         return failResult({
           command: "task",
-          human: "Usage: trekoon task <create|create-many|list|show|ready|next|search|replace|update|delete>",
+          human: "Usage: trekoon task <create|create-many|list|show|ready|next|done|search|replace|update|delete>",
           data: {
             args: context.args,
           },
