@@ -42,6 +42,15 @@ Fail fast if the envelope reports `recoveryRequired`, a storage mismatch, or any
 bootstrap error. In linked worktrees, `sharedStorageRoot` may differ from
 `worktreeRoot`; that is expected because the repo shares one DB across checkouts.
 
+If the session envelope shows `behind > 0`, pull before claiming any task:
+
+```bash
+trekoon --toon sync pull --from main
+```
+
+This syncs tracker events (not git commits) from the source branch so task
+states, dependencies, and subtrees are up to date before you start work.
+
 ### 2. Claim work explicitly
 
 ```bash
