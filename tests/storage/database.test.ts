@@ -1,5 +1,5 @@
 import { execFileSync } from "node:child_process";
-import { existsSync, mkdirSync, mkdtempSync, realpathSync, rmSync, writeFileSync } from "node:fs";
+import { copyFileSync, existsSync, mkdirSync, mkdtempSync, realpathSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
@@ -231,8 +231,10 @@ describe("storage lifecycle", (): void => {
       stdio: "ignore",
     });
 
-    createLegacyDatabaseFile(linkedWorktreeA, "same-state");
-    createLegacyDatabaseFile(linkedWorktreeB, "same-state");
+    const legacyDatabaseFileA: string = createLegacyDatabaseFile(linkedWorktreeA, "same-state");
+    const legacyDatabaseFileB: string = resolveLegacyWorktreeDatabaseFile(linkedWorktreeB);
+    mkdirSync(join(linkedWorktreeB, TREKOON_STORAGE_DIRNAME), { recursive: true });
+    copyFileSync(legacyDatabaseFileA, legacyDatabaseFileB);
 
     const storage = openTrekoonDatabase(linkedWorktreeA);
 
