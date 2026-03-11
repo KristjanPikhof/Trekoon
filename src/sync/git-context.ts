@@ -1,5 +1,6 @@
 import { type Database } from "bun:sqlite";
 
+import { resolveStoragePaths } from "../storage/path";
 import { type GitContextSnapshot } from "./types";
 
 function runGit(args: readonly string[], cwd: string): string | null {
@@ -19,11 +20,12 @@ function runGit(args: readonly string[], cwd: string): string | null {
 }
 
 export function resolveGitContext(cwd: string): GitContextSnapshot {
+  const storagePaths = resolveStoragePaths(cwd);
   const branchName: string | null = runGit(["branch", "--show-current"], cwd);
   const headSha: string | null = runGit(["rev-parse", "HEAD"], cwd);
 
   return {
-    worktreePath: cwd,
+    worktreePath: storagePaths.worktreeRoot,
     branchName,
     headSha,
   };
@@ -36,6 +38,7 @@ export function persistGitContext(db: Database, git: GitContextSnapshot): void {
     `
     INSERT INTO git_context (
       id,
+      metadata_scope,
       worktree_path,
       branch_name,
       head_sha,
@@ -43,7 +46,8 @@ export function persistGitContext(db: Database, git: GitContextSnapshot): void {
       updated_at,
       version
     ) VALUES (
-      'current',
+      @worktreePath,
+      'worktree',
       @worktreePath,
       @branchName,
       @headSha,
@@ -52,6 +56,7 @@ export function persistGitContext(db: Database, git: GitContextSnapshot): void {
       1
     )
     ON CONFLICT(id) DO UPDATE SET
+      metadata_scope = excluded.metadata_scope,
       worktree_path = excluded.worktree_path,
       branch_name = excluded.branch_name,
       head_sha = excluded.head_sha,
