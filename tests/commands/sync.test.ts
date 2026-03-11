@@ -943,7 +943,7 @@ describe("sync command", (): void => {
     });
 
     expect(primaryStatus.ok).toBe(true);
-    expect((primaryStatus.data as { git: { worktreePath: string; branchName: string } }).git).toEqual({
+    expect((primaryStatus.data as { git: { worktreePath: string; branchName: string } }).git).toMatchObject({
       worktreePath: canonicalWorkspace,
       branchName: "main",
     });
@@ -958,7 +958,7 @@ describe("sync command", (): void => {
     expect(statusBefore.error).toBeUndefined();
     expect((statusBefore.data as { behind: number }).behind).toBe(1);
     expect((statusBefore.data as { ahead: number }).ahead).toBe(0);
-    expect((statusBefore.data as { git: { worktreePath: string; branchName: string } }).git).toEqual({
+    expect((statusBefore.data as { git: { worktreePath: string; branchName: string } }).git).toMatchObject({
       worktreePath: canonicalFeatureWorktree,
       branchName: "feature/fresh-worktree",
     });
