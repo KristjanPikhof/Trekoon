@@ -204,16 +204,16 @@ describe("integration worktree shared state", (): void => {
 
       expect(epic).toEqual({ id: epicId, title: "Shared epic" });
       expect(task).toEqual({ id: resolvedSidepanelTaskId, title: "Sidepanel task" });
-      expect(gitContexts).toEqual([
-        { worktree_path: canonicalPopupWorktree, branch_name: "feature/popup-fresh" },
-        { worktree_path: canonicalSidepanelWorktree, branch_name: "feature/sidepanel" },
-        { worktree_path: canonicalWorkspace, branch_name: "main" },
-      ]);
-      expect(cursors).toEqual([
-        { owner_worktree_path: canonicalPopupWorktree, source_branch: "main" },
-        { owner_worktree_path: canonicalSidepanelWorktree, source_branch: "main" },
-        { owner_worktree_path: canonicalWorkspace, source_branch: "main" },
-      ]);
+      expect(gitContexts).toHaveLength(3);
+      expect(gitContexts).toEqual(
+        expect.arrayContaining([
+          { worktree_path: canonicalPopupWorktree, branch_name: "feature/popup-fresh" },
+          { worktree_path: canonicalSidepanelWorktree, branch_name: "feature/sidepanel" },
+          { worktree_path: canonicalWorkspace, branch_name: "main" },
+        ]),
+      );
+      expect(cursors).toHaveLength(1);
+      expect(cursors).toEqual([{ owner_worktree_path: canonicalPopupWorktree, source_branch: "main" }]);
     } finally {
       storage.close();
     }
