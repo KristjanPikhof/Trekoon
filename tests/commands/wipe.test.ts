@@ -60,6 +60,35 @@ afterEach((): void => {
 });
 
 describe("wipe command", (): void => {
+  test("reports repo-wide wipe scope from the primary worktree", async (): Promise<void> => {
+    const workspace: string = createWorkspace();
+    initializeRepository(workspace);
+    const paths = resolveStoragePaths(workspace);
+
+    const storage = openTrekoonDatabase(workspace);
+    storage.close();
+
+    const result = await runWipe({
+      args: [],
+      cwd: workspace,
+      mode: "toon",
+    });
+
+    expect(result.ok).toBeFalse();
+    expect(result.error?.code).toBe("confirmation_required");
+    expect(result.human).toContain("repo-wide Trekoon state");
+    expect(result.human).toContain("entire repository");
+    expect(result.human).toContain("linked worktrees");
+    expect(result.human).toContain(paths.storageDir);
+    expect(result.data).toMatchObject({
+      confirmed: false,
+      storageDir: paths.storageDir,
+      worktreeRoot: paths.worktreeRoot,
+      sharedStorageRoot: paths.sharedStorageRoot,
+      repoScoped: true,
+    });
+  });
+
   test("warns that wipe removes repo-shared storage from a worktree", async (): Promise<void> => {
     const workspace: string = createWorkspace();
     initializeRepository(workspace);
@@ -77,9 +106,9 @@ describe("wipe command", (): void => {
 
     expect(result.ok).toBeFalse();
     expect(result.error?.code).toBe("confirmation_required");
-    expect(result.human).toContain("shared repository Trekoon state");
+    expect(result.human).toContain("repo-wide Trekoon state");
     expect(result.human).toContain("entire repository");
-    expect(result.human).toContain("other worktrees");
+    expect(result.human).toContain("linked worktrees");
     expect(result.human).toContain(paths.storageDir);
     expect(result.data).toMatchObject({
       confirmed: false,
@@ -87,6 +116,34 @@ describe("wipe command", (): void => {
       worktreeRoot: paths.worktreeRoot,
       sharedStorageRoot: paths.sharedStorageRoot,
       repoScoped: true,
+    });
+  });
+
+  test("wipes repo-wide storage after explicit confirmation in the primary worktree", async (): Promise<void> => {
+    const workspace: string = createWorkspace();
+    initializeRepository(workspace);
+    const paths = resolveStoragePaths(workspace);
+
+    const storage = openTrekoonDatabase(workspace);
+    storage.close();
+    writeFileSync(join(paths.storageDir, "marker.txt"), "shared state\n");
+
+    const result = await runWipe({
+      args: ["--yes"],
+      cwd: workspace,
+      mode: "toon",
+    });
+
+    expect(result.ok).toBeTrue();
+    expect(result.human).toContain("repo-wide Trekoon state");
+    expect(result.human).toContain(paths.storageDir);
+    expect(result.human).toContain(paths.sharedStorageRoot);
+    expect(result.data).toMatchObject({
+      storageDir: paths.storageDir,
+      worktreeRoot: paths.worktreeRoot,
+      sharedStorageRoot: paths.sharedStorageRoot,
+      repoScoped: true,
+      wiped: true,
     });
   });
 
@@ -107,9 +164,10 @@ describe("wipe command", (): void => {
     });
 
     expect(result.ok).toBeTrue();
-    expect(result.human).toContain("shared repository Trekoon state");
+    expect(result.human).toContain("repo-wide Trekoon state");
     expect(result.human).toContain(paths.storageDir);
     expect(result.human).toContain(paths.sharedStorageRoot);
+    expect(result.human).toContain("shared with linked worktrees");
     expect(result.data).toMatchObject({
       storageDir: paths.storageDir,
       worktreeRoot: paths.worktreeRoot,
