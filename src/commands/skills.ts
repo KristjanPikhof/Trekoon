@@ -16,8 +16,6 @@ const EDITOR_NAMES = ["opencode", "claude", "pi"] as const;
 const ALLOW_OUTSIDE_REPO_FLAG = "allow-outside-repo";
 
 type EditorName = (typeof EDITOR_NAMES)[number];
-type LinkStateStatus = "missing" | "valid" | "conflict";
-
 interface InstallOutcome {
   readonly sourcePath: string;
   readonly installedPath: string;
