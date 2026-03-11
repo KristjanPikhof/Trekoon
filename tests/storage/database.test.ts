@@ -1,14 +1,19 @@
 import { execFileSync } from "node:child_process";
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
 import { Database } from "bun:sqlite";
 import { afterEach, describe, expect, test } from "bun:test";
 
+import { DomainError } from "../../src/domain/types";
 import { openTrekoonDatabase } from "../../src/storage/database";
 import { migrateDatabase, rollbackDatabase } from "../../src/storage/migrations";
-import { resolveStoragePaths } from "../../src/storage/path";
+import {
+  resolveLegacyWorktreeDatabaseFile,
+  resolveStoragePaths,
+  TREKOON_STORAGE_DIRNAME,
+} from "../../src/storage/path";
 
 const tempDirs: string[] = [];
 
@@ -53,6 +58,41 @@ function indexNames(db: ReturnType<typeof openTrekoonDatabase>["db"]): string[] 
     .all() as Array<{ name: string }>;
 
   return rows.map((row) => row.name);
+}
+
+function createLegacyDatabaseFile(workspace: string, title: string): string {
+  const databaseFile: string = resolveLegacyWorktreeDatabaseFile(workspace);
+  mkdirSync(join(workspace, TREKOON_STORAGE_DIRNAME), { recursive: true });
+  const db = new Database(databaseFile, { create: true });
+
+  try {
+    migrateDatabase(db);
+    db.exec("PRAGMA foreign_keys = ON;");
+    db.query("INSERT INTO epics (id, title, description, status, created_at, updated_at, version) VALUES (?, ?, ?, ?, ?, ?, ?);").run(
+      `epic-${title}`,
+      title,
+      `Legacy ${title}`,
+      "todo",
+      1,
+      1,
+      1,
+    );
+  } finally {
+    db.close(false);
+  }
+
+  return databaseFile;
+}
+
+function listEpicTitles(databaseFile: string): string[] {
+  const db = new Database(databaseFile, { create: false, readonly: true });
+
+  try {
+    const rows = db.query("SELECT title FROM epics ORDER BY title ASC;").all() as Array<{ title: string }>;
+    return rows.map((row) => row.title);
+  } finally {
+    db.close(false);
+  }
 }
 
 describe("storage lifecycle", (): void => {
@@ -126,6 +166,134 @@ describe("storage lifecycle", (): void => {
     } finally {
       secondaryStorage.close();
       primaryStorage.close();
+    }
+  });
+
+  test("reports no legacy recovery work when shared state is clean", (): void => {
+    const workspace: string = createWorkspace();
+    createCommittedGitRepository(workspace);
+    const storage = openTrekoonDatabase(workspace);
+
+    try {
+      expect(storage.diagnostics.recoveryStatus).toBe("no_legacy_state");
+      expect(storage.diagnostics.legacyStateDetected).toBe(false);
+      expect(storage.diagnostics.recoveryRequired).toBe(false);
+    } finally {
+      storage.close();
+    }
+  });
+
+  test("imports a single legacy worktree database into shared storage", (): void => {
+    const workspace: string = createWorkspace();
+    createCommittedGitRepository(workspace);
+    const linkedWorktree: string = createWorkspace();
+
+    execFileSync("git", ["worktree", "add", "-b", "storage-import-test", linkedWorktree, "HEAD"], {
+      cwd: workspace,
+      stdio: "ignore",
+    });
+
+    const legacyDatabaseFile: string = createLegacyDatabaseFile(linkedWorktree, "linked-worktree");
+    const sharedDatabaseFile: string = resolveStoragePaths(linkedWorktree).databaseFile;
+
+    expect(existsSync(sharedDatabaseFile)).toBe(false);
+
+    const storage = openTrekoonDatabase(linkedWorktree);
+
+    try {
+      expect(storage.diagnostics.recoveryStatus).toBe("safe_auto_migrate");
+      expect(storage.diagnostics.autoMigratedLegacyState).toBe(true);
+      expect(storage.diagnostics.importedFromLegacyDatabase).toBe(legacyDatabaseFile);
+      expect(storage.diagnostics.backupFiles).toHaveLength(1);
+      expect(existsSync(storage.diagnostics.backupFiles[0]!)).toBe(true);
+      expect(listEpicTitles(sharedDatabaseFile)).toEqual(["linked-worktree"]);
+    } finally {
+      storage.close();
+    }
+  });
+
+  test("imports identical legacy databases from multiple worktrees once", (): void => {
+    const workspace: string = createWorkspace();
+    createCommittedGitRepository(workspace);
+    const linkedWorktreeA: string = createWorkspace();
+    const linkedWorktreeB: string = createWorkspace();
+
+    execFileSync("git", ["worktree", "add", "-b", "storage-identical-a", linkedWorktreeA, "HEAD"], {
+      cwd: workspace,
+      stdio: "ignore",
+    });
+    execFileSync("git", ["worktree", "add", "-b", "storage-identical-b", linkedWorktreeB, "HEAD"], {
+      cwd: workspace,
+      stdio: "ignore",
+    });
+
+    createLegacyDatabaseFile(linkedWorktreeA, "same-state");
+    createLegacyDatabaseFile(linkedWorktreeB, "same-state");
+
+    const storage = openTrekoonDatabase(linkedWorktreeA);
+
+    try {
+      expect(storage.diagnostics.recoveryStatus).toBe("safe_auto_migrate");
+      expect(storage.diagnostics.autoMigratedLegacyState).toBe(true);
+      expect(storage.diagnostics.legacyDatabaseFiles).toHaveLength(2);
+      expect(storage.diagnostics.backupFiles).toHaveLength(2);
+      expect(listEpicTitles(storage.paths.databaseFile)).toEqual(["same-state"]);
+    } finally {
+      storage.close();
+    }
+  });
+
+  test("refuses to merge divergent legacy worktree databases", (): void => {
+    const workspace: string = createWorkspace();
+    createCommittedGitRepository(workspace);
+    const linkedWorktreeA: string = createWorkspace();
+    const linkedWorktreeB: string = createWorkspace();
+
+    execFileSync("git", ["worktree", "add", "-b", "storage-divergent-a", linkedWorktreeA, "HEAD"], {
+      cwd: workspace,
+      stdio: "ignore",
+    });
+    execFileSync("git", ["worktree", "add", "-b", "storage-divergent-b", linkedWorktreeB, "HEAD"], {
+      cwd: workspace,
+      stdio: "ignore",
+    });
+
+    createLegacyDatabaseFile(linkedWorktreeA, "first-state");
+    createLegacyDatabaseFile(linkedWorktreeB, "second-state");
+
+    expect((): void => {
+      openTrekoonDatabase(linkedWorktreeA);
+    }).toThrow(DomainError);
+
+    try {
+      openTrekoonDatabase(linkedWorktreeA);
+    } catch (error: unknown) {
+      expect(error).toBeInstanceOf(DomainError);
+      const domainError = error as DomainError;
+      expect(domainError.code).toBe("ambiguous_legacy_state");
+      expect(domainError.details?.status).toBe("ambiguous_recovery");
+    }
+  });
+
+  test("blocks tracked .trekoon files that conflict with ignored storage", (): void => {
+    const workspace: string = createWorkspace();
+    createCommittedGitRepository(workspace);
+    mkdirSync(join(workspace, TREKOON_STORAGE_DIRNAME), { recursive: true });
+    const trackedFile: string = join(workspace, TREKOON_STORAGE_DIRNAME, "tracked.txt");
+    writeFileSync(trackedFile, "tracked state\n", "utf8");
+    execFileSync("git", ["add", "-f", trackedFile], { cwd: workspace, stdio: "ignore" });
+
+    expect((): void => {
+      openTrekoonDatabase(workspace);
+    }).toThrow(DomainError);
+
+    try {
+      openTrekoonDatabase(workspace);
+    } catch (error: unknown) {
+      expect(error).toBeInstanceOf(DomainError);
+      const domainError = error as DomainError;
+      expect(domainError.code).toBe("tracked_ignored_mismatch");
+      expect(domainError.details?.trackedStorageFiles).toEqual([trackedFile]);
     }
   });
 
