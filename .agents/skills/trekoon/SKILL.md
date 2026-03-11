@@ -25,55 +25,52 @@ pick the right command with the fewest reads and mutations.
 
 ## Default agent loop
 
-Run this loop each session:
+The primary loop is: **session → work → task done → repeat**.
 
-1. Bootstrap and inspect storage diagnostics:
+### 1. Orient with a single call
 
-   ```bash
-   trekoon --toon init
-   ```
+```bash
+trekoon --toon session
+```
 
-   Fail fast if machine output reports `recoveryRequired`, tracked/ignored
-   storage mismatch, ambiguous recovery, or any other bootstrap/storage error.
-   In linked worktrees, `sharedStorageRoot` may differ from `worktreeRoot`; that
-   is expected because the repo shares one DB across checkouts.
+`session` replaces the old five-call bootstrap sequence
+(init + sync status + task next + dep list + task show) with a single DB open.
+It returns diagnostics, sync status, the full next-task tree with subtasks, blocker
+list, and readiness counts in one envelope.
 
-   On a feature branch, also check sync status to see if you are behind the
-   base branch:
+Fail fast if the envelope reports `recoveryRequired`, a storage mismatch, or any
+bootstrap error. In linked worktrees, `sharedStorageRoot` may differ from
+`worktreeRoot`; that is expected because the repo shares one DB across checkouts.
 
-   ```bash
-   trekoon --toon sync status
-   ```
+### 2. Claim work explicitly
 
-   Same-branch sync status (e.g., on `main` checking `main`) always returns
-   `behind=0` and requires no action.
+```bash
+trekoon --toon task update <task-id> --status in_progress
+```
 
-2. Pick the next item deterministically once diagnostics are clean:
+### 3. Finish or report a block
 
-   ```bash
-   trekoon --toon task next
-   trekoon --toon task ready --limit 5
-   ```
+```bash
+trekoon --toon task done <task-id>
+trekoon --toon task update <task-id> --append "Blocked by <reason>" --status blocked
+```
 
-3. Inspect dependencies or downstream impact when needed:
+`task done` replaces the old three-call transition sequence
+(mark done + get next + load deps + show task) with a single call that marks the
+task done and returns the next ready candidate with its full tree and blockers.
 
-   ```bash
-   trekoon --toon dep list <task-id>
-   trekoon --toon dep reverse <task-or-subtask-id>
-   ```
+Append a completion note before calling `task done` when useful:
 
-4. Claim work explicitly:
+```bash
+trekoon --toon task update <task-id> --append "Completed implementation and checks"
+trekoon --toon task done <task-id>
+```
 
-   ```bash
-   trekoon --toon task update <task-id> --status in_progress
-   ```
+### 4. Repeat
 
-5. Finish or report a block with appended context:
-
-   ```bash
-   trekoon --toon task update <task-id> --append "Completed implementation and checks" --status done
-   trekoon --toon task update <task-id> --append "Blocked by <reason>" --status blocked
-   ```
+Run `session` again at the start of each new session. After `task done`, the
+returned next-task envelope is sufficient to continue; a fresh `session` call is
+not required mid-loop unless you need updated diagnostics or sync status.
 
 Recommended statuses for consistent workflows: `todo`, `in_progress`, `done`.
 
