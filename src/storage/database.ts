@@ -1,10 +1,10 @@
-import { existsSync, mkdirSync } from "node:fs";
-import { resolve } from "node:path";
+import { mkdirSync } from "node:fs";
 
 import { Database } from "bun:sqlite";
 
 import { migrateDatabase } from "./migrations";
 import { resolveStoragePaths, type StoragePaths } from "./path";
+import { recoverWorktreeDatabaseState, type WorktreeRecoveryDiagnostics } from "./worktree-recovery";
 
 export interface StorageResolutionDiagnostics {
   readonly invocationCwd: string;
@@ -15,6 +15,13 @@ export interface StorageResolutionDiagnostics {
   readonly databaseFile: string;
   readonly legacyStateDetected: boolean;
   readonly recoveryRequired: boolean;
+  readonly recoveryStatus: WorktreeRecoveryDiagnostics["status"];
+  readonly legacyDatabaseFiles: readonly string[];
+  readonly backupFiles: readonly string[];
+  readonly trackedStorageFiles: readonly string[];
+  readonly autoMigratedLegacyState: boolean;
+  readonly importedFromLegacyDatabase: string | null;
+  readonly operatorAction: string;
 }
 
 export interface TrekoonDatabase {
@@ -33,10 +40,10 @@ export function openTrekoonDatabase(
   options: OpenTrekoonDatabaseOptions = {},
 ): TrekoonDatabase {
   const paths: StoragePaths = resolveStoragePaths(workingDirectory);
-  const legacyDatabaseFile: string = resolve(paths.worktreeRoot, ".trekoon", "trekoon.db");
-  const legacyStateDetected: boolean =
-    legacyDatabaseFile !== paths.databaseFile && existsSync(legacyDatabaseFile);
-  const recoveryRequired: boolean = legacyStateDetected && !existsSync(paths.databaseFile);
+  const recovery: WorktreeRecoveryDiagnostics = recoverWorktreeDatabaseState(paths);
+  const legacyStateDetected: boolean = recovery.legacyDatabaseFiles.length > 0;
+  const recoveryRequired: boolean =
+    recovery.status === "ambiguous_recovery" || recovery.status === "tracked_ignored_mismatch";
   const diagnostics: StorageResolutionDiagnostics = {
     invocationCwd: paths.invocationCwd,
     storageMode: paths.storageMode,
@@ -46,6 +53,13 @@ export function openTrekoonDatabase(
     databaseFile: paths.databaseFile,
     legacyStateDetected,
     recoveryRequired,
+    recoveryStatus: recovery.status,
+    legacyDatabaseFiles: recovery.legacyDatabaseFiles,
+    backupFiles: recovery.backupFiles,
+    trackedStorageFiles: recovery.trackedStorageFiles,
+    autoMigratedLegacyState: recovery.autoMigrated,
+    importedFromLegacyDatabase: recovery.importedFrom,
+    operatorAction: recovery.operatorAction,
   };
 
   mkdirSync(paths.storageDir, { recursive: true });
