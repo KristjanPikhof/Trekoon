@@ -681,10 +681,10 @@ export function syncStatus(cwd: string, sourceBranch: string): SyncStatusSummary
 
 export function syncPull(cwd: string, sourceBranch: string): PullSummary {
   const storage = openTrekoonDatabase(cwd);
-  const git = resolveGitContext(cwd);
-  persistGitContext(storage.db, git);
 
   try {
+    const git = resolveGitContext(cwd);
+    persistGitContext(storage.db, git);
     const cursor = loadCursor(storage.db, git.worktreePath, sourceBranch);
     const cursorToken = cursor?.cursor_token ?? "0:";
     const incomingEvents: StoredEvent[] = queryBranchEventsSince(storage.db, sourceBranch, cursorToken) as StoredEvent[];
