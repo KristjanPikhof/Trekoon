@@ -18,22 +18,67 @@ All notable changes to Trekoon are documented in this file.
 - `trekoon session` command: single-call agent orientation that returns
   diagnostics, sync status, next ready task with subtasks, blocker list, and
   readiness counts. Replaces the five-call bootstrap sequence
-  (init + sync status + task next + dep list + task show).
+  (`init + sync status + task next + dep list + task show`).
 - `trekoon task done <id>` subcommand: marks a task done and returns the next
   ready task with dependencies inline. Replaces the three-call task transition
-  sequence (update status + task next + dep list).
-- Shared `task-readiness.ts` module extracted from task.ts so session and task
-  done reuse the same readiness logic.
+  sequence (`update status + task next + dep list`).
+- Shared `task-readiness.ts` module extracted from `task.ts` so `session` and
+  `task done` use the same blocker/readiness logic.
 
 ### Changed
 
 - SKILL.md agent loop updated to use `session → work → task done → repeat`.
-- Quickstart output updated to reflect session and task done as primary flow.
-- Help text includes session command documentation.
+- Quickstart and preferred agent startup flow now begin with `session`.
+- Help text and command registry were updated to surface the new session flow.
 
-## 0.2.2 - 0.2.3
+### Fixed
 
-Bug fixes with worktrees
+- Corrected readiness sourcing in `session` output so blockers and next-step
+  data come from the same readiness model used by task transitions.
+
+## 0.2.3
+
+### Fixed
+
+- `trekoon sync status` and `trekoon sync pull` now recognize when local and
+  remote refer to the same branch and avoid unnecessary conflict detection.
+- Sync pull cursor advancement is preserved correctly for same-branch flows.
+
+### Added
+
+- `sameBranch` metadata in sync status and pull summaries for machine-readable
+  branch identity reporting.
+
+### Changed
+
+- Sync status output is clearer and easier to read.
+- Documentation now explains same-branch sync behavior and merge-sync
+  handling.
+
+## 0.2.2
+
+### Fixed
+
+- Reworked Trekoon's storage model for linked Git worktrees so shared state is
+  anchored at the repository root instead of being inferred per worktree.
+- Fixed sync metadata handling for worktrees by scoping metadata correctly and
+  migrating older layouts forward.
+- Fixed startup, init, and sync behavior when repositories contain legacy,
+  split, or partially migrated storage state.
+
+### Added
+
+- Recovery diagnostics in `trekoon init` and shell startup so agents can see
+  storage location, recovery state, and sync bootstrap issues directly.
+- Recovery safeguards for ambiguous legacy layouts, WAL-backed databases, and
+  backup path handling.
+
+### Changed
+
+- Help text, quickstart output, README, CONTRIBUTING guidance, and gitignore
+  documentation now describe the shared-storage worktree model more clearly.
+- `trekoon wipe` messaging now makes repository scope and safety constraints
+  explicit.
 
 ## 0.2.1
 
