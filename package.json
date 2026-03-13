@@ -9,6 +9,7 @@
   },
   "files": [
     "bin",
+    "docs",
     "src",
     ".agents/skills/trekoon/SKILL.md",
     "README.md",
