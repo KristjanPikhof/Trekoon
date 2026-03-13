@@ -6,10 +6,6 @@ All notable changes to Trekoon are documented in this file.
 
 ### Fixed
 
-- `trekoon skills update` now auto-creates and refreshes editor symlinks for
-  editors whose config directories exist (`.claude/`, `.opencode/`, `.pi/`).
-  Previously it only refreshed the canonical file and passively reported link
-  states, leaving editors with stale or missing links.
 - `trekoon skills install` and `trekoon skills update` now write relative
   editor symlink targets instead of absolute paths, so repo-local skill links
   continue working after the repository is moved.
@@ -18,6 +14,28 @@ All notable changes to Trekoon are documented in this file.
 
 - README skill-install documentation now matches the actual install/update link
   behavior, including relative symlink targets and update-time link refreshes.
+- Trekoon SKILL workflow guidance now tells agents to run
+  `trekoon sync pull --from main` before claiming work when `session` reports
+  `behind > 0`, and clarifies that this syncs tracker events rather than git
+  commits.
+
+## 0.2.5
+
+### Fixed
+
+- `trekoon skills update` now auto-creates and refreshes editor symlinks for
+  editors whose config directories exist (`.claude/`, `.opencode/`, `.pi/`).
+  Previously it only refreshed the canonical file and passively reported link
+  states, leaving editors with stale or missing links.
+
+### Changed
+
+- `trekoon skills update` output now reports concrete editor link actions
+  (`created`, `refreshed`, `skipped_conflict`, `skipped_no_editor_dir`) instead
+  of passive state labels, matching the command's active link-management
+  behavior.
+- Help text for `trekoon skills update` now explains automatic editor-link
+  refreshes, skipped editors with no config dir, and conflict handling.
 
 ## 0.2.4
 
@@ -62,6 +80,8 @@ All notable changes to Trekoon are documented in this file.
 - Sync status output is clearer and easier to read.
 - Documentation now explains same-branch sync behavior and merge-sync
   handling.
+- Trekoon SKILL documentation now describes valid compact-spec escaping rules,
+  accepted escape sequences, and shell pitfalls for batch planning inputs.
 
 ## 0.2.2
 
