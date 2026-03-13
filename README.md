@@ -608,16 +608,18 @@ Path behavior:
 - `--to <path>` overrides the editor root for link creation only.
 - `--to` does **not** move or copy `SKILL.md` to that path.
 - By default, link targets must resolve inside the current working directory root.
+- Editor symlinks are written with relative targets so repo-local links survive
+  moving the repository.
 - Use `--allow-outside-repo` only for intentional external links.
 - When override is used, install prints a warning and includes confirmation
   fields in machine output.
 - Re-running install is idempotent: it refreshes `SKILL.md` and reuses/replaces
   the same symlink target.
 - `trekoon skills update` is idempotent: it refreshes canonical
-  `.agents/skills/trekoon/SKILL.md` and reports default link states for
-  opencode/claude/pi as `missing`, `valid`, or `conflict`.
-- Update does not mutate default links; conflicts are reported with actionable
-  path context.
+  `.agents/skills/trekoon/SKILL.md` and creates or refreshes default editor
+  links when their config directories exist.
+- Update skips editors with no config dir and leaves conflicts untouched while
+  reporting actionable path context.
 - If the link destination exists as a non-link path, install fails with an
   actionable conflict error.
 
@@ -628,7 +630,7 @@ How `--to` works (step-by-step):
 2. If `--link` is present, Trekoon creates a `trekoon` symlink directory entry.
 3. `--to <path>` sets the symlink root directory.
 4. Final link path is:
-   - `<resolved-to-path>/trekoon -> <cwd>/.agents/skills/trekoon`
+   - `<resolved-to-path>/trekoon -> <relative path to <cwd>/.agents/skills/trekoon>`
 
 Example:
 
@@ -640,7 +642,7 @@ This produces:
 
 - `<cwd>/.agents/skills/trekoon/SKILL.md` (copied file)
 - `<cwd>/.custom-editor/skills/trekoon` (symlink)
-- symlink target: `<cwd>/.agents/skills/trekoon`
+- symlink target: relative path to `<cwd>/.agents/skills/trekoon`
 
 Trekoon does not mutate global editor config directories.
 
