@@ -10,7 +10,7 @@ import {
   writeFileSync,
 } from "node:fs";
 import { tmpdir } from "node:os";
-import { dirname, join, resolve } from "node:path";
+import { dirname, join, relative, resolve } from "node:path";
 
 import { afterEach, describe, expect, test } from "bun:test";
 
@@ -97,6 +97,7 @@ describe("skills command", (): void => {
     expect(opencodeData.linkPath).toBe(join(cwd, ".opencode", "skills", "trekoon"));
     expect(opencodeData.linkTarget).toBe(opencodeData.installedDir);
     expect(lstatSync(opencodeData.linkPath).isSymbolicLink()).toBeTrue();
+    expect(readlinkSync(opencodeData.linkPath)).toBe(relative(dirname(opencodeData.linkPath), opencodeData.installedDir));
     expect(resolve(dirname(opencodeData.linkPath), readlinkSync(opencodeData.linkPath))).toBe(opencodeData.installedDir);
 
     const claudeResult = await runSkills({
@@ -116,6 +117,7 @@ describe("skills command", (): void => {
     expect(claudeData.linkPath).toBe(join(cwd, ".claude", "skills", "trekoon"));
     expect(claudeData.linkTarget).toBe(claudeData.installedDir);
     expect(lstatSync(claudeData.linkPath).isSymbolicLink()).toBeTrue();
+    expect(readlinkSync(claudeData.linkPath)).toBe(relative(dirname(claudeData.linkPath), claudeData.installedDir));
     expect(resolve(dirname(claudeData.linkPath), readlinkSync(claudeData.linkPath))).toBe(claudeData.installedDir);
 
     const piResult = await runSkills({
@@ -135,6 +137,7 @@ describe("skills command", (): void => {
     expect(piData.linkPath).toBe(join(cwd, ".pi", "skills", "trekoon"));
     expect(piData.linkTarget).toBe(piData.installedDir);
     expect(lstatSync(piData.linkPath).isSymbolicLink()).toBeTrue();
+    expect(readlinkSync(piData.linkPath)).toBe(relative(dirname(piData.linkPath), piData.installedDir));
     expect(resolve(dirname(piData.linkPath), readlinkSync(piData.linkPath))).toBe(piData.installedDir);
   });
 
@@ -158,6 +161,7 @@ describe("skills command", (): void => {
     expect(linkedData.linked).toBeTrue();
     expect(linkedData.linkPath).toBe(join(customRoot, "trekoon"));
     expect(linkedData.linkTarget).toBe(linkedData.installedDir);
+    expect(readlinkSync(linkedData.linkPath)).toBe(relative(dirname(linkedData.linkPath), linkedData.installedDir));
 
     const conflictCwd = createWorkspace();
     const conflictPath = join(conflictCwd, ".claude", "skills", "trekoon");
@@ -323,12 +327,14 @@ describe("skills command", (): void => {
     expect(opencodeState?.action).toBe("refreshed");
     expect(opencodeState?.existingTarget).toBe(updatedData.installedDir);
     expect(lstatSync(opencodeState!.linkPath).isSymbolicLink()).toBeTrue();
+    expect(readlinkSync(opencodeState!.linkPath)).toBe(relative(dirname(opencodeState!.linkPath), updatedData.installedDir));
 
     // claude had config dir but no link, should be created
     expect(claudeState).toBeDefined();
     expect(claudeState?.action).toBe("created");
     expect(claudeState?.existingTarget).toBeNull();
     expect(lstatSync(claudeState!.linkPath).isSymbolicLink()).toBeTrue();
+    expect(readlinkSync(claudeState!.linkPath)).toBe(relative(dirname(claudeState!.linkPath), updatedData.installedDir));
     expect(resolve(dirname(claudeState!.linkPath), readlinkSync(claudeState!.linkPath))).toBe(updatedData.installedDir);
 
     // pi had non-link conflict, should be skipped
