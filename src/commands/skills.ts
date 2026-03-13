@@ -215,6 +215,11 @@ function resolveDefaultLinkPath(cwd: string, editor: EditorName): string {
   return join(resolveLinkRoot(cwd, editor, undefined), "trekoon");
 }
 
+function toRelativeSymlinkTarget(linkPath: string, targetPath: string): string {
+  const relativeTarget: string = relative(dirname(linkPath), resolve(targetPath));
+  return relativeTarget === "" ? "." : relativeTarget;
+}
+
 function resolveEditorConfigDir(cwd: string, editor: EditorName): string {
   if (editor === "opencode") {
     return join(cwd, ".opencode");
@@ -279,13 +284,15 @@ function replaceOrCreateSymlink(
   repoRoot: string,
   allowOutsideRepo: boolean,
 ): CliResult | null {
+  const symlinkTarget: string = toRelativeSymlinkTarget(linkPath, targetPath);
+
   if (!existsSync(linkPath)) {
     mkdirSync(dirname(linkPath), { recursive: true });
     const boundaryFailure = revalidateLinkParentBoundary(repoRoot, linkPath, allowOutsideRepo);
     if (boundaryFailure) {
       return boundaryFailure;
     }
-    symlinkSync(targetPath, linkPath, "dir");
+    symlinkSync(symlinkTarget, linkPath, "dir");
     return null;
   }
 
@@ -331,7 +338,7 @@ function replaceOrCreateSymlink(
   if (boundaryFailure) {
     return boundaryFailure;
   }
-  symlinkSync(targetPath, linkPath, "dir");
+  symlinkSync(symlinkTarget, linkPath, "dir");
   return null;
 }
 
@@ -489,6 +496,7 @@ function updateEditorLink(
 ): UpdateLinkEntry {
   const linkPath: string = resolveDefaultLinkPath(cwd, editor);
   const expectedTarget: string = resolve(installedDir);
+  const symlinkTarget: string = toRelativeSymlinkTarget(linkPath, expectedTarget);
   const editorConfigDir: string = resolveEditorConfigDir(cwd, editor);
 
   if (!existsSync(editorConfigDir)) {
@@ -504,7 +512,7 @@ function updateEditorLink(
 
   if (!existsSync(linkPath)) {
     mkdirSync(dirname(linkPath), { recursive: true });
-    symlinkSync(expectedTarget, linkPath, "dir");
+    symlinkSync(symlinkTarget, linkPath, "dir");
     return {
       editor,
       linkPath,
@@ -542,7 +550,7 @@ function updateEditorLink(
   }
 
   rmSync(linkPath, { force: true });
-  symlinkSync(expectedTarget, linkPath, "dir");
+  symlinkSync(symlinkTarget, linkPath, "dir");
   return {
     editor,
     linkPath,
