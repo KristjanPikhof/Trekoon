@@ -2,7 +2,7 @@
 
 All notable changes to Trekoon are documented in this file.
 
-## 0.2.5
+## 0.2.6
 
 ### Fixed
 
@@ -10,6 +10,14 @@ All notable changes to Trekoon are documented in this file.
   editors whose config directories exist (`.claude/`, `.opencode/`, `.pi/`).
   Previously it only refreshed the canonical file and passively reported link
   states, leaving editors with stale or missing links.
+- `trekoon skills install` and `trekoon skills update` now write relative
+  editor symlink targets instead of absolute paths, so repo-local skill links
+  continue working after the repository is moved.
+
+### Changed
+
+- README skill-install documentation now matches the actual install/update link
+  behavior, including relative symlink targets and update-time link refreshes.
 
 ## 0.2.4
 
