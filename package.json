@@ -1,6 +1,6 @@
 {
   "name": "trekoon",
-  "version": "0.2.5",
+  "version": "0.2.6",
   "description": "AI-first local issue tracker CLI.",
   "license": "MIT",
   "type": "module",
