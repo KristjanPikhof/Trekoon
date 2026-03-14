@@ -59,10 +59,15 @@ These defaults apply to `epic list`, `task list`, and `subtask list`:
 - All rows and statuses: `--all`
 - `--all` is mutually exclusive with `--status`, `--limit`, and `--cursor`
 
-## Bulk updates
+## Update modes
 
-Bulk updates are available for `epic update`, `task update`, and
-`subtask update`.
+`epic update`, `task update`, and `subtask update` now have two meanings for
+`--all`, depending on whether you also pass a positional ID.
+
+### Repo-wide bulk mode
+
+Use `update --all` or `update --ids <csv>` when you want to target multiple
+top-level rows directly.
 
 - Target all rows: `--all`
 - Target specific rows: `--ids <id1,id2,...>`
@@ -79,6 +84,36 @@ trekoon task update --ids <task-1>,<task-2> --append "\nFollow-up note"
 trekoon subtask update --all --status done
 trekoon subtask update --ids <subtask-1>,<subtask-2> --append "\nFollow-up note"
 trekoon epic update --ids <epic-1>,<epic-2> --status done
+```
+
+### Descendant cascade mode
+
+Use positional-ID `update <id> --all --status done|todo` when you want to close
+or reopen a whole tree from one root.
+
+- `trekoon epic update <epic-id> --all --status done|todo`
+  - updates the epic and all descendant tasks/subtasks in one atomic operation
+- `trekoon task update <task-id> --all --status done|todo`
+  - updates the task and all descendant subtasks in one atomic operation
+- `trekoon subtask update <subtask-id> --all --status done|todo`
+  - accepts the same syntax for consistency, but behaves like a normal
+    single-subtask status update because there are no descendants
+- Positional-ID cascade mode supports only `--status done|todo`
+- Do not combine positional ID + `--all` with `--ids`, `--append`,
+  `--description`, or `--title`
+- For epic/task cascades, unresolved external dependencies abort the whole
+  update with `dependency_blocked`; no partial writes are committed
+- Successful machine output includes `data.cascade` with the root, target
+  status, atomic flag, changed IDs, unchanged IDs, and per-kind counts
+
+Examples:
+
+```bash
+trekoon epic update <epic-id> --all --status done
+trekoon epic update <epic-id> --all --status todo
+trekoon task update <task-id> --all --status done
+trekoon task update <task-id> --all --status todo
+trekoon subtask update <subtask-id> --all --status done
 ```
 
 ## Related docs
