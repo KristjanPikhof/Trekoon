@@ -673,6 +673,184 @@ describe("task command", (): void => {
     expect(result.error?.code).toBe("invalid_input");
   });
 
+  test("update <id> --all --status done cascades subtasks with machine metadata", async (): Promise<void> => {
+    const cwd = createWorkspace();
+    const epicCreated = await runEpic({
+      cwd,
+      mode: "toon",
+      args: ["create", "--title", "Roadmap", "--description", "desc"],
+    });
+    const epicId = (epicCreated.data as { epic: { id: string } }).epic.id;
+
+    const createdTask = await runTask({
+      cwd,
+      mode: "toon",
+      args: ["create", "--epic", epicId, "--title", "Implement", "--description", "build it", "--status", "todo"],
+    });
+    const taskId = (createdTask.data as { task: { id: string } }).task.id;
+    const todoSubtask = await runSubtask({
+      cwd,
+      mode: "toon",
+      args: ["create", "--task", taskId, "--title", "Write tests", "--status", "todo"],
+    });
+    const todoSubtaskId = (todoSubtask.data as { subtask: { id: string } }).subtask.id;
+    const doneSubtask = await runSubtask({
+      cwd,
+      mode: "toon",
+      args: ["create", "--task", taskId, "--title", "Ship docs", "--status", "done"],
+    });
+    const doneSubtaskId = (doneSubtask.data as { subtask: { id: string } }).subtask.id;
+
+    const updated = await runTask({ cwd, mode: "toon", args: ["update", taskId, "--all", "--status", "done"] });
+    expect(updated.ok).toBeTrue();
+
+    const data = updated.data as {
+      task: { status: string };
+      cascade: {
+        mode: string;
+        root: { kind: string; id: string };
+        targetStatus: string;
+        atomic: boolean;
+        changedIds: string[];
+        unchangedIds: string[];
+        counts: {
+          scope: number;
+          changed: number;
+          unchanged: number;
+          changedTasks: number;
+          changedSubtasks: number;
+        };
+      };
+    };
+    expect(data.task.status).toBe("done");
+    expect(data.cascade).toMatchObject({
+      mode: "descendants",
+      root: { kind: "task", id: taskId },
+      targetStatus: "done",
+      atomic: true,
+      counts: {
+        scope: 3,
+        changed: 2,
+        unchanged: 1,
+        changedTasks: 1,
+        changedSubtasks: 1,
+      },
+    });
+    expect(data.cascade.changedIds).toEqual(expect.arrayContaining([taskId, todoSubtaskId]));
+    expect(data.cascade.unchangedIds).toEqual([doneSubtaskId]);
+
+    const shown = await runTask({ cwd, mode: "toon", args: ["show", taskId] });
+    expect(shown.ok).toBeTrue();
+    expect((shown.data as { task: { status: string; subtasks: Array<{ status: string }> } }).task).toMatchObject({
+      status: "done",
+      subtasks: [{ status: "done" }, { status: "done" }],
+    });
+  });
+
+  test("update <id> --all --status todo resets done descendants", async (): Promise<void> => {
+    const cwd = createWorkspace();
+    const epicCreated = await runEpic({
+      cwd,
+      mode: "toon",
+      args: ["create", "--title", "Roadmap", "--description", "desc"],
+    });
+    const epicId = (epicCreated.data as { epic: { id: string } }).epic.id;
+
+    const createdTask = await runTask({
+      cwd,
+      mode: "toon",
+      args: ["create", "--epic", epicId, "--title", "Implement", "--description", "build it", "--status", "done"],
+    });
+    const taskId = (createdTask.data as { task: { id: string } }).task.id;
+    await runSubtask({ cwd, mode: "toon", args: ["create", "--task", taskId, "--title", "Write tests", "--status", "done"] });
+    await runSubtask({ cwd, mode: "toon", args: ["create", "--task", taskId, "--title", "Ship docs", "--status", "done"] });
+
+    const updated = await runTask({ cwd, mode: "toon", args: ["update", taskId, "--all", "--status", "todo"] });
+    expect(updated.ok).toBeTrue();
+    expect((updated.data as { cascade: { targetStatus: string; counts: { changed: number } } }).cascade).toMatchObject({
+      targetStatus: "todo",
+      counts: { changed: 3 },
+    });
+
+    const shown = await runTask({ cwd, mode: "toon", args: ["show", taskId] });
+    expect(shown.ok).toBeTrue();
+    expect((shown.data as { task: { status: string; subtasks: Array<{ status: string }> } }).task).toMatchObject({
+      status: "todo",
+      subtasks: [{ status: "todo" }, { status: "todo" }],
+    });
+  });
+
+  test("update <id> --all rejects non-status cascade fields", async (): Promise<void> => {
+    const cwd = createWorkspace();
+    const epicCreated = await runEpic({
+      cwd,
+      mode: "toon",
+      args: ["create", "--title", "Roadmap", "--description", "desc"],
+    });
+    const epicId = (epicCreated.data as { epic: { id: string } }).epic.id;
+    const createdTask = await runTask({
+      cwd,
+      mode: "toon",
+      args: ["create", "--epic", epicId, "--title", "Implement", "--description", "build it"],
+    });
+    const taskId = (createdTask.data as { task: { id: string } }).task.id;
+
+    const missingStatus = await runTask({ cwd, mode: "toon", args: ["update", taskId, "--all"] });
+    expect(missingStatus.ok).toBeFalse();
+    expect(missingStatus.error?.code).toBe("invalid_input");
+
+    const withAppend = await runTask({
+      cwd,
+      mode: "toon",
+      args: ["update", taskId, "--all", "--status", "done", "--append", "note"],
+    });
+    expect(withAppend.ok).toBeFalse();
+    expect(withAppend.error?.code).toBe("invalid_input");
+  });
+
+  test("update <id> --all fails atomically when descendant has external blocker", async (): Promise<void> => {
+    const cwd = createWorkspace();
+    const epicCreated = await runEpic({
+      cwd,
+      mode: "toon",
+      args: ["create", "--title", "Roadmap", "--description", "desc"],
+    });
+    const epicId = (epicCreated.data as { epic: { id: string } }).epic.id;
+
+    const targetTask = await runTask({
+      cwd,
+      mode: "toon",
+      args: ["create", "--epic", epicId, "--title", "Implement", "--description", "build it", "--status", "todo"],
+    });
+    const taskId = (targetTask.data as { task: { id: string } }).task.id;
+    const blockedSubtask = await runSubtask({
+      cwd,
+      mode: "toon",
+      args: ["create", "--task", taskId, "--title", "Blocked child", "--status", "todo"],
+    });
+    const blockedSubtaskId = (blockedSubtask.data as { subtask: { id: string } }).subtask.id;
+    const blockerTask = await runTask({
+      cwd,
+      mode: "toon",
+      args: ["create", "--epic", epicId, "--title", "External blocker", "--description", "desc", "--status", "todo"],
+    });
+    const blockerTaskId = (blockerTask.data as { task: { id: string } }).task.id;
+    await runDep({ cwd, mode: "toon", args: ["add", blockedSubtaskId, blockerTaskId] });
+
+    const updated = await runTask({ cwd, mode: "toon", args: ["update", taskId, "--all", "--status", "done"] });
+    expect(updated.ok).toBeFalse();
+    expect(updated.error?.code).toBe("dependency_blocked");
+    expect((updated.data as { atomic: boolean }).atomic).toBeTrue();
+    expect((updated.data as { blockedNodeIds: string[] }).blockedNodeIds).toEqual([blockedSubtaskId]);
+
+    const shown = await runTask({ cwd, mode: "toon", args: ["show", taskId] });
+    expect(shown.ok).toBeTrue();
+    expect((shown.data as { task: { status: string; subtasks: Array<{ status: string }> } }).task).toMatchObject({
+      status: "todo",
+      subtasks: [{ status: "todo" }],
+    });
+  });
+
   test("update blocks in_progress/done when dependencies unresolved", async (): Promise<void> => {
     const cwd = createWorkspace();
     const epicCreated = await runEpic({
