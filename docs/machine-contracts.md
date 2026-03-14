@@ -98,6 +98,71 @@ meta:
   pagination: { hasMore, nextCursor }
 ```
 
+## Descendant cascade update contract
+
+```bash
+trekoon --toon epic update <epic-id> --all --status done
+trekoon --toon task update <task-id> --all --status todo
+```
+
+Success payload fields for epic/task cascade mode:
+
+```text
+ok: true
+command: epic.update | task.update
+data:
+  epic | task: { ...updated root row... }
+  cascade:
+    mode: descendants
+    root: { kind: epic|task, id: <root-id> }
+    targetStatus: done|todo
+    atomic: true
+    changedIds[]
+    unchangedIds[]
+    counts:
+      scope
+      changed
+      unchanged
+      blockers
+      changedEpics
+      changedTasks
+      changedSubtasks
+```
+
+Failure contract for blocked epic/task cascade mode:
+
+```text
+ok: false
+error:
+  code: dependency_blocked
+data:
+  entity: epic|task
+  id: <root-id>
+  status: done|todo
+  atomic: true
+  changedIds[]
+  unchangedIds[]
+  blockerCount
+  blockedNodeIds[]
+  unresolvedDependencyIds[]
+  blockers[]:
+    sourceId
+    sourceKind
+    dependsOnId
+    dependsOnKind
+    dependsOnStatus
+    inScope
+    willCascade
+```
+
+Notes:
+
+- `subtask update <subtask-id> --all --status done|todo` is accepted, but it
+  returns the normal single-subtask `subtask.update` payload because there are
+  no descendants to traverse
+- Cascade mode is reserved for status-only close/reopen operations; combine
+  append/title/description changes in separate commands
+
 ## Sync compatibility mode
 
 Compatibility mode exists for integrations that still consume legacy sync
