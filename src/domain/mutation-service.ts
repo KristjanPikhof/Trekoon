@@ -18,8 +18,10 @@ import {
   type SearchField,
   type SearchNode,
   type SearchSummary,
+  type StatusCascadePlan,
   type SubtaskRecord,
   type TaskRecord,
+  DomainError,
 } from "./types";
 
 function countMatches(value: string, searchText: string): number {
@@ -187,6 +189,15 @@ export class MutationService {
     })();
   }
 
+  updateEpicStatusCascade(id: string, status: string): StatusCascadePlan {
+    return this.#db.transaction((): StatusCascadePlan => {
+      const plan = this.#domain.planStatusCascade("epic", id, status);
+      this.#assertCascadeNotBlocked(plan);
+      this.#applyStatusCascadePlan(plan);
+      return plan;
+    })();
+  }
+
   deleteEpic(id: string): void {
     this.#db.transaction((): void => {
       this.#domain.deleteEpic(id);
@@ -274,6 +285,15 @@ export class MutationService {
         status: task.status,
       });
       return task;
+    })();
+  }
+
+  updateTaskStatusCascade(id: string, status: string): StatusCascadePlan {
+    return this.#db.transaction((): StatusCascadePlan => {
+      const plan = this.#domain.planStatusCascade("task", id, status);
+      this.#assertCascadeNotBlocked(plan);
+      this.#applyStatusCascadePlan(plan);
+      return plan;
     })();
   }
 
@@ -456,6 +476,62 @@ export class MutationService {
     fields: readonly SearchField[],
   ): ScopeReplacementResult {
     return this.#buildScopeReplacementResult(nodes, searchText, replacementText, fields);
+  }
+
+  #assertCascadeNotBlocked(plan: StatusCascadePlan): void {
+    if (plan.blockers.length === 0) {
+      return;
+    }
+
+    throw new DomainError({
+      code: "dependency_blocked",
+      message: `${plan.rootKind} cascade cannot transition to ${plan.targetStatus} while dependencies are unresolved`,
+      details: {
+        entity: plan.rootKind,
+        id: plan.rootId,
+        status: plan.targetStatus,
+        atomic: plan.atomic,
+        changedIds: plan.changedIds,
+        unchangedIds: plan.unchangedIds,
+        blockerCount: plan.blockers.length,
+        blockers: plan.blockers,
+        blockedNodeIds: [...new Set(plan.blockers.map((blocker) => blocker.sourceId))],
+        unresolvedDependencyIds: [...new Set(plan.blockers.map((blocker) => blocker.dependsOnId))],
+      },
+    });
+  }
+
+  #applyStatusCascadePlan(plan: StatusCascadePlan): void {
+    for (const change of plan.orderedChanges) {
+      if (change.kind === "epic") {
+        const epic = this.#domain.updateEpic(change.id, { status: change.nextStatus });
+        this.#appendEntityEvent("epic", epic.id, ENTITY_OPERATIONS.epic.updated, {
+          title: epic.title,
+          description: epic.description,
+          status: epic.status,
+        });
+        continue;
+      }
+
+      if (change.kind === "task") {
+        const task = this.#domain.updateTask(change.id, { status: change.nextStatus });
+        this.#appendEntityEvent("task", task.id, ENTITY_OPERATIONS.task.updated, {
+          epic_id: task.epicId,
+          title: task.title,
+          description: task.description,
+          status: task.status,
+        });
+        continue;
+      }
+
+      const subtask = this.#domain.updateSubtask(change.id, { status: change.nextStatus });
+      this.#appendEntityEvent("subtask", subtask.id, ENTITY_OPERATIONS.subtask.updated, {
+        task_id: subtask.taskId,
+        title: subtask.title,
+        description: subtask.description,
+        status: subtask.status,
+      });
+    }
   }
 
   #applyScopeReplacement(
