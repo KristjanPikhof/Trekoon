@@ -131,10 +131,15 @@ const EPIC_HELP = [
   "    - --preview and --apply are mutually exclusive",
   "",
   "Update behavior:",
-  "  Bulk target flags:",
-  "    --all | --ids <csv>",
-  "  Bulk fields:",
-  "    --append <text> and/or --status <status>",
+  "  Repo-wide bulk mode:",
+  "    trekoon epic update --all --append <text> [--status <status>]",
+  "    trekoon epic update --ids <csv> --append <text> [--status <status>]",
+  "  Descendant cascade mode:",
+  "    trekoon epic update <epic-id> --all --status done|todo",
+  "    - cascades atomically through descendant tasks and subtasks",
+  "    - blocked descendants abort the whole update",
+  "    - cascade mode supports only --status done|todo",
+  "    - do not combine positional id + --all with --ids, --append, --description, or --title",
 ].join("\n");
 
 const TASK_HELP = [
@@ -188,10 +193,15 @@ const TASK_HELP = [
   "    - --preview and --apply are mutually exclusive",
   "",
   "Update behavior:",
-  "  Bulk target flags:",
-  "    --all | --ids <csv>",
-  "  Bulk fields:",
-  "    --append <text> and/or --status <status>",
+  "  Repo-wide bulk mode:",
+  "    trekoon task update --all --append <text> [--status <status>]",
+  "    trekoon task update --ids <csv> --append <text> [--status <status>]",
+  "  Descendant cascade mode:",
+  "    trekoon task update <task-id> --all --status done|todo",
+  "    - cascades atomically through descendant subtasks",
+  "    - blocked descendants abort the whole update",
+  "    - cascade mode supports only --status done|todo",
+  "    - do not combine positional id + --all with --ids, --append, --description, or --title",
 ].join("\n");
 
 const SUBTASK_HELP = [
@@ -228,10 +238,15 @@ const SUBTASK_HELP = [
   "    - --preview and --apply are mutually exclusive",
   "",
   "Update behavior:",
-  "  Bulk target flags:",
-  "    --all | --ids <csv>",
-  "  Bulk fields:",
-  "    --append <text> and/or --status <status>",
+  "  Repo-wide bulk mode:",
+  "    trekoon subtask update --all --append <text> [--status <status>]",
+  "    trekoon subtask update --ids <csv> --append <text> [--status <status>]",
+  "  Positional-id cascade syntax:",
+  "    trekoon subtask update <subtask-id> --all --status done|todo",
+  "    - accepted for contract consistency",
+  "    - behaves like a normal single-subtask status update",
+  "    - positional id + --all supports only --status done|todo",
+  "    - do not combine positional id + --all with --ids, --append, --description, or --title",
 ].join("\n");
 
 const DEP_HELP = [
