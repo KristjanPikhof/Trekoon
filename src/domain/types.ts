@@ -192,6 +192,57 @@ export interface SearchNode {
   readonly description: string;
 }
 
+export type StatusCascadeRootKind = Extract<NodeKind, "epic" | "task">;
+export type DependencyNodeKind = Extract<NodeKind, "task" | "subtask">;
+
+export interface StatusCascadeScopeNode {
+  readonly kind: NodeKind;
+  readonly id: string;
+  readonly parentId?: string;
+  readonly status: string;
+}
+
+export interface StatusCascadeChange {
+  readonly kind: NodeKind;
+  readonly id: string;
+  readonly parentId?: string;
+  readonly previousStatus: string;
+  readonly nextStatus: string;
+}
+
+export interface StatusCascadeBlocker {
+  readonly sourceId: string;
+  readonly sourceKind: DependencyNodeKind;
+  readonly dependsOnId: string;
+  readonly dependsOnKind: DependencyNodeKind;
+  readonly dependsOnStatus: string;
+  readonly inScope: boolean;
+  readonly willCascade: boolean;
+}
+
+export interface StatusCascadeCounts {
+  readonly scope: number;
+  readonly changed: number;
+  readonly unchanged: number;
+  readonly blockers: number;
+  readonly changedEpics: number;
+  readonly changedTasks: number;
+  readonly changedSubtasks: number;
+}
+
+export interface StatusCascadePlan {
+  readonly rootKind: StatusCascadeRootKind;
+  readonly rootId: string;
+  readonly targetStatus: string;
+  readonly atomic: true;
+  readonly scope: ReadonlyArray<StatusCascadeScopeNode>;
+  readonly orderedChanges: ReadonlyArray<StatusCascadeChange>;
+  readonly changedIds: ReadonlyArray<string>;
+  readonly unchangedIds: ReadonlyArray<string>;
+  readonly blockers: ReadonlyArray<StatusCascadeBlocker>;
+  readonly counts: StatusCascadeCounts;
+}
+
 export interface DomainErrorShape {
   readonly code: string;
   readonly message: string;
