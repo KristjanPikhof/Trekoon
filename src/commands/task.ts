@@ -20,13 +20,8 @@ import { unexpectedFailureResult } from "./error-utils";
 import {
   buildTaskReadiness,
   DEFAULT_OPEN_TASK_STATUSES,
-  type DependencyBlocker,
-  READY_REASON_BLOCKED,
-  READY_REASON_READY,
-  type ReadyReason,
   taskStatusPriority,
   type TaskReadinessResult,
-  type TaskReadinessSummary,
   type TaskReadyCandidate,
 } from "./task-readiness";
 
