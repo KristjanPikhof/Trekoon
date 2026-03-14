@@ -1401,6 +1401,10 @@ export class TrackerDomain {
         addEdge(change.id, change.parentId);
       }
 
+      if (change.kind === "task" && change.parentId !== undefined) {
+        addEdge(change.id, change.parentId);
+      }
+
       if (change.kind !== "task" && change.kind !== "subtask") {
         continue;
       }
