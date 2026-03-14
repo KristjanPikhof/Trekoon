@@ -665,13 +665,14 @@ export class TrackerDomain {
   planStatusCascade(rootKind: StatusCascadeRootKind, rootId: string, targetStatus: string): StatusCascadePlan {
     const normalizedTargetStatus = assertNonEmpty("status", targetStatus);
     const scope = this.#collectStatusCascadeScope(rootKind, rootId);
+    const scopeIdSet = new Set(scope.map((node) => node.id));
     const orderedChanges = this.#orderStatusCascadeChanges(scope, normalizedTargetStatus);
     const changedIds = orderedChanges.map((change) => change.id);
     const changedIdSet = new Set(changedIds);
     const unchangedIds = scope
       .filter((node) => !changedIdSet.has(node.id))
       .map((node) => node.id);
-    const blockers = this.#collectStatusCascadeBlockers(orderedChanges, changedIdSet, normalizedTargetStatus);
+    const blockers = this.#collectStatusCascadeBlockers(orderedChanges, scopeIdSet, changedIdSet, normalizedTargetStatus);
 
     return {
       rootKind,
@@ -1458,6 +1459,7 @@ export class TrackerDomain {
 
   #collectStatusCascadeBlockers(
     changes: readonly StatusCascadeChange[],
+    scopeIdSet: ReadonlySet<string>,
     changedIdSet: ReadonlySet<string>,
     targetStatus: string,
   ): StatusCascadeBlocker[] {
@@ -1476,8 +1478,8 @@ export class TrackerDomain {
           dependency.dependsOnKind === "task"
             ? this.getTaskOrThrow(dependency.dependsOnId).status
             : this.getSubtaskOrThrow(dependency.dependsOnId).status;
-        const inScope = changedIdSet.has(dependency.dependsOnId);
-        const willCascade = targetStatus === "done" && inScope;
+        const inScope = scopeIdSet.has(dependency.dependsOnId);
+        const willCascade = targetStatus === "done" && changedIdSet.has(dependency.dependsOnId);
         if (dependencyStatus === "done" || willCascade) {
           continue;
         }
