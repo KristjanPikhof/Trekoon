@@ -101,6 +101,32 @@ batch commands:
 These commands validate the whole batch before applying changes, so a bad input
 fails the whole operation instead of leaving partial state behind.
 
+## Close or reopen a whole tree in one update
+
+When you need to manually finish or reopen an entire epic or task tree, use the
+positional-ID cascade form of `update --all`:
+
+```bash
+trekoon epic update <epic-id> --all --status done
+trekoon epic update <epic-id> --all --status todo
+trekoon task update <task-id> --all --status done
+trekoon task update <task-id> --all --status todo
+trekoon subtask update <subtask-id> --all --status done
+```
+
+Rules:
+
+- `epic update <id> --all --status done|todo` updates the epic and all
+  descendants atomically
+- `task update <id> --all --status done|todo` updates the task and all
+  descendant subtasks atomically
+- `subtask update <id> --all --status done|todo` is accepted for consistency,
+  but it only updates that one subtask
+- Positional-ID cascade mode is status-only; do not combine it with `--append`,
+  `--description`, `--title`, or `--ids`
+- If any epic/task descendant is blocked by an unresolved external dependency,
+  the whole cascade fails with no partial writes
+
 ## What to read next
 
 - [Command reference](commands.md)
