@@ -94,6 +94,29 @@ trekoon --toon task update <task-id> --append "Blocked by <reason>" --status blo
 Use `task done` when the task is actually finished. It marks the task complete
 and returns the next ready candidate with blockers inline.
 
+## Use descendant cascade mode when closing a whole tree
+
+When an agent needs to close or reopen an entire epic or task tree from the
+command layer, use positional-ID `update --all` instead of looping one row at a
+time:
+
+```bash
+trekoon --toon epic update <epic-id> --all --status done
+trekoon --toon epic update <epic-id> --all --status todo
+trekoon --toon task update <task-id> --all --status done
+trekoon --toon task update <task-id> --all --status todo
+trekoon --toon subtask update <subtask-id> --all --status done
+```
+
+Notes:
+
+- Epic/task cascade mode is atomic: blocked descendants abort the whole update
+- Use it only with `--status done|todo`
+- Do not combine positional ID + `--all` with `--append`, `--description`,
+  `--title`, or `--ids`
+- Subtask positional-ID `--all` is accepted for contract consistency, but it is
+  equivalent to a normal single-subtask status update
+
 ## Tell the agent exactly what to do
 
 These prompts work well because they are explicit about the skill order and the
