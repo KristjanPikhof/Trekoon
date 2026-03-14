@@ -32,7 +32,7 @@ import {
 
 import { MutationService } from "../domain/mutation-service";
 import { TrackerDomain } from "../domain/tracker-domain";
-import { type CompactBatchResultContract, type CompactTaskSpec, type SearchEntityMatch, type TaskRecord } from "../domain/types";
+import { type CompactBatchResultContract, type CompactTaskSpec, type SearchEntityMatch, type StatusCascadePlan, type TaskRecord } from "../domain/types";
 import { formatHumanTable } from "../io/human-table";
 import { failResult, okResult } from "../io/output";
 import { type CliContext, type CliResult } from "../runtime/command-types";
@@ -48,6 +48,7 @@ const DEFAULT_TASK_LIST_LIMIT = 10;
 const SEARCH_OPTIONS = ["fields", "preview"] as const;
 const REPLACE_OPTIONS = ["search", "replace", "fields", "preview", "apply"] as const;
 const CREATE_MANY_OPTIONS = ["epic", "e", "task"] as const;
+const STATUS_CASCADE_UPDATE_STATUSES = ["done", "todo"] as const;
 
 function parseIdsOption(rawIds: string | undefined): string[] {
   if (rawIds === undefined) {
@@ -183,6 +184,44 @@ function filterSortAndLimitTasks(
 
 function appendLine(existing: string, line: string): string {
   return existing.length > 0 ? `${existing}\n${line}` : line;
+}
+
+function isStatusCascadeUpdateStatus(status: string | undefined): status is (typeof STATUS_CASCADE_UPDATE_STATUSES)[number] {
+  return status === "done" || status === "todo";
+}
+
+function buildStatusCascadeData(plan: StatusCascadePlan): Record<string, unknown> {
+  return {
+    mode: "descendants",
+    root: {
+      kind: plan.rootKind,
+      id: plan.rootId,
+    },
+    targetStatus: plan.targetStatus,
+    atomic: plan.atomic,
+    changedIds: plan.changedIds,
+    unchangedIds: plan.unchangedIds,
+    counts: plan.counts,
+  };
+}
+
+function formatStatusCascadeHuman(entityLabel: string, plan: StatusCascadePlan): string {
+  return `Cascade updated ${entityLabel} ${plan.rootId} to ${plan.targetStatus} (${plan.counts.changed} changed, ${plan.counts.unchanged} unchanged; tasks=${plan.counts.changedTasks}, subtasks=${plan.counts.changedSubtasks})`;
+}
+
+function failCascadeStatusUpdate(command: string, entityLabel: string, data: Record<string, unknown>): CliResult {
+  return failResult({
+    command,
+    human: `${entityLabel} descendant cascade requires --status done or --status todo and does not support --append, --description, or --title.`,
+    data: {
+      code: "invalid_input",
+      ...data,
+    },
+    error: {
+      code: "invalid_input",
+      message: `${entityLabel} descendant cascade requires status-only done/todo mode`,
+    },
+  });
 }
 
 function formatTaskListTable(tasks: readonly TaskRecord[]): string {
@@ -1031,7 +1070,35 @@ export async function runTask(context: CliContext): Promise<CliResult> {
           });
         }
 
-        const hasBulkTarget = updateAll || ids.length > 0;
+        const cascadeMode = updateAll && taskId.length > 0;
+        if (cascadeMode) {
+          if (title !== undefined || description !== undefined || append !== undefined || !isStatusCascadeUpdateStatus(status)) {
+            return failCascadeStatusUpdate("task.update", "Task", {
+              id: taskId,
+              status,
+              allowedStatuses: [...STATUS_CASCADE_UPDATE_STATUSES],
+              fields: {
+                title: title !== undefined,
+                description: description !== undefined,
+                append: append !== undefined,
+              },
+            });
+          }
+
+          const cascade = mutations.updateTaskStatusCascade(taskId, status);
+          const task = domain.getTaskOrThrow(taskId);
+
+          return okResult({
+            command: "task.update",
+            human: formatStatusCascadeHuman("task", cascade),
+            data: {
+              task,
+              cascade: buildStatusCascadeData(cascade),
+            },
+          });
+        }
+
+        const hasBulkTarget = (updateAll && taskId.length === 0) || ids.length > 0;
         if (hasBulkTarget) {
           if (taskId.length > 0) {
             return failResult({
