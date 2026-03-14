@@ -1351,13 +1351,16 @@ export class TrackerDomain {
   #orderStatusCascadeChanges(scope: readonly StatusCascadeScopeNode[], targetStatus: string): StatusCascadeChange[] {
     const changes = scope
       .filter((node) => node.status !== targetStatus)
-      .map((node) => ({
-        kind: node.kind,
-        id: node.id,
-        parentId: node.parentId,
-        previousStatus: node.status,
-        nextStatus: targetStatus,
-      } satisfies StatusCascadeChange));
+      .map((node) => {
+        const change: StatusCascadeChange = {
+          kind: node.kind,
+          id: node.id,
+          previousStatus: node.status,
+          nextStatus: targetStatus,
+          ...(node.parentId === undefined ? {} : { parentId: node.parentId }),
+        };
+        return change;
+      });
 
     if (targetStatus !== "done") {
       return changes;
