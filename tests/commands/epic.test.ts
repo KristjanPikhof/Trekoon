@@ -4,6 +4,7 @@ import { join } from "node:path";
 
 import { afterEach, describe, expect, test } from "bun:test";
 
+import { runDep } from "../../src/commands/dep";
 import { runEpic } from "../../src/commands/epic";
 import { runSubtask } from "../../src/commands/subtask";
 import { runTask } from "../../src/commands/task";
@@ -378,6 +379,161 @@ describe("epic command", (): void => {
 
     expect(result.ok).toBeFalse();
     expect(result.error?.code).toBe("invalid_input");
+  });
+
+  test("update <id> --all --status done cascades descendants with machine metadata", async (): Promise<void> => {
+    const cwd = createWorkspace();
+    const createdEpic = await runEpic({
+      cwd,
+      mode: "toon",
+      args: ["create", "--title", "Roadmap", "--description", "Top-level work"],
+    });
+    const epicId = (createdEpic.data as { epic: { id: string } }).epic.id;
+
+    const todoTask = await runTask({
+      cwd,
+      mode: "toon",
+      args: ["create", "--epic", epicId, "--title", "Implement", "--description", "Build it", "--status", "todo"],
+    });
+    const todoTaskId = (todoTask.data as { task: { id: string } }).task.id;
+    const todoSubtask = await runSubtask({
+      cwd,
+      mode: "toon",
+      args: ["create", "--task", todoTaskId, "--title", "Write tests", "--status", "todo"],
+    });
+    const todoSubtaskId = (todoSubtask.data as { subtask: { id: string } }).subtask.id;
+
+    const doneTask = await runTask({
+      cwd,
+      mode: "toon",
+      args: ["create", "--epic", epicId, "--title", "Ship", "--description", "Release it", "--status", "done"],
+    });
+    const doneTaskId = (doneTask.data as { task: { id: string } }).task.id;
+    const doneSubtask = await runSubtask({
+      cwd,
+      mode: "toon",
+      args: ["create", "--task", doneTaskId, "--title", "Announce", "--status", "done"],
+    });
+    const doneSubtaskId = (doneSubtask.data as { subtask: { id: string } }).subtask.id;
+
+    const updated = await runEpic({ cwd, mode: "toon", args: ["update", epicId, "--all", "--status", "done"] });
+    expect(updated.ok).toBeTrue();
+
+    const data = updated.data as {
+      epic: { status: string };
+      cascade: {
+        mode: string;
+        root: { kind: string; id: string };
+        targetStatus: string;
+        atomic: boolean;
+        changedIds: string[];
+        unchangedIds: string[];
+        counts: {
+          scope: number;
+          changed: number;
+          unchanged: number;
+          changedEpics: number;
+          changedTasks: number;
+          changedSubtasks: number;
+        };
+      };
+    };
+    expect(data.epic.status).toBe("done");
+    expect(data.cascade).toMatchObject({
+      mode: "descendants",
+      root: { kind: "epic", id: epicId },
+      targetStatus: "done",
+      atomic: true,
+      counts: {
+        scope: 5,
+        changed: 3,
+        unchanged: 2,
+        changedEpics: 1,
+        changedTasks: 1,
+        changedSubtasks: 1,
+      },
+    });
+    expect(data.cascade.changedIds).toEqual(expect.arrayContaining([epicId, todoTaskId, todoSubtaskId]));
+    expect(data.cascade.unchangedIds).toEqual(expect.arrayContaining([doneTaskId, doneSubtaskId]));
+
+    const shown = await runEpic({ cwd, mode: "toon", args: ["show", epicId, "--all"] });
+    expect(shown.ok).toBeTrue();
+    expect((shown.data as { tree: { status: string } }).tree.status).toBe("done");
+    expect((shown.data as { tree: { tasks: Array<{ status: string; subtasks: Array<{ status: string }> }> } }).tree.tasks).toMatchObject([
+      { status: "done", subtasks: [{ status: "done" }] },
+      { status: "done", subtasks: [{ status: "done" }] },
+    ]);
+  });
+
+  test("update <id> --all rejects non-status cascade fields", async (): Promise<void> => {
+    const cwd = createWorkspace();
+    const createdEpic = await runEpic({
+      cwd,
+      mode: "toon",
+      args: ["create", "--title", "Roadmap", "--description", "Top-level work"],
+    });
+    const epicId = (createdEpic.data as { epic: { id: string } }).epic.id;
+
+    const missingStatus = await runEpic({ cwd, mode: "toon", args: ["update", epicId, "--all"] });
+    expect(missingStatus.ok).toBeFalse();
+    expect(missingStatus.error?.code).toBe("invalid_input");
+
+    const withAppend = await runEpic({
+      cwd,
+      mode: "toon",
+      args: ["update", epicId, "--all", "--status", "done", "--append", "note"],
+    });
+    expect(withAppend.ok).toBeFalse();
+    expect(withAppend.error?.code).toBe("invalid_input");
+  });
+
+  test("update <id> --all fails atomically when descendant has external blocker", async (): Promise<void> => {
+    const cwd = createWorkspace();
+    const targetEpic = await runEpic({
+      cwd,
+      mode: "toon",
+      args: ["create", "--title", "Roadmap", "--description", "Top-level work"],
+    });
+    const targetEpicId = (targetEpic.data as { epic: { id: string } }).epic.id;
+    const externalEpic = await runEpic({
+      cwd,
+      mode: "toon",
+      args: ["create", "--title", "External", "--description", "External work"],
+    });
+    const externalEpicId = (externalEpic.data as { epic: { id: string } }).epic.id;
+
+    const targetTask = await runTask({
+      cwd,
+      mode: "toon",
+      args: ["create", "--epic", targetEpicId, "--title", "Blocked task", "--description", "desc", "--status", "todo"],
+    });
+    const targetTaskId = (targetTask.data as { task: { id: string } }).task.id;
+    await runSubtask({
+      cwd,
+      mode: "toon",
+      args: ["create", "--task", targetTaskId, "--title", "Child work", "--status", "todo"],
+    });
+
+    const blockerTask = await runTask({
+      cwd,
+      mode: "toon",
+      args: ["create", "--epic", externalEpicId, "--title", "External blocker", "--description", "desc", "--status", "todo"],
+    });
+    const blockerTaskId = (blockerTask.data as { task: { id: string } }).task.id;
+    await runDep({ cwd, mode: "toon", args: ["add", targetTaskId, blockerTaskId] });
+
+    const updated = await runEpic({ cwd, mode: "toon", args: ["update", targetEpicId, "--all", "--status", "done"] });
+    expect(updated.ok).toBeFalse();
+    expect(updated.error?.code).toBe("dependency_blocked");
+    expect((updated.data as { atomic: boolean }).atomic).toBeTrue();
+    expect((updated.data as { blockedNodeIds: string[] }).blockedNodeIds).toEqual([targetTaskId]);
+
+    const shown = await runEpic({ cwd, mode: "toon", args: ["show", targetEpicId, "--all"] });
+    expect(shown.ok).toBeTrue();
+    expect((shown.data as { tree: { status: string; tasks: Array<{ status: string; subtasks: Array<{ status: string }> }> } }).tree).toMatchObject({
+      status: "todo",
+      tasks: [{ status: "todo", subtasks: [{ status: "todo" }] }],
+    });
   });
 
   test("default list includes only open statuses and max 10", async (): Promise<void> => {
