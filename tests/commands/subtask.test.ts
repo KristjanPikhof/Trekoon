@@ -644,6 +644,65 @@ describe("subtask command", (): void => {
     expect(result.error?.code).toBe("invalid_input");
   });
 
+  test("update <id> --all behaves like a validated single-subtask status update", async (): Promise<void> => {
+    const cwd = createWorkspace();
+    const epicCreated = await runEpic({
+      cwd,
+      mode: "toon",
+      args: ["create", "--title", "Roadmap", "--description", "desc"],
+    });
+    const epicId = (epicCreated.data as { epic: { id: string } }).epic.id;
+    const taskCreated = await runTask({
+      cwd,
+      mode: "toon",
+      args: ["create", "--epic", epicId, "--title", "Implement", "--description", "task desc"],
+    });
+    const taskId = (taskCreated.data as { task: { id: string } }).task.id;
+    const created = await runSubtask({
+      cwd,
+      mode: "toon",
+      args: ["create", "--task", taskId, "--title", "A subtask", "--status", "todo"],
+    });
+    const subtaskId = (created.data as { subtask: { id: string } }).subtask.id;
+
+    const updated = await runSubtask({ cwd, mode: "toon", args: ["update", subtaskId, "--all", "--status", "done"] });
+    expect(updated.ok).toBeTrue();
+    expect((updated.data as { subtask: { id: string; status: string } }).subtask).toMatchObject({
+      id: subtaskId,
+      status: "done",
+    });
+  });
+
+  test("update <id> --all rejects non-status cascade fields", async (): Promise<void> => {
+    const cwd = createWorkspace();
+    const epicCreated = await runEpic({
+      cwd,
+      mode: "toon",
+      args: ["create", "--title", "Roadmap", "--description", "desc"],
+    });
+    const epicId = (epicCreated.data as { epic: { id: string } }).epic.id;
+    const taskCreated = await runTask({
+      cwd,
+      mode: "toon",
+      args: ["create", "--epic", epicId, "--title", "Implement", "--description", "task desc"],
+    });
+    const taskId = (taskCreated.data as { task: { id: string } }).task.id;
+    const created = await runSubtask({ cwd, mode: "toon", args: ["create", "--task", taskId, "--title", "A subtask"] });
+    const subtaskId = (created.data as { subtask: { id: string } }).subtask.id;
+
+    const invalidStatus = await runSubtask({ cwd, mode: "toon", args: ["update", subtaskId, "--all", "--status", "blocked"] });
+    expect(invalidStatus.ok).toBeFalse();
+    expect(invalidStatus.error?.code).toBe("invalid_input");
+
+    const withAppend = await runSubtask({
+      cwd,
+      mode: "toon",
+      args: ["update", subtaskId, "--all", "--status", "done", "--append", "note"],
+    });
+    expect(withAppend.ok).toBeFalse();
+    expect(withAppend.error?.code).toBe("invalid_input");
+  });
+
   test("update blocks in_progress/done when dependencies unresolved", async (): Promise<void> => {
     const cwd = createWorkspace();
     const epicCreated = await runEpic({
