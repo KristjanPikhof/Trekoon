@@ -12,6 +12,7 @@ import {
   type CompactTaskBatchCreateResult,
   type CompactTaskSpec,
   type DependencyRecord,
+  type DependencyNodeKind,
   DomainError,
   type EpicTreeDetailed,
   type EpicRecord,
@@ -23,6 +24,11 @@ import {
   type SearchFieldMatch,
   type SearchNode,
   type SearchSummary,
+  type StatusCascadeBlocker,
+  type StatusCascadeChange,
+  type StatusCascadePlan,
+  type StatusCascadeRootKind,
+  type StatusCascadeScopeNode,
   type SubtaskRecord,
   type TaskTreeDetailed,
   type TaskRecord,
@@ -66,7 +72,7 @@ interface ReverseDependencyRow {
 
 interface UnresolvedDependencyBlocker {
   readonly id: string;
-  readonly kind: "task" | "subtask";
+  readonly kind: DependencyNodeKind;
   readonly status: string;
 }
 
@@ -653,6 +659,39 @@ export class TrackerDomain {
       description: epic.description,
       status: epic.status,
       tasks: tasks.map((task) => this.buildTaskTreeDetailed(task.id)),
+    };
+  }
+
+  planStatusCascade(rootKind: StatusCascadeRootKind, rootId: string, targetStatus: string): StatusCascadePlan {
+    const normalizedTargetStatus = assertNonEmpty("status", targetStatus);
+    const scope = this.#collectStatusCascadeScope(rootKind, rootId);
+    const orderedChanges = this.#orderStatusCascadeChanges(scope, normalizedTargetStatus);
+    const changedIds = orderedChanges.map((change) => change.id);
+    const changedIdSet = new Set(changedIds);
+    const unchangedIds = scope
+      .filter((node) => !changedIdSet.has(node.id))
+      .map((node) => node.id);
+    const blockers = this.#collectStatusCascadeBlockers(orderedChanges, changedIdSet, normalizedTargetStatus);
+
+    return {
+      rootKind,
+      rootId,
+      targetStatus: normalizedTargetStatus,
+      atomic: true,
+      scope,
+      orderedChanges,
+      changedIds,
+      unchangedIds,
+      blockers,
+      counts: {
+        scope: scope.length,
+        changed: orderedChanges.length,
+        unchanged: unchangedIds.length,
+        blockers: blockers.length,
+        changedEpics: orderedChanges.filter((change) => change.kind === "epic").length,
+        changedTasks: orderedChanges.filter((change) => change.kind === "task").length,
+        changedSubtasks: orderedChanges.filter((change) => change.kind === "subtask").length,
+      },
     };
   }
 
@@ -1266,9 +1305,199 @@ export class TrackerDomain {
     return row !== null;
   }
 
+  #collectStatusCascadeScope(rootKind: StatusCascadeRootKind, rootId: string): StatusCascadeScopeNode[] {
+    if (rootKind === "task") {
+      const tree = this.buildTaskTreeDetailed(rootId);
+      return [
+        {
+          kind: "task",
+          id: tree.id,
+          parentId: tree.epicId,
+          status: tree.status,
+        },
+        ...tree.subtasks.map((subtask) => ({
+          kind: "subtask" as const,
+          id: subtask.id,
+          parentId: subtask.taskId,
+          status: subtask.status,
+        })),
+      ];
+    }
+
+    const tree = this.buildEpicTreeDetailed(rootId);
+    return [
+      {
+        kind: "epic",
+        id: tree.id,
+        status: tree.status,
+      },
+      ...tree.tasks.flatMap((task) => [
+        {
+          kind: "task" as const,
+          id: task.id,
+          parentId: task.epicId,
+          status: task.status,
+        },
+        ...task.subtasks.map((subtask) => ({
+          kind: "subtask" as const,
+          id: subtask.id,
+          parentId: subtask.taskId,
+          status: subtask.status,
+        })),
+      ]),
+    ];
+  }
+
+  #orderStatusCascadeChanges(scope: readonly StatusCascadeScopeNode[], targetStatus: string): StatusCascadeChange[] {
+    const changes = scope
+      .filter((node) => node.status !== targetStatus)
+      .map((node) => ({
+        kind: node.kind,
+        id: node.id,
+        parentId: node.parentId,
+        previousStatus: node.status,
+        nextStatus: targetStatus,
+      } satisfies StatusCascadeChange));
+
+    if (targetStatus !== "done") {
+      return changes;
+    }
+
+    return this.#topologicallyOrderDoneCascadeChanges(changes);
+  }
+
+  #topologicallyOrderDoneCascadeChanges(changes: readonly StatusCascadeChange[]): StatusCascadeChange[] {
+    const indexById = new Map<string, number>();
+    const changeById = new Map<string, StatusCascadeChange>();
+    const dependents = new Map<string, Set<string>>();
+    const indegree = new Map<string, number>();
+
+    changes.forEach((change, index) => {
+      indexById.set(change.id, index);
+      changeById.set(change.id, change);
+      indegree.set(change.id, 0);
+    });
+
+    const addEdge = (fromId: string, toId: string): void => {
+      if (fromId === toId || !changeById.has(fromId) || !changeById.has(toId)) {
+        return;
+      }
+
+      const neighbors = dependents.get(fromId) ?? new Set<string>();
+      if (neighbors.has(toId)) {
+        return;
+      }
+
+      neighbors.add(toId);
+      dependents.set(fromId, neighbors);
+      indegree.set(toId, (indegree.get(toId) ?? 0) + 1);
+    };
+
+    for (const change of changes) {
+      if (change.kind === "subtask" && change.parentId !== undefined) {
+        addEdge(change.id, change.parentId);
+      }
+
+      if (change.kind !== "task" && change.kind !== "subtask") {
+        continue;
+      }
+
+      for (const dependency of this.listDependencies(change.id)) {
+        addEdge(dependency.dependsOnId, dependency.sourceId);
+      }
+    }
+
+    const ordered: StatusCascadeChange[] = [];
+    const ready = changes
+      .filter((change) => (indegree.get(change.id) ?? 0) === 0)
+      .sort((left, right) => (indexById.get(left.id) ?? 0) - (indexById.get(right.id) ?? 0));
+
+    while (ready.length > 0) {
+      const next = ready.shift();
+      if (next === undefined) {
+        continue;
+      }
+
+      ordered.push(next);
+      for (const dependentId of dependents.get(next.id) ?? []) {
+        const remaining = (indegree.get(dependentId) ?? 0) - 1;
+        indegree.set(dependentId, remaining);
+        if (remaining !== 0) {
+          continue;
+        }
+
+        const dependent = changeById.get(dependentId);
+        if (dependent === undefined) {
+          continue;
+        }
+
+        ready.push(dependent);
+        ready.sort((left, right) => (indexById.get(left.id) ?? 0) - (indexById.get(right.id) ?? 0));
+      }
+    }
+
+    if (ordered.length !== changes.length) {
+      throw new DomainError({
+        code: "invalid_dependency",
+        message: "unable to determine dependency-safe cascade order",
+        details: {
+          changedIds: changes.map((change) => change.id),
+        },
+      });
+    }
+
+    return ordered;
+  }
+
+  #collectStatusCascadeBlockers(
+    changes: readonly StatusCascadeChange[],
+    changedIdSet: ReadonlySet<string>,
+    targetStatus: string,
+  ): StatusCascadeBlocker[] {
+    if (!DEPENDENCY_GATED_STATUSES.has(targetStatus)) {
+      return [];
+    }
+
+    const blockers: StatusCascadeBlocker[] = [];
+    for (const change of changes) {
+      if (change.kind !== "task" && change.kind !== "subtask") {
+        continue;
+      }
+
+      for (const dependency of this.listDependencies(change.id)) {
+        const dependencyStatus =
+          dependency.dependsOnKind === "task"
+            ? this.getTaskOrThrow(dependency.dependsOnId).status
+            : this.getSubtaskOrThrow(dependency.dependsOnId).status;
+        const inScope = changedIdSet.has(dependency.dependsOnId);
+        const willCascade = targetStatus === "done" && inScope;
+        if (dependencyStatus === "done" || willCascade) {
+          continue;
+        }
+
+        blockers.push({
+          sourceId: dependency.sourceId,
+          sourceKind: dependency.sourceKind,
+          dependsOnId: dependency.dependsOnId,
+          dependsOnKind: dependency.dependsOnKind,
+          dependsOnStatus: dependencyStatus,
+          inScope,
+          willCascade,
+        });
+      }
+    }
+
+    return blockers.sort(
+      (left, right) =>
+        left.sourceId.localeCompare(right.sourceId) ||
+        left.dependsOnId.localeCompare(right.dependsOnId) ||
+        left.dependsOnKind.localeCompare(right.dependsOnKind),
+    );
+  }
+
   private assertNoUnresolvedDependenciesForStatusTransition(
     id: string,
-    kind: "task" | "subtask",
+    kind: DependencyNodeKind,
     existingStatus: string,
     nextStatus: string,
   ): void {
