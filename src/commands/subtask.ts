@@ -36,6 +36,7 @@ const DEFAULT_OPEN_SUBTASK_STATUSES = ["in_progress", "in-progress", "todo"] as 
 const SEARCH_OPTIONS = ["fields", "preview"] as const;
 const REPLACE_OPTIONS = ["search", "replace", "fields", "preview", "apply"] as const;
 const CREATE_MANY_OPTIONS = ["task", "t", "subtask"] as const;
+const STATUS_CASCADE_UPDATE_STATUSES = ["done", "todo"] as const;
 
 function parseIdsOption(rawIds: string | undefined): string[] {
   if (rawIds === undefined) {
@@ -166,6 +167,25 @@ function filterSortAndLimitSubtasks(
 
 function appendLine(existing: string, line: string): string {
   return existing.length > 0 ? `${existing}\n${line}` : line;
+}
+
+function isStatusCascadeUpdateStatus(status: string | undefined): status is (typeof STATUS_CASCADE_UPDATE_STATUSES)[number] {
+  return status === "done" || status === "todo";
+}
+
+function failCascadeStatusUpdate(command: string, entityLabel: string, data: Record<string, unknown>): CliResult {
+  return failResult({
+    command,
+    human: `${entityLabel} cascade mode requires --status done or --status todo and does not support --append, --description, or --title.`,
+    data: {
+      code: "invalid_input",
+      ...data,
+    },
+    error: {
+      code: "invalid_input",
+      message: `${entityLabel} cascade mode requires status-only done/todo input`,
+    },
+  });
 }
 
 function formatSubtaskListTable(subtasks: readonly SubtaskRecord[]): string {
@@ -773,7 +793,31 @@ export async function runSubtask(context: CliContext): Promise<CliResult> {
           });
         }
 
-        const hasBulkTarget = updateAll || ids.length > 0;
+        const cascadeMode = updateAll && subtaskId.length > 0;
+        if (cascadeMode) {
+          if (title !== undefined || description !== undefined || append !== undefined || !isStatusCascadeUpdateStatus(status)) {
+            return failCascadeStatusUpdate("subtask.update", "Subtask", {
+              id: subtaskId,
+              status,
+              allowedStatuses: [...STATUS_CASCADE_UPDATE_STATUSES],
+              fields: {
+                title: title !== undefined,
+                description: description !== undefined,
+                append: append !== undefined,
+              },
+            });
+          }
+
+          const subtask = mutations.updateSubtask(subtaskId, { status });
+
+          return okResult({
+            command: "subtask.update",
+            human: `Updated subtask ${formatSubtask(subtask)}`,
+            data: { subtask },
+          });
+        }
+
+        const hasBulkTarget = (updateAll && subtaskId.length === 0) || ids.length > 0;
         if (hasBulkTarget) {
           if (subtaskId.length > 0) {
             return failResult({
