@@ -75,7 +75,7 @@ Current runtime expectations for operators:
 
 - the served HTML, styles, and board app files come from the local
   `.trekoon/board` runtime directory
-- the current shell also pulls Vue from `esm.sh`, Tailwind from
+- the current shell also pulls Vue from `unpkg.com`, Tailwind from
   `cdn.tailwindcss.com`, and Google-hosted fonts/icons at page load time
 - if those hosts are unavailable, the command still starts the loopback server
   and prints the fallback URL, but the shell may not fully hydrate in the
