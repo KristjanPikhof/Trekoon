@@ -192,4 +192,39 @@ describe("board routes", (): void => {
       storage.close();
     }
   });
+
+  test("accepts bearer token auth for mutation routes", async (): Promise<void> => {
+    const cwd = createWorkspace();
+    const storage = openTrekoonDatabase(cwd);
+
+    try {
+      const mutations = new MutationService(storage.db, cwd);
+      const epic = mutations.createEpic({ title: "Roadmap", description: "Plan release" });
+      const task = mutations.createTask({ epicId: epic.id, title: "Implement", description: "Ship board" });
+
+      const handler = createBoardApiHandler({ db: storage.db, cwd, token: "secret-token" });
+      const response = await handler(new Request(`http://board.test/api/tasks/${task.id}`, {
+        method: "PATCH",
+        headers: {
+          authorization: "Bearer secret-token",
+          "content-type": "application/json",
+        },
+        body: JSON.stringify({ status: "done" }),
+      }));
+      const body = await response.json() as {
+        ok: boolean;
+        data: {
+          task: { id: string; status: string };
+          snapshot: { tasks: Array<{ id: string; status: string }> };
+        };
+      };
+
+      expect(response.status).toBe(200);
+      expect(body.ok).toBeTrue();
+      expect(body.data.task).toEqual(expect.objectContaining({ id: task.id, status: "done" }));
+      expect(body.data.snapshot.tasks).toContainEqual(expect.objectContaining({ id: task.id, status: "done" }));
+    } finally {
+      storage.close();
+    }
+  });
 });

@@ -1,5 +1,6 @@
 const THEME_STORAGE_KEY = "trekoon-board-theme";
 const STATE_STORAGE_KEY = "trekoon-board-state";
+const SESSION_TOKEN_STORAGE_KEY = "trekoon-board-session-token";
 const SEARCH_FOCUS_KEYS = new Set(["/", "s"]);
 const VIEW_MODES = ["kanban", "list"];
 const STATUS_ORDER = ["todo", "blocked", "in_progress", "done"];
@@ -11,7 +12,51 @@ const STATUS_LABELS = {
 };
 
 const appElement = document.querySelector("#app");
-const SESSION_TOKEN = new URLSearchParams(window.location.search).get("token") || "";
+
+function readSessionTokenFromStorage() {
+  try {
+    const storedToken = sessionStorage.getItem(SESSION_TOKEN_STORAGE_KEY) || "";
+    return storedToken.trim();
+  } catch {
+    return "";
+  }
+}
+
+function persistSessionToken(token) {
+  try {
+    sessionStorage.setItem(SESSION_TOKEN_STORAGE_KEY, token);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+function resolveRuntimeSession() {
+  const url = new URL(window.location.href);
+  const queryToken = (url.searchParams.get("token") || "").trim();
+  if (queryToken.length > 0) {
+    return {
+      token: queryToken,
+      shouldScrubAddressBar: persistSessionToken(queryToken),
+    };
+  }
+
+  return {
+    token: readSessionTokenFromStorage(),
+    shouldScrubAddressBar: false,
+  };
+}
+
+function scrubTokenFromAddressBar() {
+  const url = new URL(window.location.href);
+  if (!url.searchParams.has("token") || typeof window.history?.replaceState !== "function") {
+    return;
+  }
+
+  url.searchParams.delete("token");
+  const nextUrl = `${url.pathname}${url.search}${url.hash}`;
+  window.history.replaceState(window.history.state, document.title, nextUrl || "/");
+}
 
 function normalizeStatus(rawStatus) {
   if (rawStatus === "in-progress") return "in_progress";
@@ -312,9 +357,13 @@ function createStore(snapshot) {
 }
 
 function createApi(model) {
+  const { token: sessionToken } = resolveRuntimeSession();
+
   async function request(path, options = {}) {
     const headers = new Headers(options.headers || {});
-    headers.set("x-trekoon-token", SESSION_TOKEN);
+    if (sessionToken.length > 0) {
+      headers.set("authorization", `Bearer ${sessionToken}`);
+    }
     if (options.body && !headers.has("content-type")) {
       headers.set("content-type", "application/json");
     }
@@ -333,6 +382,10 @@ function createApi(model) {
   }
 
   async function runMutation({ optimistic, request: mutationRequest, successMessage }) {
+    if (model.store.isMutating) {
+      return;
+    }
+
     const previousSnapshot = cloneSnapshot(model.store.snapshot);
     model.store.notice = null;
     model.store.isMutating = true;
@@ -462,9 +515,9 @@ function removeDependencyInSnapshot(snapshot, sourceId, dependsOnId) {
   return normalizeSnapshot(nextSnapshot);
 }
 
-function renderStatusSelect(name, selectedStatus) {
+function renderStatusSelect(name, selectedStatus, disabled = false) {
   return `
-    <select name="${escapeHtml(name)}">
+    <select name="${escapeHtml(name)}" ${disabled ? "disabled" : ""}>
       ${STATUS_ORDER.map((status) => `
         <option value="${escapeHtml(status)}" ${selectedStatus === status ? "selected" : ""}>${escapeHtml(STATUS_LABELS[status] ?? status)}</option>
       `).join("")}
@@ -510,12 +563,12 @@ function renderEpicOption(epic, selected, isSynthetic) {
   `;
 }
 
-function renderTaskCard(task, selected) {
+function renderTaskCard(task, selected, isMutating = false) {
   return `
     <article
       class="board-task-card ${selected ? "is-selected" : ""}"
       tabindex="0"
-      draggable="true"
+      draggable="${isMutating ? "false" : "true"}"
       data-task-id="${escapeHtml(task.id)}"
       data-draggable-task="true"
     >
@@ -530,7 +583,7 @@ function renderTaskCard(task, selected) {
   `;
 }
 
-function renderListRow(task, selected, isEditing) {
+function renderListRow(task, selected, isEditing, isMutating = false) {
   return `
     <article class="board-list-row ${selected ? "is-selected" : ""}" data-task-id="${escapeHtml(task.id)}">
       <div>
@@ -542,23 +595,23 @@ function renderListRow(task, selected, isEditing) {
       <span>${escapeHtml(formatDate(task.updatedAt))}</span>
       <div class="board-legend">
         <button type="button" class="board-button" data-select-task="${escapeHtml(task.id)}">Open</button>
-        <button type="button" class="board-button" data-inline-edit-task="${escapeHtml(task.id)}">${isEditing ? "Hide edit" : "Inline edit"}</button>
+        <button type="button" class="board-button" data-inline-edit-task="${escapeHtml(task.id)}" ${isMutating ? "disabled" : ""}>${isEditing ? "Hide edit" : "Inline edit"}</button>
       </div>
       ${isEditing ? `
         <form data-task-form="${escapeHtml(task.id)}">
           <label>
             <span>Title</span>
-            <input name="title" value="${escapeHtml(task.title)}" required />
+            <input name="title" value="${escapeHtml(task.title)}" required ${isMutating ? "disabled" : ""} />
           </label>
           <label>
             <span>Description</span>
-            <textarea name="description" rows="3">${escapeHtml(task.description)}</textarea>
+            <textarea name="description" rows="3" ${isMutating ? "disabled" : ""}>${escapeHtml(task.description)}</textarea>
           </label>
           <label>
             <span>Status</span>
-            ${renderStatusSelect("status", task.status)}
+            ${renderStatusSelect("status", task.status, isMutating)}
           </label>
-          <button type="submit" class="board-button">Save task</button>
+          <button type="submit" class="board-button" ${isMutating ? "disabled" : ""}>Save task</button>
         </form>
       ` : ""}
     </article>
@@ -585,7 +638,7 @@ function lookupNode(snapshot, id) {
     ?? null;
 }
 
-function renderDependencyList(task, snapshot) {
+function renderDependencyList(task, snapshot, isMutating = false) {
   if (task.blockedBy.length === 0) {
     return renderEmptyState("No dependencies", "Add blockers here to keep task transitions honest.");
   }
@@ -599,13 +652,13 @@ function renderDependencyList(task, snapshot) {
         </div>
         <strong>${escapeHtml(readNodeLabel(dependency?.kind ?? "task", dependency?.title ?? dependencyId))}</strong>
         <p class="board-muted">${escapeHtml(dependency?.description || "No description provided.")}</p>
-        <button type="button" class="board-button" data-remove-dependency-source="${escapeHtml(task.id)}" data-remove-dependency-target="${escapeHtml(dependencyId)}">Remove dependency</button>
+        <button type="button" class="board-button" data-remove-dependency-source="${escapeHtml(task.id)}" data-remove-dependency-target="${escapeHtml(dependencyId)}" ${isMutating ? "disabled" : ""}>Remove dependency</button>
       </article>
     `;
   }).join("");
 }
 
-function renderDrawer(task, epics, snapshot) {
+function renderDrawer(task, epics, snapshot, isMutating = false) {
   const epic = epics.find((candidate) => candidate.id === task.epicId) ?? null;
   const dependencyOptions = renderDependencyOptions(task, snapshot);
   return `
@@ -631,17 +684,17 @@ function renderDrawer(task, epics, snapshot) {
         <form data-task-form="${escapeHtml(task.id)}">
           <label>
             <span>Title</span>
-            <input name="title" value="${escapeHtml(task.title)}" required />
+            <input name="title" value="${escapeHtml(task.title)}" required ${isMutating ? "disabled" : ""} />
           </label>
           <label>
             <span>Description</span>
-            <textarea name="description" rows="4">${escapeHtml(task.description)}</textarea>
+            <textarea name="description" rows="4" ${isMutating ? "disabled" : ""}>${escapeHtml(task.description)}</textarea>
           </label>
           <label>
             <span>Status</span>
-            ${renderStatusSelect("status", task.status)}
+            ${renderStatusSelect("status", task.status, isMutating)}
           </label>
-          <button type="submit" class="board-button">Save task</button>
+          <button type="submit" class="board-button" ${isMutating ? "disabled" : ""}>Save task</button>
         </form>
       </section>
       <section>
@@ -649,14 +702,14 @@ function renderDrawer(task, epics, snapshot) {
         <form data-dependency-form="${escapeHtml(task.id)}">
           <label>
             <span>Add dependency</span>
-            <select name="dependsOnId" required>
+            <select name="dependsOnId" required ${isMutating ? "disabled" : ""}>
               <option value="">Select a task or subtask</option>
               ${dependencyOptions}
             </select>
           </label>
-          <button type="submit" class="board-button">Add dependency</button>
+          <button type="submit" class="board-button" ${isMutating ? "disabled" : ""}>Add dependency</button>
         </form>
-        ${renderDependencyList(task, snapshot)}
+        ${renderDependencyList(task, snapshot, isMutating)}
       </section>
       <section>
         <strong>Subtasks</strong>
@@ -667,17 +720,17 @@ function renderDrawer(task, epics, snapshot) {
             </div>
             <label>
               <span>Title</span>
-              <input name="title" value="${escapeHtml(subtask.title)}" required />
+              <input name="title" value="${escapeHtml(subtask.title)}" required ${isMutating ? "disabled" : ""} />
             </label>
             <label>
               <span>Description</span>
-              <textarea name="description" rows="3">${escapeHtml(subtask.description)}</textarea>
+              <textarea name="description" rows="3" ${isMutating ? "disabled" : ""}>${escapeHtml(subtask.description)}</textarea>
             </label>
             <label>
               <span>Status</span>
-              ${renderStatusSelect("status", subtask.status)}
+              ${renderStatusSelect("status", subtask.status, isMutating)}
             </label>
-            <button type="submit" class="board-button">Save subtask</button>
+            <button type="submit" class="board-button" ${isMutating ? "disabled" : ""}>Save subtask</button>
           </form>
         `).join("") : renderEmptyState("No subtasks", "This task does not have subtasks in the current snapshot.")}
       </section>
@@ -719,7 +772,7 @@ function renderBoard(model) {
     const content = columnTasks.length === 0
       ? renderEmptyState(`No ${columnTitle.toLowerCase()} work`, "Adjust search or switch epics to inspect more tasks.")
       : columnTasks
-          .map((task) => renderTaskCard(task, selectedTask?.id === task.id))
+          .map((task) => renderTaskCard(task, selectedTask?.id === task.id, store.isMutating))
           .join("");
 
     return `
@@ -734,7 +787,7 @@ function renderBoard(model) {
 
   const listRows = visibleTasks.length === 0
     ? renderEmptyState("No matching tasks", "Nothing in this slice matches the active search and epic filters.", "/")
-    : visibleTasks.map((task) => renderListRow(task, selectedTask?.id === task.id, store.inlineTaskId === task.id)).join("");
+    : visibleTasks.map((task) => renderListRow(task, selectedTask?.id === task.id, store.inlineTaskId === task.id, store.isMutating)).join("");
 
   appElement.innerHTML = `
     ${renderNotice(store.notice)}
@@ -757,7 +810,7 @@ function renderBoard(model) {
         <section class="board-legend">
           <span class="board-chip">All epics by default</span>
           <span class="board-chip">${visibleTasks.length} visible tasks</span>
-          ${store.isMutating ? `<span class="board-chip">Saving…</span>` : ""}
+            ${store.isMutating ? `<span class="board-chip">Saving…</span>` : ""}
         </section>
 
         <section class="board-epics" role="listbox" aria-label="Epics" tabindex="0">
@@ -778,7 +831,7 @@ function renderBoard(model) {
             ${VIEW_MODES.map((view) => `<button class="board-tab" type="button" role="tab" aria-selected="${store.view === view}" data-view="${view}">${view === "kanban" ? "Kanban" : "List"}</button>`).join("")}
           </div>
           <div class="board-legend">
-            <span class="board-chip">Drag cards across columns</span>
+         <span class="board-chip">Drag cards across columns</span>
             <span class="board-chip">Inline edit in list view</span>
             <span class="board-chip">Drawer edits stay live</span>
           </div>
@@ -802,7 +855,7 @@ function renderBoard(model) {
       </section>
 
       <aside class="board-panel board-drawer" aria-label="Task drawer">
-        ${selectedTask ? renderDrawer(selectedTask, store.snapshot.epics, store.snapshot) : renderDrawerEmpty()}
+         ${selectedTask ? renderDrawer(selectedTask, store.snapshot.epics, store.snapshot, store.isMutating) : renderDrawerEmpty()}
       </aside>
     </div>
   `;
@@ -890,6 +943,9 @@ function attachInteractions(model, api) {
   document.querySelectorAll("[data-task-form]").forEach((form) => {
     form.addEventListener("submit", (event) => {
       event.preventDefault();
+      if (store.isMutating) {
+        return;
+      }
       const taskId = form.dataset.taskForm;
       const formData = new FormData(form);
       const updates = {
@@ -904,6 +960,9 @@ function attachInteractions(model, api) {
   document.querySelectorAll("[data-subtask-form]").forEach((form) => {
     form.addEventListener("submit", (event) => {
       event.preventDefault();
+      if (store.isMutating) {
+        return;
+      }
       const subtaskId = form.dataset.subtaskForm;
       const formData = new FormData(form);
       const updates = {
@@ -918,6 +977,9 @@ function attachInteractions(model, api) {
   document.querySelectorAll("[data-dependency-form]").forEach((form) => {
     form.addEventListener("submit", (event) => {
       event.preventDefault();
+      if (store.isMutating) {
+        return;
+      }
       const sourceId = form.dataset.dependencyForm;
       const formData = new FormData(form);
       const dependsOnId = String(formData.get("dependsOnId") || "").trim();
@@ -934,6 +996,9 @@ function attachInteractions(model, api) {
 
   document.querySelectorAll("[data-remove-dependency-source]").forEach((button) => {
     button.addEventListener("click", () => {
+      if (store.isMutating) {
+        return;
+      }
       const sourceId = button.dataset.removeDependencySource;
       const dependsOnId = button.dataset.removeDependencyTarget;
       api.removeDependency(sourceId, dependsOnId, (snapshot) => removeDependencyInSnapshot(snapshot, sourceId, dependsOnId));
@@ -942,6 +1007,10 @@ function attachInteractions(model, api) {
 
   document.querySelectorAll("[data-draggable-task]").forEach((card) => {
     card.addEventListener("dragstart", (event) => {
+      if (store.isMutating) {
+        event.preventDefault();
+        return;
+      }
       const taskId = card.dataset.taskId;
       if (!taskId) {
         return;
@@ -957,6 +1026,9 @@ function attachInteractions(model, api) {
     });
     column.addEventListener("drop", (event) => {
       event.preventDefault();
+      if (store.isMutating) {
+        return;
+      }
       const taskId = event.dataTransfer?.getData("text/task-id") || event.dataTransfer?.getData("text/plain");
       const nextStatus = column.dataset.dropStatus;
       const task = getTaskById(taskId);
@@ -1024,10 +1096,33 @@ function attachInteractions(model, api) {
   };
 }
 
-function boot() {
+async function boot() {
   try {
     applyTheme(readThemePreference());
-    const snapshot = normalizeSnapshot(readJsonScript("trekoon-board-snapshot") ?? {});
+    const runtimeSession = resolveRuntimeSession();
+    if (runtimeSession.shouldScrubAddressBar) {
+      scrubTokenFromAddressBar();
+    }
+
+    const headers = new Headers();
+    if (runtimeSession.token.length > 0) {
+      headers.set("authorization", `Bearer ${runtimeSession.token}`);
+    }
+
+    let snapshotPayload = readJsonScript("trekoon-board-snapshot") ?? {};
+    if (runtimeSession.token.length > 0) {
+      const response = await fetch("/api/snapshot", {
+        headers,
+      });
+      const payload = await response.json();
+      if (!payload?.ok) {
+        const message = payload?.error?.message || "Board request failed";
+        throw new Error(message);
+      }
+      snapshotPayload = payload?.data?.snapshot ?? {};
+    }
+
+    const snapshot = normalizeSnapshot(snapshotPayload);
 
     if (snapshot.epics.length === 0 && snapshot.tasks.length === 0) {
       appElement.innerHTML = `
