@@ -17,6 +17,7 @@ function mockInstallResult(action: BoardInstallResult["action"] = "updated"): Bo
       assetVersion: "9.9.9",
       entryFile: "index.html",
       files: ["index.html", "assets/app.js"],
+      assetDigest: "digest",
     },
   };
 }
