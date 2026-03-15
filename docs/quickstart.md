@@ -90,6 +90,43 @@ Current layout behavior:
 - long descriptions, dependency lists, and subtask lists stay collapsed behind
   disclosure controls until the operator expands them
 
+Operator notes for responsive modes and scroll ownership:
+
+- start in the epic overview; each overview card is the open action and moves
+  you into that epic's board workspace
+- the topbar always echoes current scope so you can confirm whether search is
+  acting on all epics or only the active epic
+- compact/mobile layouts switch between explicit `Epics`, `Board`, and `Detail`
+  modes instead of leaving overview, board, and detail stacked on top of each
+  other
+- opening task detail on smaller screens uses the dedicated detail sheet/modal;
+  nested subtask work then appears above that detail surface rather than inside
+  the background board list
+- scrolling belongs to exactly one surface at a time: page in overview,
+  workspace inside an epic, inspector or task modal when detail is open, and the
+  subtask modal for the top-most nested layer
+- when you close a nested layer, scroll ownership returns to the previous
+  surface so you land back in the same board context instead of losing position
+
+Desktop/mobile verification checklist for operators:
+
+1. Open the board with `trekoon board open` and confirm the first view is the
+   epic overview.
+2. Activate an epic from the overview card, then confirm the topbar scope label
+   changes from overview to the active epic.
+3. Type in search and verify the scope copy updates to searching-all-epics or
+   searching-the-active-epic depending on the current mode; clear search and
+   confirm the prior scope summary returns immediately.
+4. On desktop width, open task detail and confirm the inspector/modal sits above
+   the workspace without the background page taking over scroll.
+5. From task detail, open a subtask modal and confirm the subtask layer owns
+   scroll until it closes.
+6. Repeat the same flow on an iPhone-sized viewport and confirm the top nav can
+   move between `Epics`, `Board`, and `Detail` while only one dominant region is
+   visible at a time.
+7. Close nested layers from the top down and confirm you return to the prior
+   workspace/detail context instead of the page top.
+
 ## Create an epic, task, and subtask
 
 ```bash
