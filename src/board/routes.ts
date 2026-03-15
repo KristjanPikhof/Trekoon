@@ -235,6 +235,24 @@ export function createBoardApiHandler(context: BoardRouteContext): (request: Req
         return buildMutationResponse(domain, { subtask });
       }
 
+      if (request.method === "POST" && url.pathname === "/api/subtasks") {
+        const body = await parseJsonBody(request);
+        const subtask = mutations.createSubtask({
+          taskId: readRequiredString(body, "taskId"),
+          title: readRequiredString(body, "title"),
+          description: readOptionalString(body, "description"),
+          status: readOptionalString(body, "status"),
+        });
+        return buildMutationResponse(domain, { subtask }, 201);
+      }
+
+      const deleteSubtaskMatch = request.method === "DELETE" ? url.pathname.match(/^\/api\/subtasks\/([^/]+)$/u) : null;
+      if (deleteSubtaskMatch) {
+        const subtaskId = deleteSubtaskMatch[1] ?? "";
+        mutations.deleteSubtask(subtaskId);
+        return buildMutationResponse(domain, { subtaskId, deleted: true });
+      }
+
       if (request.method === "POST" && url.pathname === "/api/dependencies") {
         const body = await parseJsonBody(request);
         const dependency = mutations.addDependency(readRequiredString(body, "sourceId"), readRequiredString(body, "dependsOnId"));
