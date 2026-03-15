@@ -134,6 +134,7 @@ const EPIC_HELP = [
   "  Repo-wide bulk mode:",
   "    trekoon epic update --all --append <text> [--status <status>]",
   "    trekoon epic update --ids <csv> --append <text> [--status <status>]",
+  "    - preserves existing per-row bulk behavior; not one atomic multi-row update",
   "  Descendant cascade mode:",
   "    trekoon epic update <epic-id> --all --status done|todo",
   "    - cascades atomically through descendant tasks and subtasks",
@@ -143,7 +144,7 @@ const EPIC_HELP = [
 ].join("\n");
 
 const TASK_HELP = [
-  "Usage: trekoon task <create|create-many|list|show|ready|next|search|replace|update|delete> [options]",
+  "Usage: trekoon task <create|create-many|list|show|ready|next|done|search|replace|update|delete> [options]",
   "",
   "Create-many behavior:",
   "  trekoon task create-many --epic <epic-id> --task <spec> [--task <spec> ...]",
@@ -196,6 +197,7 @@ const TASK_HELP = [
   "  Repo-wide bulk mode:",
   "    trekoon task update --all --append <text> [--status <status>]",
   "    trekoon task update --ids <csv> --append <text> [--status <status>]",
+  "    - preserves existing per-row bulk behavior; not one atomic multi-row update",
   "  Descendant cascade mode:",
   "    trekoon task update <task-id> --all --status done|todo",
   "    - cascades atomically through descendant subtasks",
@@ -241,6 +243,7 @@ const SUBTASK_HELP = [
   "  Repo-wide bulk mode:",
   "    trekoon subtask update --all --append <text> [--status <status>]",
   "    trekoon subtask update --ids <csv> --append <text> [--status <status>]",
+  "    - preserves existing per-row bulk behavior; not one atomic multi-row update",
   "  Positional-id cascade syntax:",
   "    trekoon subtask update <subtask-id> --all --status done|todo",
   "    - accepted for contract consistency",
