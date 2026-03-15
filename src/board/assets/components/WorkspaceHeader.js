@@ -5,6 +5,7 @@ export function renderWorkspaceHeader(context) {
     neutralChipClasses,
     renderEpicCountSummary,
     renderIcon,
+    renderStatusBadge,
     sectionLabelClasses,
     selectedEpic,
     snapshotEpics,
