@@ -77,7 +77,12 @@ function persistPreferredBoardPort(stateFile: string, port: number): void {
 }
 
 function isUnavailablePortError(error: unknown): boolean {
-  return error instanceof Error && /(EADDRINUSE|EACCES|address already in use|permission denied)/i.test(error.message);
+  if (!(error instanceof Error)) {
+    return false;
+  }
+
+  const errorCode = typeof (error as { code?: unknown }).code === "string" ? (error as { code: string }).code : "";
+  return /^(EADDRINUSE|EACCES)$/i.test(errorCode) || /(EADDRINUSE|EACCES|address already in use|permission denied)/i.test(error.message);
 }
 
 export function startBoardServer(options: StartBoardServerOptions = {}): BoardServerInfo {
