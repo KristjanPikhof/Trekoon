@@ -5,7 +5,7 @@ import { dirname, join } from "node:path";
 import { afterEach, describe, expect, test } from "bun:test";
 
 import { ensureBoardInstalled, updateBoardInstallation } from "../../src/board/install";
-import { BOARD_ASSET_CONTRACT_VERSION, BoardInstallError } from "../../src/board/types";
+import { BOARD_ASSET_CONTRACT_VERSION } from "../../src/board/types";
 import { resolveStoragePaths, TREKOON_BOARD_ENTRY_FILENAME } from "../../src/storage/path";
 
 const tempDirs: string[] = [];
@@ -146,10 +146,6 @@ describe("board install", (): void => {
         bundledAssetRoot,
         assetVersion: "1.0.0",
       }),
-    ).toThrow(
-      expect.objectContaining<Partial<BoardInstallError>>({
-        code: "missing_asset",
-      }),
-    );
+    ).toThrow(expect.objectContaining({ code: "missing_asset" }));
   });
 });
