@@ -18,6 +18,9 @@ All notable changes to Trekoon are documented in this file.
 - Help text, docs, and machine-readable command contracts now clarify the two
   meanings of `update --all`: bulk field application on selected rows vs.
   descendant status cascades from a positional epic/task id.
+- Documentation was refactored and expanded across the README, AI agent,
+  quickstart, CLI reference, and machine-contract docs, and those docs now
+  ship in package distributions.
 
 ### Fixed
 
