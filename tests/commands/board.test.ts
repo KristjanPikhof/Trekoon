@@ -84,7 +84,7 @@ describe("board command", (): void => {
           // no-op in tests
         },
       }),
-      openBoardInBrowser: (url) => ({
+      openBoardInBrowser: async (url) => ({
         launched: true,
         url,
         command: "open",
@@ -141,7 +141,7 @@ describe("board command", (): void => {
           // no-op in tests
         },
       }),
-      openBoardInBrowser: (url) => ({
+      openBoardInBrowser: async (url) => ({
         launched: false,
         url,
         command: "open",
