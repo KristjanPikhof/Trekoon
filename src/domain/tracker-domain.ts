@@ -1373,6 +1373,7 @@ export class TrackerDomain {
   #topologicallyOrderDoneCascadeChanges(changes: readonly StatusCascadeChange[]): StatusCascadeChange[] {
     const indexById = new Map<string, number>();
     const changeById = new Map<string, StatusCascadeChange>();
+    const dependencyTargetsBySource = new Map<string, Set<string>>();
     const dependents = new Map<string, Set<string>>();
     const indegree = new Map<string, number>();
 
@@ -1380,6 +1381,13 @@ export class TrackerDomain {
       indexById.set(change.id, index);
       changeById.set(change.id, change);
       indegree.set(change.id, 0);
+
+      if (change.kind !== "task" && change.kind !== "subtask") {
+        return;
+      }
+
+      const dependencyTargets = new Set(this.listDependencies(change.id).map((dependency) => dependency.dependsOnId));
+      dependencyTargetsBySource.set(change.id, dependencyTargets);
     });
 
     const addEdge = (fromId: string, toId: string): void => {
@@ -1398,11 +1406,13 @@ export class TrackerDomain {
     };
 
     for (const change of changes) {
-      if (change.kind === "subtask" && change.parentId !== undefined) {
+      const dependencyTargets = dependencyTargetsBySource.get(change.id);
+
+      if (change.kind === "subtask" && change.parentId !== undefined && !dependencyTargets?.has(change.parentId)) {
         addEdge(change.id, change.parentId);
       }
 
-      if (change.kind === "task" && change.parentId !== undefined) {
+      if (change.kind === "task" && change.parentId !== undefined && !dependencyTargets?.has(change.parentId)) {
         addEdge(change.id, change.parentId);
       }
 
@@ -1410,8 +1420,8 @@ export class TrackerDomain {
         continue;
       }
 
-      for (const dependency of this.listDependencies(change.id)) {
-        addEdge(dependency.dependsOnId, dependency.sourceId);
+      for (const dependencyTargetId of dependencyTargets ?? []) {
+        addEdge(dependencyTargetId, change.id);
       }
     }
 
