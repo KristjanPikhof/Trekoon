@@ -1268,6 +1268,21 @@ function attachInteractions(model, api) {
     attachInteractions(model, api);
   });
 
+  document.querySelectorAll("[data-nav-board]").forEach((button) => {
+    button.addEventListener("click", () => {
+      const fallbackEpicId = store.selectedEpicId || store.snapshot.epics[0]?.id || null;
+      if (!fallbackEpicId) {
+        return;
+      }
+
+      store.screen = "tasks";
+      store.selectedEpicId = fallbackEpicId;
+      persist();
+      renderBoard(model);
+      attachInteractions(model, api);
+    });
+  });
+
   document.querySelectorAll("[data-view]").forEach((button) => {
     button.addEventListener("click", () => {
       store.view = button.dataset.view;
@@ -1533,10 +1548,15 @@ async function boot() {
 
     if (snapshot.epics.length === 0 && snapshot.tasks.length === 0) {
       appElement.innerHTML = `
-        <section class="board-state">
-          <span class="board-pill">Board ready</span>
-          <h1>No work has been published yet</h1>
-          <p>Once the board snapshot is installed into <code>.trekoon/board</code>, epics and tasks will appear here.</p>
+        <section class="mx-auto flex min-h-screen max-w-4xl items-center justify-center px-4 py-10 sm:px-6">
+          <div class="${panelClasses("w-full p-8 text-center")}">
+            <div class="mx-auto mb-5 flex h-14 w-14 items-center justify-center rounded-2xl bg-[var(--board-accent-soft)] text-[var(--board-accent)] ring-1 ring-[var(--board-border-strong)]">
+              ${renderIcon("inventory_2", "text-[22px]")}
+            </div>
+            <span class="${sectionLabelClasses()}">Board ready</span>
+            <h1 class="mt-2 text-3xl font-semibold tracking-tight text-[var(--board-text)]">No work has been published yet</h1>
+            <p class="mx-auto mt-3 max-w-2xl text-sm leading-6 text-[var(--board-text-muted)] sm:text-base">Once the board snapshot is installed into <code class="rounded-lg border border-[var(--board-border)] bg-white/[0.04] px-2 py-1 text-[var(--board-text)]">.trekoon/board</code>, epics and tasks will appear here.</p>
+          </div>
         </section>
       `;
       return;
