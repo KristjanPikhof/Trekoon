@@ -515,9 +515,9 @@ function removeDependencyInSnapshot(snapshot, sourceId, dependsOnId) {
   return normalizeSnapshot(nextSnapshot);
 }
 
-function renderStatusSelect(name, selectedStatus) {
+function renderStatusSelect(name, selectedStatus, disabled = false) {
   return `
-    <select name="${escapeHtml(name)}">
+    <select name="${escapeHtml(name)}" ${disabled ? "disabled" : ""}>
       ${STATUS_ORDER.map((status) => `
         <option value="${escapeHtml(status)}" ${selectedStatus === status ? "selected" : ""}>${escapeHtml(STATUS_LABELS[status] ?? status)}</option>
       `).join("")}
@@ -563,12 +563,12 @@ function renderEpicOption(epic, selected, isSynthetic) {
   `;
 }
 
-function renderTaskCard(task, selected) {
+function renderTaskCard(task, selected, isMutating = false) {
   return `
     <article
       class="board-task-card ${selected ? "is-selected" : ""}"
       tabindex="0"
-      draggable="true"
+      draggable="${isMutating ? "false" : "true"}"
       data-task-id="${escapeHtml(task.id)}"
       data-draggable-task="true"
     >
@@ -583,7 +583,7 @@ function renderTaskCard(task, selected) {
   `;
 }
 
-function renderListRow(task, selected, isEditing) {
+function renderListRow(task, selected, isEditing, isMutating = false) {
   return `
     <article class="board-list-row ${selected ? "is-selected" : ""}" data-task-id="${escapeHtml(task.id)}">
       <div>
@@ -595,23 +595,23 @@ function renderListRow(task, selected, isEditing) {
       <span>${escapeHtml(formatDate(task.updatedAt))}</span>
       <div class="board-legend">
         <button type="button" class="board-button" data-select-task="${escapeHtml(task.id)}">Open</button>
-        <button type="button" class="board-button" data-inline-edit-task="${escapeHtml(task.id)}">${isEditing ? "Hide edit" : "Inline edit"}</button>
+        <button type="button" class="board-button" data-inline-edit-task="${escapeHtml(task.id)}" ${isMutating ? "disabled" : ""}>${isEditing ? "Hide edit" : "Inline edit"}</button>
       </div>
       ${isEditing ? `
         <form data-task-form="${escapeHtml(task.id)}">
           <label>
             <span>Title</span>
-            <input name="title" value="${escapeHtml(task.title)}" required />
+            <input name="title" value="${escapeHtml(task.title)}" required ${isMutating ? "disabled" : ""} />
           </label>
           <label>
             <span>Description</span>
-            <textarea name="description" rows="3">${escapeHtml(task.description)}</textarea>
+            <textarea name="description" rows="3" ${isMutating ? "disabled" : ""}>${escapeHtml(task.description)}</textarea>
           </label>
           <label>
             <span>Status</span>
-            ${renderStatusSelect("status", task.status)}
+            ${renderStatusSelect("status", task.status, isMutating)}
           </label>
-          <button type="submit" class="board-button">Save task</button>
+          <button type="submit" class="board-button" ${isMutating ? "disabled" : ""}>Save task</button>
         </form>
       ` : ""}
     </article>
@@ -638,7 +638,7 @@ function lookupNode(snapshot, id) {
     ?? null;
 }
 
-function renderDependencyList(task, snapshot) {
+function renderDependencyList(task, snapshot, isMutating = false) {
   if (task.blockedBy.length === 0) {
     return renderEmptyState("No dependencies", "Add blockers here to keep task transitions honest.");
   }
@@ -652,16 +652,15 @@ function renderDependencyList(task, snapshot) {
         </div>
         <strong>${escapeHtml(readNodeLabel(dependency?.kind ?? "task", dependency?.title ?? dependencyId))}</strong>
         <p class="board-muted">${escapeHtml(dependency?.description || "No description provided.")}</p>
-        <button type="button" class="board-button" data-remove-dependency-source="${escapeHtml(task.id)}" data-remove-dependency-target="${escapeHtml(dependencyId)}">Remove dependency</button>
+        <button type="button" class="board-button" data-remove-dependency-source="${escapeHtml(task.id)}" data-remove-dependency-target="${escapeHtml(dependencyId)}" ${isMutating ? "disabled" : ""}>Remove dependency</button>
       </article>
     `;
   }).join("");
 }
 
-function renderDrawer(task, epics, snapshot) {
+function renderDrawer(task, epics, snapshot, isMutating = false) {
   const epic = epics.find((candidate) => candidate.id === task.epicId) ?? null;
   const dependencyOptions = renderDependencyOptions(task, snapshot);
-  const isMutating = snapshot === undefined ? false : false;
   return `
     <header class="board-drawer__header">
       <span class="board-pill">Task drawer</span>
@@ -685,17 +684,17 @@ function renderDrawer(task, epics, snapshot) {
         <form data-task-form="${escapeHtml(task.id)}">
           <label>
             <span>Title</span>
-            <input name="title" value="${escapeHtml(task.title)}" required />
+            <input name="title" value="${escapeHtml(task.title)}" required ${isMutating ? "disabled" : ""} />
           </label>
           <label>
             <span>Description</span>
-            <textarea name="description" rows="4">${escapeHtml(task.description)}</textarea>
+            <textarea name="description" rows="4" ${isMutating ? "disabled" : ""}>${escapeHtml(task.description)}</textarea>
           </label>
           <label>
             <span>Status</span>
-            ${renderStatusSelect("status", task.status)}
+            ${renderStatusSelect("status", task.status, isMutating)}
           </label>
-          <button type="submit" class="board-button">Save task</button>
+          <button type="submit" class="board-button" ${isMutating ? "disabled" : ""}>Save task</button>
         </form>
       </section>
       <section>
@@ -703,14 +702,14 @@ function renderDrawer(task, epics, snapshot) {
         <form data-dependency-form="${escapeHtml(task.id)}">
           <label>
             <span>Add dependency</span>
-            <select name="dependsOnId" required>
+            <select name="dependsOnId" required ${isMutating ? "disabled" : ""}>
               <option value="">Select a task or subtask</option>
               ${dependencyOptions}
             </select>
           </label>
-          <button type="submit" class="board-button">Add dependency</button>
+          <button type="submit" class="board-button" ${isMutating ? "disabled" : ""}>Add dependency</button>
         </form>
-        ${renderDependencyList(task, snapshot)}
+        ${renderDependencyList(task, snapshot, isMutating)}
       </section>
       <section>
         <strong>Subtasks</strong>
@@ -721,17 +720,17 @@ function renderDrawer(task, epics, snapshot) {
             </div>
             <label>
               <span>Title</span>
-            <input name="title" value="${escapeHtml(subtask.title)}" required />
+              <input name="title" value="${escapeHtml(subtask.title)}" required ${isMutating ? "disabled" : ""} />
             </label>
             <label>
               <span>Description</span>
-            <textarea name="description" rows="3">${escapeHtml(subtask.description)}</textarea>
+              <textarea name="description" rows="3" ${isMutating ? "disabled" : ""}>${escapeHtml(subtask.description)}</textarea>
             </label>
             <label>
               <span>Status</span>
-              ${renderStatusSelect("status", subtask.status)}
+              ${renderStatusSelect("status", subtask.status, isMutating)}
             </label>
-            <button type="submit" class="board-button">Save subtask</button>
+            <button type="submit" class="board-button" ${isMutating ? "disabled" : ""}>Save subtask</button>
           </form>
         `).join("") : renderEmptyState("No subtasks", "This task does not have subtasks in the current snapshot.")}
       </section>
@@ -754,7 +753,6 @@ function renderDrawerEmpty() {
 
 function renderBoard(model) {
   const { store, getSelectedTask, getVisibleEpics, getVisibleTasks } = model;
-  const mutationDisabled = store.isMutating ? "disabled" : "";
   const visibleEpics = getVisibleEpics();
   const visibleTasks = getVisibleTasks();
   const selectedTask = getSelectedTask() ?? visibleTasks[0] ?? null;
@@ -774,7 +772,7 @@ function renderBoard(model) {
     const content = columnTasks.length === 0
       ? renderEmptyState(`No ${columnTitle.toLowerCase()} work`, "Adjust search or switch epics to inspect more tasks.")
       : columnTasks
-          .map((task) => renderTaskCard(task, selectedTask?.id === task.id))
+          .map((task) => renderTaskCard(task, selectedTask?.id === task.id, store.isMutating))
           .join("");
 
     return `
@@ -789,7 +787,7 @@ function renderBoard(model) {
 
   const listRows = visibleTasks.length === 0
     ? renderEmptyState("No matching tasks", "Nothing in this slice matches the active search and epic filters.", "/")
-    : visibleTasks.map((task) => renderListRow(task, selectedTask?.id === task.id, store.inlineTaskId === task.id)).join("");
+    : visibleTasks.map((task) => renderListRow(task, selectedTask?.id === task.id, store.inlineTaskId === task.id, store.isMutating)).join("");
 
   appElement.innerHTML = `
     ${renderNotice(store.notice)}
@@ -857,7 +855,7 @@ function renderBoard(model) {
       </section>
 
       <aside class="board-panel board-drawer" aria-label="Task drawer">
-         ${selectedTask ? renderDrawer(selectedTask, store.snapshot.epics, store.snapshot, mutationDisabled) : renderDrawerEmpty()}
+         ${selectedTask ? renderDrawer(selectedTask, store.snapshot.epics, store.snapshot, store.isMutating) : renderDrawerEmpty()}
       </aside>
     </div>
   `;
