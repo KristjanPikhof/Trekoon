@@ -67,6 +67,10 @@ function isCompactViewport() {
   return typeof window !== "undefined" && window.matchMedia?.("(max-width: 900px)")?.matches;
 }
 
+function shouldUseTaskModal(boardState, store) {
+  return Boolean(boardState?.selectedTask && (store?.view === "kanban" || isCompactViewport()));
+}
+
 function buttonClasses(options = {}) {
   const kind = options.kind ?? "secondary";
   const iconOnly = options.iconOnly ?? false;
@@ -112,12 +116,12 @@ let appElement = null;
 const scrollAuthorityStack = createScrollAuthorityStack();
 let searchReturnFocusState = null;
 
-function resolveTaskDetailOwner(boardState, useTaskModal) {
+function resolveTaskDetailOwner(boardState, store) {
   if (!boardState?.selectedTask) {
     return null;
   }
 
-  return useTaskModal ? SCROLL_AUTHORITY.taskModal : SCROLL_AUTHORITY.inspector;
+  return shouldUseTaskModal(boardState, store) ? SCROLL_AUTHORITY.taskModal : SCROLL_AUTHORITY.inspector;
 }
 
 function rememberReturnFocus(owner, element) {
@@ -1060,7 +1064,7 @@ function renderBoard(model) {
   const selectedSubtask = boardState.selectedSubtask;
   const screen = boardState.screen;
   const compactViewport = isCompactViewport();
-  const useTaskModal = Boolean(selectedTask && (store.view === "kanban" || compactViewport));
+  const useTaskModal = shouldUseTaskModal(boardState, store);
   const currentNav = selectedTask ? "detail" : screen === "tasks" ? "board" : "epics";
   const primarySurfaceLabel = currentNav === "detail"
     ? "Detail"
@@ -1323,7 +1327,7 @@ function attachInteractions(model, api, rerender) {
   document.querySelectorAll("[data-open-subtask]").forEach((button) => {
     button.addEventListener("click", () => {
       const boardState = getBoardState();
-      rememberReturnFocus(resolveTaskDetailOwner(boardState, store.view === "kanban"), button);
+      rememberReturnFocus(resolveTaskDetailOwner(boardState, store), button);
       actions.openSubtask(button.dataset.openSubtask || null);
     });
   });
