@@ -1252,8 +1252,8 @@ function renderBoard(model) {
   `;
 
   const tasksWorkspaceMarkup = selectedEpic ? `
-    <div class="board-root board-root--tasks ${selectedTask && !useTaskModal ? "has-detail" : ""} flex-1 min-h-0 grid gap-5 ${selectedTask && !useTaskModal ? "2xl:grid-cols-[280px_minmax(0,1fr)_420px]" : "xl:grid-cols-[280px_minmax(0,1fr)]"}">
-      <aside class="board-sidebar ${panelClasses("hidden min-h-0 overflow-hidden p-4 xl:grid xl:grid-rows-[auto_1fr]")}" aria-label="Epic switcher">
+    <div class="board-root board-root--tasks ${selectedTask && !useTaskModal ? "has-detail" : ""} h-full flex-1 min-h-0 grid gap-5 ${selectedTask && !useTaskModal ? "2xl:grid-cols-[280px_minmax(0,1fr)_420px]" : "xl:grid-cols-[280px_minmax(0,1fr)]"}">
+      <aside class="board-sidebar ${panelClasses("hidden h-full min-h-0 overflow-hidden p-4 xl:grid xl:grid-rows-[auto_1fr]")}" aria-label="Epic switcher">
         <header class="board-sidebar__header border-b border-[var(--board-border)] pb-4">
           <span class="${sectionLabelClasses()}">Epics</span>
           <h2 class="mt-2 text-lg font-semibold tracking-tight text-[var(--board-text)]">Switch epic</h2>
@@ -1266,7 +1266,7 @@ function renderBoard(model) {
         </div>
       </aside>
 
-      <section class="board-workspace ${panelClasses("grid min-h-0 min-w-0 grid-rows-[auto_1fr] overflow-hidden p-5 sm:p-6")}" aria-label="Workspace">
+      <section class="board-workspace ${panelClasses("grid h-full min-h-0 min-w-0 grid-rows-[auto_1fr] overflow-hidden p-5 sm:p-6")}" aria-label="Workspace">
         <header class="board-section-head board-section-head--workspace flex flex-col gap-5 border-b border-[var(--board-border)] pb-5">
           <div>
             <span class="${sectionLabelClasses()}">Selected epic</span>
@@ -1299,11 +1299,11 @@ function renderBoard(model) {
           </div>
         </header>
 
-        <div class="board-content mt-6 min-h-0 min-w-0 overflow-hidden">
+        <div class="board-content mt-6 h-full min-h-0 min-w-0 overflow-hidden">
           ${store.view === "kanban"
-            ? `<div class="board-kanban flex min-h-0 min-w-0 flex-wrap content-start gap-4 overflow-y-auto pr-1">${columnsMarkup}</div>`
+            ? `<div class="board-kanban flex h-full min-h-0 min-w-0 flex-wrap content-start gap-4 overflow-y-auto pr-1">${columnsMarkup}</div>`
             : `
-                <div class="board-list grid min-h-0 gap-4 grid-rows-[auto_1fr]">
+                <div class="board-list grid h-full min-h-0 gap-4 grid-rows-[auto_1fr]">
                   <div class="board-list__header hidden gap-3 px-1 text-[11px] font-semibold uppercase tracking-[0.16em] text-[var(--board-text-soft)] md:grid md:grid-cols-[minmax(0,1.8fr)_140px_90px_170px]">
                     <span>Task</span>
                     <span>Status</span>
@@ -1316,7 +1316,7 @@ function renderBoard(model) {
       </section>
 
       ${selectedTask && !useTaskModal ? `
-        <aside class="board-panel board-drawer is-open ${panelClasses("fixed inset-4 z-30 grid min-h-0 overflow-hidden p-5 xl:static xl:inset-auto xl:max-h-full xl:p-5")}" aria-label="Task drawer">
+        <aside class="board-panel board-drawer is-open ${panelClasses("fixed inset-4 z-30 grid h-full min-h-0 overflow-hidden p-5 xl:static xl:inset-auto xl:max-h-full xl:p-5")}" aria-label="Task drawer">
           ${renderDrawer(selectedTask, store.snapshot.epics, store.snapshot, store.isMutating)}
         </aside>
       ` : ""}
@@ -1326,14 +1326,14 @@ function renderBoard(model) {
 
   appElement.innerHTML = `
     ${renderNotice(store.notice)}
-    <div class="board-layout mx-auto flex w-full max-w-[1600px] flex-col gap-4 px-4 py-4 sm:px-6 sm:py-6 xl:px-8 ${screen === "tasks" ? "min-h-[100dvh] max-h-[100dvh] overflow-hidden" : "min-h-screen"}">
+    <div class="board-layout mx-auto flex w-full max-w-[1600px] flex-col gap-4 px-4 py-4 sm:px-6 sm:py-6 xl:px-8 ${screen === "tasks" ? "h-[100dvh] overflow-hidden" : "min-h-screen"}">
       ${topbarMarkup}
       ${screen === "tasks" ? tasksWorkspaceMarkup : epicsOverviewMarkup}
       ${selectedSubtask ? renderSubtaskModal(selectedSubtask, store.isMutating) : ""}
     </div>
   `;
 
-  syncOverlayScrollLock(Boolean(selectedTask || selectedSubtask));
+  syncOverlayScrollLock(Boolean(useTaskModal || selectedSubtask));
 }
 
 function renderError(message) {
