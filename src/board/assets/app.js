@@ -1016,19 +1016,45 @@ function attachInteractions(model, api) {
 
   document.querySelector("#board-search-input")?.addEventListener("input", (event) => {
     store.search = event.target.value;
+    if (store.selectedTaskId && !getVisibleTasks().some((task) => task.id === store.selectedTaskId)) {
+      store.selectedTaskId = null;
+      store.selectedSubtaskId = null;
+    }
     persist();
     renderBoard(model);
     attachInteractions(model, api);
     document.querySelector("#board-search-input")?.focus();
   });
 
-  document.querySelectorAll("[data-epic-id]").forEach((button) => {
+  document.querySelectorAll("[data-open-epic]").forEach((button) => {
     button.addEventListener("click", () => {
-      store.epicFilter = button.dataset.epicId || "ALL";
+      store.screen = "tasks";
+      store.selectedEpicId = button.dataset.openEpic || null;
+      store.selectedTaskId = null;
+      store.selectedSubtaskId = null;
       persist();
       renderBoard(model);
       attachInteractions(model, api);
     });
+  });
+
+  document.querySelector("#board-epic-select")?.addEventListener("change", (event) => {
+    store.screen = "tasks";
+    store.selectedEpicId = event.target.value || null;
+    store.selectedTaskId = null;
+    store.selectedSubtaskId = null;
+    persist();
+    renderBoard(model);
+    attachInteractions(model, api);
+  });
+
+  document.querySelector("[data-nav='epics']")?.addEventListener("click", () => {
+    store.screen = "epics";
+    store.selectedTaskId = null;
+    store.selectedSubtaskId = null;
+    persist();
+    renderBoard(model);
+    attachInteractions(model, api);
   });
 
   document.querySelectorAll("[data-view]").forEach((button) => {
@@ -1053,24 +1079,37 @@ function attachInteractions(model, api) {
     });
   });
 
-  document.querySelectorAll("[data-select-task]").forEach((button) => {
-    button.addEventListener("click", (event) => {
-      event.stopPropagation();
-      store.selectedTaskId = button.dataset.selectTask;
+  document.querySelectorAll("[data-close-task]").forEach((button) => {
+    button.addEventListener("click", () => {
+      store.selectedTaskId = null;
+      store.selectedSubtaskId = null;
       persist();
       renderBoard(model);
       attachInteractions(model, api);
     });
   });
 
-  document.querySelectorAll("[data-inline-edit-task]").forEach((button) => {
-    button.addEventListener("click", (event) => {
-      event.stopPropagation();
-      store.inlineTaskId = store.inlineTaskId === button.dataset.inlineEditTask ? null : button.dataset.inlineEditTask;
-      persist();
+  document.querySelectorAll("[data-open-subtask]").forEach((button) => {
+    button.addEventListener("click", () => {
+      store.selectedSubtaskId = button.dataset.openSubtask || null;
       renderBoard(model);
       attachInteractions(model, api);
     });
+  });
+
+  document.querySelectorAll("[data-close-subtask]").forEach((node) => {
+    node.addEventListener("click", (event) => {
+      if (event.currentTarget !== event.target && event.currentTarget?.classList?.contains("board-modal-backdrop")) {
+        return;
+      }
+      store.selectedSubtaskId = null;
+      renderBoard(model);
+      attachInteractions(model, api);
+    });
+  });
+
+  document.querySelector(".board-modal")?.addEventListener("click", (event) => {
+    event.stopPropagation();
   });
 
   document.querySelectorAll("[data-task-form]").forEach((form) => {
@@ -1103,6 +1142,7 @@ function attachInteractions(model, api) {
         description: String(formData.get("description") || "").trim(),
         status: normalizeStatus(String(formData.get("status") || "todo")),
       };
+      store.selectedSubtaskId = subtaskId;
       api.patchSubtask(subtaskId, updates, (snapshot) => updateSubtaskInSnapshot(snapshot, subtaskId, updates));
     });
   });
@@ -1190,17 +1230,27 @@ function attachInteractions(model, api) {
     if (event.key === "Escape") {
       if (activeElement?.id === "board-search-input") {
         activeElement.blur();
-      } else {
+      } else if (store.selectedSubtaskId) {
+        store.selectedSubtaskId = null;
+        renderBoard(model);
+        attachInteractions(model, api);
+      } else if (store.selectedTaskId) {
         store.selectedTaskId = null;
-        store.inlineTaskId = null;
         persist();
         renderBoard(model);
         attachInteractions(model, api);
+      } else if (store.screen === "tasks") {
+        store.screen = "epics";
+        persist();
+        renderBoard(model);
+        attachInteractions(model, api);
+      } else {
+        store.notice = null;
       }
       return;
     }
 
-    if (isTypingTarget || visibleTasks.length === 0) return;
+    if (store.screen !== "tasks" || isTypingTarget || visibleTasks.length === 0) return;
 
     if (event.key.toLowerCase() === "j" || event.key === "ArrowDown") {
       event.preventDefault();
@@ -1225,6 +1275,15 @@ function attachInteractions(model, api) {
     if (event.key === "Enter" && currentIndex >= 0) {
       event.preventDefault();
       document.querySelector(".board-drawer")?.scrollIntoView({ block: "nearest", behavior: "smooth" });
+      return;
+    }
+
+    if (event.key === "Enter" && currentIndex === -1 && visibleTasks[0]) {
+      event.preventDefault();
+      store.selectedTaskId = visibleTasks[0].id;
+      persist();
+      renderBoard(model);
+      attachInteractions(model, api);
     }
   };
 }
