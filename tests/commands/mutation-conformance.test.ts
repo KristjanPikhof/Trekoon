@@ -4,6 +4,7 @@ import { join } from "node:path";
 
 import { afterEach, describe, expect, test } from "bun:test";
 
+import { createBoardApiHandler } from "../../src/board/routes";
 import { runDep } from "../../src/commands/dep";
 import { runEpic } from "../../src/commands/epic";
 import { runSubtask } from "../../src/commands/subtask";
@@ -680,5 +681,46 @@ describe("mutation conformance", (): void => {
     expect(eventOperationsForEntity(cwd, "epic", epicId)).toEqual([ENTITY_OPERATIONS.epic.created]);
     expect(eventOperationsForEntity(cwd, "task", taskId)).toEqual([ENTITY_OPERATIONS.task.created]);
     expect(eventOperationsForEntity(cwd, "subtask", subtaskId)).toEqual([ENTITY_OPERATIONS.subtask.created]);
+  });
+
+  test("board mutation routes append canonical task update events", async (): Promise<void> => {
+    const cwd = createWorkspace();
+
+    const createdEpic = await runEpic({
+      cwd,
+      mode: "toon",
+      args: ["create", "--title", "Roadmap", "--description", "Scope"],
+    });
+    expect(createdEpic.ok).toBeTrue();
+    const epicId = (createdEpic.data as { epic: { id: string } }).epic.id;
+
+    const createdTask = await runTask({
+      cwd,
+      mode: "toon",
+      args: ["create", "--epic", epicId, "--title", "Implement", "--description", "Ship board"],
+    });
+    expect(createdTask.ok).toBeTrue();
+    const taskId = (createdTask.data as { task: { id: string } }).task.id;
+
+    const storage = openTrekoonDatabase(cwd);
+    try {
+      const handler = createBoardApiHandler({ db: storage.db, cwd, token: "board-token" });
+      const response = await handler(new Request(`http://board.test/api/tasks/${taskId}?token=board-token`, {
+        method: "PATCH",
+        headers: {
+          "content-type": "application/json",
+        },
+        body: JSON.stringify({ status: "in_progress" }),
+      }));
+
+      expect(response.status).toBe(200);
+    } finally {
+      storage.close();
+    }
+
+    expect(eventOperationsForEntity(cwd, "task", taskId)).toEqual([
+      ENTITY_OPERATIONS.task.created,
+      ENTITY_OPERATIONS.task.updated,
+    ]);
   });
 });
