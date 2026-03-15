@@ -324,7 +324,7 @@ function createStore(snapshot) {
   const getVisibleTasks = () => {
     const query = store.search.trim().toLowerCase();
     return store.snapshot.tasks
-      .filter((task) => !store.selectedEpicId || task.epicId === store.selectedEpicId)
+      .filter((task) => store.screen !== "tasks" || !store.selectedEpicId || task.epicId === store.selectedEpicId)
       .filter((task) => query.length === 0 || task.searchText.includes(query));
   };
 
