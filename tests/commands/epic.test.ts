@@ -628,6 +628,18 @@ describe("epic command", (): void => {
     expect(epics[0]?.status).toBe("done");
   });
 
+  test("short list aliases apply status filtering and limits", async (): Promise<void> => {
+    const cwd = createWorkspace();
+    await createEpic(cwd, { title: "Done 1", description: "Top-level work", status: "done" });
+    await createEpic(cwd, { title: "Done 2", description: "Top-level work", status: "done" });
+    await createEpic(cwd, { title: "Todo", description: "Top-level work", status: "todo" });
+
+    const listed = await runEpic({ cwd, mode: "toon", args: ["list", "--s", "done", "--l", "1"] });
+    expect(listed.ok).toBeTrue();
+    expect((listed.data as { epics: Array<{ status: string }> }).epics).toMatchObject([{ status: "done" }]);
+    expect((listed.data as { epics: unknown[] }).epics).toHaveLength(1);
+  });
+
   test("--all includes done and bypasses limit", async (): Promise<void> => {
     const cwd = createWorkspace();
 
@@ -686,6 +698,14 @@ describe("epic command", (): void => {
   test("rejects --all with --status", async (): Promise<void> => {
     const cwd = createWorkspace();
     const result = await runEpic({ cwd, mode: "human", args: ["list", "--all", "--status", "done"] });
+
+    expect(result.ok).toBeFalse();
+    expect(result.error?.code).toBe("invalid_input");
+  });
+
+  test("rejects --all with short status alias", async (): Promise<void> => {
+    const cwd = createWorkspace();
+    const result = await runEpic({ cwd, mode: "human", args: ["list", "--all", "--s", "done"] });
 
     expect(result.ok).toBeFalse();
     expect(result.error?.code).toBe("invalid_input");
