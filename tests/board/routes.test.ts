@@ -430,4 +430,75 @@ describe("board routes", (): void => {
       storage.close();
     }
   });
+
+  test("creates and deletes subtasks through board routes", async (): Promise<void> => {
+    const cwd = createWorkspace();
+    const storage = openTrekoonDatabase(cwd);
+
+    try {
+      const mutations = new MutationService(storage.db, cwd);
+      const epic = mutations.createEpic({ title: "Roadmap", description: "Plan release" });
+      const task = mutations.createTask({ epicId: epic.id, title: "Implement", description: "Ship board" });
+
+      const handler = createBoardApiHandler({ db: storage.db, cwd, token: "secret-token" });
+
+      const createResponse = await handler(new Request("http://board.test/api/subtasks?token=secret-token", {
+        method: "POST",
+        headers: {
+          "content-type": "application/json",
+        },
+        body: JSON.stringify({
+          taskId: task.id,
+          title: "Write regression coverage",
+          description: "Add the board route tests",
+          status: "todo",
+        }),
+      }));
+
+      const createBody = await createResponse.json() as {
+        ok: boolean;
+        data: {
+          subtask: { id: string; taskId: string; title: string; description: string; status: string };
+          snapshot: { subtasks: Array<{ id: string; taskId: string; title: string; description: string; status: string }> };
+        };
+      };
+
+      expect(createResponse.status).toBe(201);
+      expect(createBody.ok).toBeTrue();
+      expect(createBody.data.subtask).toEqual(expect.objectContaining({
+        taskId: task.id,
+        title: "Write regression coverage",
+        description: "Add the board route tests",
+        status: "todo",
+      }));
+      expect(createBody.data.snapshot.subtasks).toContainEqual(expect.objectContaining({
+        id: createBody.data.subtask.id,
+        taskId: task.id,
+        title: "Write regression coverage",
+      }));
+
+      const deleteResponse = await handler(new Request(`http://board.test/api/subtasks/${createBody.data.subtask.id}?token=secret-token`, {
+        method: "DELETE",
+      }));
+
+      const deleteBody = await deleteResponse.json() as {
+        ok: boolean;
+        data: {
+          subtaskId: string;
+          deleted: boolean;
+          snapshot: { subtasks: Array<{ id: string }> };
+        };
+      };
+
+      expect(deleteResponse.status).toBe(200);
+      expect(deleteBody.ok).toBeTrue();
+      expect(deleteBody.data).toEqual(expect.objectContaining({
+        subtaskId: createBody.data.subtask.id,
+        deleted: true,
+      }));
+      expect(deleteBody.data.snapshot.subtasks.some((subtask) => subtask.id === createBody.data.subtask.id)).toBeFalse();
+    } finally {
+      storage.close();
+    }
+  });
 });
