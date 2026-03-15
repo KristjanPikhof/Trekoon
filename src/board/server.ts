@@ -81,7 +81,8 @@ function isUnavailablePortError(error: unknown): boolean {
     return false;
   }
 
-  const errorCode = typeof (error as { code?: unknown }).code === "string" ? (error as { code: string }).code : "";
+  const errorWithCode = error as Error & { code?: unknown };
+  const errorCode = typeof errorWithCode.code === "string" ? errorWithCode.code : "";
   return /^(EADDRINUSE|EACCES)$/i.test(errorCode) || /(EADDRINUSE|EACCES|address already in use|permission denied)/i.test(error.message);
 }
 
