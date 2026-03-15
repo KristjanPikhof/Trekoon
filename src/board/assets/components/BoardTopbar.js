@@ -3,6 +3,7 @@ export function renderBoardTopbar(context) {
     buttonClasses,
     currentNav,
     escapeHtml,
+    isCompactViewport,
     neutralChipClasses,
     renderIcon,
     screen,
@@ -13,10 +14,16 @@ export function renderBoardTopbar(context) {
     theme,
   } = context;
 
+  const navDetail = currentNav === "detail"
+    ? selectedEpic
+      ? `Task detail · ${selectedEpic.title}`
+      : "Task detail"
+    : searchScope?.detail ?? "Open a task to focus the detail surface.";
+
   const navItems = [
-    { id: "epics", label: "Epics", icon: "layers" },
-    { id: "board", label: "Board", icon: "view_kanban" },
-    { id: "detail", label: "Detail", icon: "assignment" },
+    { id: "epics", label: "Epics", icon: "layers", helper: "Browse every epic", action: 'data-nav="epics"' },
+    { id: "board", label: "Board", icon: "view_kanban", helper: selectedEpic ? `Active epic · ${selectedEpic.title}` : "Choose an epic to enter the board", action: 'data-nav-board="true"', disabled: !selectedEpic },
+    { id: "detail", label: "Detail", icon: "assignment", helper: navDetail, action: 'data-nav-detail="true"', disabled: currentNav !== "detail" },
   ];
 
   const navMarkup = navItems.map((item) => {
@@ -26,15 +33,12 @@ export function renderBoardTopbar(context) {
       isActive ? "is-active" : "",
     ].filter(Boolean).join(" ");
 
-    if (item.id === "epics") {
-      return `<button type="button" class="${classes}" data-nav="epics">${renderIcon(item.icon, "text-[18px]")} ${escapeHtml(item.label)}</button>`;
-    }
-
-    if (item.id === "board") {
-      return `<button type="button" class="${classes}" data-nav-board="true" ${selectedEpic ? "" : "disabled"}>${renderIcon(item.icon, "text-[18px]")} ${escapeHtml(item.label)}</button>`;
-    }
-
-    return `<span class="${classes}">${renderIcon(item.icon, "text-[18px]")} ${escapeHtml(item.label)}</span>`;
+    return `
+      <button type="button" class="${classes}" ${item.action} ${item.disabled ? "disabled" : ""} ${isActive ? 'aria-current="page"' : ""}>
+        <span class="board-shell-topbar__nav-item-main">${renderIcon(item.icon, "text-[18px]")} <span>${escapeHtml(item.label)}</span></span>
+        ${isCompactViewport ? `<span class="board-shell-topbar__nav-item-helper">${escapeHtml(item.helper)}</span>` : ""}
+      </button>
+    `;
   }).join("");
 
   return `
