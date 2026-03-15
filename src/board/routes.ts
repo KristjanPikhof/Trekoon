@@ -1,4 +1,4 @@
-import type { Database } from "bun:sqlite";
+import { type Database } from "bun:sqlite";
 
 import { safeErrorMessage } from "../commands/error-utils";
 import { MutationService } from "../domain/mutation-service";
@@ -65,7 +65,7 @@ function toBoardRouteError(error: unknown): BoardRouteError {
       status,
       code: error.code,
       message: error.message,
-      details: error.details,
+      ...(error.details === undefined ? {} : { details: error.details }),
     };
   }
 
