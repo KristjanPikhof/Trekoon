@@ -723,4 +723,96 @@ describe("mutation conformance", (): void => {
       ENTITY_OPERATIONS.task.updated,
     ]);
   });
+
+  test("board routes append subtask and dependency mutation events", async (): Promise<void> => {
+    const cwd = createWorkspace();
+
+    const createdEpic = await runEpic({
+      cwd,
+      mode: "toon",
+      args: ["create", "--title", "Roadmap", "--description", "Scope"],
+    });
+    expect(createdEpic.ok).toBeTrue();
+    const epicId = (createdEpic.data as { epic: { id: string } }).epic.id;
+
+    const createdTask = await runTask({
+      cwd,
+      mode: "toon",
+      args: ["create", "--epic", epicId, "--title", "Implement", "--description", "Ship board"],
+    });
+    expect(createdTask.ok).toBeTrue();
+    const taskId = (createdTask.data as { task: { id: string } }).task.id;
+
+    const createdOtherTask = await runTask({
+      cwd,
+      mode: "toon",
+      args: ["create", "--epic", epicId, "--title", "Blocker", "--description", "Finish first"],
+    });
+    expect(createdOtherTask.ok).toBeTrue();
+    const blockerTaskId = (createdOtherTask.data as { task: { id: string } }).task.id;
+
+    const createdSubtask = await runSubtask({
+      cwd,
+      mode: "toon",
+      args: ["create", "--task", taskId, "--title", "Write tests", "--description", "Cover board API"],
+    });
+    expect(createdSubtask.ok).toBeTrue();
+    const subtaskId = (createdSubtask.data as { subtask: { id: string } }).subtask.id;
+
+    const storage = openTrekoonDatabase(cwd);
+    try {
+      const handler = createBoardApiHandler({ db: storage.db, cwd, token: "board-token" });
+
+      const updatedSubtask = await handler(new Request(`http://board.test/api/subtasks/${subtaskId}?token=board-token`, {
+        method: "PATCH",
+        headers: {
+          "content-type": "application/json",
+        },
+        body: JSON.stringify({ status: "blocked" }),
+      }));
+      expect(updatedSubtask.status).toBe(200);
+
+      const addedDependency = await handler(new Request("http://board.test/api/dependencies?token=board-token", {
+        method: "POST",
+        headers: {
+          "content-type": "application/json",
+        },
+        body: JSON.stringify({ sourceId: taskId, dependsOnId: blockerTaskId }),
+      }));
+      expect(addedDependency.status).toBe(201);
+
+      const removedDependency = await handler(new Request(`http://board.test/api/dependencies?token=board-token&sourceId=${encodeURIComponent(taskId)}&dependsOnId=${encodeURIComponent(blockerTaskId)}`, {
+        method: "DELETE",
+      }));
+      expect(removedDependency.status).toBe(200);
+    } finally {
+      storage.close();
+    }
+
+    expect(eventOperationsForEntity(cwd, "subtask", subtaskId)).toEqual([
+      ENTITY_OPERATIONS.subtask.created,
+      ENTITY_OPERATIONS.subtask.updated,
+    ]);
+
+    const dependencyRows = eventRowsForEntity(cwd, "dependency", `${taskId}->${blockerTaskId}`);
+    expect(dependencyRows.at(-1)).toEqual({
+      operation: ENTITY_OPERATIONS.dependency.removed,
+      payload: {
+        fields: {
+          source_id: taskId,
+          depends_on_id: blockerTaskId,
+        },
+      },
+    });
+
+    const storageCheck = openTrekoonDatabase(cwd);
+    try {
+      const addedDependencyRow = storageCheck.db
+        .query("SELECT operation FROM events WHERE entity_kind = 'dependency' AND operation = ? LIMIT 1;")
+        .get(ENTITY_OPERATIONS.dependency.added) as { operation: string } | null;
+      expect(addedDependencyRow?.operation).toBe(ENTITY_OPERATIONS.dependency.added);
+    } finally {
+      storageCheck.close();
+    }
+  });
 });
