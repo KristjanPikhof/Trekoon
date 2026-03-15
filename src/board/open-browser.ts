@@ -8,15 +8,26 @@ export interface OpenBrowserResult {
   readonly errorMessage: string | null;
 }
 
-type BrowserLauncher = (command: string, args: readonly string[]) => void;
+type BrowserLaunchEvent = "error" | "spawn";
 
-let browserLauncher: BrowserLauncher = (command: string, args: readonly string[]): void => {
+interface BrowserLaunchHandle {
+  once(event: BrowserLaunchEvent, listener: (error?: Error) => void): BrowserLaunchHandle;
+  removeListener(event: BrowserLaunchEvent, listener: (error?: Error) => void): BrowserLaunchHandle;
+  unref(): void;
+}
+
+type BrowserLauncher = (command: string, args: readonly string[]) => BrowserLaunchHandle;
+
+function spawnBrowserProcess(command: string, args: readonly string[]): BrowserLaunchHandle {
   const child = spawn(command, [...args], {
     detached: true,
     stdio: "ignore",
   });
   child.unref();
-};
+  return child;
+}
+
+let browserLauncher: BrowserLauncher = spawnBrowserProcess;
 
 function resolveOpenCommand(url: string): { command: string; args: readonly string[] } {
   if (process.platform === "darwin") {
@@ -31,27 +42,40 @@ function resolveOpenCommand(url: string): { command: string; args: readonly stri
 }
 
 export function setBrowserLauncherForTests(nextLauncher: BrowserLauncher | null): void {
-  browserLauncher = nextLauncher ?? ((command: string, args: readonly string[]): void => {
-    const child = spawn(command, [...args], {
-      detached: true,
-      stdio: "ignore",
-    });
-    child.unref();
-  });
+  browserLauncher = nextLauncher ?? spawnBrowserProcess;
 }
 
-export function openBoardInBrowser(url: string): OpenBrowserResult {
+export async function openBoardInBrowser(url: string): Promise<OpenBrowserResult> {
   const launch = resolveOpenCommand(url);
 
   try {
-    browserLauncher(launch.command, launch.args);
-    return {
-      launched: true,
-      url,
-      command: launch.command,
-      args: launch.args,
-      errorMessage: null,
-    };
+    const child = browserLauncher(launch.command, launch.args);
+
+    return await new Promise<OpenBrowserResult>((resolve) => {
+      const handleSpawn = (): void => {
+        child.removeListener("error", handleError);
+        resolve({
+          launched: true,
+          url,
+          command: launch.command,
+          args: launch.args,
+          errorMessage: null,
+        });
+      };
+      const handleError = (error?: Error): void => {
+        child.removeListener("spawn", handleSpawn);
+        resolve({
+          launched: false,
+          url,
+          command: launch.command,
+          args: launch.args,
+          errorMessage: error?.message ?? "Unknown browser launch failure",
+        });
+      };
+
+      child.once("spawn", handleSpawn);
+      child.once("error", handleError);
+    });
   } catch (error: unknown) {
     return {
       launched: false,
