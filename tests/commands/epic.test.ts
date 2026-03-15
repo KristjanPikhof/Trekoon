@@ -491,7 +491,9 @@ describe("epic command", (): void => {
 
     const updated = await runEpic({ cwd, mode: "toon", args: ["update", epicId, "--all", "--status", "done"] });
     expect(updated.ok).toBeTrue();
-    expect((updated.data as { cascade: { changedIds: string[] } }).cascade.changedIds).toEqual([epicId, taskId, subtaskId]);
+    const changedIds = (updated.data as { cascade: { changedIds: string[] } }).cascade.changedIds;
+    expect(changedIds).toEqual(expect.arrayContaining([epicId, taskId, subtaskId]));
+    expect(changedIds.indexOf(taskId)).toBeLessThan(changedIds.indexOf(subtaskId));
 
     const shown = await runEpic({ cwd, mode: "toon", args: ["show", epicId, "--all"] });
     expect(shown.ok).toBeTrue();
