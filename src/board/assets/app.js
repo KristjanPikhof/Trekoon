@@ -6,7 +6,15 @@ import { renderEpicRow as renderEpicOverviewRow } from "./components/EpicRow.js"
 import { renderEpicsOverview } from "./components/EpicsOverview.js";
 import { renderWorkspaceHeader } from "./components/WorkspaceHeader.js";
 import { applyTheme, createStore, readThemePreference, VIEW_MODES, STATUS_ORDER } from "./state/store.js";
-import { captureRuntimeState, restoreRuntimeState, syncOverlayScrollLock } from "./utils/dom.js";
+import {
+  createScrollAuthorityStack,
+  resolveFocusSelector,
+  resolveScrollAuthorityStack,
+  restoreRuntimeState,
+  SCROLL_AUTHORITY,
+  syncOverlayScrollLock,
+  syncScrollAuthority,
+} from "./utils/dom.js";
 
 const SESSION_TOKEN_STORAGE_KEY = "trekoon-board-session-token";
 const SEARCH_FOCUS_KEYS = new Set(["/", "s"]);
@@ -97,6 +105,23 @@ function renderStatusBadge(rawStatus, label = readStatusLabel(rawStatus)) {
 }
 
 let appElement = null;
+const scrollAuthorityStack = createScrollAuthorityStack();
+
+function resolveTaskDetailOwner(boardState, useTaskModal) {
+  if (!boardState?.selectedTask) {
+    return null;
+  }
+
+  return useTaskModal ? SCROLL_AUTHORITY.taskModal : SCROLL_AUTHORITY.inspector;
+}
+
+function rememberReturnFocus(owner, element) {
+  if (!owner || !(element instanceof HTMLElement)) {
+    return;
+  }
+
+  scrollAuthorityStack.rememberReturnFocus(owner, resolveFocusSelector(element));
+}
 
 function readSessionTokenFromStorage() {
   try {
@@ -806,7 +831,7 @@ function renderSubtaskModal(subtask, isMutating = false) {
           </div>
           <button type="button" class="${buttonClasses()} mt-4 sm:mt-0" data-close-subtask>Close</button>
         </header>
-        <div class="board-modal__body board-detail-surface__body overflow-auto pt-5">
+        <div class="board-modal__body board-detail-surface__body min-h-0 pt-5" data-scroll-surface="subtask-modal">
           <form class="grid gap-4" data-subtask-form="${escapeHtml(subtask.id)}">
             <label class="grid gap-2">
               <span class="${sectionLabelClasses()}">Title</span>
@@ -837,6 +862,7 @@ function renderTaskSurface(task, epics, snapshot, isMutating = false, options = 
     titleId = "",
     closeLabel = "Close",
     containerClassName = "board-detail-surface",
+    scrollSurface = "inspector",
   } = options;
 
   return `
@@ -858,7 +884,7 @@ function renderTaskSurface(task, epics, snapshot, isMutating = false, options = 
           </div>
         </div>
       </header>
-      <div class="board-detail-surface__body board-drawer__body min-h-0 overflow-auto overscroll-contain pt-5 pr-1">
+      <div class="board-detail-surface__body board-drawer__body min-h-0 overscroll-contain pt-5 pr-1" data-scroll-surface="${escapeHtml(scrollSurface)}">
         <div class="board-detail-surface__stack space-y-4">
           <section class="${secondaryPanelClasses("board-detail-card p-4")}">
             <div class="board-detail-summary-grid grid gap-3 md:grid-cols-2 xl:grid-cols-3">
@@ -917,6 +943,7 @@ function renderTaskModal(task, epics, snapshot, isMutating = false) {
             titleId: "board-task-modal-title",
             closeLabel: "Close",
             containerClassName: "board-detail-surface board-detail-surface--modal",
+            scrollSurface: "task-modal",
           })}
         </div>
       </section>
@@ -936,6 +963,7 @@ function renderBoard(model) {
   const screen = boardState.screen;
   const useTaskModal = Boolean(selectedTask && store.view === "kanban");
   const currentNav = selectedTask ? "detail" : screen === "tasks" ? "board" : "epics";
+  const ownerStack = resolveScrollAuthorityStack(boardState, { useTaskModal });
 
   const columnsMarkup = STATUS_ORDER.map((status) => {
     const columnTasks = visibleTasks.filter((task) => task.status === status);
@@ -1003,7 +1031,7 @@ function renderBoard(model) {
   });
 
   const tasksWorkspaceMarkup = selectedEpic ? `
-    <div class="board-root ${workspaceLayoutClass} ${selectedTask && !useTaskModal ? "has-detail" : ""} h-full flex-1 min-h-0 grid gap-4 xl:gap-5">
+    <div class="board-root ${workspaceLayoutClass} ${selectedTask && !useTaskModal ? "has-detail" : ""} h-full flex-1 min-h-0 grid gap-4 xl:gap-5" data-scroll-surface="workspace">
       <aside class="board-sidebar ${panelClasses("hidden h-full min-h-0 overflow-hidden p-4 xl:grid xl:grid-rows-[auto_1fr]")}" aria-label="Epic switcher">
         <header class="board-sidebar__header border-b border-[var(--board-border)] pb-4">
           <span class="${sectionLabelClasses()}">Epics</span>
@@ -1068,6 +1096,7 @@ function renderBoard(model) {
           ${renderTaskSurface(selectedTask, store.snapshot.epics, store.snapshot, store.isMutating, {
             closeLabel: "Close inspector",
             containerClassName: "board-detail-surface board-detail-surface--inspector",
+            scrollSurface: "inspector",
           })}
         </aside>
       ` : ""}
@@ -1077,14 +1106,16 @@ function renderBoard(model) {
 
   appElement.innerHTML = `
     ${renderNotice(store.notice)}
-    <div class="board-layout ${screen === "tasks" ? "board-layout--workspace" : "board-layout--overview"} mx-auto flex w-full max-w-[1600px] flex-col gap-4 px-4 py-4 sm:px-6 sm:py-6 xl:px-8 ${screen === "tasks" ? "h-[100dvh] overflow-hidden" : "min-h-screen"}">
+    <div class="board-layout ${screen === "tasks" ? "board-layout--workspace" : "board-layout--overview"} mx-auto flex w-full max-w-[1600px] flex-col gap-4 px-4 py-4 sm:px-6 sm:py-6 xl:px-8 ${screen === "tasks" ? "h-[100dvh]" : "min-h-screen"}" data-scroll-surface="page">
       ${topbarMarkup}
       ${screen === "tasks" ? tasksWorkspaceMarkup : epicsOverviewMarkup}
       ${selectedSubtask ? renderSubtaskModal(selectedSubtask, store.isMutating) : ""}
     </div>
   `;
 
+  syncScrollAuthority(appElement.querySelector(".board-layout"), ownerStack);
   syncOverlayScrollLock(Boolean(useTaskModal || selectedSubtask));
+  return { ownerStack };
 }
 
 function renderError(message) {
@@ -1104,7 +1135,7 @@ function renderError(message) {
 }
 
 function attachInteractions(model, api, rerender) {
-  const { store } = model;
+  const { store, getBoardState } = model;
   const actions = createBoardActions({
     model,
     api,
@@ -1151,6 +1182,7 @@ function attachInteractions(model, api, rerender) {
 
   document.querySelectorAll("[data-task-id]").forEach((node) => {
     node.addEventListener("click", () => {
+      rememberReturnFocus(SCROLL_AUTHORITY.workspace, node);
       actions.selectTask(node.dataset.taskId);
     });
   });
@@ -1172,6 +1204,8 @@ function attachInteractions(model, api, rerender) {
 
   document.querySelectorAll("[data-open-subtask]").forEach((button) => {
     button.addEventListener("click", () => {
+      const boardState = getBoardState();
+      rememberReturnFocus(resolveTaskDetailOwner(boardState, store.view === "kanban"), button);
       actions.openSubtask(button.dataset.openSubtask || null);
     });
   });
@@ -1295,7 +1329,63 @@ function attachInteractions(model, api, rerender) {
   });
 
   window.onkeydown = (event) => {
-    actions.handleKeydown(event);
+    const boardState = getBoardState();
+    const activeElement = document.activeElement;
+    const tagName = activeElement?.tagName?.toLowerCase();
+    const isTypingTarget = tagName === "input" || tagName === "textarea" || tagName === "select";
+    const visibleTasks = boardState.visibleTasks;
+    const currentIndex = visibleTasks.findIndex((task) => task.id === boardState.selectedTaskId);
+
+    if (SEARCH_FOCUS_KEYS.has(event.key.toLowerCase()) && activeElement?.id !== "board-search-input" && !isTypingTarget) {
+      event.preventDefault();
+      document.querySelector("#board-search-input")?.focus({ preventScroll: true });
+      return;
+    }
+
+    if (event.key === "Escape") {
+      if (activeElement?.id === "board-search-input") {
+        activeElement.blur();
+      } else if (boardState.selectedSubtaskId) {
+        actions.closeSubtask();
+      } else if (boardState.selectedTaskId) {
+        actions.closeTask();
+      } else if (boardState.screen === "tasks") {
+        actions.showEpics();
+      } else if (store.notice) {
+        store.notice = null;
+        rerender();
+      }
+      return;
+    }
+
+    if (boardState.screen !== "tasks" || isTypingTarget || visibleTasks.length === 0) {
+      return;
+    }
+
+    if (event.key.toLowerCase() === "j" || event.key === "ArrowDown") {
+      event.preventDefault();
+      const nextTask = visibleTasks[Math.min(currentIndex + 1, visibleTasks.length - 1)] ?? visibleTasks[0];
+      actions.selectTask(nextTask.id);
+      return;
+    }
+
+    if (event.key.toLowerCase() === "k" || event.key === "ArrowUp") {
+      event.preventDefault();
+      const previousTask = visibleTasks[Math.max(currentIndex - 1, 0)] ?? visibleTasks[0];
+      actions.selectTask(previousTask.id);
+      return;
+    }
+
+    if (event.key === "Enter" && currentIndex >= 0) {
+      event.preventDefault();
+      document.querySelector(".board-drawer, .board-task-modal")?.scrollIntoView({ block: "nearest", behavior: "smooth" });
+      return;
+    }
+
+    if (event.key === "Enter" && currentIndex === -1 && visibleTasks[0]) {
+      event.preventDefault();
+      actions.selectTask(visibleTasks[0].id);
+    }
   };
 }
 
@@ -1352,12 +1442,17 @@ export async function bootLegacyBoard(options = {}) {
     const model = createStore(snapshot, { normalizeSnapshot });
     let api = null;
     const rerender = (options = {}) => {
-      const runtimeState = options.preserveFocus === false
-        ? null
-        : captureRuntimeState(appElement, model.store);
-      renderBoard(model);
+      if (appElement.childElementCount > 0) {
+        scrollAuthorityStack.capture(appElement, model.store);
+      }
+
+      const renderState = renderBoard(model);
       attachInteractions(model, api, rerender);
-      restoreRuntimeState(appElement, runtimeState);
+
+      const activeRuntime = scrollAuthorityStack.transition(renderState.ownerStack);
+      if (options.preserveFocus !== false) {
+        restoreRuntimeState(appElement, activeRuntime);
+      }
     };
 
     api = createApi(model, { sessionToken: runtimeSession.token, rerender });
