@@ -620,7 +620,7 @@ function renderEpicRow(epic, selected) {
 
 function renderTaskMeta(task, includeStatus = false) {
   return `
-    ${includeStatus ? `<span class="board-chip">${escapeHtml(STATUS_LABELS[task.status] ?? task.status)}</span>` : ""}
+    ${includeStatus ? `<span class="board-chip">${escapeHtml(readStatusLabel(task.status))}</span>` : ""}
     <span class="board-chip">${task.subtasks.length} subtask${task.subtasks.length === 1 ? "" : "s"}</span>
     ${task.blockedBy.length > 0 ? `<span class="board-chip">${task.blockedBy.length} blocker${task.blockedBy.length === 1 ? "" : "s"}</span>` : ""}
   `;
@@ -657,7 +657,7 @@ function renderListRow(task, selected) {
         <strong>${escapeHtml(task.title)}</strong>
         ${renderDescriptionPreview(task.description)}
       </div>
-      <span class="board-list-row__status">${escapeHtml(STATUS_LABELS[task.status] ?? task.status)}</span>
+      <span class="board-list-row__status">${escapeHtml(readStatusLabel(task.status))}</span>
       <span class="board-list-row__meta">${task.subtasks.length}</span>
       <span class="board-list-row__meta">${escapeHtml(formatDate(task.updatedAt))}</span>
     </article>
@@ -698,7 +698,7 @@ function renderDependencyList(task, snapshot, isMutating = false) {
           ${renderDescriptionPreview(dependency?.description ?? "")}
         </div>
         <div class="board-inline-row__actions">
-          <span class="board-status-pill">${escapeHtml(STATUS_LABELS[dependency?.status] ?? dependency?.status ?? "Unknown")}</span>
+          <span class="board-status-pill">${escapeHtml(readStatusLabel(dependency?.status ?? "Unknown"))}</span>
           <button type="button" class="board-button" data-remove-dependency-source="${escapeHtml(task.id)}" data-remove-dependency-target="${escapeHtml(dependencyId)}" ${isMutating ? "disabled" : ""}>Remove</button>
         </div>
       </article>
@@ -720,7 +720,7 @@ function renderSubtaskList(task) {
             ${renderDescriptionPreview(subtask.description)}
           </div>
           <div class="board-inline-row__actions">
-            <span class="board-status-pill">${escapeHtml(STATUS_LABELS[subtask.status] ?? subtask.status)}</span>
+            <span class="board-status-pill">${escapeHtml(readStatusLabel(subtask.status))}</span>
             <button type="button" class="board-button" data-open-subtask="${escapeHtml(subtask.id)}">Open</button>
           </div>
         </article>
@@ -854,7 +854,7 @@ function renderBoard(model) {
 
   const columnsMarkup = STATUS_ORDER.map((status) => {
     const columnTasks = visibleTasks.filter((task) => task.status === status);
-    const columnTitle = STATUS_LABELS[status] ?? status;
+      const columnTitle = readStatusLabel(status);
     const content = columnTasks.length === 0
       ? renderEmptyState(`No ${columnTitle.toLowerCase()} work`, "Adjust search or switch epics to inspect more tasks.")
       : columnTasks
