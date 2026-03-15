@@ -98,7 +98,19 @@ export function createBoardActions(options) {
     applyTheme,
     searchFocusKeys,
   } = options;
-  const { store, persist, getTaskById, getVisibleTasks } = model;
+  const { store, persist, getBoardState, getTaskById, syncState } = model;
+
+  const transition = (patch = {}, options = {}) => {
+    const { persistState = true, rerenderBoard = true } = options;
+    const boardState = syncState(patch);
+    if (persistState) {
+      persist();
+    }
+    if (rerenderBoard) {
+      rerender();
+    }
+    return boardState;
+  };
 
   return {
     toggleTheme() {
@@ -107,74 +119,66 @@ export function createBoardActions(options) {
       rerender();
     },
     updateSearch(value) {
-      store.search = value;
-      if (store.selectedTaskId && !getVisibleTasks().some((task) => task.id === store.selectedTaskId)) {
-        store.selectedTaskId = null;
-        store.selectedSubtaskId = null;
-      }
-      persist();
-      rerender();
+      transition({ search: value });
     },
     openEpic(epicId) {
-      store.screen = "tasks";
-      store.selectedEpicId = epicId || null;
-      store.selectedTaskId = null;
-      store.selectedSubtaskId = null;
-      persist();
-      rerender();
+      transition({
+        screen: "tasks",
+        selectedEpicId: epicId || null,
+        selectedTaskId: null,
+        selectedSubtaskId: null,
+      });
     },
     selectEpic(epicId) {
-      store.screen = "tasks";
-      store.selectedEpicId = epicId || null;
-      store.selectedTaskId = null;
-      store.selectedSubtaskId = null;
-      persist();
-      rerender();
+      transition({
+        screen: "tasks",
+        selectedEpicId: epicId || null,
+        selectedTaskId: null,
+        selectedSubtaskId: null,
+      });
     },
     showEpics() {
-      store.screen = "epics";
-      store.selectedTaskId = null;
-      store.selectedSubtaskId = null;
-      persist();
-      rerender();
+      transition({
+        screen: "epics",
+        selectedTaskId: null,
+        selectedSubtaskId: null,
+      });
     },
     showBoard() {
-      const fallbackEpicId = store.selectedEpicId || store.snapshot.epics[0]?.id || null;
+      const fallbackEpicId = getBoardState().selectedEpicId || store.snapshot.epics[0]?.id || null;
       if (!fallbackEpicId) {
         return;
       }
 
-      store.screen = "tasks";
-      store.selectedEpicId = fallbackEpicId;
-      persist();
-      rerender();
+      transition({
+        screen: "tasks",
+        selectedEpicId: fallbackEpicId,
+        selectedTaskId: null,
+        selectedSubtaskId: null,
+      });
     },
     setView(view) {
-      store.view = view;
-      persist();
-      rerender();
+      transition({ view });
     },
     selectTask(taskId) {
-      if (!taskId) {
+      const task = getTaskById(taskId);
+      if (!task) {
         return;
       }
-      store.selectedTaskId = taskId;
-      persist();
-      rerender();
+      transition({
+        screen: "tasks",
+        selectedEpicId: task.epicId,
+        selectedTaskId: taskId,
+      });
     },
     closeTask() {
-      store.selectedTaskId = null;
-      store.selectedSubtaskId = null;
-      persist();
-      rerender();
+      transition({ selectedTaskId: null, selectedSubtaskId: null });
     },
     openSubtask(subtaskId) {
-      store.selectedSubtaskId = subtaskId || null;
-      rerender();
+      transition({ selectedSubtaskId: subtaskId || null }, { persistState: false });
     },
     closeSubtask() {
-      store.selectedSubtaskId = null;
-      rerender();
+      transition({ selectedSubtaskId: null }, { persistState: false });
     },
     submitTaskForm(taskId, formData) {
       const updates = {
@@ -190,7 +194,7 @@ export function createBoardActions(options) {
         description: String(formData.get("description") || "").trim(),
         status: normalizeStatus(String(formData.get("status") || "todo")),
       };
-      store.selectedSubtaskId = subtaskId;
+      syncState({ selectedSubtaskId: subtaskId });
       api.patchSubtask(subtaskId, updates, (snapshot) => updateSubtaskInSnapshot(snapshot, subtaskId, updates, normalizeSnapshot));
     },
     submitCreateSubtask(taskId, formData) {
@@ -234,16 +238,16 @@ export function createBoardActions(options) {
       if (!task || !nextStatus || task.status === nextStatus) {
         return;
       }
-      store.selectedTaskId = taskId;
-      persist();
+      transition({ selectedTaskId: taskId }, { rerenderBoard: false });
       api.patchTask(taskId, { status: nextStatus }, (snapshot) => updateTaskInSnapshot(snapshot, taskId, { status: nextStatus }, normalizeSnapshot));
     },
     handleKeydown(event) {
+      const boardState = getBoardState();
       const activeElement = document.activeElement;
       const tagName = activeElement?.tagName?.toLowerCase();
       const isTypingTarget = tagName === "input" || tagName === "textarea" || tagName === "select";
-      const visibleTasks = getVisibleTasks();
-      const currentIndex = visibleTasks.findIndex((task) => task.id === store.selectedTaskId);
+      const visibleTasks = boardState.visibleTasks;
+      const currentIndex = visibleTasks.findIndex((task) => task.id === boardState.selectedTaskId);
 
       if (searchFocusKeys.has(event.key.toLowerCase()) && activeElement?.id !== "board-search-input" && !isTypingTarget) {
         event.preventDefault();
@@ -254,11 +258,11 @@ export function createBoardActions(options) {
       if (event.key === "Escape") {
         if (activeElement?.id === "board-search-input") {
           activeElement.blur();
-        } else if (store.selectedSubtaskId) {
+        } else if (boardState.selectedSubtaskId) {
           this.closeSubtask();
-        } else if (store.selectedTaskId) {
+        } else if (boardState.selectedTaskId) {
           this.closeTask();
-        } else if (store.screen === "tasks") {
+        } else if (boardState.screen === "tasks") {
           this.showEpics();
         } else if (store.notice) {
           store.notice = null;
@@ -267,7 +271,7 @@ export function createBoardActions(options) {
         return;
       }
 
-      if (store.screen !== "tasks" || isTypingTarget || visibleTasks.length === 0) {
+      if (boardState.screen !== "tasks" || isTypingTarget || visibleTasks.length === 0) {
         return;
       }
 
