@@ -135,7 +135,7 @@ function closeTopmostDisclosure(boardState, activeElement = document.activeEleme
       ? document.querySelector(".board-drawer, .board-task-modal")
       : document;
 
-  if (!(disclosureRoot instanceof ParentNode)) {
+  if (!disclosureRoot || typeof disclosureRoot.querySelectorAll !== "function") {
     return false;
   }
 
@@ -158,13 +158,13 @@ function closeTopmostDisclosure(boardState, activeElement = document.activeEleme
       .map((disclosure, index) => ({
         disclosure,
         index,
-        depth: disclosure.closest("details[open] details[open]") ? disclosure.parents?.length ?? 0 : 0,
+        depth: disclosure.parentElement?.closest("details[open]")
+          ? disclosure.closest("details[open]")?.querySelectorAll("details[open]").length ?? 0
+          : 0,
       }))
       .sort((left, right) => {
-        const leftDepth = left.disclosure.querySelectorAll("details[open]").length;
-        const rightDepth = right.disclosure.querySelectorAll("details[open]").length;
-        if (leftDepth !== rightDepth) {
-          return rightDepth - leftDepth;
+        if (left.depth !== right.depth) {
+          return right.depth - left.depth;
         }
         return right.index - left.index;
       })[0]?.disclosure ?? null;
