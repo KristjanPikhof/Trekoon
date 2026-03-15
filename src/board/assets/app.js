@@ -925,21 +925,17 @@ function renderTaskModal(task, epics, snapshot, isMutating = false) {
 }
 
 function renderBoard(model) {
-  const { store, getSelectedEpic, getSelectedTask, getSubtaskById, getVisibleEpics, getVisibleTasks } = model;
-  const visibleEpics = getVisibleEpics();
+  const { store, getBoardState } = model;
+  const boardState = getBoardState();
+  const visibleEpics = boardState.visibleEpics;
   const sidebarEpics = getSidebarEpics(store.snapshot.epics, store.search);
-  const visibleTasks = getVisibleTasks();
-  const selectedEpic = getSelectedEpic();
-  const selectedTask = getSelectedTask();
-  const selectedSubtask = getSubtaskById(store.selectedSubtaskId);
-  const screen = store.screen === "tasks" && selectedEpic ? "tasks" : "epics";
+  const visibleTasks = boardState.visibleTasks;
+  const selectedEpic = boardState.selectedEpic;
+  const selectedTask = boardState.selectedTask;
+  const selectedSubtask = boardState.selectedSubtask;
+  const screen = boardState.screen;
   const useTaskModal = Boolean(selectedTask && store.view === "kanban");
   const currentNav = selectedTask ? "detail" : screen === "tasks" ? "board" : "epics";
-
-  if (screen !== store.screen) {
-    store.screen = screen;
-    model.persist();
-  }
 
   const columnsMarkup = STATUS_ORDER.map((status) => {
     const columnTasks = visibleTasks.filter((task) => task.status === status);
@@ -982,6 +978,7 @@ function renderBoard(model) {
     renderIcon,
     screen,
     search: store.search,
+    searchScope: boardState.searchScope,
     sectionLabelClasses,
     selectedEpic,
     theme: store.theme,
@@ -990,7 +987,7 @@ function renderBoard(model) {
   const epicsOverviewMarkup = renderEpicsOverview({
     panelClasses,
     renderEmptyState,
-    renderEpicRow: (epic) => renderEpicOverviewRow({
+      renderEpicRow: (epic) => renderEpicOverviewRow({
       epic,
       escapeHtml,
       formatDate,
@@ -998,8 +995,8 @@ function renderBoard(model) {
       renderClampedText,
       renderIcon,
       renderStatusBadge,
-      selected: store.selectedEpicId === epic.id,
-    }),
+        selected: boardState.selectedEpicId === epic.id,
+      }),
     sectionLabelClasses,
     store,
     visibleEpics,
@@ -1016,7 +1013,7 @@ function renderBoard(model) {
         <div class="board-sidebar__list mt-4 grid min-h-0 content-start gap-2.5 overflow-auto pr-1 overscroll-contain">
           ${sidebarEpics.length === 0
             ? renderEmptyState("No active epics", "Todo and in-progress epics will appear here for quick switching.")
-            : sidebarEpics.map((epic) => renderEpicSidebarItem(epic, store.selectedEpicId === epic.id)).join("")}
+            : sidebarEpics.map((epic) => renderEpicSidebarItem(epic, boardState.selectedEpicId === epic.id)).join("")}
         </div>
       </aside>
 
@@ -1028,13 +1025,14 @@ function renderBoard(model) {
           renderEpicCountSummary,
           renderIcon,
           renderStatusBadge,
-          sectionLabelClasses,
-          selectedEpic,
-          snapshotEpics: store.snapshot.epics,
-          store: {
-            isMutating: store.isMutating,
-            selectedEpicId: store.selectedEpicId,
-            view: store.view,
+            sectionLabelClasses,
+            searchScope: boardState.searchScope,
+            selectedEpic,
+            snapshotEpics: store.snapshot.epics,
+            store: {
+              isMutating: store.isMutating,
+              selectedEpicId: boardState.selectedEpicId,
+              view: store.view,
             viewModes: VIEW_MODES.map((view) => ({
               active: store.view === view,
               classes: cx(
