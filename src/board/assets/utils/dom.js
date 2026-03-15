@@ -140,7 +140,7 @@ function resolveOwnerContainer(root, owner) {
   return element instanceof HTMLElement ? element : null;
 }
 
-function buildFocusCandidates(owner, runtimeState, focusOverride) {
+function buildFocusCandidates(owner, runtimeState, focusOverride, fallbackFocusSelectors = []) {
   const focusCandidates = [];
 
   if (focusOverride?.selector) {
@@ -149,6 +149,12 @@ function buildFocusCandidates(owner, runtimeState, focusOverride) {
 
   if (runtimeState?.focusState?.selector) {
     focusCandidates.push({ selector: runtimeState.focusState.selector, selection: runtimeState.focusState.selection ?? null });
+  }
+
+  for (const selector of fallbackFocusSelectors) {
+    if (typeof selector === "string" && selector.length > 0) {
+      focusCandidates.push({ selector, selection: null });
+    }
   }
 
   for (const selector of SCROLL_OWNER_CONFIG[owner]?.defaultFocusSelectors ?? []) {
@@ -276,7 +282,12 @@ export function restoreRuntimeState(root, payload) {
   }
 
   const ownerContainer = resolveOwnerContainer(root, owner) ?? root;
-  const focusCandidates = buildFocusCandidates(owner, runtimeState, payload.returnFocusState);
+  const focusCandidates = buildFocusCandidates(
+    owner,
+    runtimeState,
+    payload.returnFocusState,
+    payload.fallbackFocusSelectors ?? [],
+  );
 
   for (const candidate of focusCandidates) {
     const element = root.querySelector(candidate.selector);
