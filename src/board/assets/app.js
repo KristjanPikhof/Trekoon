@@ -867,6 +867,7 @@ function renderTaskSurface(task, epics, snapshot, isMutating = false, options = 
     titleId = "",
     closeLabel = "Close",
     containerClassName = "board-detail-surface",
+    detailEyebrow = "Task detail",
     scrollSurface = "inspector",
   } = options;
 
@@ -874,11 +875,12 @@ function renderTaskSurface(task, epics, snapshot, isMutating = false, options = 
     <div class="${containerClassName} grid h-full min-h-0 grid-rows-[auto_1fr] overflow-hidden">
       <header class="board-detail-surface__header board-drawer__header border-b border-[var(--board-border)] pb-5">
         <div class="board-detail-surface__hero flex flex-col gap-4">
-          <div class="board-detail-surface__title-row flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
-            <div class="min-w-0">
-              <span class="${sectionLabelClasses()}">Task detail</span>
-              <h3 ${titleId ? `id="${escapeHtml(titleId)}"` : ""} class="mt-2 text-2xl font-semibold tracking-tight text-[var(--board-text)]">${escapeHtml(task.title)}</h3>
-            </div>
+            <div class="board-detail-surface__title-row flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+              <div class="min-w-0">
+                <span class="${sectionLabelClasses()}">${escapeHtml(detailEyebrow)}</span>
+                <h3 ${titleId ? `id="${escapeHtml(titleId)}"` : ""} class="mt-2 text-2xl font-semibold tracking-tight text-[var(--board-text)]">${escapeHtml(task.title)}</h3>
+                <p class="board-detail-surface__context mt-2 text-sm text-[var(--board-text-muted)]">One dominant task surface with sticky context, close, and constrained internal scrolling.</p>
+              </div>
             <button type="button" class="${buttonClasses()} shrink-0" data-close-task>${escapeHtml(closeLabel)}</button>
           </div>
           <div class="board-detail-surface__meta flex flex-wrap gap-2">
