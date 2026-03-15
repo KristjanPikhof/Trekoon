@@ -2,7 +2,9 @@ export function renderWorkspaceHeader(context) {
   const {
     escapeHtml,
     fieldClasses,
+    isCompactViewport,
     neutralChipClasses,
+    primarySurfaceLabel,
     renderEpicCountSummary,
     renderIcon,
     renderStatusBadge,
@@ -24,6 +26,7 @@ export function renderWorkspaceHeader(context) {
           <div class="board-workspace-header__title-row">
             <h2>${escapeHtml(selectedEpic.title)}</h2>
             ${renderStatusBadge(selectedEpic.status)}
+            ${isCompactViewport ? `<span class="${neutralChipClasses()}">Primary surface · ${escapeHtml(primarySurfaceLabel)}</span>` : ""}
           </div>
           <div class="mt-3 flex flex-wrap gap-2">
             <span class="${neutralChipClasses()}">${escapeHtml(searchScope?.detail ?? "")}</span>
