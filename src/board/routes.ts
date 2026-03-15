@@ -91,6 +91,29 @@ function toBoardRouteError(error: unknown): BoardRouteError {
   };
 }
 
+function describeBoardError(mutations: MutationService, error: unknown): BoardRouteError {
+  const routeError = toBoardRouteError(error);
+  const readableMessage = mutations.describeError(error);
+  if (readableMessage === undefined) {
+    return routeError;
+  }
+
+  return {
+    ...routeError,
+    message: readableMessage,
+  };
+}
+
+function buildMutationResponse(domain: TrackerDomain, data: Record<string, unknown>, status = 200): Response {
+  return jsonResponse(status, {
+    ok: true,
+    data: {
+      ...data,
+      snapshot: buildBoardSnapshot(domain),
+    },
+  });
+}
+
 async function parseJsonBody(request: Request): Promise<Record<string, unknown>> {
   const contentType: string = request.headers.get("content-type") ?? "";
   if (!contentType.includes("application/json")) {
@@ -176,7 +199,7 @@ export function createBoardApiHandler(context: BoardRouteContext): (request: Req
           description: readOptionalString(body, "description"),
           status: readOptionalString(body, "status"),
         });
-        return jsonResponse(200, { ok: true, data: { epic } });
+        return buildMutationResponse(domain, { epic });
       }
 
       const taskMatch = request.method === "PATCH" ? url.pathname.match(/^\/api\/tasks\/([^/]+)$/u) : null;
@@ -187,7 +210,7 @@ export function createBoardApiHandler(context: BoardRouteContext): (request: Req
           description: readOptionalString(body, "description"),
           status: readOptionalString(body, "status"),
         });
-        return jsonResponse(200, { ok: true, data: { task } });
+        return buildMutationResponse(domain, { task });
       }
 
       const subtaskMatch = request.method === "PATCH" ? url.pathname.match(/^\/api\/subtasks\/([^/]+)$/u) : null;
@@ -198,13 +221,13 @@ export function createBoardApiHandler(context: BoardRouteContext): (request: Req
           description: readOptionalString(body, "description"),
           status: readOptionalString(body, "status"),
         });
-        return jsonResponse(200, { ok: true, data: { subtask } });
+        return buildMutationResponse(domain, { subtask });
       }
 
       if (request.method === "POST" && url.pathname === "/api/dependencies") {
         const body = await parseJsonBody(request);
         const dependency = mutations.addDependency(readRequiredString(body, "sourceId"), readRequiredString(body, "dependsOnId"));
-        return jsonResponse(201, { ok: true, data: { dependency } });
+        return buildMutationResponse(domain, { dependency }, 201);
       }
 
       if (request.method === "DELETE" && url.pathname === "/api/dependencies") {
@@ -222,14 +245,7 @@ export function createBoardApiHandler(context: BoardRouteContext): (request: Req
           });
         }
 
-        return jsonResponse(200, {
-          ok: true,
-          data: {
-            sourceId,
-            dependsOnId,
-            removed,
-          },
-        });
+        return buildMutationResponse(domain, { sourceId, dependsOnId, removed });
       }
 
       return jsonResponse(404, {
@@ -240,7 +256,7 @@ export function createBoardApiHandler(context: BoardRouteContext): (request: Req
         },
       });
     } catch (error: unknown) {
-      const routeError = toBoardRouteError(error);
+      const routeError = describeBoardError(mutations, error);
       return jsonResponse(routeError.status, {
         ok: false,
         error: {
