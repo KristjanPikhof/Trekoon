@@ -193,6 +193,122 @@ describe("board routes", (): void => {
     }
   });
 
+  test("returns invalid_input for malformed JSON bodies", async (): Promise<void> => {
+    const cwd = createWorkspace();
+    const storage = openTrekoonDatabase(cwd);
+
+    try {
+      const mutations = new MutationService(storage.db, cwd);
+      const epic = mutations.createEpic({ title: "Roadmap", description: "Plan release" });
+      const task = mutations.createTask({ epicId: epic.id, title: "Implement", description: "Ship board" });
+
+      const handler = createBoardApiHandler({ db: storage.db, cwd, token: "secret-token" });
+      const response = await handler(new Request(`http://board.test/api/tasks/${task.id}?token=secret-token`, {
+        method: "PATCH",
+        headers: {
+          "content-type": "application/json",
+        },
+        body: "{",
+      }));
+      const body = await response.json() as {
+        ok: boolean;
+        error: { code: string; message: string };
+      };
+
+      expect(response.status).toBe(400);
+      expect(body).toEqual({
+        ok: false,
+        error: {
+          code: "invalid_input",
+          message: "Malformed JSON request body",
+        },
+      });
+    } finally {
+      storage.close();
+    }
+  });
+
+  test("returns invalid_input for representative invalid request bodies", async (): Promise<void> => {
+    const cwd = createWorkspace();
+    const storage = openTrekoonDatabase(cwd);
+
+    try {
+      const mutations = new MutationService(storage.db, cwd);
+      const epic = mutations.createEpic({ title: "Roadmap", description: "Plan release" });
+      const task = mutations.createTask({ epicId: epic.id, title: "Implement", description: "Ship board" });
+
+      const handler = createBoardApiHandler({ db: storage.db, cwd, token: "secret-token" });
+
+      const wrongContentType = await handler(new Request(`http://board.test/api/tasks/${task.id}?token=secret-token`, {
+        method: "PATCH",
+        headers: {
+          "content-type": "text/plain",
+        },
+        body: JSON.stringify({ status: "done" }),
+      }));
+      const wrongContentTypeBody = await wrongContentType.json() as {
+        ok: boolean;
+        error: { code: string; message: string };
+      };
+
+      expect(wrongContentType.status).toBe(400);
+      expect(wrongContentTypeBody).toEqual({
+        ok: false,
+        error: {
+          code: "invalid_input",
+          message: "Expected application/json request body",
+        },
+      });
+
+      const wrongShape = await handler(new Request(`http://board.test/api/tasks/${task.id}?token=secret-token`, {
+        method: "PATCH",
+        headers: {
+          "content-type": "application/json",
+        },
+        body: JSON.stringify(["done"]),
+      }));
+      const wrongShapeBody = await wrongShape.json() as {
+        ok: boolean;
+        error: { code: string; message: string };
+      };
+
+      expect(wrongShape.status).toBe(400);
+      expect(wrongShapeBody).toEqual({
+        ok: false,
+        error: {
+          code: "invalid_input",
+          message: "Expected JSON object request body",
+        },
+      });
+
+      const missingRequiredField = await handler(new Request("http://board.test/api/dependencies?token=secret-token", {
+        method: "POST",
+        headers: {
+          "content-type": "application/json",
+        },
+        body: JSON.stringify({ sourceId: task.id }),
+      }));
+      const missingRequiredFieldBody = await missingRequiredField.json() as {
+        ok: boolean;
+        error: { code: string; message: string; details: { field: string } };
+      };
+
+      expect(missingRequiredField.status).toBe(400);
+      expect(missingRequiredFieldBody).toEqual({
+        ok: false,
+        error: {
+          code: "invalid_input",
+          message: "dependsOnId is required",
+          details: {
+            field: "dependsOnId",
+          },
+        },
+      });
+    } finally {
+      storage.close();
+    }
+  });
+
   test("accepts bearer token auth for mutation routes", async (): Promise<void> => {
     const cwd = createWorkspace();
     const storage = openTrekoonDatabase(cwd);
