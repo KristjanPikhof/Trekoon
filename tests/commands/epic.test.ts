@@ -465,6 +465,43 @@ describe("epic command", (): void => {
     ]);
   });
 
+  test("update <id> --all --status done honors subtask dependency on its parent task", async (): Promise<void> => {
+    const cwd = createWorkspace();
+    const createdEpic = await runEpic({
+      cwd,
+      mode: "toon",
+      args: ["create", "--title", "Roadmap", "--description", "Top-level work"],
+    });
+    const epicId = (createdEpic.data as { epic: { id: string } }).epic.id;
+
+    const createdTask = await runTask({
+      cwd,
+      mode: "toon",
+      args: ["create", "--epic", epicId, "--title", "Implement", "--description", "Build it", "--status", "todo"],
+    });
+    const taskId = (createdTask.data as { task: { id: string } }).task.id;
+    const createdSubtask = await runSubtask({
+      cwd,
+      mode: "toon",
+      args: ["create", "--task", taskId, "--title", "Release", "--status", "todo"],
+    });
+    const subtaskId = (createdSubtask.data as { subtask: { id: string } }).subtask.id;
+    const dependency = await runDep({ cwd, mode: "toon", args: ["add", subtaskId, taskId] });
+    expect(dependency.ok).toBeTrue();
+
+    const updated = await runEpic({ cwd, mode: "toon", args: ["update", epicId, "--all", "--status", "done"] });
+    expect(updated.ok).toBeTrue();
+    expect((updated.data as { cascade: { changedIds: string[] } }).cascade.changedIds).toEqual([epicId, taskId, subtaskId]);
+
+    const shown = await runEpic({ cwd, mode: "toon", args: ["show", epicId, "--all"] });
+    expect(shown.ok).toBeTrue();
+    expect((shown.data as { tree: { status: string; tasks: Array<{ id: string; status: string; subtasks: Array<{ id: string; status: string }> }> } }).tree)
+      .toMatchObject({
+        status: "done",
+        tasks: [{ id: taskId, status: "done", subtasks: [{ id: subtaskId, status: "done" }] }],
+      });
+  });
+
   test("update <id> --all rejects non-status cascade fields", async (): Promise<void> => {
     const cwd = createWorkspace();
     const createdEpic = await runEpic({
