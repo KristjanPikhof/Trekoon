@@ -561,6 +561,25 @@ function createApi(model) {
         }),
       });
     },
+    createSubtask(input, optimistic) {
+      return runMutation({
+        optimistic,
+        successMessage: "Subtask added.",
+        request: () => request("/api/subtasks", {
+          method: "POST",
+          body: JSON.stringify(input),
+        }),
+      });
+    },
+    deleteSubtask(subtaskId, optimistic) {
+      return runMutation({
+        optimistic,
+        successMessage: "Subtask removed.",
+        request: () => request(`/api/subtasks/${encodeURIComponent(subtaskId)}`, {
+          method: "DELETE",
+        }),
+      });
+    },
     addDependency(sourceId, dependsOnId, optimistic) {
       return runMutation({
         optimistic,
@@ -636,6 +655,29 @@ function removeDependencyInSnapshot(snapshot, sourceId, dependsOnId) {
   const nextSnapshot = cloneSnapshot(snapshot);
   nextSnapshot.dependencies = normalizeArray(nextSnapshot.dependencies).filter(
     (dependency) => !(dependency.sourceId === sourceId && dependency.dependsOnId === dependsOnId),
+  );
+  return normalizeSnapshot(nextSnapshot);
+}
+
+function createSubtaskInSnapshot(snapshot, input) {
+  const nextSnapshot = cloneSnapshot(snapshot);
+  normalizeArray(nextSnapshot.subtasks).push({
+    id: crypto.randomUUID(),
+    taskId: input.taskId,
+    title: input.title,
+    description: input.description ?? "",
+    status: input.status ?? "todo",
+    createdAt: Date.now(),
+    updatedAt: Date.now(),
+  });
+  return normalizeSnapshot(nextSnapshot);
+}
+
+function deleteSubtaskInSnapshot(snapshot, subtaskId) {
+  const nextSnapshot = cloneSnapshot(snapshot);
+  nextSnapshot.subtasks = normalizeArray(nextSnapshot.subtasks).filter((candidate) => candidate.id !== subtaskId);
+  nextSnapshot.dependencies = normalizeArray(nextSnapshot.dependencies).filter(
+    (dependency) => dependency.sourceId !== subtaskId && dependency.dependsOnId !== subtaskId,
   );
   return normalizeSnapshot(nextSnapshot);
 }
@@ -774,7 +816,7 @@ function renderTaskCard(task, selected, isMutating = false) {
         <span class="text-xs uppercase tracking-[0.16em] text-[var(--board-text-soft)]">Task</span>
       </div>
       <strong class="mt-4 block text-base font-semibold leading-6 text-[var(--board-text)]">${escapeHtml(task.title)}</strong>
-      ${renderDescriptionPreview(task.description, "mt-2 text-sm leading-6 text-[var(--board-text-muted)]")}
+      ${renderDescriptionPreview(task.description, "mt-2 overflow-hidden text-sm leading-6 text-[var(--board-text-muted)] [display:-webkit-box] [-webkit-box-orient:vertical] [-webkit-line-clamp:3]")}
       <div class="mt-4 flex flex-wrap gap-2">${renderTaskMeta(task)}</div>
     </article>
   `;
@@ -864,10 +906,37 @@ function renderSubtaskList(task) {
           <div class="flex flex-wrap items-center gap-2">
             ${renderStatusBadge(subtask.status)}
             <button type="button" class="${buttonClasses()}" data-open-subtask="${escapeHtml(subtask.id)}">Open</button>
+            <button type="button" class="${buttonClasses()}" data-delete-subtask="${escapeHtml(subtask.id)}">Remove</button>
           </div>
         </article>
       `).join("")}
     </div>
+  `;
+}
+
+function renderCreateSubtaskForm(task, isMutating = false) {
+  return `
+    <form class="grid gap-4 rounded-3xl border border-[var(--board-border)] bg-white/[0.03] p-4" data-create-subtask-form="${escapeHtml(task.id)}">
+      <div>
+        <span class="${sectionLabelClasses()}">Add subtask</span>
+        <p class="mt-2 text-sm leading-6 text-[var(--board-text-muted)]">Create a new subtask directly from the task detail panel.</p>
+      </div>
+      <label class="grid gap-2">
+        <span class="${sectionLabelClasses()}">Title</span>
+        <input class="${fieldClasses()}" name="title" placeholder="Write tests" required ${isMutating ? "disabled" : ""} />
+      </label>
+      <label class="grid gap-2">
+        <span class="${sectionLabelClasses()}">Description</span>
+        <textarea class="${fieldClasses()} min-h-[96px]" name="description" rows="3" placeholder="Optional context for this subtask" ${isMutating ? "disabled" : ""}></textarea>
+      </label>
+      <label class="grid gap-2">
+        <span class="${sectionLabelClasses()}">Status</span>
+        ${renderStatusSelect("status", "todo", isMutating)}
+      </label>
+      <div class="flex justify-end">
+        <button type="submit" class="${buttonClasses({ kind: "primary" })}" ${isMutating ? "disabled" : ""}>Add subtask</button>
+      </div>
+    </form>
   `;
 }
 
@@ -974,7 +1043,22 @@ function renderDrawer(task, epics, snapshot, isMutating = false) {
           <strong class="text-sm font-semibold text-[var(--board-text)]">Subtasks</strong>
           <span class="${neutralChipClasses()}">${task.subtasks.length}</span>
         </div>
-        <div class="mt-4">${renderSubtaskList(task)}</div>
+        <div class="mt-4 space-y-4">
+          ${renderCreateSubtaskForm(task, isMutating)}
+          ${renderSubtaskList(task)}
+        </div>
+      </section>
+    </div>
+  `;
+}
+
+function renderTaskModal(task, epics, snapshot, isMutating = false) {
+  return `
+    <div class="board-task-modal-backdrop fixed inset-0 z-30 grid place-items-center bg-slate-950/70 p-4 backdrop-blur-md" data-close-task>
+      <section class="board-task-modal ${panelClasses("grid max-h-[calc(100vh-2rem)] w-full max-w-3xl grid-rows-[1fr] overflow-hidden p-5 sm:p-6")}" role="dialog" aria-modal="true" aria-labelledby="board-task-modal-title">
+        <div class="min-h-0">
+          ${renderDrawer(task, epics, snapshot, isMutating).replace("<h3 class=\"mt-2 text-2xl font-semibold tracking-tight text-[var(--board-text)]\">", "<h3 id=\"board-task-modal-title\" class=\"mt-2 text-2xl font-semibold tracking-tight text-[var(--board-text)]\">")}
+        </div>
       </section>
     </div>
   `;
@@ -988,6 +1072,7 @@ function renderBoard(model) {
   const selectedTask = getSelectedTask();
   const selectedSubtask = getSubtaskById(store.selectedSubtaskId);
   const screen = store.screen === "tasks" && selectedEpic ? "tasks" : "epics";
+  const useTaskModal = Boolean(selectedTask && store.view === "kanban");
   const currentNav = selectedTask ? "detail" : screen === "tasks" ? "board" : "epics";
   const overallCounts = deriveCounts(store.snapshot.tasks);
   const completionRate = store.snapshot.tasks.length === 0
@@ -1121,7 +1206,7 @@ function renderBoard(model) {
   `;
 
   const tasksWorkspaceMarkup = selectedEpic ? `
-    <div class="board-root board-root--tasks ${selectedTask ? "has-detail" : ""} grid gap-5 ${selectedTask ? "2xl:grid-cols-[280px_minmax(0,1fr)_420px]" : "xl:grid-cols-[280px_minmax(0,1fr)]"}">
+    <div class="board-root board-root--tasks ${selectedTask && !useTaskModal ? "has-detail" : ""} grid gap-5 ${selectedTask && !useTaskModal ? "2xl:grid-cols-[280px_minmax(0,1fr)_420px]" : "xl:grid-cols-[280px_minmax(0,1fr)]"}">
       <aside class="board-sidebar ${panelClasses("hidden p-4 xl:block")}" aria-label="Epic switcher">
         <header class="board-sidebar__header border-b border-[var(--board-border)] pb-4">
           <span class="${sectionLabelClasses()}">Epics</span>
@@ -1182,12 +1267,13 @@ function renderBoard(model) {
         </div>
       </section>
 
-      ${selectedTask ? `
+      ${selectedTask && !useTaskModal ? `
         <aside class="board-panel board-drawer is-open ${panelClasses("fixed inset-4 z-30 p-5 xl:static xl:inset-auto xl:p-5")}" aria-label="Task drawer">
           ${renderDrawer(selectedTask, store.snapshot.epics, store.snapshot, store.isMutating)}
         </aside>
       ` : ""}
     </div>
+    ${useTaskModal ? renderTaskModal(selectedTask, store.snapshot.epics, store.snapshot, store.isMutating) : ""}
   ` : epicsOverviewMarkup;
 
   appElement.innerHTML = `
@@ -1306,7 +1392,10 @@ function attachInteractions(model, api) {
   });
 
   document.querySelectorAll("[data-close-task]").forEach((button) => {
-    button.addEventListener("click", () => {
+    button.addEventListener("click", (event) => {
+      if (event.currentTarget !== event.target && event.currentTarget?.classList?.contains("board-task-modal-backdrop")) {
+        return;
+      }
       store.selectedTaskId = null;
       store.selectedSubtaskId = null;
       persist();
@@ -1335,6 +1424,10 @@ function attachInteractions(model, api) {
   });
 
   document.querySelector(".board-modal")?.addEventListener("click", (event) => {
+    event.stopPropagation();
+  });
+
+  document.querySelector(".board-task-modal")?.addEventListener("click", (event) => {
     event.stopPropagation();
   });
 
@@ -1370,6 +1463,48 @@ function attachInteractions(model, api) {
       };
       store.selectedSubtaskId = subtaskId;
       api.patchSubtask(subtaskId, updates, (snapshot) => updateSubtaskInSnapshot(snapshot, subtaskId, updates));
+    });
+  });
+
+  document.querySelectorAll("[data-create-subtask-form]").forEach((form) => {
+    form.addEventListener("submit", (event) => {
+      event.preventDefault();
+      if (store.isMutating) {
+        return;
+      }
+
+      const taskId = form.dataset.createSubtaskForm;
+      const formData = new FormData(form);
+      const input = {
+        taskId,
+        title: String(formData.get("title") || "").trim(),
+        description: String(formData.get("description") || "").trim(),
+        status: normalizeStatus(String(formData.get("status") || "todo")),
+      };
+
+      if (!taskId || input.title.length === 0) {
+        store.notice = { type: "error", message: "Subtasks need a title before they can be added." };
+        renderBoard(model);
+        attachInteractions(model, api);
+        return;
+      }
+
+      api.createSubtask(input, (snapshot) => createSubtaskInSnapshot(snapshot, input));
+    });
+  });
+
+  document.querySelectorAll("[data-delete-subtask]").forEach((button) => {
+    button.addEventListener("click", () => {
+      if (store.isMutating) {
+        return;
+      }
+
+      const subtaskId = button.dataset.deleteSubtask;
+      if (!subtaskId) {
+        return;
+      }
+
+      api.deleteSubtask(subtaskId, (snapshot) => deleteSubtaskInSnapshot(snapshot, subtaskId));
     });
   });
 
@@ -1504,7 +1639,7 @@ function attachInteractions(model, api) {
 
     if (event.key === "Enter" && currentIndex >= 0) {
       event.preventDefault();
-      document.querySelector(".board-drawer")?.scrollIntoView({ block: "nearest", behavior: "smooth" });
+      document.querySelector(".board-drawer, .board-task-modal")?.scrollIntoView({ block: "nearest", behavior: "smooth" });
       return;
     }
 
