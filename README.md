@@ -99,7 +99,7 @@ The browser flow is local-only by design:
 Current runtime expectations:
 
 - the local runtime is served from `.trekoon/board`
-- the shell currently loads Vue from `esm.sh`, Tailwind from
+- the shell currently loads Vue from `unpkg.com`, Tailwind from
   `cdn.tailwindcss.com`, and Google-hosted fonts/icons when the page renders
 - if your environment blocks those hosts, `trekoon board open` still starts the
   local server, but the browser UI may render without the enhanced shell until
