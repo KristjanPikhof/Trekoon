@@ -112,6 +112,15 @@ Current board behavior to expect:
   surfaces so the board remains usable without horizontal overflow
 - long descriptions and dependency/subtask lists use disclosure controls such as
   “Show more” and “Collapse” instead of expanding dense rows by default
+- overview cards are the primary entry point into an epic; the topbar then keeps
+  the active scope visible as you switch between overview, board, and detail
+  contexts
+- compact/mobile layouts use explicit `Epics`, `Board`, and `Detail` modes so
+  one dominant region owns attention at a time instead of stacking multiple
+  competing panes
+- scroll ownership moves with the active surface: page in overview, workspace in
+  an epic, inspector/task modal for detail, and subtask modal for the top-most
+  overlay; background layers stay locked while overlays are open
 
 For the full lifecycle and examples, read [Quickstart](docs/quickstart.md) and
 [Command reference](docs/commands.md).
