@@ -83,6 +83,28 @@ not required mid-loop unless you need updated diagnostics or sync status.
 
 Recommended statuses for consistent workflows: `todo`, `in_progress`, `done`.
 
+## Local board workflow
+
+Use the browser board when you need a visual view over the same local Trekoon
+state.
+
+```bash
+trekoon --toon init
+trekoon --toon board open
+trekoon --toon board update
+```
+
+Rules:
+
+- `init` installs or refreshes bundled board assets into repo-shared
+  `.trekoon/board`
+- `board open` ensures assets are installed, starts a loopback-only server on
+  `127.0.0.1`, and launches the browser
+- `board update` refreshes runtime assets only; it does not start the server or
+  open a browser
+- every board session is protected by a per-session token in the launch URL/API
+- if browser launch fails, use the reported fallback URL manually
+
 ## Read policy: use the smallest sufficient read
 
 Use the narrowest command that answers the question.
