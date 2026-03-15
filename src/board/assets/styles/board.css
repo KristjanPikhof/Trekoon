@@ -237,6 +237,81 @@ body {
   max-height: none;
 }
 
+.board-detail-surface-frame {
+  min-width: 0;
+}
+
+.board-detail-surface {
+  min-height: 0;
+}
+
+.board-detail-surface__header {
+  position: sticky;
+  top: 0;
+  z-index: 2;
+  background: var(--board-surface);
+}
+
+.board-detail-surface__body {
+  scrollbar-gutter: stable;
+}
+
+.board-detail-surface__stack {
+  display: grid;
+  align-content: start;
+  gap: 16px;
+}
+
+.board-detail-card {
+  min-width: 0;
+}
+
+.board-detail-summary-grid {
+  align-items: start;
+}
+
+.board-detail-summary-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.board-detail-copy {
+  max-width: 78ch;
+}
+
+.board-detail-copy--compact {
+  max-width: 68ch;
+}
+
+.board-detail-copy br {
+  content: "";
+}
+
+.board-detail-nested {
+  gap: 0;
+}
+
+.board-related-item {
+  min-width: 0;
+}
+
+.board-related-item__description {
+  display: -webkit-box;
+  overflow: hidden;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 3;
+}
+
+.board-task-modal {
+  width: min(80vw, 1100px);
+}
+
+.board-modal--sheet {
+  width: min(80vw, 960px);
+}
+
 .board-layout--overview .board-overview {
   overflow: hidden;
 }
@@ -497,6 +572,14 @@ body {
     grid-template-columns: minmax(0, 1.1fr) minmax(320px, 380px);
   }
 
+  .board-task-modal {
+    width: min(88vw, 980px);
+  }
+
+  .board-modal--sheet {
+    width: min(88vw, 820px);
+  }
+
   .board-layout--workspace .board-root--detail.board-root--detail-open .board-sidebar {
     display: none;
   }
@@ -542,6 +625,11 @@ body {
     display: none;
   }
 
+  .board-task-modal,
+  .board-modal--sheet {
+    width: min(100vw - 24px, 920px);
+  }
+
   .board-layout--workspace .board-content,
   .board-layout--workspace .board-kanban,
   .board-layout--workspace .board-list__rows,
@@ -560,6 +648,17 @@ body {
   .board-shell-topbar__actions {
     width: 100%;
     justify-content: space-between;
+  }
+
+  .board-detail-surface__title-row,
+  .board-detail-summary-row {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+
+  .board-task-modal,
+  .board-modal--sheet {
+    width: 100%;
   }
 
   .board-shell-topbar__meta summary span {
