@@ -34,10 +34,37 @@ trekoon --toon sync status
 Bootstrap rules:
 
 - Run `trekoon --toon init` once per repository to create or re-bootstrap the
-  shared storage root.
+  shared storage root and install the bundled board runtime under
+  `.trekoon/board`.
 - Run `trekoon --toon sync status` before agent work to inspect diagnostics.
 - If diagnostics report `recoveryRequired`, a tracked or ignored mismatch, or an
   ambiguous recovery path, stop and repair setup before continuing.
+
+## Open the local board
+
+After `trekoon init`, you can browse and update the same repo-shared Trekoon
+state in the browser:
+
+```bash
+trekoon board open
+trekoon board update
+```
+
+What these commands do:
+
+- `trekoon board open` ensures bundled board assets are installed, starts a
+  loopback-only server on `127.0.0.1`, opens the browser, and prints a fallback
+  URL you can paste manually if launch fails
+- `trekoon board update` refreshes the runtime assets in `.trekoon/board`
+  without opening a browser or starting the server
+
+Why the board uses a local server instead of a bare HTML file:
+
+- the UI needs live reads and writes against Trekoon data, not a static export
+- the server binds only to `127.0.0.1`
+- each `board open` call generates a per-session token used by the browser/API
+- bundled assets are copied from the CLI package into `.trekoon/board`, so the
+  board works without a separate frontend install or runtime CDN dependency
 
 ## Create an epic, task, and subtask
 
