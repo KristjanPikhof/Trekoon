@@ -14,8 +14,8 @@ export function renderEpicsOverview(context) {
         <header class="board-section-head board-overview__header">
           <div>
             <span class="${sectionLabelClasses()}">Epics overview</span>
-            <h2 class="board-overview__title">Manage high-level initiatives</h2>
-            <p class="board-overview__summary">Dense scan-first rows keep long epic context readable without stretching the overview.</p>
+            <h2 class="board-overview__title">Open an initiative and drive the next move</h2>
+            <p class="board-overview__summary">Each card is the entry point, so status, task counts, and freshness stay visible at a glance.</p>
           </div>
           <div class="board-legend board-overview__legend">
             <span class="board-chip board-chip--neutral">${visibleEpics.length} visible epic${visibleEpics.length === 1 ? "" : "s"}</span>
@@ -29,7 +29,7 @@ export function renderEpicsOverview(context) {
             <span>Status</span>
             <span>Counts</span>
             <span>Updated</span>
-            <span>Open</span>
+            <span>Action</span>
           </div>
           <div class="board-table__rows board-table__rows--epics">
             ${visibleEpics.length === 0
