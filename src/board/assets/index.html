@@ -1,0 +1,44 @@
+<!doctype html>
+<html lang="en" data-theme="dark">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta
+      name="description"
+      content="Trekoon board — local-first workspace for browsing epics, tasks, and flow states."
+    />
+    <title>Trekoon Board</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500;9..144,700&family=Manrope:wght@400;500;600;700;800&display=swap"
+      rel="stylesheet"
+    />
+    <link rel="stylesheet" href="./app.css" />
+  </head>
+  <body>
+    <div class="board-shell">
+      <div class="board-noise"></div>
+      <main id="app" class="board-app" aria-live="polite">
+        <section class="board-loading" aria-label="Loading board">
+          <div class="board-loading__badge">Trekoon board</div>
+          <h1>Preparing your local workspace…</h1>
+          <p>
+            Loading epics, tasks, and saved board context from your repo-shared
+            storage.
+          </p>
+        </section>
+      </main>
+    </div>
+
+    <script id="trekoon-board-snapshot" type="application/json">
+      {
+        "generatedAt": null,
+        "epics": [],
+        "tasks": [],
+        "subtasks": []
+      }
+    </script>
+    <script type="module" src="./app.js"></script>
+  </body>
+</html>
