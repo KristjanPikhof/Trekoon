@@ -63,6 +63,10 @@ function secondaryPanelClasses(extra = "") {
   );
 }
 
+function isCompactViewport() {
+  return typeof window !== "undefined" && window.matchMedia?.("(max-width: 900px)")?.matches;
+}
+
 function buttonClasses(options = {}) {
   const kind = options.kind ?? "secondary";
   const iconOnly = options.iconOnly ?? false;
