@@ -151,6 +151,12 @@ textarea {
   overflow: hidden;
 }
 
+.board-notice {
+  display: grid;
+  gap: 8px;
+  padding: 12px 14px;
+}
+
 .board-topbar {
   display: flex;
   align-items: center;
@@ -504,6 +510,11 @@ textarea {
   color: var(--board-accent);
 }
 
+.board-list-row__status {
+  font-weight: 600;
+  color: var(--board-heading);
+}
+
 .board-workspace__toolbar {
   justify-content: space-between;
 }
@@ -742,7 +753,7 @@ textarea {
   }
 
   .board-topbar__actions {
-    justify-content: stretch;
+    justify-content: flex-start;
   }
 
   .board-search {
