@@ -69,6 +69,7 @@ body {
 
 .board-shell-v2__frame {
   display: grid;
+  grid-template-rows: auto minmax(0, 1fr);
   gap: 12px;
   width: min(1600px, 100%);
   min-height: calc(100vh - 24px);
@@ -188,15 +189,18 @@ body {
 
 .board-shell-v2__runtime {
   min-height: 0;
+  height: 100%;
 }
 
 .board-shell-v2__runtime-shell {
+  display: grid;
   min-height: 0;
+  height: 100%;
 }
 
 .board-layout--workspace {
-  min-height: 100dvh;
-  max-height: 100dvh;
+  height: 100%;
+  min-height: 0;
 }
 
 .board-layout[data-scroll-owner] {
@@ -1191,7 +1195,8 @@ body {
   }
 
   .board-layout--workspace {
-    min-height: 100dvh;
+    height: 100%;
+    min-height: 0;
   }
 
   .board-layout--workspace .board-content {
