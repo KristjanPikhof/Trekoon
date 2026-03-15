@@ -701,8 +701,8 @@ function renderDependencySection(task, snapshot, isMutating = false) {
         ${renderDependencyItems(task, snapshot, isMutating, visibleDependencies)}
       </div>
       ${hiddenDependencies.length > 0 ? `
-        <details class="board-disclosure board-detail-nested mt-4 ${secondaryPanelClasses("p-3")}">
-          <summary class="cursor-pointer list-none text-sm font-semibold text-[var(--board-text)]">Show ${hiddenDependencies.length} more dependency${hiddenDependencies.length === 1 ? "" : "ies"}</summary>
+          <details class="board-disclosure board-detail-nested mt-4 ${secondaryPanelClasses("p-3")}">
+            <summary class="cursor-pointer list-none text-sm font-semibold text-[var(--board-text)]">Show ${hiddenDependencies.length} more ${hiddenDependencies.length === 1 ? "dependency" : "dependencies"}</summary>
           <div class="board-inline-list mt-3 space-y-3">
             ${renderDependencyItems(task, snapshot, isMutating, hiddenDependencies)}
           </div>
