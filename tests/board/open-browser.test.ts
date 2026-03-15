@@ -1,13 +1,54 @@
-import { EventEmitter } from "node:events";
-
 import { afterEach, describe, expect, test } from "bun:test";
 
 import { openBoardInBrowser, setBrowserLauncherForTests } from "../../src/board/open-browser";
 
-class MockBrowserProcess extends EventEmitter {
+type BrowserLaunchEvent = "error" | "spawn";
+type BrowserLaunchListener = (error?: Error) => void;
+
+class MockBrowserProcess {
+  private readonly listeners = new Map<BrowserLaunchEvent, BrowserLaunchListener[]>();
+
+  once(event: BrowserLaunchEvent, listener: BrowserLaunchListener): MockBrowserProcess {
+    const wrappedListener: BrowserLaunchListener = (error?: Error): void => {
+      this.removeListener(event, wrappedListener);
+      listener(error);
+    };
+    const currentListeners = this.listeners.get(event) ?? [];
+    currentListeners.push(wrappedListener);
+    this.listeners.set(event, currentListeners);
+    return this;
+  }
+
+  removeListener(event: BrowserLaunchEvent, listener: BrowserLaunchListener): MockBrowserProcess {
+    const currentListeners = this.listeners.get(event) ?? [];
+    this.listeners.set(
+      event,
+      currentListeners.filter((currentListener) => currentListener !== listener),
+    );
+    return this;
+  }
+
+  emit(event: BrowserLaunchEvent, error?: Error): void {
+    for (const listener of this.listeners.get(event) ?? []) {
+      listener(error);
+    }
+  }
+
   unref(): void {
     // no-op for tests
   }
+}
+
+function expectedLaunch(url: string): { command: string; args: string[] } {
+  if (process.platform === "darwin") {
+    return { command: "open", args: [url] };
+  }
+
+  if (process.platform === "win32") {
+    return { command: "cmd", args: ["/c", "start", "", url] };
+  }
+
+  return { command: "xdg-open", args: [url] };
 }
 
 afterEach((): void => {
@@ -16,23 +57,26 @@ afterEach((): void => {
 
 describe("openBoardInBrowser", (): void => {
   test("reports missing opener binaries via fallback metadata", async (): Promise<void> => {
+    const url = "http://127.0.0.1:4321";
+    const launch = expectedLaunch(url);
+
     setBrowserLauncherForTests((command, args) => {
       const child = new MockBrowserProcess();
 
       queueMicrotask(() => {
-        expect(command).toBeString();
-        expect(args).toEqual(["http://127.0.0.1:4321"]);
+        expect(command).toBe(launch.command);
+        expect(args).toEqual(launch.args);
         child.emit("error", new Error("spawn open ENOENT"));
       });
 
       return child;
     });
 
-    await expect(openBoardInBrowser("http://127.0.0.1:4321")).resolves.toEqual({
+    await expect(openBoardInBrowser(url)).resolves.toEqual({
       launched: false,
-      url: "http://127.0.0.1:4321",
-      command: process.platform === "darwin" ? "open" : process.platform === "win32" ? "cmd" : "xdg-open",
-      args: process.platform === "win32" ? ["/c", "start", "", "http://127.0.0.1:4321"] : ["http://127.0.0.1:4321"],
+      url,
+      command: launch.command,
+      args: launch.args,
       errorMessage: "spawn open ENOENT",
     });
   });
