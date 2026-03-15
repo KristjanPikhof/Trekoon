@@ -48,6 +48,7 @@ These are the commands most people need to recognize quickly:
 | Goal | Commands |
 | --- | --- |
 | Initialize a repo | `trekoon init` |
+| Install/open/update the local board | `trekoon board open`, `trekoon board update` |
 | Learn the CLI | `trekoon help [command]`, `trekoon quickstart` |
 | Plan work | `trekoon epic ...`, `trekoon task ...`, `trekoon subtask ...`, `trekoon dep ...` |
 | Start an execution session | `trekoon session` |
@@ -64,6 +65,30 @@ Machine output modes:
 
 For the full command surface, flags, filters, and bulk update rules, read the
 [command reference](docs/commands.md).
+
+## Local board workflow
+
+Trekoon ships a no-extra-install local board for browsing and updating work in a
+browser.
+
+- `trekoon init` creates the shared `.trekoon` storage, database, and board
+  runtime under `.trekoon/board`
+- `trekoon board open` ensures those bundled board assets are installed, starts a
+  token-gated loopback server on `127.0.0.1`, and launches the browser
+- `trekoon board update` refreshes the board runtime assets only; it does not
+  start the server or open a browser
+
+The browser flow is local-only by design:
+
+- static assets are bundled with Trekoon and copied into repo-shared storage, so
+  the board does not depend on a separate install step or network CDN at runtime
+- the board server binds only to `127.0.0.1`
+- every `board open` session uses a per-session token in the URL/API requests
+- command output always includes a manual fallback URL if the browser launch
+  fails
+
+For the full lifecycle and examples, read [Quickstart](docs/quickstart.md) and
+[Command reference](docs/commands.md).
 
 ## AI skill
 
