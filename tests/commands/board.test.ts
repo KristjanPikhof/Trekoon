@@ -127,6 +127,64 @@ describe("board command", (): void => {
     });
   });
 
+  test("reports fallback URL when browser launch fails", async (): Promise<void> => {
+    setBoardCommandHooksForTests({
+      ensureInstalled: () => mockInstallResult("unchanged"),
+      startBoardServer: () => ({
+        origin: "http://127.0.0.1:4321",
+        url: "http://127.0.0.1:4321/?token=secret-token",
+        fallbackUrl: "http://127.0.0.1:4321/?token=secret-token",
+        hostname: "127.0.0.1",
+        port: 4321,
+        token: "secret-token",
+        stop(): void {
+          // no-op in tests
+        },
+      }),
+      openBoardInBrowser: (url) => ({
+        launched: false,
+        url,
+        command: "open",
+        args: [url],
+        errorMessage: "mock browser failure",
+      }),
+    });
+
+    const result = await runBoard({
+      cwd: "/tmp/workspace",
+      mode: "toon",
+      args: ["open"],
+    });
+
+    expect(result.ok).toBeTrue();
+    expect(result.command).toBe("board.open");
+    expect(result.human).toContain("Board ready at http://127.0.0.1:4321/?token=secret-token");
+    expect(result.human).toContain("Browser launch failed: mock browser failure");
+    expect(result.human).toContain("Open manually if needed: http://127.0.0.1:4321/?token=secret-token");
+    expect(result.data).toEqual({
+      install: {
+        action: "unchanged",
+        paths: mockInstallResult("unchanged").paths,
+        manifest: mockInstallResult("unchanged").manifest,
+      },
+      server: {
+        origin: "http://127.0.0.1:4321",
+        url: "http://127.0.0.1:4321/?token=secret-token",
+        fallbackUrl: "http://127.0.0.1:4321/?token=secret-token",
+        hostname: "127.0.0.1",
+        port: 4321,
+        token: "secret-token",
+      },
+      launch: {
+        launched: false,
+        url: "http://127.0.0.1:4321/?token=secret-token",
+        command: "open",
+        args: ["http://127.0.0.1:4321/?token=secret-token"],
+        errorMessage: "mock browser failure",
+      },
+    });
+  });
+
   test("surfaces install failures with stable codes", async (): Promise<void> => {
     setBoardCommandHooksForTests({
       ensureInstalled: () => {
