@@ -4,6 +4,9 @@ import { resolve } from "node:path";
 
 export const TREKOON_STORAGE_DIRNAME = ".trekoon";
 export const TREKOON_DATABASE_FILENAME = "trekoon.db";
+export const TREKOON_BOARD_DIRNAME = "board";
+export const TREKOON_BOARD_ENTRY_FILENAME = "index.html";
+export const TREKOON_BOARD_MANIFEST_FILENAME = "manifest.json";
 
 export function resolveLegacyWorktreeStorageDir(worktreeRoot: string): string {
   return resolve(worktreeRoot, TREKOON_STORAGE_DIRNAME);
@@ -15,6 +18,18 @@ export function resolveLegacyWorktreeDatabaseFile(worktreeRoot: string): string 
 
 export type StorageMode = "cwd" | "git_common_dir";
 
+export function resolveBoardStorageDir(storageDir: string): string {
+  return resolve(storageDir, TREKOON_BOARD_DIRNAME);
+}
+
+export function resolveBoardEntryFile(storageDir: string): string {
+  return resolve(resolveBoardStorageDir(storageDir), TREKOON_BOARD_ENTRY_FILENAME);
+}
+
+export function resolveBoardManifestFile(storageDir: string): string {
+  return resolve(resolveBoardStorageDir(storageDir), TREKOON_BOARD_MANIFEST_FILENAME);
+}
+
 export interface StoragePaths {
   readonly invocationCwd: string;
   readonly storageMode: StorageMode;
@@ -23,6 +38,9 @@ export interface StoragePaths {
   readonly sharedStorageRoot: string;
   readonly storageDir: string;
   readonly databaseFile: string;
+  readonly boardDir: string;
+  readonly boardEntryFile: string;
+  readonly boardManifestFile: string;
   readonly diagnostics: StoragePathDiagnostics;
 }
 
@@ -35,6 +53,9 @@ export interface StoragePathIssue {
   readonly worktreeRoot: string;
   readonly sharedStorageRoot: string;
   readonly databaseFile: string;
+  readonly boardDir: string;
+  readonly boardEntryFile: string;
+  readonly boardManifestFile: string;
 }
 
 export interface StoragePathDiagnostics {
@@ -44,6 +65,9 @@ export interface StoragePathDiagnostics {
   readonly worktreeRoot: string;
   readonly sharedStorageRoot: string;
   readonly databaseFile: string;
+  readonly boardDir: string;
+  readonly boardEntryFile: string;
+  readonly boardManifestFile: string;
   readonly warnings: readonly StoragePathIssue[];
   readonly errors: readonly StoragePathIssue[];
 }
@@ -76,6 +100,9 @@ export function resolveStoragePaths(workingDirectory: string = process.cwd()): S
   const sharedStorageRoot: string = repoCommonDir ? realpathSync(resolve(repoCommonDir, "..")) : invocationCwd;
   const storageDir: string = resolve(sharedStorageRoot, TREKOON_STORAGE_DIRNAME);
   const databaseFile: string = resolve(storageDir, TREKOON_DATABASE_FILENAME);
+  const boardDir: string = resolveBoardStorageDir(storageDir);
+  const boardEntryFile: string = resolveBoardEntryFile(storageDir);
+  const boardManifestFile: string = resolveBoardManifestFile(storageDir);
   const warnings: StoragePathIssue[] = [];
 
   const createIssue = (code: string, message: string): StoragePathIssue => ({
@@ -87,6 +114,9 @@ export function resolveStoragePaths(workingDirectory: string = process.cwd()): S
     worktreeRoot,
     sharedStorageRoot,
     databaseFile,
+    boardDir,
+    boardEntryFile,
+    boardManifestFile,
   });
 
   if (invocationCwd !== worktreeRoot) {
@@ -111,6 +141,9 @@ export function resolveStoragePaths(workingDirectory: string = process.cwd()): S
     worktreeRoot,
     sharedStorageRoot,
     databaseFile,
+    boardDir,
+    boardEntryFile,
+    boardManifestFile,
     warnings,
     errors: [],
   };
@@ -123,6 +156,9 @@ export function resolveStoragePaths(workingDirectory: string = process.cwd()): S
     sharedStorageRoot,
     storageDir,
     databaseFile,
+    boardDir,
+    boardEntryFile,
+    boardManifestFile,
     diagnostics,
   };
 }
