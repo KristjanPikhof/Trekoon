@@ -46,6 +46,8 @@ const LIST_VIEW_MODES = ["table", "compact"] as const;
 const DEFAULT_LIST_LIMIT = 10;
 const DEFAULT_OPEN_STATUSES = ["in_progress", "in-progress", "todo"] as const;
 const CREATE_OPTIONS = ["title", "t", "description", "d", "status", "s", "task", "subtask", "dep"] as const;
+const LIST_OPTIONS = ["status", "s", "limit", "l", "cursor", "all", "view"] as const;
+const SHOW_OPTIONS = ["view", "all"] as const;
 const SEARCH_OPTIONS = ["fields", "preview"] as const;
 const REPLACE_OPTIONS = ["search", "replace", "fields", "preview", "apply"] as const;
 const EXPAND_OPTIONS = ["task", "subtask", "dep"] as const;
@@ -867,6 +869,16 @@ export async function runEpic(context: CliContext): Promise<CliResult> {
         });
       }
       case "list": {
+        const listUnknownOption = findUnknownOption(parsed, LIST_OPTIONS);
+        if (listUnknownOption !== undefined) {
+          return unknownOption("epic.list", listUnknownOption, LIST_OPTIONS);
+        }
+
+        const unexpectedListPositionals = readUnexpectedPositionals(parsed, 1);
+        if (unexpectedListPositionals.length > 0) {
+          return failUnexpectedPositionals("epic.list", unexpectedListPositionals);
+        }
+
         const missingListOption =
           readMissingOptionValue(parsed.missingOptionValues, "status", "s") ??
           readMissingOptionValue(parsed.missingOptionValues, "limit", "l") ??
@@ -980,6 +992,16 @@ export async function runEpic(context: CliContext): Promise<CliResult> {
         });
       }
       case "show": {
+        const showUnknownOption = findUnknownOption(parsed, SHOW_OPTIONS);
+        if (showUnknownOption !== undefined) {
+          return unknownOption("epic.show", showUnknownOption, SHOW_OPTIONS);
+        }
+
+        const unexpectedShowPositionals = readUnexpectedPositionals(parsed, 2);
+        if (unexpectedShowPositionals.length > 0) {
+          return failUnexpectedPositionals("epic.show", unexpectedShowPositionals);
+        }
+
         const missingShowOption = readMissingOptionValue(parsed.missingOptionValues, "view");
         if (missingShowOption !== undefined) {
           return failMissingOptionValue("epic.show", missingShowOption);
