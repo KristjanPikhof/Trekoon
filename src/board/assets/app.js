@@ -110,6 +110,7 @@ function renderStatusBadge(rawStatus, label = readStatusLabel(rawStatus)) {
 
 let appElement = null;
 const scrollAuthorityStack = createScrollAuthorityStack();
+let searchReturnFocusState = null;
 
 function resolveTaskDetailOwner(boardState, useTaskModal) {
   if (!boardState?.selectedTask) {
@@ -125,6 +126,91 @@ function rememberReturnFocus(owner, element) {
   }
 
   scrollAuthorityStack.rememberReturnFocus(owner, resolveFocusSelector(element));
+}
+
+function closeTopmostDisclosure(boardState, activeElement = document.activeElement) {
+  const disclosureRoot = boardState?.selectedSubtaskId
+    ? document.querySelector(".board-modal")
+    : boardState?.selectedTaskId
+      ? document.querySelector(".board-drawer, .board-task-modal")
+      : document;
+
+  if (!(disclosureRoot instanceof ParentNode)) {
+    return false;
+  }
+
+  const openDisclosures = Array.from(disclosureRoot.querySelectorAll("details[open]"))
+    .filter((disclosure) => disclosure instanceof HTMLDetailsElement);
+  if (openDisclosures.length === 0) {
+    return false;
+  }
+
+  let candidate = null;
+  if (activeElement instanceof HTMLElement) {
+    candidate = activeElement.closest("details[open]");
+    if (candidate && !openDisclosures.includes(candidate)) {
+      candidate = null;
+    }
+  }
+
+  if (!(candidate instanceof HTMLDetailsElement)) {
+    candidate = openDisclosures
+      .map((disclosure, index) => ({
+        disclosure,
+        index,
+        depth: disclosure.closest("details[open] details[open]") ? disclosure.parents?.length ?? 0 : 0,
+      }))
+      .sort((left, right) => {
+        const leftDepth = left.disclosure.querySelectorAll("details[open]").length;
+        const rightDepth = right.disclosure.querySelectorAll("details[open]").length;
+        if (leftDepth !== rightDepth) {
+          return rightDepth - leftDepth;
+        }
+        return right.index - left.index;
+      })[0]?.disclosure ?? null;
+  }
+
+  if (!(candidate instanceof HTMLDetailsElement)) {
+    return false;
+  }
+
+  candidate.open = false;
+  candidate.querySelector(":scope > summary")?.focus({ preventScroll: true });
+  return true;
+}
+
+function focusSearch(activeElement = document.activeElement) {
+  if (activeElement instanceof HTMLElement && activeElement.id !== "board-search-input") {
+    searchReturnFocusState = resolveFocusSelector(activeElement);
+  }
+
+  document.querySelector("#board-search-input")?.focus({ preventScroll: true });
+}
+
+function dismissSearch(boardState, activeElement = document.activeElement) {
+  if (activeElement?.id !== "board-search-input") {
+    return false;
+  }
+
+  restoreRuntimeState(appElement, {
+    owner: boardState?.screen === "tasks" ? SCROLL_AUTHORITY.workspace : SCROLL_AUTHORITY.page,
+    scrollState: [],
+    fallbackTaskId: boardState?.selectedTaskId ?? null,
+    fallbackEpicId: boardState?.selectedEpicId ?? null,
+    returnFocusState: searchReturnFocusState,
+    fallbackFocusSelectors: [
+      "[data-nav-board]:not([disabled])",
+      "[data-nav='epics']",
+      "#board-epic-select",
+      "[data-open-epic]",
+    ],
+  });
+  searchReturnFocusState = null;
+  return true;
+}
+
+function focusTaskDetail() {
+  document.querySelector(".board-drawer, .board-task-modal")?.scrollIntoView({ block: "nearest", behavior: "smooth" });
 }
 
 function readSessionTokenFromStorage() {
@@ -1162,6 +1248,10 @@ function attachInteractions(model, api, rerender) {
     normalizeSnapshot,
     normalizeStatus,
     applyTheme,
+    closeTopmostDisclosure,
+    dismissSearch,
+    focusSearch,
+    focusTaskDetail,
     searchFocusKeys: SEARCH_FOCUS_KEYS,
   });
 
@@ -1354,63 +1444,7 @@ function attachInteractions(model, api, rerender) {
   });
 
   window.onkeydown = (event) => {
-    const boardState = getBoardState();
-    const activeElement = document.activeElement;
-    const tagName = activeElement?.tagName?.toLowerCase();
-    const isTypingTarget = tagName === "input" || tagName === "textarea" || tagName === "select";
-    const visibleTasks = boardState.visibleTasks;
-    const currentIndex = visibleTasks.findIndex((task) => task.id === boardState.selectedTaskId);
-
-    if (SEARCH_FOCUS_KEYS.has(event.key.toLowerCase()) && activeElement?.id !== "board-search-input" && !isTypingTarget) {
-      event.preventDefault();
-      document.querySelector("#board-search-input")?.focus({ preventScroll: true });
-      return;
-    }
-
-    if (event.key === "Escape") {
-      if (activeElement?.id === "board-search-input") {
-        activeElement.blur();
-      } else if (boardState.selectedSubtaskId) {
-        actions.closeSubtask();
-      } else if (boardState.selectedTaskId) {
-        actions.closeTask();
-      } else if (boardState.screen === "tasks") {
-        actions.showEpics();
-      } else if (store.notice) {
-        store.notice = null;
-        rerender();
-      }
-      return;
-    }
-
-    if (boardState.screen !== "tasks" || isTypingTarget || visibleTasks.length === 0) {
-      return;
-    }
-
-    if (event.key.toLowerCase() === "j" || event.key === "ArrowDown") {
-      event.preventDefault();
-      const nextTask = visibleTasks[Math.min(currentIndex + 1, visibleTasks.length - 1)] ?? visibleTasks[0];
-      actions.selectTask(nextTask.id);
-      return;
-    }
-
-    if (event.key.toLowerCase() === "k" || event.key === "ArrowUp") {
-      event.preventDefault();
-      const previousTask = visibleTasks[Math.max(currentIndex - 1, 0)] ?? visibleTasks[0];
-      actions.selectTask(previousTask.id);
-      return;
-    }
-
-    if (event.key === "Enter" && currentIndex >= 0) {
-      event.preventDefault();
-      document.querySelector(".board-drawer, .board-task-modal")?.scrollIntoView({ block: "nearest", behavior: "smooth" });
-      return;
-    }
-
-    if (event.key === "Enter" && currentIndex === -1 && visibleTasks[0]) {
-      event.preventDefault();
-      actions.selectTask(visibleTasks[0].id);
-    }
+    actions.handleKeydown(event);
   };
 }
 
