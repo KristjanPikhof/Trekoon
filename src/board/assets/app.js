@@ -1,5 +1,7 @@
 import { createBoardActions } from "./state/actions.js";
 import { createApi } from "./state/api.js";
+import { renderBoardTopbar } from "./components/BoardTopbar.js";
+import { renderWorkspaceHeader } from "./components/WorkspaceHeader.js";
 import { applyTheme, createStore, readThemePreference, VIEW_MODES, STATUS_ORDER } from "./state/store.js";
 import { captureRuntimeState, restoreRuntimeState, syncOverlayScrollLock } from "./utils/dom.js";
 
@@ -11,12 +13,6 @@ const STATUS_LABELS = {
   in_progress: "In progress",
   done: "Done",
 };
-
-const NAV_ITEMS = [
-  { id: "epics", label: "Epics", icon: "layers" },
-  { id: "board", label: "Board", icon: "view_kanban" },
-  { id: "detail", label: "Detail", icon: "assignment" },
-];
 
 const STATUS_BADGE_STYLES = {
   todo: "border-white/10 bg-white/[0.05] text-[var(--board-text-muted)]",
@@ -843,59 +839,18 @@ function renderBoard(model) {
     ? renderEmptyState("No matching tasks", "Nothing in this slice matches the active search and epic filters.", "/")
     : visibleTasks.map((task) => renderListRow(task, selectedTask?.id === task.id)).join("");
 
-  const topbarMarkup = `
-    <header class="sticky top-4 z-20 ${panelClasses("bg-[var(--board-shell)]/95 p-4 backdrop-blur-xl sm:p-5")}">
-      <div class="flex flex-col gap-4 xl:flex-row xl:items-center xl:justify-between">
-        <div class="flex flex-col gap-4 lg:flex-row lg:items-center lg:gap-6">
-          <div class="flex items-center gap-3">
-            <div class="flex h-12 w-12 items-center justify-center rounded-2xl bg-[var(--board-accent-soft)] text-[var(--board-accent)] ring-1 ring-[var(--board-border-strong)]">
-              ${renderIcon("rocket_launch", "text-[22px]")}
-            </div>
-            <div>
-              <span class="${sectionLabelClasses()}">${screen === "tasks" ? "Task workspace" : "Product ops"}</span>
-              <h1 class="mt-1 text-xl font-semibold tracking-tight text-[var(--board-text)] sm:text-2xl">Trekoon</h1>
-            </div>
-          </div>
-          <nav class="flex flex-wrap items-center gap-2">
-            ${NAV_ITEMS.map((item) => {
-              const isActive = currentNav === item.id;
-              const common = cx(
-                "inline-flex items-center gap-2 rounded-2xl border px-3.5 py-2 text-sm font-medium transition",
-                isActive
-                  ? "border-[var(--board-border-strong)] bg-[var(--board-accent-soft)] text-[var(--board-text)]"
-                  : "border-[var(--board-border)] bg-white/[0.03] text-[var(--board-text-muted)]",
-              );
-
-              if (item.id === "epics") {
-                return `<button type="button" class="${common}" data-nav="epics">${renderIcon(item.icon, "text-[18px]")} ${escapeHtml(item.label)}</button>`;
-              }
-
-              if (item.id === "board") {
-                return `<button type="button" class="${common}" data-nav-board="true" ${selectedEpic ? "" : "disabled"}>${renderIcon(item.icon, "text-[18px]")} ${escapeHtml(item.label)}</button>`;
-              }
-
-              return `<span class="${common}">${renderIcon(item.icon, "text-[18px]")} ${escapeHtml(item.label)}</span>`;
-            }).join("")}
-          </nav>
-        </div>
-        <div class="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-end">
-          <label class="flex min-h-11 items-center gap-3 rounded-2xl border border-[var(--board-border)] bg-[var(--board-surface-2)] px-3.5 text-sm text-[var(--board-text-muted)] lg:min-w-[320px]" aria-label="Search tasks and epics">
-            ${renderIcon("search", "text-[18px] text-[var(--board-text-soft)]")}
-            <input id="board-search-input" class="w-full border-0 bg-transparent py-2 text-sm text-[var(--board-text)] outline-none placeholder:text-[var(--board-text-soft)]" type="search" placeholder="Search epics, tasks, subtasks" value="${escapeHtml(store.search)}" />
-            <span class="inline-flex items-center rounded-lg border border-[var(--board-border)] bg-white/[0.04] px-2 py-1 text-[11px] font-medium text-[var(--board-text-soft)]">/</span>
-          </label>
-          <button type="button" class="${buttonClasses()}" data-action="toggle-theme">${renderIcon(store.theme === "dark" ? "light_mode" : "dark_mode", "text-[18px]")} ${store.theme === "dark" ? "Light" : "Dark"}</button>
-          <div class="inline-flex items-center gap-3 rounded-2xl border border-[var(--board-border)] bg-white/[0.03] px-3.5 py-2.5 text-sm text-[var(--board-text-muted)]">
-            <span class="flex h-9 w-9 items-center justify-center rounded-2xl bg-[var(--board-surface-3)] text-sm font-semibold text-[var(--board-text)]">JD</span>
-            <div>
-              <div class="font-medium text-[var(--board-text)]">Local board</div>
-              <div class="text-xs text-[var(--board-text-soft)]">Repo workspace</div>
-            </div>
-          </div>
-        </div>
-      </div>
-    </header>
-  `;
+  const topbarMarkup = renderBoardTopbar({
+    buttonClasses,
+    currentNav,
+    escapeHtml,
+    neutralChipClasses,
+    renderIcon,
+    screen,
+    search: store.search,
+    sectionLabelClasses,
+    selectedEpic,
+    theme: store.theme,
+  });
 
   const epicsOverviewMarkup = `
     <div class="board-root board-root--epics grid gap-5 xl:grid-cols-[minmax(0,1fr)_320px]" >
@@ -951,37 +906,33 @@ function renderBoard(model) {
       </aside>
 
       <section class="board-workspace ${panelClasses("grid h-full min-h-0 min-w-0 grid-rows-[auto_1fr] overflow-hidden p-5 sm:p-6")}" aria-label="Workspace">
-        <header class="board-section-head board-section-head--workspace flex flex-col gap-5 border-b border-[var(--board-border)] pb-5">
-          <div>
-            <span class="${sectionLabelClasses()}">Selected epic</span>
-            <h2 class="mt-2 text-2xl font-semibold tracking-tight text-[var(--board-text)] sm:text-3xl">${escapeHtml(selectedEpic.title)}</h2>
-            <p class="mt-3 max-w-3xl text-sm leading-6 text-[var(--board-text-muted)] sm:text-base">${escapeHtml(selectedEpic.description || "No epic description yet.")}</p>
-          </div>
-          <div class="board-workspace__toolbar flex flex-col gap-4 xl:flex-row xl:items-end xl:justify-between">
-            <label class="board-select grid gap-2 xl:min-w-[280px]" aria-label="Choose epic">
-              <span class="${sectionLabelClasses()}">Epic</span>
-              <select class="${fieldClasses()}" id="board-epic-select">
-                ${store.snapshot.epics.map((epic) => `
-                  <option value="${escapeHtml(epic.id)}" ${store.selectedEpicId === epic.id ? "selected" : ""}>
-                    ${escapeHtml(epic.title)}
-                  </option>
-                `).join("")}
-              </select>
-            </label>
-            <div class="flex flex-col gap-3 xl:items-end">
-              <div class="board-tabs inline-flex rounded-2xl border border-[var(--board-border)] bg-white/[0.03] p-1" role="tablist" aria-label="Board views">
-                ${VIEW_MODES.map((view) => `<button class="${cx("rounded-2xl px-4 py-2 text-sm font-medium transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--board-border-strong)] focus-visible:ring-offset-2 focus-visible:ring-offset-[var(--board-surface)]", store.view === view ? "bg-[var(--board-accent-soft)] text-[var(--board-text)] shadow-[inset_0_0_0_1px_var(--board-border-strong)]" : "text-[var(--board-text-muted)] hover:text-[var(--board-text)]")}" type="button" role="tab" aria-selected="${store.view === view}" data-view="${view}">${renderIcon(view === "kanban" ? "view_kanban" : "list", "text-[18px]")} ${view === "kanban" ? "Kanban" : "Rows"}</button>`).join("")}
-              </div>
-              <div class="board-legend flex flex-wrap gap-2">
-                ${renderEpicCountSummary(selectedEpic)}
-                <span class="${neutralChipClasses()}">${visibleTasks.length} visible</span>
-                <span class="${neutralChipClasses()}">Click a task to open details</span>
-                ${store.view === "kanban" ? `<span class="${neutralChipClasses()}">Drag to move</span>` : ""}
-                ${store.isMutating ? `<span class="${neutralChipClasses()}">Saving…</span>` : ""}
-              </div>
-            </div>
-          </div>
-        </header>
+        ${renderWorkspaceHeader({
+          escapeHtml,
+          fieldClasses,
+          neutralChipClasses,
+          renderEpicCountSummary,
+          renderIcon,
+          renderStatusBadge,
+          sectionLabelClasses,
+          selectedEpic,
+          snapshotEpics: store.snapshot.epics,
+          store: {
+            isMutating: store.isMutating,
+            selectedEpicId: store.selectedEpicId,
+            view: store.view,
+            viewModes: VIEW_MODES.map((view) => ({
+              active: store.view === view,
+              classes: cx(
+                "rounded-2xl px-4 py-2 text-sm font-medium transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--board-border-strong)] focus-visible:ring-offset-2 focus-visible:ring-offset-[var(--board-surface)]",
+                store.view === view ? "bg-[var(--board-accent-soft)] text-[var(--board-text)] shadow-[inset_0_0_0_1px_var(--board-border-strong)]" : "text-[var(--board-text-muted)] hover:text-[var(--board-text)]",
+              ),
+              icon: view === "kanban" ? "view_kanban" : "list",
+              id: view,
+              label: view === "kanban" ? "Kanban" : "Rows",
+            })),
+          },
+          visibleTasks,
+        })}
 
         <div class="board-content mt-6 h-full min-h-0 min-w-0 overflow-hidden">
           ${store.view === "kanban"
