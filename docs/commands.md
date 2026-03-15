@@ -94,6 +94,37 @@ Current board layout behavior:
 - long descriptions and oversized dependency or subtask sections are intentionally
   hidden behind disclosure controls until expanded
 
+Responsive mode and overlay guide for operators:
+
+- overview mode is the default entry point; every epic card is the primary
+  activation target and opens that epic into the board workspace
+- on desktop and other wide layouts, expect three named surfaces when a task is
+  active: the epic rail, the task workspace, and either the inspector or the
+  modal detail surface
+- on phone-sized layouts, the top navigation switches between explicit `Epics`,
+  `Board`, and `Detail` modes so only one dominant region owns attention at a
+  time
+- the search box always reports the current scope in the topbar: either `Epic
+  overview`, `Searching all epics`, or the active epic label when you are inside
+  a board
+- opening task detail from compact layouts promotes detail into the dedicated
+  modal or sheet surface instead of stacking a second independently scrolling
+  workspace underneath it
+
+Scroll authority and layer ownership:
+
+- the root page owns scrolling only in overview or other page-level states
+- once you are inside an epic workspace, the workspace becomes the primary
+  scroll owner and the background page stops scrolling
+- opening the desktop inspector transfers scroll ownership to the inspector
+  surface; opening the task modal transfers ownership to the task modal; opening
+  a nested subtask modal transfers ownership again to the subtask modal
+- when an overlay is open, background regions are intentionally locked to avoid
+  double scrollbars and accidental scroll bleed on desktop and mobile
+- close overlays from the top down: disclosure → subtask modal → task detail →
+  broader board context; each close returns you to the previous scroll owner and
+  scope instead of jumping back to the page root
+
 Examples:
 
 ```bash
