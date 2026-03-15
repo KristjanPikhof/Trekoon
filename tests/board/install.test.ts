@@ -161,6 +161,30 @@ describe("board install", (): void => {
     expect(readFileSync(join(updated.paths.runtimeRoot, "static", "app.js"), "utf8")).toContain("board v2");
   });
 
+  test("reinstalls when the runtime manifest is corrupt", (): void => {
+    const workspace: string = createWorkspace();
+    const bundledAssetRoot: string = join(workspace, "bundled-assets");
+    createBundledAssets(bundledAssetRoot);
+
+    const initial = ensureBoardInstalled({
+      workingDirectory: workspace,
+      bundledAssetRoot,
+      assetVersion: "1.2.3",
+    });
+
+    writeFileSync(initial.paths.manifestFile, "{not-json\n", "utf8");
+
+    const recovered = updateBoardInstallation({
+      workingDirectory: workspace,
+      bundledAssetRoot,
+      assetVersion: "1.2.3",
+    });
+
+    expect(recovered.action).toBe("reinstalled");
+    expect(readFileSync(recovered.paths.entryFile, "utf8")).toContain("board");
+    expect(JSON.parse(readFileSync(recovered.paths.manifestFile, "utf8"))).toEqual(recovered.manifest);
+  });
+
   test("fails deterministically when bundled entry asset is missing", (): void => {
     const workspace: string = createWorkspace();
     const bundledAssetRoot: string = join(workspace, "bundled-assets");
