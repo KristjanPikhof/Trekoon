@@ -51,6 +51,25 @@ describe("board command", (): void => {
     expect(result.error?.code).toBe("invalid_input");
   });
 
+  test("rejects command options for board lifecycle commands", async (): Promise<void> => {
+    const result = await runBoard({
+      cwd: "/tmp/workspace",
+      mode: "toon",
+      args: ["open", "--port", "4321"],
+    });
+
+    expect(result.ok).toBeFalse();
+    expect(result.command).toBe("board.open");
+    expect(result.human).toBe("Board commands do not accept options yet.");
+    expect(result.data).toEqual({
+      options: ["--port"],
+    });
+    expect(result.error).toEqual({
+      code: "invalid_input",
+      message: "Board commands do not accept options",
+    });
+  });
+
   test("refreshes board assets for update", async (): Promise<void> => {
     setBoardCommandHooksForTests({
       updateInstalled: () => mockInstallResult("updated"),
