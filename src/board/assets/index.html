@@ -8,22 +8,129 @@
       content="Trekoon board — local-first workspace for browsing epics, tasks, and flow states."
     />
     <title>Trekoon Board</title>
-    <link rel="stylesheet" href="./app.css" />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      rel="stylesheet"
+      href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Material+Symbols+Rounded:FILL@0&display=swap"
+    />
+    <script>
+      tailwind = window.tailwind || {};
+      tailwind.config = {
+        theme: {
+          extend: {
+            fontFamily: {
+              sans: ["Inter", "ui-sans-serif", "system-ui", "sans-serif"],
+            },
+            boxShadow: {
+              panel: "var(--board-shadow)",
+              lift: "0 18px 52px rgba(0, 0, 0, 0.34)",
+              focus: "0 0 0 1px var(--board-border-strong), 0 16px 40px rgba(88, 28, 135, 0.2)",
+            },
+          },
+        },
+      };
+    </script>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+      :root {
+        color-scheme: dark;
+        --board-bg: #0b0d12;
+        --board-bg-alt: #10131b;
+        --board-shell: rgba(15, 18, 24, 0.88);
+        --board-surface: #141922;
+        --board-surface-2: #191f2b;
+        --board-surface-3: #202636;
+        --board-border: rgba(255, 255, 255, 0.1);
+        --board-border-strong: rgba(167, 139, 250, 0.38);
+        --board-text: #f5f7fb;
+        --board-text-muted: #b6becc;
+        --board-text-soft: #8891a1;
+        --board-accent: #8b5cf6;
+        --board-accent-strong: #9f75ff;
+        --board-accent-soft: rgba(139, 92, 246, 0.15);
+        --board-success: #22c55e;
+        --board-warning: #f59e0b;
+        --board-danger: #ef4444;
+        --board-info: #38bdf8;
+        --board-shadow: 0 24px 80px rgba(0, 0, 0, 0.42);
+        --board-glow: rgba(139, 92, 246, 0.18);
+      }
+
+      :root[data-theme="light"] {
+        color-scheme: light;
+        --board-bg: #f4f6fb;
+        --board-bg-alt: #edf1f7;
+        --board-shell: rgba(255, 255, 255, 0.82);
+        --board-surface: #ffffff;
+        --board-surface-2: #f8faff;
+        --board-surface-3: #eef2ff;
+        --board-border: rgba(15, 23, 42, 0.1);
+        --board-border-strong: rgba(124, 58, 237, 0.28);
+        --board-text: #111827;
+        --board-text-muted: #4b5563;
+        --board-text-soft: #6b7280;
+        --board-accent: #7c3aed;
+        --board-accent-strong: #6d28d9;
+        --board-accent-soft: rgba(124, 58, 237, 0.12);
+        --board-success: #16a34a;
+        --board-warning: #d97706;
+        --board-danger: #dc2626;
+        --board-info: #0284c7;
+        --board-shadow: 0 24px 60px rgba(15, 23, 42, 0.12);
+        --board-glow: rgba(124, 58, 237, 0.1);
+      }
+
+      html,
+      body {
+        min-height: 100%;
+      }
+
+      body {
+        margin: 0;
+        font-family: Inter, ui-sans-serif, system-ui, sans-serif;
+        background:
+          radial-gradient(circle at top left, var(--board-glow), transparent 28%),
+          linear-gradient(180deg, var(--board-bg), var(--board-bg-alt));
+        color: var(--board-text);
+      }
+
+      .material-symbols-rounded {
+        font-family: "Material Symbols Rounded";
+        font-weight: 400;
+        font-style: normal;
+        font-size: 20px;
+        line-height: 1;
+        letter-spacing: normal;
+        text-transform: none;
+        display: inline-block;
+        white-space: nowrap;
+        direction: ltr;
+        font-variation-settings:
+          "FILL" 0,
+          "wght" 400,
+          "GRAD" 0,
+          "opsz" 20;
+      }
+    </style>
   </head>
   <body>
-    <div class="board-shell">
-      <div class="board-noise"></div>
-      <main id="app" class="board-app" aria-live="polite">
-        <section class="board-loading" aria-label="Loading board">
-          <div class="board-loading__badge">Trekoon board</div>
-          <h1>Preparing your local workspace…</h1>
-          <p>
-            Loading epics, tasks, and saved board context from your repo-shared
-            storage.
+    <main id="app" aria-live="polite" class="min-h-screen">
+      <section class="mx-auto flex min-h-screen max-w-4xl items-center justify-center px-4 py-10 sm:px-6">
+        <div class="w-full rounded-[32px] border border-[var(--board-border)] bg-[var(--board-surface)]/95 p-8 text-center shadow-panel backdrop-blur-xl">
+          <div class="mx-auto mb-5 flex h-14 w-14 items-center justify-center rounded-2xl bg-[var(--board-accent-soft)] text-[var(--board-accent)] ring-1 ring-[var(--board-border-strong)]">
+            <span class="material-symbols-rounded" aria-hidden="true">rocket_launch</span>
+          </div>
+          <div class="mb-3 inline-flex items-center gap-2 rounded-full border border-[var(--board-border)] bg-white/5 px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.18em] text-[var(--board-text-soft)]">
+            Trekoon board
+          </div>
+          <h1 class="text-3xl font-semibold tracking-tight text-[var(--board-text)]">Preparing your local workspace…</h1>
+          <p class="mx-auto mt-3 max-w-2xl text-sm leading-6 text-[var(--board-text-muted)] sm:text-base">
+            Loading epics, tasks, and saved board context from your repo-shared storage.
           </p>
-        </section>
-      </main>
-    </div>
+        </div>
+      </section>
+    </main>
 
     <script type="module" src="./app.js"></script>
   </body>
