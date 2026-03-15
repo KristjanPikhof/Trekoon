@@ -6,6 +6,7 @@ export interface BoardAssetManifest {
   readonly assetVersion: string;
   readonly entryFile: string;
   readonly files: readonly string[];
+  readonly assetDigest: string;
 }
 
 export interface BoardAssetPaths {
