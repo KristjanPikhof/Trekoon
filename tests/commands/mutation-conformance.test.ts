@@ -4,12 +4,12 @@ import { join } from "node:path";
 
 import { afterEach, describe, expect, test } from "bun:test";
 
-import { createBoardApiHandler } from "../../src/board/routes";
 import { runDep } from "../../src/commands/dep";
 import { runEpic } from "../../src/commands/epic";
 import { runSubtask } from "../../src/commands/subtask";
 import { runTask } from "../../src/commands/task";
 import { ENTITY_OPERATIONS } from "../../src/domain/mutation-operations";
+import { MutationService } from "../../src/domain/mutation-service";
 import { openTrekoonDatabase } from "../../src/storage/database";
 
 const tempDirs: string[] = [];
@@ -188,65 +188,51 @@ describe("mutation conformance", (): void => {
 
   test("subtask update events preserve explicit empty descriptions", async (): Promise<void> => {
     const cwd = createWorkspace();
+    const storage = openTrekoonDatabase(cwd);
 
-    const createdEpic = await runEpic({
-      cwd,
-      mode: "toon",
-      args: ["create", "--title", "Roadmap", "--description", "Scope"],
-    });
-    expect(createdEpic.ok).toBeTrue();
-    const epicId = (createdEpic.data as { epic: { id: string } }).epic.id;
+    try {
+      const mutations = new MutationService(storage.db, cwd);
+      const epic = mutations.createEpic({ title: "Roadmap", description: "Scope" });
+      const task = mutations.createTask({ epicId: epic.id, title: "Implement", description: "Code" });
+      const subtask = mutations.createSubtask({
+        taskId: task.id,
+        title: "Write tests",
+        description: "Regression coverage",
+      });
 
-    const createdTask = await runTask({
-      cwd,
-      mode: "toon",
-      args: ["create", "--epic", epicId, "--title", "Implement", "--description", "Code"],
-    });
-    expect(createdTask.ok).toBeTrue();
-    const taskId = (createdTask.data as { task: { id: string } }).task.id;
+      const updatedSubtask = mutations.updateSubtask(subtask.id, {
+        description: "",
+        status: "done",
+      });
 
-    const createdSubtask = await runSubtask({
-      cwd,
-      mode: "toon",
-      args: ["create", "--task", taskId, "--title", "Write tests", "--description", "Regression coverage"],
-    });
-    expect(createdSubtask.ok).toBeTrue();
-    const subtaskId = (createdSubtask.data as { subtask: { id: string } }).subtask.id;
-
-    const updatedSubtask = await runSubtask({
-      cwd,
-      mode: "toon",
-      args: ["update", subtaskId, "--description", "", "--status", "done"],
-    });
-    expect(updatedSubtask.ok).toBeTrue();
-    expect((updatedSubtask.data as { subtask: { description: string; status: string } }).subtask).toEqual(
-      expect.objectContaining({ description: "", status: "done" }),
-    );
-
-    expect(eventRowsForEntity(cwd, "subtask", subtaskId)).toEqual([
-      {
-        operation: ENTITY_OPERATIONS.subtask.created,
-        payload: {
-          fields: {
-            task_id: taskId,
-            title: "Write tests",
-            description: "Regression coverage",
-            status: "todo",
+      expect(updatedSubtask).toEqual(expect.objectContaining({ description: "", status: "done" }));
+      expect(eventRowsForEntity(cwd, "subtask", subtask.id)).toEqual([
+        {
+          operation: ENTITY_OPERATIONS.subtask.created,
+          payload: {
+            fields: {
+              task_id: task.id,
+              title: "Write tests",
+              description: "Regression coverage",
+              status: "todo",
+            },
           },
         },
-      },
-      {
-        operation: ENTITY_OPERATIONS.subtask.updated,
-        payload: {
-          fields: {
-            task_id: taskId,
-            title: "Write tests",
-            description: "",
-            status: "done",
+        {
+          operation: ENTITY_OPERATIONS.subtask.updated,
+          payload: {
+            fields: {
+              task_id: task.id,
+              title: "Write tests",
+              description: "",
+              status: "done",
+            },
           },
         },
-      },
-    ]);
+      ]);
+    } finally {
+      storage.close();
+    }
   });
 
   test("batch create and dependency add-many append canonical events atomically", async (): Promise<void> => {
