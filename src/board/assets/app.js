@@ -1278,8 +1278,10 @@ export async function bootLegacyBoard(options = {}) {
 
     const model = createStore(snapshot, { normalizeSnapshot });
     let api = null;
-    const rerender = () => {
-      const runtimeState = captureRuntimeState(appElement, model.store);
+    const rerender = (options = {}) => {
+      const runtimeState = options.preserveFocus === false
+        ? null
+        : captureRuntimeState(appElement, model.store);
       renderBoard(model);
       attachInteractions(model, api, rerender);
       restoreRuntimeState(appElement, runtimeState);
@@ -1287,7 +1289,7 @@ export async function bootLegacyBoard(options = {}) {
 
     api = createApi(model, { sessionToken: runtimeSession.token, rerender });
     applyTheme(model.store.theme);
-    rerender();
+    rerender({ preserveFocus: false });
   } catch (error) {
     renderError(error instanceof Error ? error.message : String(error));
   }
