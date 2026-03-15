@@ -4,7 +4,6 @@ export function renderEpicRow(context) {
     escapeHtml,
     formatDate,
     neutralChipClasses,
-    renderClampedText,
     renderIcon,
     renderStatusBadge,
     selected,
