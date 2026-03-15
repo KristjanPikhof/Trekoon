@@ -198,6 +198,41 @@ body {
   max-height: 100dvh;
 }
 
+.board-layout[data-scroll-owner] {
+  overflow: hidden;
+}
+
+.board-layout[data-scroll-owner="page"] {
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  -webkit-overflow-scrolling: touch;
+}
+
+.board-layout [data-scroll-surface] {
+  min-height: 0;
+  overflow: hidden;
+}
+
+.board-layout[data-scroll-owner="workspace"] [data-scroll-surface="workspace"],
+.board-layout[data-scroll-owner="inspector"] [data-scroll-surface="inspector"],
+.board-layout[data-scroll-owner="task-modal"] [data-scroll-surface="task-modal"],
+.board-layout[data-scroll-owner="subtask-modal"] [data-scroll-surface="subtask-modal"] {
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  -webkit-overflow-scrolling: touch;
+}
+
+.board-layout[data-scroll-owner="workspace"] .board-sidebar__list,
+.board-layout[data-scroll-owner="workspace"] .board-content,
+.board-layout[data-scroll-owner="workspace"] .board-kanban,
+.board-layout[data-scroll-owner="workspace"] .board-list__rows,
+.board-layout[data-scroll-owner="workspace"] .board-column__tasks,
+.board-layout[data-scroll-owner="inspector"] [data-scroll-surface="workspace"],
+.board-layout[data-scroll-owner="task-modal"] [data-scroll-surface="workspace"],
+.board-layout[data-scroll-owner="subtask-modal"] [data-scroll-surface="workspace"] {
+  overflow: visible;
+}
+
 .board-layout--workspace .board-root--tasks {
   min-height: 0;
 }
@@ -218,7 +253,8 @@ body {
 .board-layout--workspace .board-list__rows,
 .board-layout--workspace .board-column__tasks,
 .board-layout--workspace .board-sidebar__list,
-.board-layout--workspace .board-drawer__body {
+.board-layout--workspace .board-drawer__body,
+.board-layout--workspace .board-modal__body {
   overscroll-behavior: contain;
 }
 
@@ -239,6 +275,10 @@ body {
 
 .board-detail-surface-frame {
   min-width: 0;
+}
+
+.board-root {
+  align-content: start;
 }
 
 .board-detail-surface {
@@ -922,7 +962,8 @@ body {
   .board-layout--workspace .board-content,
   .board-layout--workspace .board-kanban,
   .board-layout--workspace .board-list__rows,
-  .board-layout--workspace .board-column__tasks {
+  .board-layout--workspace .board-column__tasks,
+  .board-layout--workspace [data-scroll-surface="workspace"] {
     overflow: visible;
   }
 
