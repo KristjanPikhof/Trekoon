@@ -117,7 +117,7 @@ function renderMetricCard(icon, label, value, detail) {
   `;
 }
 
-const appElement = document.querySelector("#app");
+let appElement = null;
 
 function readSessionTokenFromStorage() {
   try {
@@ -1704,8 +1704,13 @@ function attachInteractions(model, api) {
   };
 }
 
-async function boot() {
+export async function bootLegacyBoard(options = {}) {
   try {
+    appElement = options.mountElement instanceof HTMLElement ? options.mountElement : document.querySelector("#app");
+    if (!(appElement instanceof HTMLElement)) {
+      throw new Error("Board runtime could not find its mount element.");
+    }
+
     applyTheme(readThemePreference());
     const runtimeSession = resolveRuntimeSession();
     if (runtimeSession.shouldScrubAddressBar) {
@@ -1759,4 +1764,6 @@ async function boot() {
   }
 }
 
-boot();
+if (window.__TREKOON_BOARD_BOOTSTRAP__ !== "main") {
+  void bootLegacyBoard();
+}
