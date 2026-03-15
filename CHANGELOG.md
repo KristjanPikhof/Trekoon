@@ -12,9 +12,9 @@ All notable changes to Trekoon are documented in this file.
 
 ### Changed
 
-- `subtask update <id> --all` now remains valid for bulk field updates on the
-  addressed subtask, preserving subtask positional-id compatibility while root
-  task/epic updates use positional id + `--all` for descendant cascades.
+- `subtask update <id> --all --status done|todo` is accepted for contract
+  consistency, but because subtasks have no descendants it behaves like a
+  normal single-subtask status update rather than a cascade.
 - Help text, docs, and machine-readable command contracts now clarify the two
   meanings of `update --all`: bulk field application on selected rows vs.
   descendant status cascades from a positional epic/task id.
