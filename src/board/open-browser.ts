@@ -8,11 +8,12 @@ export interface OpenBrowserResult {
   readonly errorMessage: string | null;
 }
 
-type BrowserLaunchEvent = "error" | "spawn";
+type BrowserLaunchEvent = "error" | "exit" | "spawn";
+type BrowserLaunchListener = (eventData?: Error | number | null) => void;
 
 interface BrowserLaunchHandle {
-  once(event: BrowserLaunchEvent, listener: (error?: Error) => void): BrowserLaunchHandle;
-  removeListener(event: BrowserLaunchEvent, listener: (error?: Error) => void): BrowserLaunchHandle;
+  once(event: BrowserLaunchEvent, listener: BrowserLaunchListener): BrowserLaunchHandle;
+  removeListener(event: BrowserLaunchEvent, listener: BrowserLaunchListener): BrowserLaunchHandle;
   unref(): void;
 }
 
@@ -52,9 +53,24 @@ export async function openBoardInBrowser(url: string): Promise<OpenBrowserResult
     const child = browserLauncher(launch.command, launch.args);
 
     return await new Promise<OpenBrowserResult>((resolve) => {
-      const handleSpawn = (): void => {
+      let settled = false;
+      let spawned = false;
+      let launchResultScheduled = false;
+
+      const complete = (result: OpenBrowserResult): void => {
+        if (settled) {
+          return;
+        }
+
+        settled = true;
+        child.removeListener("spawn", handleSpawn);
         child.removeListener("error", handleError);
-        resolve({
+        child.removeListener("exit", handleExit);
+        resolve(result);
+      };
+
+      const resolveLaunchSuccess = (): void => {
+        complete({
           launched: true,
           url,
           command: launch.command,
@@ -62,19 +78,46 @@ export async function openBoardInBrowser(url: string): Promise<OpenBrowserResult
           errorMessage: null,
         });
       };
-      const handleError = (error?: Error): void => {
-        child.removeListener("spawn", handleSpawn);
-        resolve({
+
+      const handleSpawn = (): void => {
+        spawned = true;
+        if (launchResultScheduled) {
+          return;
+        }
+
+        launchResultScheduled = true;
+        setTimeout(resolveLaunchSuccess, 0);
+      };
+
+      const handleError = (eventData?: Error | number | null): void => {
+        complete({
           launched: false,
           url,
           command: launch.command,
           args: launch.args,
-          errorMessage: error?.message ?? "Unknown browser launch failure",
+          errorMessage: eventData instanceof Error ? eventData.message : "Unknown browser launch failure",
+        });
+      };
+
+      const handleExit = (eventData?: Error | number | null): void => {
+        const exitCode = typeof eventData === "number" ? eventData : Number.NaN;
+
+        if (!spawned || exitCode === 0 || Number.isNaN(exitCode)) {
+          return;
+        }
+
+        complete({
+          launched: false,
+          url,
+          command: launch.command,
+          args: launch.args,
+          errorMessage: `${launch.command} exited with code ${exitCode}`,
         });
       };
 
       child.once("spawn", handleSpawn);
       child.once("error", handleError);
+      child.once("exit", handleExit);
     });
   } catch (error: unknown) {
     return {

@@ -2,16 +2,16 @@ import { afterEach, describe, expect, test } from "bun:test";
 
 import { openBoardInBrowser, setBrowserLauncherForTests } from "../../src/board/open-browser";
 
-type BrowserLaunchEvent = "error" | "spawn";
-type BrowserLaunchListener = (error?: Error) => void;
+type BrowserLaunchEvent = "error" | "exit" | "spawn";
+type BrowserLaunchListener = (eventData?: Error | number | null) => void;
 
 class MockBrowserProcess {
   private readonly listeners = new Map<BrowserLaunchEvent, BrowserLaunchListener[]>();
 
   once(event: BrowserLaunchEvent, listener: BrowserLaunchListener): MockBrowserProcess {
-    const wrappedListener: BrowserLaunchListener = (error?: Error): void => {
+    const wrappedListener: BrowserLaunchListener = (eventData?: Error | number | null): void => {
       this.removeListener(event, wrappedListener);
-      listener(error);
+      listener(eventData);
     };
     const currentListeners = this.listeners.get(event) ?? [];
     currentListeners.push(wrappedListener);
@@ -28,9 +28,9 @@ class MockBrowserProcess {
     return this;
   }
 
-  emit(event: BrowserLaunchEvent, error?: Error): void {
+  emit(event: BrowserLaunchEvent, eventData?: Error | number | null): void {
     for (const listener of this.listeners.get(event) ?? []) {
-      listener(error);
+      listener(eventData);
     }
   }
 
@@ -96,5 +96,51 @@ describe("openBoardInBrowser", (): void => {
 
     expect(result.launched).toBeFalse();
     expect(result.errorMessage).toBe("mock async spawn failure");
+  });
+
+  test("reports launch failure when opener exits non-zero after spawn", async (): Promise<void> => {
+    const url = "http://127.0.0.1:4321";
+    const launch = expectedLaunch(url);
+
+    setBrowserLauncherForTests((command, args) => {
+      const child = new MockBrowserProcess();
+
+      queueMicrotask(() => {
+        expect(command).toBe(launch.command);
+        expect(args).toEqual(launch.args);
+        child.emit("spawn");
+        child.emit("exit", 3);
+      });
+
+      return child;
+    });
+
+    await expect(openBoardInBrowser(url)).resolves.toEqual({
+      launched: false,
+      url,
+      command: launch.command,
+      args: launch.args,
+      errorMessage: `${launch.command} exited with code 3`,
+    });
+  });
+
+  test("keeps launch success when opener exits zero after spawn", async (): Promise<void> => {
+    const url = "http://127.0.0.1:4321";
+
+    setBrowserLauncherForTests(() => {
+      const child = new MockBrowserProcess();
+
+      queueMicrotask(() => {
+        child.emit("spawn");
+        child.emit("exit", 0);
+      });
+
+      return child;
+    });
+
+    const result = await openBoardInBrowser(url);
+
+    expect(result.launched).toBeTrue();
+    expect(result.errorMessage).toBeNull();
   });
 });
