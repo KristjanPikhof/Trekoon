@@ -1193,6 +1193,12 @@ function attachInteractions(model, api, rerender) {
     });
   });
 
+  document.querySelectorAll("[data-nav-detail]").forEach((button) => {
+    button.addEventListener("click", () => {
+      document.querySelector(".board-drawer, .board-task-modal")?.scrollIntoView({ block: "nearest", behavior: "smooth" });
+    });
+  });
+
   document.querySelectorAll("[data-view]").forEach((button) => {
     button.addEventListener("click", () => {
       actions.setView(button.dataset.view);
