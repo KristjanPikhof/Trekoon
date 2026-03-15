@@ -54,6 +54,12 @@ Board terminology in docs matches `trekoon help board`:
   - refreshes board runtime assets only
   - does not start the server or open a browser
 
+Operator guidance:
+
+- use `trekoon board open` as the normal one-command startup path
+- use `trekoon board update` when you specifically need to refresh copied assets
+  before the next launch
+
 Board commands do not accept command-specific options yet. For tests and local
 development only, `TREKOON_BOARD_ASSET_ROOT` can override the bundled asset
 source used by `init`, `board open`, and `board update`.
@@ -68,6 +74,25 @@ Runtime layout and security model:
   token
 - static responses use `cache-control: no-store`, and CLI output always includes
   a manual fallback URL
+
+Current shell/runtime notes:
+
+- the runtime copied into `.trekoon/board` includes the HTML shell, local app
+  modules, and shared styles
+- the current shell also requests Vue from `esm.sh`, Tailwind from
+  `cdn.tailwindcss.com`, and Google-hosted fonts/icons in the browser
+- if those remote dependencies are blocked, the local server still starts and
+  the fallback URL remains valid, but the browser UI may not fully load until
+  network access is restored
+
+Current board layout behavior:
+
+- extra-wide layouts can show the epic rail, workspace, and task inspector at
+  once
+- narrower layouts progressively collapse support surfaces into stacked panels
+  or a drawer-style inspector
+- long descriptions and oversized dependency or subtask sections are intentionally
+  hidden behind disclosure controls until expanded
 
 Examples:
 
