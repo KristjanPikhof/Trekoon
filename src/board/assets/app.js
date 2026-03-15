@@ -290,39 +290,41 @@ function normalizeSnapshot(rawSnapshot) {
 
 function createStore(snapshot) {
   const storedState = readStoredState();
+  const selectedEpicId = typeof storedState.selectedEpicId === "string" ? storedState.selectedEpicId : null;
+  const selectedTaskId = typeof storedState.selectedTaskId === "string" ? storedState.selectedTaskId : null;
   const store = {
     snapshot,
-    epicFilter: storedState.epicFilter ?? "ALL",
+    screen: storedState.screen === "tasks" && selectedEpicId ? "tasks" : "epics",
+    selectedEpicId,
     search: storedState.search ?? "",
     view: VIEW_MODES.includes(storedState.view) ? storedState.view : "kanban",
-    selectedTaskId: storedState.selectedTaskId ?? null,
-    activeColumn: storedState.activeColumn ?? "todo",
+    selectedTaskId,
+    selectedSubtaskId: null,
     theme: readThemePreference(),
     focusedEpicIndex: 0,
-    inlineTaskId: storedState.inlineTaskId ?? null,
     notice: null,
     isMutating: false,
   };
 
   const persist = () => {
     writeStoredState({
-      epicFilter: store.epicFilter,
+      screen: store.screen,
+      selectedEpicId: store.selectedEpicId,
       search: store.search,
       view: store.view,
       selectedTaskId: store.selectedTaskId,
-      activeColumn: store.activeColumn,
-      inlineTaskId: store.inlineTaskId,
     });
   };
 
   const getTaskById = (taskId) => store.snapshot.tasks.find((task) => task.id === taskId) ?? null;
   const getSubtaskById = (subtaskId) => store.snapshot.subtasks.find((subtask) => subtask.id === subtaskId) ?? null;
+  const getSelectedEpic = () => store.snapshot.epics.find((epic) => epic.id === store.selectedEpicId) ?? null;
   const getSelectedTask = () => getTaskById(store.selectedTaskId);
 
   const getVisibleTasks = () => {
     const query = store.search.trim().toLowerCase();
     return store.snapshot.tasks
-      .filter((task) => store.epicFilter === "ALL" || task.epicId === store.epicFilter)
+      .filter((task) => !store.selectedEpicId || task.epicId === store.selectedEpicId)
       .filter((task) => query.length === 0 || task.searchText.includes(query));
   };
 
@@ -335,11 +337,21 @@ function createStore(snapshot) {
 
   const replaceSnapshot = (nextSnapshot) => {
     store.snapshot = normalizeSnapshot(nextSnapshot);
-    if (!getTaskById(store.selectedTaskId)) {
-      store.selectedTaskId = getVisibleTasks()[0]?.id ?? store.snapshot.tasks[0]?.id ?? null;
+    if (store.selectedEpicId && !getSelectedEpic()) {
+      store.selectedEpicId = null;
+      store.screen = "epics";
     }
-    if (store.inlineTaskId && !getTaskById(store.inlineTaskId)) {
-      store.inlineTaskId = null;
+    if (!getTaskById(store.selectedTaskId)) {
+      store.selectedTaskId = null;
+    }
+    if (store.selectedTaskId) {
+      const selectedTask = getTaskById(store.selectedTaskId);
+      if (store.selectedEpicId && selectedTask?.epicId !== store.selectedEpicId) {
+        store.selectedTaskId = null;
+      }
+    }
+    if (!getSubtaskById(store.selectedSubtaskId)) {
+      store.selectedSubtaskId = null;
     }
     persist();
   };
@@ -349,6 +361,7 @@ function createStore(snapshot) {
     persist,
     getTaskById,
     getSubtaskById,
+    getSelectedEpic,
     getSelectedTask,
     getVisibleTasks,
     getVisibleEpics,
