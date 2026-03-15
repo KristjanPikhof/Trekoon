@@ -6,6 +6,7 @@ surface, defaults, and flag rules.
 ## Command surface
 
 - `trekoon init`
+- `trekoon board <open|update>`
 - `trekoon help [command]`
 - `trekoon quickstart`
 - `trekoon epic <create|expand|list|show|search|replace|update|delete>`
@@ -39,6 +40,43 @@ trekoon quickstart --json
 
 Trekoon uses long-form options for command and subcommand flags. Root help and
 version aliases `-h` and `-v` are also supported.
+
+## Board lifecycle commands
+
+Board terminology in docs matches `trekoon help board`:
+
+- `trekoon board open`
+  - ensures board assets are installed in the repo-shared runtime directory
+  - starts a local board server on `127.0.0.1`
+  - launches the browser and returns the board URL, fallback URL, and launch
+    metadata in machine output
+- `trekoon board update`
+  - refreshes board runtime assets only
+  - does not start the server or open a browser
+
+Board commands do not accept command-specific options yet. For tests and local
+development only, `TREKOON_BOARD_ASSET_ROOT` can override the bundled asset
+source used by `init`, `board open`, and `board update`.
+
+Runtime layout and security model:
+
+- `trekoon init` installs or refreshes the board runtime under `.trekoon/board`
+- `board open` serves those bundled files over a loopback-only server instead of
+  opening a raw file directly
+- the server binds to `127.0.0.1` on a random port
+- every session gets a per-session token; browser/API requests must present that
+  token
+- static responses use `cache-control: no-store`, and CLI output always includes
+  a manual fallback URL
+
+Examples:
+
+```bash
+trekoon init
+trekoon board open
+trekoon --json board open
+trekoon board update
+```
 
 ## Human views
 
