@@ -237,6 +237,8 @@ body {
 .board-layout[data-scroll-owner="workspace"] .board-kanban,
 .board-layout[data-scroll-owner="workspace"] .board-list__rows,
 .board-layout[data-scroll-owner="workspace"] .board-column__tasks,
+.board-layout[data-scroll-owner="workspace"] .board-sidebar,
+.board-layout[data-scroll-owner="workspace"] .board-workspace,
 .board-layout[data-scroll-owner="inspector"] [data-scroll-surface="workspace"],
 .board-layout[data-scroll-owner="task-modal"] [data-scroll-surface="workspace"],
 .board-layout[data-scroll-owner="subtask-modal"] [data-scroll-surface="workspace"] {
