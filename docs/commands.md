@@ -69,6 +69,9 @@ These defaults apply to `epic list`, `task list`, and `subtask list`:
 Use `update --all` or `update --ids <csv>` when you want to target multiple
 top-level rows directly.
 
+This mode preserves the existing per-row update behavior. It is **not** the same
+as descendant cascade mode and is not one atomic multi-row transaction.
+
 - Target all rows: `--all`
 - Target specific rows: `--ids <id1,id2,...>`
 - Bulk mode supports only `--append <text>`, `--status <status>`, or both
