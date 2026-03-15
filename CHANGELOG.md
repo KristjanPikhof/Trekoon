@@ -2,6 +2,28 @@
 
 All notable changes to Trekoon are documented in this file.
 
+## 0.2.7
+
+### Added
+
+- Descendant cascade status updates for epic/task roots via positional id plus
+  `--all` and `--status done|todo`, so a whole tree can be completed or reset
+  in one update call.
+
+### Changed
+
+- `subtask update <id> --all` now remains valid for bulk field updates on the
+  addressed subtask, preserving subtask positional-id compatibility while root
+  task/epic updates use positional id + `--all` for descendant cascades.
+- Help text, docs, and machine-readable command contracts now clarify the two
+  meanings of `update --all`: bulk field application on selected rows vs.
+  descendant status cascades from a positional epic/task id.
+
+### Fixed
+
+- Added regression coverage for blocked-descendant cascades so status updates
+  stay atomic when any descendant cannot transition.
+
 ## 0.2.6
 
 ### Fixed
