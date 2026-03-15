@@ -33,6 +33,8 @@ function formatSubtask(subtask: SubtaskRecord): string {
 const VIEW_MODES = ["table", "compact"] as const;
 const DEFAULT_SUBTASK_LIST_LIMIT = 10;
 const DEFAULT_OPEN_SUBTASK_STATUSES = ["in_progress", "in-progress", "todo"] as const;
+const CREATE_OPTIONS = ["task", "t", "title", "description", "d", "status", "s"] as const;
+const LIST_OPTIONS = ["task", "t", "status", "s", "limit", "l", "cursor", "all", "view"] as const;
 const SEARCH_OPTIONS = ["fields", "preview"] as const;
 const REPLACE_OPTIONS = ["search", "replace", "fields", "preview", "apply"] as const;
 const CREATE_MANY_OPTIONS = ["task", "t", "subtask"] as const;
@@ -380,6 +382,16 @@ export async function runSubtask(context: CliContext): Promise<CliResult> {
 
     switch (subcommand) {
       case "create": {
+        const createUnknownOption = findUnknownOption(parsed, CREATE_OPTIONS);
+        if (createUnknownOption !== undefined) {
+          return unknownOption("subtask.create", createUnknownOption, CREATE_OPTIONS);
+        }
+
+        const unexpectedCreatePositionals = readUnexpectedPositionals(parsed, 3);
+        if (unexpectedCreatePositionals.length > 0) {
+          return failUnexpectedPositionals("subtask.create", unexpectedCreatePositionals);
+        }
+
         const missingCreateOption =
           readMissingOptionValue(parsed.missingOptionValues, "task", "t") ??
           readMissingOptionValue(parsed.missingOptionValues, "description", "d") ??
@@ -468,6 +480,16 @@ export async function runSubtask(context: CliContext): Promise<CliResult> {
         });
       }
       case "list": {
+        const listUnknownOption = findUnknownOption(parsed, LIST_OPTIONS);
+        if (listUnknownOption !== undefined) {
+          return unknownOption("subtask.list", listUnknownOption, LIST_OPTIONS);
+        }
+
+        const unexpectedListPositionals = readUnexpectedPositionals(parsed, 2);
+        if (unexpectedListPositionals.length > 0) {
+          return failUnexpectedPositionals("subtask.list", unexpectedListPositionals);
+        }
+
         const missingListOption =
           readMissingOptionValue(parsed.missingOptionValues, "view") ??
           readMissingOptionValue(parsed.missingOptionValues, "status", "s") ??
