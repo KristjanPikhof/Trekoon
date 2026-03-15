@@ -50,6 +50,11 @@ trekoon board open
 trekoon board update
 ```
 
+For day-to-day use, treat `trekoon board open` as the one-command entry point.
+It both verifies the runtime files and launches the board. Reach for
+`trekoon board update` only when you need to refresh the copied runtime without
+opening the browser.
+
 What these commands do:
 
 - `trekoon board open` ensures bundled board assets are installed, starts a
@@ -64,7 +69,26 @@ Why the board uses a local server instead of a bare HTML file:
 - the server binds only to `127.0.0.1`
 - each `board open` call generates a per-session token used by the browser/API
 - bundled assets are copied from the CLI package into `.trekoon/board`, so the
-  board works without a separate frontend install or runtime CDN dependency
+  board works without a separate frontend install or local build step
+
+Current runtime expectations for operators:
+
+- the served HTML, styles, and board app files come from the local
+  `.trekoon/board` runtime directory
+- the current shell also pulls Vue from `esm.sh`, Tailwind from
+  `cdn.tailwindcss.com`, and Google-hosted fonts/icons at page load time
+- if those hosts are unavailable, the command still starts the loopback server
+  and prints the fallback URL, but the shell may not fully hydrate in the
+  browser until network access is available again
+
+Current layout behavior:
+
+- on wide displays, expect a three-surface workspace: epic switcher, task
+  workspace, and task inspector
+- on medium and small displays, secondary surfaces collapse into stacked panels
+  or drawer-style views so the board remains navigable on narrower widths
+- long descriptions, dependency lists, and subtask lists stay collapsed behind
+  disclosure controls until the operator expands them
 
 ## Create an epic, task, and subtask
 
