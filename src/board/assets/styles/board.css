@@ -568,6 +568,10 @@ body {
   -webkit-line-clamp: 2;
 }
 
+.board-clamped-text__preview--3 {
+  -webkit-line-clamp: 3;
+}
+
 .board-clamped-text__toggle {
   display: inline-flex;
   align-items: center;
