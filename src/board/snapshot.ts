@@ -10,6 +10,7 @@ interface SearchFields {
 interface StatusCounts {
   readonly total: number;
   readonly todo: number;
+  readonly blocked: number;
   readonly inProgress: number;
   readonly done: number;
   readonly other: number;
@@ -95,6 +96,10 @@ function normalizeStatusBucket(status: string): keyof Omit<StatusCounts, "total"
     return "todo";
   }
 
+   if (status === "blocked") {
+    return "blocked";
+  }
+
   if (status === "in_progress" || status === "in-progress") {
     return "inProgress";
   }
@@ -110,12 +115,14 @@ function countStatuses(records: readonly { readonly status: string }[]): StatusC
   const counts: {
     total: number;
     todo: number;
+    blocked: number;
     inProgress: number;
     done: number;
     other: number;
   } = {
     total: records.length,
     todo: 0,
+    blocked: 0,
     inProgress: 0,
     done: 0,
     other: 0,
