@@ -163,6 +163,70 @@ Notes:
 - Cascade mode is reserved for status-only close/reopen operations; combine
   append/title/description changes in separate commands
 
+## Batch create and expand payloads
+
+Trekoon uses stable batch payloads for one-shot graph creation and sibling batch
+creation commands.
+
+### `epic create` and `epic expand`
+
+```bash
+trekoon --toon epic create --title "..." --description "..." --task "..."
+trekoon --toon epic expand <epic-id> --task "..."
+```
+
+Payload fields:
+
+```text
+ok: true
+command: epic.create | epic.expand
+data:
+  epic: { ... }                    # epic.create only
+  epicId: <epic-id>                # epic.expand only
+  tasks[]
+  subtasks[]
+  dependencies[]
+  result:
+    mappings[]: { kind, tempKey, id }
+    counts: { tasks, subtasks, dependencies }
+```
+
+### `task create-many`
+
+```bash
+trekoon --toon task create-many --epic <epic-id> --task "..."
+```
+
+Payload fields:
+
+```text
+ok: true
+command: task.create-many
+data:
+  epicId: <epic-id>
+  tasks[]
+  result:
+    mappings[]: { kind: task, tempKey, id }
+```
+
+### `subtask create-many`
+
+```bash
+trekoon --toon subtask create-many --task <task-id> --subtask "..."
+```
+
+Payload fields:
+
+```text
+ok: true
+command: subtask.create-many
+data:
+  taskId: <task-id>
+  subtasks[]
+  result:
+    mappings[]: { kind: subtask, tempKey, id }
+```
+
 ## Sync compatibility mode
 
 Compatibility mode exists for integrations that still consume legacy sync
