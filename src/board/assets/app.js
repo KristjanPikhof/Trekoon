@@ -832,6 +832,7 @@ function renderSubtaskModal(subtask, isMutating = false) {
           <div>
             <span class="${sectionLabelClasses()}">Subtask editor</span>
             <h3 id="board-subtask-modal-title" class="mt-2 text-xl font-semibold tracking-tight text-[var(--board-text)]">${escapeHtml(subtask.title)}</h3>
+            <p class="mt-2 text-sm text-[var(--board-text-muted)]">Focused editing surface with its own scroll and sticky close action.</p>
           </div>
           <button type="button" class="${buttonClasses()} mt-4 sm:mt-0" data-close-subtask>Close</button>
         </header>
