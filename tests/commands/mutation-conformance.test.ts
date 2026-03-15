@@ -10,6 +10,7 @@ import { runEpic } from "../../src/commands/epic";
 import { runSubtask } from "../../src/commands/subtask";
 import { runTask } from "../../src/commands/task";
 import { ENTITY_OPERATIONS } from "../../src/domain/mutation-operations";
+import { MutationService } from "../../src/domain/mutation-service";
 import { openTrekoonDatabase } from "../../src/storage/database";
 
 const tempDirs: string[] = [];
@@ -181,6 +182,55 @@ describe("mutation conformance", (): void => {
         .query("SELECT operation FROM events WHERE entity_kind = 'dependency' AND operation = ? LIMIT 1;")
         .get(ENTITY_OPERATIONS.dependency.added) as { operation: string } | null;
       expect(addedRow?.operation).toBe(ENTITY_OPERATIONS.dependency.added);
+    } finally {
+      storage.close();
+    }
+  });
+
+  test("subtask update events preserve explicit empty descriptions", async (): Promise<void> => {
+    const cwd = createWorkspace();
+    const storage = openTrekoonDatabase(cwd);
+
+    try {
+      const mutations = new MutationService(storage.db, cwd);
+      const epic = mutations.createEpic({ title: "Roadmap", description: "Scope" });
+      const task = mutations.createTask({ epicId: epic.id, title: "Implement", description: "Code" });
+      const subtask = mutations.createSubtask({
+        taskId: task.id,
+        title: "Write tests",
+        description: "Regression coverage",
+      });
+
+      const updatedSubtask = mutations.updateSubtask(subtask.id, {
+        description: "",
+        status: "done",
+      });
+
+      expect(updatedSubtask).toEqual(expect.objectContaining({ description: "", status: "done" }));
+      expect(eventRowsForEntity(cwd, "subtask", subtask.id)).toEqual([
+        {
+          operation: ENTITY_OPERATIONS.subtask.created,
+          payload: {
+            fields: {
+              task_id: task.id,
+              title: "Write tests",
+              description: "Regression coverage",
+              status: "todo",
+            },
+          },
+        },
+        {
+          operation: ENTITY_OPERATIONS.subtask.updated,
+          payload: {
+            fields: {
+              task_id: task.id,
+              title: "Write tests",
+              description: "",
+              status: "done",
+            },
+          },
+        },
+      ]);
     } finally {
       storage.close();
     }

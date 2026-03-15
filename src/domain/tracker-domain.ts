@@ -138,6 +138,14 @@ function normalizeStatus(value: string | undefined): string {
   return assertNonEmpty("status", value);
 }
 
+function normalizeSubtaskDescription(value: string | undefined): string {
+  if (value === undefined) {
+    return "";
+  }
+
+  return value.trim();
+}
+
 function mapEpic(row: EpicRow): EpicRecord {
   return {
     id: row.id,
@@ -431,7 +439,7 @@ export class TrackerDomain {
     const id: string = randomUUID();
     const taskId: string = assertNonEmpty("taskId", input.taskId);
     const title: string = assertNonEmpty("title", input.title);
-    const description: string = input.description === undefined ? "" : assertNonEmpty("description", input.description);
+    const description: string = normalizeSubtaskDescription(input.description);
     const status: string = normalizeStatus(input.status);
 
     this.getTaskOrThrow(taskId);
@@ -457,7 +465,7 @@ export class TrackerDomain {
         tempKey: assertNonEmpty("tempKey", spec.tempKey),
         taskId,
         title: assertNonEmpty("title", spec.title),
-        description: spec.description === undefined ? "" : assertNonEmpty("description", spec.description),
+        description: normalizeSubtaskDescription(spec.description),
         status: normalizeStatus(spec.status),
       };
     });
@@ -574,7 +582,7 @@ export class TrackerDomain {
     const existing: SubtaskRecord = this.getSubtaskOrThrow(id);
     const nextTitle: string = input.title !== undefined ? assertNonEmpty("title", input.title) : existing.title;
     const nextDescription: string =
-      input.description !== undefined ? assertNonEmpty("description", input.description) : existing.description;
+      input.description !== undefined ? normalizeSubtaskDescription(input.description) : existing.description;
     const nextStatus: string = input.status !== undefined ? assertNonEmpty("status", input.status) : existing.status;
     this.assertNoUnresolvedDependenciesForStatusTransition(id, "subtask", existing.status, nextStatus);
     const now: number = Date.now();
