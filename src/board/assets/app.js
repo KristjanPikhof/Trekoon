@@ -411,6 +411,69 @@ function renderDescriptionPreview(description, className = "mt-1 text-sm leading
   return `<p class="${escapeHtml(className)}">${escapeHtml(description)}</p>`;
 }
 
+function renderDescriptionBody(description, className = "text-sm leading-7 text-[var(--board-text-muted)]") {
+  if (!description || description.trim().length === 0) {
+    return `<p class="${escapeHtml(className)}">No description provided.</p>`;
+  }
+
+  return `<div class="${escapeHtml(className)}">${escapeHtml(description).replaceAll("\n", "<br />")}</div>`;
+}
+
+function shouldCollapseDescription(description) {
+  if (!description) {
+    return false;
+  }
+
+  const trimmed = description.trim();
+  return trimmed.length > 260 || trimmed.split("\n").length > 5;
+}
+
+function renderDescriptionSection(title, description, options = {}) {
+  const {
+    open = false,
+    compact = false,
+    emptyText = "Add context so collaborators know what done looks like.",
+  } = options;
+
+  if (!description || description.trim().length === 0) {
+    return `
+      <section class="${secondaryPanelClasses("board-detail-card p-4")}">
+        <div class="board-section__header flex items-center justify-between gap-3">
+          <strong class="text-sm font-semibold text-[var(--board-text)]">${escapeHtml(title)}</strong>
+          <span class="${neutralChipClasses()}">Empty</span>
+        </div>
+        <p class="mt-3 text-sm leading-6 text-[var(--board-text-muted)]">${escapeHtml(emptyText)}</p>
+      </section>
+    `;
+  }
+
+  if (!shouldCollapseDescription(description)) {
+    return `
+      <section class="${secondaryPanelClasses("board-detail-card p-4")}">
+        <div class="board-section__header flex items-center justify-between gap-3">
+          <strong class="text-sm font-semibold text-[var(--board-text)]">${escapeHtml(title)}</strong>
+          <span class="${neutralChipClasses()}">${escapeHtml(`${description.trim().length} chars`)}</span>
+        </div>
+        <div class="mt-3 ${compact ? "board-detail-copy board-detail-copy--compact" : "board-detail-copy"}">
+          ${renderDescriptionBody(description)}
+        </div>
+      </section>
+    `;
+  }
+
+  return `
+    <details class="board-disclosure ${secondaryPanelClasses("board-detail-card p-4")}" ${open ? "open" : ""}>
+      <summary class="board-detail-summary-row cursor-pointer list-none text-sm font-semibold text-[var(--board-text)]">
+        <span>${escapeHtml(title)}</span>
+        <span class="${neutralChipClasses()}">Long</span>
+      </summary>
+      <div class="mt-3 board-detail-copy ${compact ? "board-detail-copy--compact" : ""}">
+        ${renderDescriptionBody(description)}
+      </div>
+    </details>
+  `;
+}
+
 function renderEpicCountSummary(epic) {
   const totalTasks = Array.isArray(epic.taskIds) ? epic.taskIds.length : 0;
   const counts = epic.counts || { todo: 0, blocked: 0, in_progress: 0, done: 0 };
@@ -591,18 +654,18 @@ function lookupNode(snapshot, id) {
     ?? null;
 }
 
-function renderDependencyList(task, snapshot, isMutating = false) {
-  if (task.blockedBy.length === 0) {
+function renderDependencyItems(task, snapshot, isMutating = false, dependencyIds = task.blockedBy) {
+  if (dependencyIds.length === 0) {
     return renderEmptyState("No dependencies", "Add blockers here to keep task transitions honest.");
   }
 
-  return task.blockedBy.map((dependencyId) => {
+  return dependencyIds.map((dependencyId) => {
     const dependency = lookupNode(snapshot, dependencyId);
     return `
-      <article class="grid gap-4 rounded-3xl border border-[var(--board-border)] bg-white/[0.03] px-4 py-4 md:grid-cols-[minmax(0,1fr)_auto] md:items-start">
+      <article class="board-related-item grid gap-3 rounded-3xl border border-[var(--board-border)] bg-white/[0.03] px-4 py-4 md:grid-cols-[minmax(0,1fr)_auto] md:items-start">
         <div class="min-w-0">
           <strong class="block text-sm font-semibold text-[var(--board-text)]">${escapeHtml(readNodeLabel(dependency?.kind ?? "task", dependency?.title ?? dependencyId))}</strong>
-          ${renderDescriptionPreview(dependency?.description ?? "")}
+          ${renderDescriptionPreview(dependency?.description ?? "", "board-related-item__description mt-2 text-sm leading-6 text-[var(--board-text-muted)]")}
         </div>
         <div class="flex flex-wrap items-center gap-2">
           ${renderStatusBadge(dependency?.status ?? "todo", readStatusLabel(dependency?.status ?? "Unknown"))}
@@ -613,18 +676,54 @@ function renderDependencyList(task, snapshot, isMutating = false) {
   }).join("");
 }
 
-function renderSubtaskList(task) {
-  if (task.subtasks.length === 0) {
+function renderDependencySection(task, snapshot, isMutating = false) {
+  const visibleDependencies = task.blockedBy.slice(0, 3);
+  const hiddenDependencies = task.blockedBy.slice(3);
+  return `
+    <details class="board-disclosure ${secondaryPanelClasses("board-detail-card p-4")}" ${task.blockedBy.length <= 2 ? "open" : ""}>
+      <summary class="board-detail-summary-row cursor-pointer list-none text-sm font-semibold text-[var(--board-text)]">
+        <span>Dependencies</span>
+        <span class="${neutralChipClasses()}">${task.blockedBy.length}</span>
+      </summary>
+      <form class="mt-4 grid gap-4" data-dependency-form="${escapeHtml(task.id)}">
+        <label class="grid gap-2">
+          <span class="${sectionLabelClasses()}">Add dependency</span>
+          <select class="${fieldClasses()}" name="dependsOnId" required ${isMutating ? "disabled" : ""}>
+            <option value="">Select a task or subtask</option>
+            ${renderDependencyOptions(task, snapshot)}
+          </select>
+        </label>
+        <div class="flex justify-end">
+          <button type="submit" class="${buttonClasses({ kind: "primary" })}" ${isMutating ? "disabled" : ""}>Add dependency</button>
+        </div>
+      </form>
+      <div class="board-inline-list mt-4 space-y-3">
+        ${renderDependencyItems(task, snapshot, isMutating, visibleDependencies)}
+      </div>
+      ${hiddenDependencies.length > 0 ? `
+        <details class="board-disclosure board-detail-nested mt-4 ${secondaryPanelClasses("p-3")}">
+          <summary class="cursor-pointer list-none text-sm font-semibold text-[var(--board-text)]">Show ${hiddenDependencies.length} more dependency${hiddenDependencies.length === 1 ? "" : "ies"}</summary>
+          <div class="board-inline-list mt-3 space-y-3">
+            ${renderDependencyItems(task, snapshot, isMutating, hiddenDependencies)}
+          </div>
+        </details>
+      ` : ""}
+    </details>
+  `;
+}
+
+function renderSubtaskItems(subtasks) {
+  if (subtasks.length === 0) {
     return renderEmptyState("No subtasks", "This task does not have subtasks in the current snapshot.");
   }
 
   return `
     <div class="space-y-3">
-      ${task.subtasks.map((subtask) => `
-        <article class="grid gap-4 rounded-3xl border border-[var(--board-border)] bg-white/[0.03] px-4 py-4 md:grid-cols-[minmax(0,1fr)_auto] md:items-start">
+      ${subtasks.map((subtask) => `
+        <article class="board-related-item grid gap-3 rounded-3xl border border-[var(--board-border)] bg-white/[0.03] px-4 py-4 md:grid-cols-[minmax(0,1fr)_auto] md:items-start">
           <div class="min-w-0">
             <strong class="block text-sm font-semibold text-[var(--board-text)]">${escapeHtml(subtask.title)}</strong>
-            ${renderDescriptionPreview(subtask.description)}
+            ${renderDescriptionPreview(subtask.description, "board-related-item__description mt-2 text-sm leading-6 text-[var(--board-text-muted)]")}
           </div>
           <div class="flex flex-wrap items-center gap-2">
             ${renderStatusBadge(subtask.status)}
@@ -634,6 +733,37 @@ function renderSubtaskList(task) {
         </article>
       `).join("")}
     </div>
+  `;
+}
+
+function renderSubtaskSection(task, isMutating = false) {
+  const visibleSubtasks = task.subtasks.slice(0, 4);
+  const hiddenSubtasks = task.subtasks.slice(4);
+  const shouldOpen = task.subtasks.length <= 3;
+  return `
+    <details class="board-disclosure ${secondaryPanelClasses("board-detail-card p-4")}" ${shouldOpen ? "open" : ""}>
+      <summary class="board-detail-summary-row cursor-pointer list-none text-sm font-semibold text-[var(--board-text)]">
+        <span>Subtasks</span>
+        <span class="${neutralChipClasses()}">${task.subtasks.length}</span>
+      </summary>
+      <div class="mt-4 space-y-4">
+        <details class="board-disclosure board-detail-nested ${secondaryPanelClasses("p-3")}" ${task.subtasks.length === 0 ? "open" : ""}>
+          <summary class="cursor-pointer list-none text-sm font-semibold text-[var(--board-text)]">Add subtask</summary>
+          <div class="mt-3">
+            ${renderCreateSubtaskForm(task, isMutating)}
+          </div>
+        </details>
+        ${renderSubtaskItems(visibleSubtasks)}
+        ${hiddenSubtasks.length > 0 ? `
+          <details class="board-disclosure board-detail-nested ${secondaryPanelClasses("p-3")}">
+            <summary class="cursor-pointer list-none text-sm font-semibold text-[var(--board-text)]">Show ${hiddenSubtasks.length} more subtask${hiddenSubtasks.length === 1 ? "" : "s"}</summary>
+            <div class="mt-3">
+              ${renderSubtaskItems(hiddenSubtasks)}
+            </div>
+          </details>
+        ` : ""}
+      </div>
+    </details>
   `;
 }
 
@@ -666,15 +796,15 @@ function renderCreateSubtaskForm(task, isMutating = false) {
 function renderSubtaskModal(subtask, isMutating = false) {
   return `
     <div class="board-modal-backdrop fixed inset-0 z-40 grid place-items-center bg-slate-950/70 p-4 backdrop-blur-md" data-close-subtask>
-      <section class="board-modal ${panelClasses("grid max-h-[calc(100dvh-2rem)] w-full max-w-2xl grid-rows-[auto_1fr] overflow-hidden p-5 sm:p-6")}" role="dialog" aria-modal="true" aria-labelledby="board-subtask-modal-title">
-        <header class="board-modal__header border-b border-[var(--board-border)] pb-5">
+      <section class="board-modal board-modal--sheet ${panelClasses("grid max-h-[calc(100dvh-2rem)] w-full grid-rows-[auto_1fr] overflow-hidden p-5 sm:p-6")}" role="dialog" aria-modal="true" aria-labelledby="board-subtask-modal-title">
+        <header class="board-modal__header board-detail-surface__header border-b border-[var(--board-border)] pb-5">
           <div>
             <span class="${sectionLabelClasses()}">Subtask editor</span>
             <h3 id="board-subtask-modal-title" class="mt-2 text-xl font-semibold tracking-tight text-[var(--board-text)]">${escapeHtml(subtask.title)}</h3>
           </div>
           <button type="button" class="${buttonClasses()} mt-4 sm:mt-0" data-close-subtask>Close</button>
         </header>
-        <div class="board-modal__body overflow-auto pt-5">
+        <div class="board-modal__body board-detail-surface__body overflow-auto pt-5">
           <form class="grid gap-4" data-subtask-form="${escapeHtml(subtask.id)}">
             <label class="grid gap-2">
               <span class="${sectionLabelClasses()}">Title</span>
@@ -699,79 +829,78 @@ function renderSubtaskModal(subtask, isMutating = false) {
   `;
 }
 
-function renderDrawer(task, epics, snapshot, isMutating = false) {
+function renderTaskSurface(task, epics, snapshot, isMutating = false, options = {}) {
   const epic = epics.find((candidate) => candidate.id === task.epicId) ?? null;
-  const dependencyOptions = renderDependencyOptions(task, snapshot);
+  const {
+    titleId = "",
+    closeLabel = "Close",
+    containerClassName = "board-detail-surface",
+  } = options;
+
   return `
-    <div class="board-drawer__content grid h-full min-h-0 grid-rows-[auto_1fr] overflow-hidden">
-      <header class="board-drawer__header border-b border-[var(--board-border)] pb-5">
-        <div class="board-drawer__title flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
-          <div>
-            <span class="${sectionLabelClasses()}">Task detail</span>
-            <h3 class="mt-2 text-2xl font-semibold tracking-tight text-[var(--board-text)]">${escapeHtml(task.title)}</h3>
+    <div class="${containerClassName} grid h-full min-h-0 grid-rows-[auto_1fr] overflow-hidden">
+      <header class="board-detail-surface__header board-drawer__header border-b border-[var(--board-border)] pb-5">
+        <div class="board-detail-surface__hero flex flex-col gap-4">
+          <div class="board-detail-surface__title-row flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+            <div class="min-w-0">
+              <span class="${sectionLabelClasses()}">Task detail</span>
+              <h3 ${titleId ? `id="${escapeHtml(titleId)}"` : ""} class="mt-2 text-2xl font-semibold tracking-tight text-[var(--board-text)]">${escapeHtml(task.title)}</h3>
+            </div>
+            <button type="button" class="${buttonClasses()} shrink-0" data-close-task>${escapeHtml(closeLabel)}</button>
           </div>
-          <button type="button" class="${buttonClasses()} shrink-0" data-close-task>Close</button>
+          <div class="board-detail-surface__meta flex flex-wrap gap-2">
+            <span class="${neutralChipClasses()}">Epic ${escapeHtml(epic?.title ?? "Unknown")}</span>
+            ${renderStatusBadge(task.status)}
+            <span class="${neutralChipClasses()}">${task.subtasks.length} subtask${task.subtasks.length === 1 ? "" : "s"}</span>
+            <span class="${neutralChipClasses()}">${task.blockedBy.length} blocker${task.blockedBy.length === 1 ? "" : "s"}</span>
+          </div>
         </div>
-        <div class="board-drawer__actions mt-4 flex flex-wrap gap-2">
-          <span class="${neutralChipClasses()}">Epic ${escapeHtml(epic?.title ?? "Unknown")}</span>
-          ${renderStatusBadge(task.status)}
-        </div>
-        ${task.description.trim().length > 0
-          ? `<div class="board-drawer__description mt-4 rounded-3xl border border-[var(--board-border)] bg-white/[0.03] px-4 py-4 text-sm leading-7 text-[var(--board-text-muted)]">${escapeHtml(task.description).replaceAll("\n", "<br />")}</div>`
-          : `<p class="mt-4 text-sm leading-6 text-[var(--board-text-muted)]">No task description provided.</p>`}
       </header>
-      <div class="board-drawer__body min-h-0 space-y-4 overflow-auto overscroll-contain pt-5 pr-1">
-        <section class="${secondaryPanelClasses("p-4")}">
-          <div class="board-meta-grid flex flex-wrap gap-2">
-            <span class="${neutralChipClasses()}">Updated ${escapeHtml(formatDate(task.updatedAt))}</span>
-            <span class="${neutralChipClasses()}">Depends on ${task.blockedBy.length}</span>
-            <span class="${neutralChipClasses()}">Blocks ${task.blocks.length}</span>
-          </div>
-        </section>
-        <details class="board-disclosure ${secondaryPanelClasses("p-4")}" open>
-          <summary class="cursor-pointer list-none text-sm font-semibold text-[var(--board-text)]">Edit task</summary>
-          <form class="mt-4 grid gap-4" data-task-form="${escapeHtml(task.id)}">
-            <label class="grid gap-2">
-              <span class="${sectionLabelClasses()}">Title</span>
-              <input class="${fieldClasses()}" name="title" value="${escapeHtml(task.title)}" required ${isMutating ? "disabled" : ""} />
-            </label>
-            <label class="grid gap-2">
-              <span class="${sectionLabelClasses()}">Description</span>
-              <textarea class="${fieldClasses()} min-h-[120px]" name="description" rows="4" ${isMutating ? "disabled" : ""}>${escapeHtml(task.description)}</textarea>
-            </label>
-            <label class="grid gap-2">
-              <span class="${sectionLabelClasses()}">Status</span>
-              ${renderStatusSelect("status", task.status, isMutating)}
-            </label>
-            <button type="submit" class="${buttonClasses({ kind: "primary" })}" ${isMutating ? "disabled" : ""}>Save task</button>
-          </form>
-        </details>
-        <details class="board-disclosure ${secondaryPanelClasses("p-4")}" open>
-          <summary class="cursor-pointer list-none text-sm font-semibold text-[var(--board-text)]">Dependencies</summary>
-          <form class="mt-4 grid gap-4" data-dependency-form="${escapeHtml(task.id)}">
-            <label class="grid gap-2">
-              <span class="${sectionLabelClasses()}">Add dependency</span>
-              <select class="${fieldClasses()}" name="dependsOnId" required ${isMutating ? "disabled" : ""}>
-                <option value="">Select a task or subtask</option>
-                ${dependencyOptions}
-              </select>
-            </label>
-            <button type="submit" class="${buttonClasses({ kind: "primary" })}" ${isMutating ? "disabled" : ""}>Add dependency</button>
-          </form>
-          <div class="board-inline-list mt-4 space-y-3">
-            ${renderDependencyList(task, snapshot, isMutating)}
-          </div>
-        </details>
-        <section class="${secondaryPanelClasses("p-4")}">
-          <div class="board-section__header flex items-center justify-between gap-3">
-            <strong class="text-sm font-semibold text-[var(--board-text)]">Subtasks</strong>
-            <span class="${neutralChipClasses()}">${task.subtasks.length}</span>
-          </div>
-          <div class="mt-4 space-y-4">
-            ${renderCreateSubtaskForm(task, isMutating)}
-            ${renderSubtaskList(task)}
-          </div>
-        </section>
+      <div class="board-detail-surface__body board-drawer__body min-h-0 overflow-auto overscroll-contain pt-5 pr-1">
+        <div class="board-detail-surface__stack space-y-4">
+          <section class="${secondaryPanelClasses("board-detail-card p-4")}">
+            <div class="board-detail-summary-grid grid gap-3 md:grid-cols-2 xl:grid-cols-3">
+              <div>
+                <p class="${sectionLabelClasses()}">Updated</p>
+                <p class="mt-2 text-sm font-medium text-[var(--board-text)]">${escapeHtml(formatDate(task.updatedAt))}</p>
+              </div>
+              <div>
+                <p class="${sectionLabelClasses()}">Dependencies</p>
+                <p class="mt-2 text-sm font-medium text-[var(--board-text)]">${task.blockedBy.length} blocking item${task.blockedBy.length === 1 ? "" : "s"}</p>
+              </div>
+              <div>
+                <p class="${sectionLabelClasses()}">Outgoing</p>
+                <p class="mt-2 text-sm font-medium text-[var(--board-text)]">${task.blocks.length} dependent item${task.blocks.length === 1 ? "" : "s"}</p>
+              </div>
+            </div>
+          </section>
+          ${renderDescriptionSection("Description", task.description, { open: false, compact: true })}
+          <details class="board-disclosure ${secondaryPanelClasses("board-detail-card p-4")}" open>
+            <summary class="board-detail-summary-row cursor-pointer list-none text-sm font-semibold text-[var(--board-text)]">
+              <span>Edit task</span>
+              ${renderStatusBadge(task.status)}
+            </summary>
+            <form class="mt-4 grid gap-4" data-task-form="${escapeHtml(task.id)}">
+              <label class="grid gap-2">
+                <span class="${sectionLabelClasses()}">Title</span>
+                <input class="${fieldClasses()}" name="title" value="${escapeHtml(task.title)}" required ${isMutating ? "disabled" : ""} />
+              </label>
+              <label class="grid gap-2">
+                <span class="${sectionLabelClasses()}">Description</span>
+                <textarea class="${fieldClasses()} min-h-[180px]" name="description" rows="7" ${isMutating ? "disabled" : ""}>${escapeHtml(task.description)}</textarea>
+              </label>
+              <label class="grid gap-2">
+                <span class="${sectionLabelClasses()}">Status</span>
+                ${renderStatusSelect("status", task.status, isMutating)}
+              </label>
+              <div class="board-detail-surface__actions flex flex-wrap justify-end gap-3">
+                <button type="submit" class="${buttonClasses({ kind: "primary" })}" ${isMutating ? "disabled" : ""}>Save task</button>
+              </div>
+            </form>
+          </details>
+          ${renderDependencySection(task, snapshot, isMutating)}
+          ${renderSubtaskSection(task, isMutating)}
+        </div>
       </div>
     </div>
   `;
@@ -780,9 +909,13 @@ function renderDrawer(task, epics, snapshot, isMutating = false) {
 function renderTaskModal(task, epics, snapshot, isMutating = false) {
   return `
     <div class="board-task-modal-backdrop fixed inset-0 z-30 grid place-items-center bg-slate-950/70 p-4 backdrop-blur-md" data-close-task>
-      <section class="board-task-modal ${panelClasses("grid max-h-[calc(100dvh-2rem)] w-full max-w-3xl grid-rows-[1fr] overflow-hidden p-5 sm:p-6")}" role="dialog" aria-modal="true" aria-labelledby="board-task-modal-title">
+      <section class="board-task-modal ${panelClasses("grid max-h-[calc(100dvh-2rem)] w-full grid-rows-[1fr] overflow-hidden p-5 sm:p-6")}" role="dialog" aria-modal="true" aria-labelledby="board-task-modal-title">
         <div class="h-full min-h-0 overflow-hidden">
-          ${renderDrawer(task, epics, snapshot, isMutating).replace("<h3 class=\"mt-2 text-2xl font-semibold tracking-tight text-[var(--board-text)]\">", "<h3 id=\"board-task-modal-title\" class=\"mt-2 text-2xl font-semibold tracking-tight text-[var(--board-text)]\">")}
+          ${renderTaskSurface(task, epics, snapshot, isMutating, {
+            titleId: "board-task-modal-title",
+            closeLabel: "Close",
+            containerClassName: "board-detail-surface board-detail-surface--modal",
+          })}
         </div>
       </section>
     </div>
@@ -954,8 +1087,11 @@ function renderBoard(model) {
       </section>
 
       ${selectedTask && !useTaskModal ? `
-        <aside class="board-panel board-drawer is-open ${panelClasses("fixed inset-4 z-30 grid h-full min-h-0 overflow-hidden p-5 xl:static xl:inset-auto xl:max-h-full xl:p-5")}" aria-label="Task drawer">
-          ${renderDrawer(selectedTask, store.snapshot.epics, store.snapshot, store.isMutating)}
+        <aside class="board-panel board-drawer board-detail-surface-frame is-open ${panelClasses("fixed inset-4 z-30 grid h-full min-h-0 overflow-hidden p-5 xl:static xl:inset-auto xl:max-h-full xl:p-5")}" aria-label="Task inspector">
+          ${renderTaskSurface(selectedTask, store.snapshot.epics, store.snapshot, store.isMutating, {
+            closeLabel: "Close inspector",
+            containerClassName: "board-detail-surface board-detail-surface--inspector",
+          })}
         </aside>
       ` : ""}
     </div>
