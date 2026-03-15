@@ -1,5 +1,6 @@
 const THEME_STORAGE_KEY = "trekoon-board-theme";
 const STATE_STORAGE_KEY = "trekoon-board-state";
+const SESSION_TOKEN_STORAGE_KEY = "trekoon-board-session-token";
 const SEARCH_FOCUS_KEYS = new Set(["/", "s"]);
 const VIEW_MODES = ["kanban", "list"];
 const STATUS_ORDER = ["todo", "blocked", "in_progress", "done"];
@@ -11,7 +12,51 @@ const STATUS_LABELS = {
 };
 
 const appElement = document.querySelector("#app");
-const SESSION_TOKEN = new URLSearchParams(window.location.search).get("token") || "";
+
+function readSessionTokenFromStorage() {
+  try {
+    const storedToken = sessionStorage.getItem(SESSION_TOKEN_STORAGE_KEY) || "";
+    return storedToken.trim();
+  } catch {
+    return "";
+  }
+}
+
+function persistSessionToken(token) {
+  try {
+    sessionStorage.setItem(SESSION_TOKEN_STORAGE_KEY, token);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+function resolveRuntimeSession() {
+  const url = new URL(window.location.href);
+  const queryToken = (url.searchParams.get("token") || "").trim();
+  if (queryToken.length > 0) {
+    return {
+      token: queryToken,
+      shouldScrubAddressBar: persistSessionToken(queryToken),
+    };
+  }
+
+  return {
+    token: readSessionTokenFromStorage(),
+    shouldScrubAddressBar: false,
+  };
+}
+
+function scrubTokenFromAddressBar() {
+  const url = new URL(window.location.href);
+  if (!url.searchParams.has("token") || typeof window.history?.replaceState !== "function") {
+    return;
+  }
+
+  url.searchParams.delete("token");
+  const nextUrl = `${url.pathname}${url.search}${url.hash}`;
+  window.history.replaceState(window.history.state, document.title, nextUrl || "/");
+}
 
 function normalizeStatus(rawStatus) {
   if (rawStatus === "in-progress") return "in_progress";
@@ -312,9 +357,13 @@ function createStore(snapshot) {
 }
 
 function createApi(model) {
+  const { token: sessionToken } = resolveRuntimeSession();
+
   async function request(path, options = {}) {
     const headers = new Headers(options.headers || {});
-    headers.set("x-trekoon-token", SESSION_TOKEN);
+    if (sessionToken.length > 0) {
+      headers.set("authorization", `Bearer ${sessionToken}`);
+    }
     if (options.body && !headers.has("content-type")) {
       headers.set("content-type", "application/json");
     }
@@ -333,6 +382,10 @@ function createApi(model) {
   }
 
   async function runMutation({ optimistic, request: mutationRequest, successMessage }) {
+    if (model.store.isMutating) {
+      return;
+    }
+
     const previousSnapshot = cloneSnapshot(model.store.snapshot);
     model.store.notice = null;
     model.store.isMutating = true;
@@ -608,6 +661,7 @@ function renderDependencyList(task, snapshot) {
 function renderDrawer(task, epics, snapshot) {
   const epic = epics.find((candidate) => candidate.id === task.epicId) ?? null;
   const dependencyOptions = renderDependencyOptions(task, snapshot);
+  const isMutating = snapshot === undefined ? false : false;
   return `
     <header class="board-drawer__header">
       <span class="board-pill">Task drawer</span>
@@ -667,11 +721,11 @@ function renderDrawer(task, epics, snapshot) {
             </div>
             <label>
               <span>Title</span>
-              <input name="title" value="${escapeHtml(subtask.title)}" required />
+            <input name="title" value="${escapeHtml(subtask.title)}" required />
             </label>
             <label>
               <span>Description</span>
-              <textarea name="description" rows="3">${escapeHtml(subtask.description)}</textarea>
+            <textarea name="description" rows="3">${escapeHtml(subtask.description)}</textarea>
             </label>
             <label>
               <span>Status</span>
@@ -700,6 +754,7 @@ function renderDrawerEmpty() {
 
 function renderBoard(model) {
   const { store, getSelectedTask, getVisibleEpics, getVisibleTasks } = model;
+  const mutationDisabled = store.isMutating ? "disabled" : "";
   const visibleEpics = getVisibleEpics();
   const visibleTasks = getVisibleTasks();
   const selectedTask = getSelectedTask() ?? visibleTasks[0] ?? null;
@@ -757,7 +812,7 @@ function renderBoard(model) {
         <section class="board-legend">
           <span class="board-chip">All epics by default</span>
           <span class="board-chip">${visibleTasks.length} visible tasks</span>
-          ${store.isMutating ? `<span class="board-chip">Saving…</span>` : ""}
+            ${store.isMutating ? `<span class="board-chip">Saving…</span>` : ""}
         </section>
 
         <section class="board-epics" role="listbox" aria-label="Epics" tabindex="0">
@@ -778,7 +833,7 @@ function renderBoard(model) {
             ${VIEW_MODES.map((view) => `<button class="board-tab" type="button" role="tab" aria-selected="${store.view === view}" data-view="${view}">${view === "kanban" ? "Kanban" : "List"}</button>`).join("")}
           </div>
           <div class="board-legend">
-            <span class="board-chip">Drag cards across columns</span>
+         <span class="board-chip">Drag cards across columns</span>
             <span class="board-chip">Inline edit in list view</span>
             <span class="board-chip">Drawer edits stay live</span>
           </div>
@@ -802,7 +857,7 @@ function renderBoard(model) {
       </section>
 
       <aside class="board-panel board-drawer" aria-label="Task drawer">
-        ${selectedTask ? renderDrawer(selectedTask, store.snapshot.epics, store.snapshot) : renderDrawerEmpty()}
+         ${selectedTask ? renderDrawer(selectedTask, store.snapshot.epics, store.snapshot, mutationDisabled) : renderDrawerEmpty()}
       </aside>
     </div>
   `;
@@ -890,6 +945,9 @@ function attachInteractions(model, api) {
   document.querySelectorAll("[data-task-form]").forEach((form) => {
     form.addEventListener("submit", (event) => {
       event.preventDefault();
+      if (store.isMutating) {
+        return;
+      }
       const taskId = form.dataset.taskForm;
       const formData = new FormData(form);
       const updates = {
@@ -904,6 +962,9 @@ function attachInteractions(model, api) {
   document.querySelectorAll("[data-subtask-form]").forEach((form) => {
     form.addEventListener("submit", (event) => {
       event.preventDefault();
+      if (store.isMutating) {
+        return;
+      }
       const subtaskId = form.dataset.subtaskForm;
       const formData = new FormData(form);
       const updates = {
@@ -918,6 +979,9 @@ function attachInteractions(model, api) {
   document.querySelectorAll("[data-dependency-form]").forEach((form) => {
     form.addEventListener("submit", (event) => {
       event.preventDefault();
+      if (store.isMutating) {
+        return;
+      }
       const sourceId = form.dataset.dependencyForm;
       const formData = new FormData(form);
       const dependsOnId = String(formData.get("dependsOnId") || "").trim();
@@ -934,6 +998,9 @@ function attachInteractions(model, api) {
 
   document.querySelectorAll("[data-remove-dependency-source]").forEach((button) => {
     button.addEventListener("click", () => {
+      if (store.isMutating) {
+        return;
+      }
       const sourceId = button.dataset.removeDependencySource;
       const dependsOnId = button.dataset.removeDependencyTarget;
       api.removeDependency(sourceId, dependsOnId, (snapshot) => removeDependencyInSnapshot(snapshot, sourceId, dependsOnId));
@@ -942,6 +1009,10 @@ function attachInteractions(model, api) {
 
   document.querySelectorAll("[data-draggable-task]").forEach((card) => {
     card.addEventListener("dragstart", (event) => {
+      if (store.isMutating) {
+        event.preventDefault();
+        return;
+      }
       const taskId = card.dataset.taskId;
       if (!taskId) {
         return;
@@ -957,6 +1028,9 @@ function attachInteractions(model, api) {
     });
     column.addEventListener("drop", (event) => {
       event.preventDefault();
+      if (store.isMutating) {
+        return;
+      }
       const taskId = event.dataTransfer?.getData("text/task-id") || event.dataTransfer?.getData("text/plain");
       const nextStatus = column.dataset.dropStatus;
       const task = getTaskById(taskId);
@@ -1024,10 +1098,33 @@ function attachInteractions(model, api) {
   };
 }
 
-function boot() {
+async function boot() {
   try {
     applyTheme(readThemePreference());
-    const snapshot = normalizeSnapshot(readJsonScript("trekoon-board-snapshot") ?? {});
+    const runtimeSession = resolveRuntimeSession();
+    if (runtimeSession.shouldScrubAddressBar) {
+      scrubTokenFromAddressBar();
+    }
+
+    const headers = new Headers();
+    if (runtimeSession.token.length > 0) {
+      headers.set("authorization", `Bearer ${runtimeSession.token}`);
+    }
+
+    let snapshotPayload = readJsonScript("trekoon-board-snapshot") ?? {};
+    if (runtimeSession.token.length > 0) {
+      const response = await fetch("/api/snapshot", {
+        headers,
+      });
+      const payload = await response.json();
+      if (!payload?.ok) {
+        const message = payload?.error?.message || "Board request failed";
+        throw new Error(message);
+      }
+      snapshotPayload = payload?.data?.snapshot ?? {};
+    }
+
+    const snapshot = normalizeSnapshot(snapshotPayload);
 
     if (snapshot.epics.length === 0 && snapshot.tasks.length === 0) {
       appElement.innerHTML = `
