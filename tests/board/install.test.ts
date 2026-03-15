@@ -56,12 +56,14 @@ describe("board install", (): void => {
       assetVersion: string;
       entryFile: string;
       files: string[];
+      assetDigest: string;
     };
     expect(manifest).toEqual({
       contractVersion: BOARD_ASSET_CONTRACT_VERSION,
       assetVersion: "1.2.3",
       entryFile: TREKOON_BOARD_ENTRY_FILENAME,
       files: ["index.html", "static/app.js"],
+      assetDigest: expect.any(String),
     });
 
     const second = ensureBoardInstalled({
@@ -117,6 +119,7 @@ describe("board install", (): void => {
           assetVersion: "0.9.0",
           entryFile: TREKOON_BOARD_ENTRY_FILENAME,
           files: ["index.html", "static/app.js"],
+          assetDigest: initial.manifest.assetDigest,
         },
         null,
         2,
@@ -132,6 +135,30 @@ describe("board install", (): void => {
 
     expect(updated.action).toBe("updated");
     expect(readFileSync(updated.paths.manifestFile, "utf8")).toContain('"assetVersion": "1.0.0"');
+  });
+
+  test("updates when bundled asset contents change without a version bump", (): void => {
+    const workspace: string = createWorkspace();
+    const bundledAssetRoot: string = join(workspace, "bundled-assets");
+    createBundledAssets(bundledAssetRoot);
+
+    const initial = ensureBoardInstalled({
+      workingDirectory: workspace,
+      bundledAssetRoot,
+      assetVersion: "1.2.3",
+    });
+
+    writeFileSync(join(bundledAssetRoot, "static", "app.js"), "console.log('board v2');\n", "utf8");
+
+    const updated = updateBoardInstallation({
+      workingDirectory: workspace,
+      bundledAssetRoot,
+      assetVersion: "1.2.3",
+    });
+
+    expect(updated.action).toBe("updated");
+    expect(updated.manifest.assetDigest).not.toBe(initial.manifest.assetDigest);
+    expect(readFileSync(join(updated.paths.runtimeRoot, "static", "app.js"), "utf8")).toContain("board v2");
   });
 
   test("fails deterministically when bundled entry asset is missing", (): void => {
