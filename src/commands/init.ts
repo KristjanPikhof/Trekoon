@@ -1,5 +1,7 @@
 import { unexpectedFailureResult } from "./error-utils";
 
+import { ensureBoardInstalled } from "../board/install";
+import { BoardInstallError } from "../board/types";
 import { DomainError } from "../domain/types";
 import { failResult, okResult } from "../io/output";
 import { type CliContext, type CliResult } from "../runtime/command-types";
@@ -80,6 +82,10 @@ export async function runInit(context: CliContext): Promise<CliResult> {
   try {
     database = openTrekoonDatabase(context.cwd);
     const diagnostics = database.diagnostics;
+    const board = ensureBoardInstalled({
+      workingDirectory: context.cwd,
+      bundledAssetRoot: process.env.TREKOON_BOARD_ASSET_ROOT,
+    });
     const humanLines: string[] = [
       "Trekoon initialized.",
       `Storage mode: ${diagnostics.storageMode}`,
@@ -87,6 +93,8 @@ export async function runInit(context: CliContext): Promise<CliResult> {
       `Shared storage root: ${diagnostics.sharedStorageRoot}`,
       `Storage directory: ${database.paths.storageDir}`,
       `Database file: ${database.paths.databaseFile}`,
+      `Board assets: ${board.action}`,
+      `Board runtime root: ${board.paths.runtimeRoot}`,
       ...buildRecoverySummary(database),
     ];
 
@@ -101,6 +109,11 @@ export async function runInit(context: CliContext): Promise<CliResult> {
         sharedStorageRoot: diagnostics.sharedStorageRoot,
         storageDir: database.paths.storageDir,
         databaseFile: database.paths.databaseFile,
+        board: {
+          action: board.action,
+          paths: board.paths,
+          manifest: board.manifest,
+        },
         legacyStateDetected: diagnostics.legacyStateDetected,
         recoveryRequired: diagnostics.recoveryRequired,
         recoveryStatus: diagnostics.recoveryStatus,
@@ -118,6 +131,21 @@ export async function runInit(context: CliContext): Promise<CliResult> {
       if (recoveryFailure !== null) {
         return recoveryFailure;
       }
+    }
+
+    if (error instanceof BoardInstallError) {
+      return failResult({
+        command: "init",
+        human: error.message,
+        data: {
+          code: error.code,
+          ...error.details,
+        },
+        error: {
+          code: error.code,
+          message: error.message,
+        },
+      });
     }
 
     return unexpectedFailureResult(error, {
