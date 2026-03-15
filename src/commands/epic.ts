@@ -49,6 +49,7 @@ const CREATE_OPTIONS = ["title", "t", "description", "d", "status", "s", "task",
 const SEARCH_OPTIONS = ["fields", "preview"] as const;
 const REPLACE_OPTIONS = ["search", "replace", "fields", "preview", "apply"] as const;
 const EXPAND_OPTIONS = ["task", "subtask", "dep"] as const;
+const UPDATE_OPTIONS = ["all", "ids", "append", "description", "d", "status", "s", "title", "t"] as const;
 const STATUS_CASCADE_UPDATE_STATUSES = ["done", "todo"] as const;
 
 function parseStatusCsv(rawStatuses: string | undefined): string[] | undefined {
@@ -1207,6 +1208,16 @@ export async function runEpic(context: CliContext): Promise<CliResult> {
         });
       }
       case "update": {
+        const updateUnknownOption = findUnknownOption(parsed, UPDATE_OPTIONS);
+        if (updateUnknownOption !== undefined) {
+          return unknownOption("epic.update", updateUnknownOption, UPDATE_OPTIONS);
+        }
+
+        const unexpectedUpdatePositionals = readUnexpectedPositionals(parsed, 2);
+        if (unexpectedUpdatePositionals.length > 0) {
+          return failUnexpectedPositionals("epic.update", unexpectedUpdatePositionals);
+        }
+
         const missingUpdateOption =
           readMissingOptionValue(parsed.missingOptionValues, "ids") ??
           readMissingOptionValue(parsed.missingOptionValues, "append") ??
