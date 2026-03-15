@@ -58,8 +58,10 @@ function toBoardRouteError(error: unknown): BoardRouteError {
     const status =
       error.code === "not_found"
         ? 404
-        : error.code === "invalid_input" || error.code === "invalid_dependency" || error.code === "dependency_blocked"
-          ? 409
+        : error.code === "invalid_input"
+          ? 400
+          : error.code === "invalid_dependency" || error.code === "dependency_blocked"
+            ? 409
           : 400;
     return {
       status,
@@ -123,7 +125,16 @@ async function parseJsonBody(request: Request): Promise<Record<string, unknown>>
     });
   }
 
-  const body = await request.json();
+  let body: unknown;
+  try {
+    body = await request.json();
+  } catch {
+    throw new DomainError({
+      code: "invalid_input",
+      message: "Malformed JSON request body",
+    });
+  }
+
   if (!body || typeof body !== "object" || Array.isArray(body)) {
     throw new DomainError({
       code: "invalid_input",
