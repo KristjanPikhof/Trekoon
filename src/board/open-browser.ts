@@ -9,10 +9,11 @@ export interface OpenBrowserResult {
 }
 
 type BrowserLaunchEvent = "error" | "exit" | "spawn";
+type BrowserLaunchListener = (eventData?: Error | number | null) => void;
 
 interface BrowserLaunchHandle {
-  once(event: BrowserLaunchEvent, listener: (error?: Error) => void): BrowserLaunchHandle;
-  removeListener(event: BrowserLaunchEvent, listener: (error?: Error) => void): BrowserLaunchHandle;
+  once(event: BrowserLaunchEvent, listener: BrowserLaunchListener): BrowserLaunchHandle;
+  removeListener(event: BrowserLaunchEvent, listener: BrowserLaunchListener): BrowserLaunchHandle;
   unref(): void;
 }
 
@@ -88,18 +89,18 @@ export async function openBoardInBrowser(url: string): Promise<OpenBrowserResult
         setTimeout(resolveLaunchSuccess, 0);
       };
 
-      const handleError = (error?: Error): void => {
+      const handleError = (eventData?: Error | number | null): void => {
         complete({
           launched: false,
           url,
           command: launch.command,
           args: launch.args,
-          errorMessage: error?.message ?? "Unknown browser launch failure",
+          errorMessage: eventData instanceof Error ? eventData.message : "Unknown browser launch failure",
         });
       };
 
-      const handleExit = (error?: Error): void => {
-        const exitCode = typeof error === "number" ? error : Number.NaN;
+      const handleExit = (eventData?: Error | number | null): void => {
+        const exitCode = typeof eventData === "number" ? eventData : Number.NaN;
 
         if (!spawned || exitCode === 0 || Number.isNaN(exitCode)) {
           return;
