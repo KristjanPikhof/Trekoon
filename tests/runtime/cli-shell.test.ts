@@ -12,6 +12,7 @@ import { migrateDatabase } from "../../src/storage/migrations";
 import { resolveLegacyWorktreeDatabaseFile, resolveStoragePaths } from "../../src/storage/path";
 
 const tempDirs: string[] = [];
+const originalBoardAssetRoot = process.env.TREKOON_BOARD_ASSET_ROOT;
 
 function createWorkspace(): string {
   const workspace = mkdtempSync(join(tmpdir(), "trekoon-shell-"));
@@ -59,7 +60,14 @@ function createLegacyDatabaseFile(workspace: string, title: string): string {
   return realpathSync(databaseFile);
 }
 
+function createBoardAssets(rootPath: string): void {
+  mkdirSync(join(rootPath, "assets"), { recursive: true });
+  writeFileSync(join(rootPath, "index.html"), "<html><body>board</body></html>\n", "utf8");
+  writeFileSync(join(rootPath, "assets", "app.js"), "console.log('board');\n", "utf8");
+}
+
 afterEach((): void => {
+  process.env.TREKOON_BOARD_ASSET_ROOT = originalBoardAssetRoot;
   while (tempDirs.length > 0) {
     const next = tempDirs.pop();
     if (next) {
@@ -180,6 +188,24 @@ describe("cli shell dispatch", (): void => {
     expect(wipeData.text).toContain("same .trekoon state for every linked worktree");
     expect(wipeData.text).toContain("--yes  Required confirmation for destructive repo-wide removal");
     expect(wipeData.text).toContain("Do not use wipe to fix gitignore mistakes");
+  });
+
+  test("dispatches board update and board help", async (): Promise<void> => {
+    const workspace = createWorkspace();
+    const assetRoot = createWorkspace();
+    createBoardAssets(assetRoot);
+    process.env.TREKOON_BOARD_ASSET_ROOT = assetRoot;
+
+    const boardHelp = await executeShell(parseInvocation(["help", "board"], { stdoutIsTTY: false }), workspace);
+    const boardUpdate = await executeShell(parseInvocation(["board", "update"], { stdoutIsTTY: false }), workspace);
+
+    expect(boardHelp.ok).toBeTrue();
+    expect((boardHelp.data as { topic: string; text: string }).topic).toBe("board");
+    expect((boardHelp.data as { text: string }).text).toContain("trekoon board <open|update>");
+
+    expect(boardUpdate.ok).toBeTrue();
+    expect(boardUpdate.command).toBe("board.update");
+    expect((boardUpdate.data as { action: string }).action).toBe("updated");
   });
 
   test("dispatches skills install and creates project-local artifact", async (): Promise<void> => {
