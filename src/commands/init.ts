@@ -82,9 +82,10 @@ export async function runInit(context: CliContext): Promise<CliResult> {
   try {
     database = openTrekoonDatabase(context.cwd);
     const diagnostics = database.diagnostics;
+    const bundledAssetRoot: string | undefined = process.env.TREKOON_BOARD_ASSET_ROOT;
     const board = ensureBoardInstalled({
       workingDirectory: context.cwd,
-      bundledAssetRoot: process.env.TREKOON_BOARD_ASSET_ROOT,
+      ...(bundledAssetRoot === undefined ? {} : { bundledAssetRoot }),
     });
     const humanLines: string[] = [
       "Trekoon initialized.",
