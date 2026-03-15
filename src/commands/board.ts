@@ -9,7 +9,7 @@ import { type CliContext, type CliResult } from "../runtime/command-types";
 
 type EnsureBoardInstalledFn = (options: EnsureBoardInstalledOptions) => ReturnType<typeof ensureBoardInstalled>;
 type StartBoardServerFn = (options: { cwd: string }) => BoardServerInfo;
-type OpenBoardInBrowserFn = (url: string) => OpenBrowserResult;
+type OpenBoardInBrowserFn = (url: string) => Promise<OpenBrowserResult> | OpenBrowserResult;
 
 let ensureInstalledImpl: EnsureBoardInstalledFn = ensureBoardInstalled;
 let updateInstalledImpl: EnsureBoardInstalledFn = updateBoardInstallation;
@@ -117,7 +117,7 @@ export async function runBoard(context: CliContext): Promise<CliResult> {
       case "open": {
         const install = ensureInstalledImpl(boardInstallOptions(context));
         const server = startBoardServerImpl({ cwd: context.cwd });
-        const launch = openBoardInBrowserImpl(server.url);
+        const launch = await openBoardInBrowserImpl(server.url);
         return okResult({
           command: "board.open",
           human: [
