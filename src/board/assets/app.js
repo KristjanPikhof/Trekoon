@@ -970,8 +970,14 @@ function renderBoard(model) {
   const selectedTask = boardState.selectedTask;
   const selectedSubtask = boardState.selectedSubtask;
   const screen = boardState.screen;
-  const useTaskModal = Boolean(selectedTask && store.view === "kanban");
+  const compactViewport = isCompactViewport();
+  const useTaskModal = Boolean(selectedTask && (store.view === "kanban" || compactViewport));
   const currentNav = selectedTask ? "detail" : screen === "tasks" ? "board" : "epics";
+  const primarySurfaceLabel = currentNav === "detail"
+    ? "Detail"
+    : screen === "tasks"
+      ? "Board"
+      : "Epics";
   const ownerStack = resolveScrollAuthorityStack(boardState, { useTaskModal });
 
   const columnsMarkup = STATUS_ORDER.map((status) => {
@@ -1011,6 +1017,7 @@ function renderBoard(model) {
     buttonClasses,
     currentNav,
     escapeHtml,
+    isCompactViewport: compactViewport,
     neutralChipClasses,
     renderIcon,
     screen,
@@ -1058,7 +1065,9 @@ function renderBoard(model) {
         ${renderWorkspaceHeader({
           escapeHtml,
           fieldClasses,
+          isCompactViewport: compactViewport,
           neutralChipClasses,
+          primarySurfaceLabel,
           renderEpicCountSummary,
           renderIcon,
           renderStatusBadge,
@@ -1105,6 +1114,7 @@ function renderBoard(model) {
           ${renderTaskSurface(selectedTask, store.snapshot.epics, store.snapshot, store.isMutating, {
             closeLabel: "Close inspector",
             containerClassName: "board-detail-surface board-detail-surface--inspector",
+            detailEyebrow: "Task inspector",
             scrollSurface: "inspector",
           })}
         </aside>
