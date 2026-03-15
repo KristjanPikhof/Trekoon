@@ -129,6 +129,27 @@ describe("board routes", (): void => {
     }
   });
 
+  test("accepts x-trekoon-token auth for board API requests", async (): Promise<void> => {
+    const cwd = createWorkspace();
+    const storage = openTrekoonDatabase(cwd);
+
+    try {
+      const handler = createBoardApiHandler({ db: storage.db, cwd, token: "secret-token" });
+      const response = await handler(new Request("http://board.test/api/snapshot", {
+        headers: {
+          "x-trekoon-token": "secret-token",
+        },
+      }));
+      const body = await response.json() as { ok: boolean; data: { snapshot: { epics: unknown[] } } };
+
+      expect(response.status).toBe(200);
+      expect(body.ok).toBeTrue();
+      expect(Array.isArray(body.data.snapshot.epics)).toBeTrue();
+    } finally {
+      storage.close();
+    }
+  });
+
   test("returns readable dependency blocked errors for mutation routes", async (): Promise<void> => {
     const cwd = createWorkspace();
     const storage = openTrekoonDatabase(cwd);
@@ -497,6 +518,102 @@ describe("board routes", (): void => {
         deleted: true,
       }));
       expect(deleteBody.data.snapshot.subtasks.some((subtask) => subtask.id === createBody.data.subtask.id)).toBeFalse();
+    } finally {
+      storage.close();
+    }
+  });
+
+  test("keeps dependency snapshot relationships consistent across add and remove", async (): Promise<void> => {
+    const cwd = createWorkspace();
+    const storage = openTrekoonDatabase(cwd);
+
+    try {
+      const mutations = new MutationService(storage.db, cwd);
+      const epic = mutations.createEpic({ title: "Roadmap", description: "Plan release" });
+      const blocker = mutations.createTask({ epicId: epic.id, title: "Stabilize shell", description: "Guard overlays" });
+      const task = mutations.createTask({ epicId: epic.id, title: "Verify board", description: "Check search and scroll" });
+
+      const handler = createBoardApiHandler({ db: storage.db, cwd, token: "secret-token" });
+
+      const addResponse = await handler(new Request("http://board.test/api/dependencies?token=secret-token", {
+        method: "POST",
+        headers: {
+          "content-type": "application/json",
+        },
+        body: JSON.stringify({
+          sourceId: task.id,
+          dependsOnId: blocker.id,
+        }),
+      }));
+
+      const addBody = await addResponse.json() as {
+        ok: boolean;
+        data: {
+          dependency: { id: string; sourceId: string; dependsOnId: string };
+          snapshot: {
+            tasks: Array<{
+              id: string;
+              dependencyIds: string[];
+              dependentIds: string[];
+              counts: { dependencies: number; dependents: number };
+            }>;
+            counts: { dependencies: number };
+          };
+        };
+      };
+
+      expect(addResponse.status).toBe(201);
+      expect(addBody.ok).toBeTrue();
+      expect(addBody.data.dependency).toEqual(expect.objectContaining({
+        sourceId: task.id,
+        dependsOnId: blocker.id,
+      }));
+      expect(addBody.data.snapshot.tasks).toContainEqual(expect.objectContaining({
+        id: task.id,
+        dependencyIds: [addBody.data.dependency.id],
+        counts: expect.objectContaining({ dependencies: 1 }),
+      }));
+      expect(addBody.data.snapshot.tasks).toContainEqual(expect.objectContaining({
+        id: blocker.id,
+        dependentIds: [addBody.data.dependency.id],
+        counts: expect.objectContaining({ dependents: 1 }),
+      }));
+      expect(addBody.data.snapshot.counts.dependencies).toBe(1);
+
+      const removeResponse = await handler(new Request(`http://board.test/api/dependencies?token=secret-token&sourceId=${encodeURIComponent(task.id)}&dependsOnId=${encodeURIComponent(blocker.id)}`, {
+        method: "DELETE",
+      }));
+
+      const removeBody = await removeResponse.json() as {
+        ok: boolean;
+        data: {
+          removed: number;
+          snapshot: {
+            tasks: Array<{
+              id: string;
+              dependencyIds: string[];
+              dependentIds: string[];
+              counts: { dependencies: number; dependents: number };
+            }>;
+            counts: { dependencies: number };
+          };
+        };
+      };
+
+      expect(removeResponse.status).toBe(200);
+      expect(removeBody.ok).toBeTrue();
+      expect(removeBody.data.removed).toBe(1);
+      expect(removeBody.data.snapshot.tasks).toContainEqual(expect.objectContaining({
+        id: task.id,
+        dependencyIds: [],
+        counts: expect.objectContaining({ dependencies: 0 }),
+      }));
+      expect(removeBody.data.snapshot.tasks).toContainEqual(expect.objectContaining({
+        id: blocker.id,
+        dependentIds: [],
+        counts: expect.objectContaining({ dependents: 0 }),
+      }));
+      expect(removeBody.data.snapshot.counts.dependencies).toBe(0);
     } finally {
       storage.close();
     }
