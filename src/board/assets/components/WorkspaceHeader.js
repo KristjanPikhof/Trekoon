@@ -7,6 +7,7 @@ export function renderWorkspaceHeader(context) {
     renderIcon,
     renderStatusBadge,
     sectionLabelClasses,
+    searchScope,
     selectedEpic,
     snapshotEpics,
     store,
@@ -19,16 +20,20 @@ export function renderWorkspaceHeader(context) {
     <header class="board-section-head board-section-head--workspace board-workspace-header">
       <div class="board-workspace-header__intro">
         <div class="board-workspace-header__title-block">
-          <span class="${sectionLabelClasses()}">Selected epic</span>
+          <span class="${sectionLabelClasses()}">${escapeHtml(searchScope?.summary ?? "Selected epic")}</span>
           <div class="board-workspace-header__title-row">
             <h2>${escapeHtml(selectedEpic.title)}</h2>
             ${renderStatusBadge(selectedEpic.status)}
+          </div>
+          <div class="mt-3 flex flex-wrap gap-2">
+            <span class="${neutralChipClasses()}">${escapeHtml(searchScope?.detail ?? "")}</span>
+            <span class="${neutralChipClasses()}">${visibleTasks.length} visible task${visibleTasks.length === 1 ? "" : "s"}</span>
           </div>
         </div>
         <details class="board-workspace-header__details">
           <summary>
             ${renderIcon("subject", "text-[18px]")}
-            <span>Epic notes</span>
+            <span>${searchScope?.kind === "epic_search" ? "Epic scope" : "Epic notes"}</span>
           </summary>
           <p>${escapeHtml(description)}</p>
         </details>
@@ -51,7 +56,7 @@ export function renderWorkspaceHeader(context) {
           </div>
           <div class="board-legend board-workspace-header__legend">
             ${renderEpicCountSummary(selectedEpic)}
-            <span class="${neutralChipClasses()}">${visibleTasks.length} visible</span>
+            <span class="${neutralChipClasses()}">${escapeHtml(searchScope?.summary ?? "Current scope")}</span>
             ${store.view === "kanban" ? `<span class="${neutralChipClasses()}">Drag to move</span>` : ""}
             ${store.isMutating ? `<span class="${neutralChipClasses()}">Saving…</span>` : ""}
           </div>
