@@ -532,11 +532,43 @@ function renderTaskMeta(task, includeStatus = false) {
   `;
 }
 
+function hasLongTaskTitle(title) {
+  if (!title) {
+    return false;
+  }
+
+  const trimmed = title.trim();
+  return trimmed.length > 72 || trimmed.split("\n").length > 2;
+}
+
+function renderTaskTextDisclosure(description, options = {}) {
+  const {
+    buttonLabel = "task description",
+    className = "",
+    lineClamp = 2,
+  } = options;
+
+  if (!description || description.trim().length === 0) {
+    return "";
+  }
+
+  return renderClampedText({
+    buttonLabel,
+    className,
+    escapeHtml,
+    lineClamp,
+    renderIcon,
+    text: description,
+  });
+}
+
 function renderTaskCard(task, selected, isMutating = false) {
+  const longTitle = hasLongTaskTitle(task.title);
+
   return `
     <article
       class="board-task-card ${cx(
-        "rounded-3xl border p-4 transition duration-200",
+        "rounded-[22px] border p-3.5 transition duration-200 lg:p-4",
         "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--board-border-strong)] focus-visible:ring-offset-2 focus-visible:ring-offset-[var(--board-surface)]",
         selected
           ? "border-[var(--board-border-strong)] bg-[var(--board-accent-soft)] shadow-focus"
@@ -549,22 +581,33 @@ function renderTaskCard(task, selected, isMutating = false) {
       role="button"
       aria-pressed="${selected}"
     >
-      <div class="flex items-start justify-between gap-3">
-        ${renderStatusBadge(task.status)}
-        <span class="text-xs uppercase tracking-[0.16em] text-[var(--board-text-soft)]">Task</span>
+      <div class="board-task-card__header flex items-start justify-between gap-3">
+        <div class="flex min-w-0 flex-wrap items-center gap-2">
+          ${renderStatusBadge(task.status)}
+          <span class="board-task-card__eyebrow text-[10px] font-semibold uppercase tracking-[0.18em] text-[var(--board-text-soft)]">${escapeHtml(formatDate(task.updatedAt))}</span>
+        </div>
+        ${longTitle ? `<span class="board-task-card__cue ${neutralChipClasses()}">Open for full title</span>` : ""}
       </div>
-      <strong class="mt-4 block text-base font-semibold leading-6 text-[var(--board-text)]">${escapeHtml(task.title)}</strong>
-      ${renderDescriptionPreview(task.description, "mt-2 overflow-hidden text-sm leading-6 text-[var(--board-text-muted)] [display:-webkit-box] [-webkit-box-orient:vertical] [-webkit-line-clamp:3]")}
-      <div class="mt-4 flex flex-wrap gap-2">${renderTaskMeta(task)}</div>
+      <div class="board-task-card__body mt-3 grid gap-3">
+        <strong class="board-task-card__title block text-sm font-semibold leading-5 text-[var(--board-text)] sm:text-[0.95rem]">${escapeHtml(task.title)}</strong>
+        ${renderTaskTextDisclosure(task.description, {
+          buttonLabel: "task description",
+          className: "board-task-card__description text-sm leading-5 text-[var(--board-text-muted)]",
+          lineClamp: 2,
+        })}
+      </div>
+      <div class="board-task-card__footer mt-3 flex flex-wrap items-center gap-2.5">${renderTaskMeta(task)}</div>
     </article>
   `;
 }
 
 function renderListRow(task, selected) {
+  const longTitle = hasLongTaskTitle(task.title);
+
   return `
     <article
       class="board-list-row ${cx(
-        "grid gap-4 rounded-3xl border px-4 py-4 transition duration-200 md:grid-cols-[minmax(0,1.8fr)_140px_90px_170px] md:items-center",
+        "grid gap-3 rounded-[22px] border px-4 py-3 transition duration-200 lg:grid-cols-[minmax(0,2fr)_150px_minmax(0,210px)_110px] lg:items-start",
         "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--board-border-strong)] focus-visible:ring-offset-2 focus-visible:ring-offset-[var(--board-surface)]",
         selected
           ? "border-[var(--board-border-strong)] bg-[var(--board-accent-soft)] shadow-focus"
@@ -576,12 +619,19 @@ function renderListRow(task, selected) {
       aria-pressed="${selected}"
     >
       <div class="board-list-row__summary min-w-0">
-        <strong class="block text-sm font-semibold text-[var(--board-text)] sm:text-base">${escapeHtml(task.title)}</strong>
-        ${renderDescriptionPreview(task.description)}
+        <div class="board-list-row__summary-head flex min-w-0 flex-wrap items-start justify-between gap-2">
+          <strong class="board-list-row__title block min-w-0 text-sm font-semibold text-[var(--board-text)] sm:text-[0.98rem]">${escapeHtml(task.title)}</strong>
+          ${longTitle ? `<span class="board-list-row__cue ${neutralChipClasses()}">Open</span>` : ""}
+        </div>
+        ${renderTaskTextDisclosure(task.description, {
+          buttonLabel: "task row description",
+          className: "board-list-row__description mt-2 text-sm leading-5 text-[var(--board-text-muted)]",
+          lineClamp: 2,
+        })}
       </div>
-      <span>${renderStatusBadge(task.status)}</span>
-      <span class="text-sm font-medium text-[var(--board-text-muted)]">${task.subtasks.length}</span>
-      <span class="text-sm text-[var(--board-text-muted)]">${escapeHtml(formatDate(task.updatedAt))}</span>
+      <div class="board-list-row__status">${renderStatusBadge(task.status)}</div>
+      <div class="board-list-row__meta flex min-w-0 flex-wrap gap-2">${renderTaskMeta(task)}</div>
+      <span class="board-list-row__updated text-sm text-[var(--board-text-muted)]">${escapeHtml(formatDate(task.updatedAt))}</span>
     </article>
   `;
 }
@@ -901,17 +951,18 @@ function renderBoard(model) {
           .join("");
 
     return `
-      <section class="board-column ${secondaryPanelClasses("flex min-h-[22rem] min-w-0 flex-col p-3 sm:p-4 md:w-[calc(50%-0.5rem)] 2xl:w-[calc(25%-0.75rem)]")}" aria-labelledby="column-${status}">
-        <header class="flex items-center justify-between gap-3 border-b border-[var(--board-border)] pb-3">
-          <div>
+      <section class="board-column board-column--dense ${secondaryPanelClasses("flex min-h-[20rem] min-w-0 flex-col p-3")}" aria-labelledby="column-${status}">
+        <header class="board-column__header flex items-start justify-between gap-3 border-b border-[var(--board-border)] pb-3">
+          <div class="min-w-0">
             <p class="${sectionLabelClasses()}">${escapeHtml(columnTitle)}</p>
-            <div class="mt-2">${renderStatusBadge(status, `${columnTasks.length} item${columnTasks.length === 1 ? "" : "s"}`)}</div>
+            <div class="mt-2 flex flex-wrap items-center gap-2">
+              ${renderStatusBadge(status)}
+              <span class="${neutralChipClasses()}">${columnTasks.length} item${columnTasks.length === 1 ? "" : "s"}</span>
+            </div>
           </div>
-          <div class="flex h-9 w-9 items-center justify-center rounded-2xl bg-white/[0.04] text-[var(--board-text-soft)]">
-            ${renderIcon("add", "text-[18px]")}
-          </div>
+          ${columnTasks.length > 0 ? `<span class="board-column__count text-xs font-medium text-[var(--board-text-soft)]">${columnTasks.length === 1 ? "1 task" : `${columnTasks.length} tasks`}</span>` : ""}
         </header>
-        <div class="board-column__tasks mt-4 grid min-h-0 flex-1 content-start gap-3 overflow-auto overscroll-contain pr-1" id="column-${status}" data-drop-status="${escapeHtml(status)}">${content}</div>
+        <div class="board-column__tasks mt-3 grid min-h-0 flex-1 content-start gap-2.5 overflow-auto pr-1 overscroll-contain" id="column-${status}" data-drop-status="${escapeHtml(status)}">${content}</div>
       </section>
     `;
   }).join("");
@@ -1000,13 +1051,13 @@ function renderBoard(model) {
 
         <div class="board-content mt-6 h-full min-h-0 min-w-0 overflow-hidden">
           ${store.view === "kanban"
-            ? `<div class="board-kanban flex h-full min-h-0 min-w-0 flex-wrap content-start gap-4 overflow-y-auto pr-1">${columnsMarkup}</div>`
+            ? `<div class="board-kanban board-kanban--dense h-full min-h-0 min-w-0 overflow-y-auto pr-1">${columnsMarkup}</div>`
             : `
-                <div class="board-list grid h-full min-h-0 gap-4 grid-rows-[auto_1fr]">
-                  <div class="board-list__header hidden gap-3 px-1 text-[11px] font-semibold uppercase tracking-[0.16em] text-[var(--board-text-soft)] md:grid md:grid-cols-[minmax(0,1.8fr)_140px_90px_170px]">
+                <div class="board-list board-list--dense grid h-full min-h-0 gap-4 grid-rows-[auto_1fr]">
+                  <div class="board-list__header hidden gap-3 px-1 text-[11px] font-semibold uppercase tracking-[0.16em] text-[var(--board-text-soft)] lg:grid lg:grid-cols-[minmax(0,2fr)_150px_minmax(0,210px)_110px]">
                     <span>Task</span>
                     <span>Status</span>
-                    <span>Subtasks</span>
+                    <span>Workflow</span>
                     <span>Updated</span>
                   </div>
                   <div class="board-list__rows min-h-0 space-y-3 overflow-auto pr-1 overscroll-contain">${listRows}</div>
