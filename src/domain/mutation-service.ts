@@ -18,6 +18,7 @@ import {
   type SearchField,
   type SearchNode,
   type SearchSummary,
+  type StatusCascadeBlocker,
   type StatusCascadePlan,
   type SubtaskRecord,
   type TaskRecord,
@@ -399,6 +400,45 @@ export class MutationService {
       }
       return removed;
     })();
+  }
+
+  describeError(error: unknown): string | undefined {
+    if (!(error instanceof DomainError) || error.code !== "dependency_blocked") {
+      return undefined;
+    }
+
+    const details = error.details as Record<string, unknown> | undefined;
+    const unresolvedDependencies = Array.isArray(details?.unresolvedDependencies)
+      ? details.unresolvedDependencies
+      : [];
+    if (unresolvedDependencies.length > 0) {
+      const blockers = unresolvedDependencies
+        .map((dependency) => {
+          if (!dependency || typeof dependency !== "object") {
+            return null;
+          }
+
+          const id = typeof dependency.id === "string" ? dependency.id : "unknown";
+          const kind = typeof dependency.kind === "string" ? dependency.kind : "dependency";
+          const status = typeof dependency.status === "string" ? dependency.status : "unknown";
+          return `${kind} ${id} is still ${status}`;
+        })
+        .filter((value): value is string => value !== null);
+
+      if (blockers.length > 0) {
+        return `Resolve dependencies first: ${blockers.join("; ")}.`;
+      }
+    }
+
+    const cascadeBlockers = Array.isArray(details?.blockers) ? details.blockers as StatusCascadeBlocker[] : [];
+    if (cascadeBlockers.length > 0) {
+      const blockers = cascadeBlockers.map((blocker) =>
+        `${blocker.sourceKind} ${blocker.sourceId} is blocked by ${blocker.dependsOnKind} ${blocker.dependsOnId} (${blocker.dependsOnStatus})`
+      );
+      return `Resolve dependencies first: ${blockers.join("; ")}.`;
+    }
+
+    return undefined;
   }
 
   previewEpicReplacement(
