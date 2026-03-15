@@ -1140,8 +1140,8 @@ function renderBoard(model) {
   });
 
   const tasksWorkspaceMarkup = selectedEpic ? `
-    <div class="board-root ${workspaceLayoutClass} ${selectedTask && !useTaskModal ? "has-detail" : ""} h-full flex-1 min-h-0 grid gap-4 xl:gap-5" data-scroll-surface="workspace">
-      <aside class="board-sidebar ${panelClasses("hidden h-full min-h-0 overflow-hidden p-4 xl:grid xl:grid-rows-[auto_1fr]")}" aria-label="Epic switcher">
+    <div class="board-root ${workspaceLayoutClass} ${selectedTask && !useTaskModal ? "has-detail" : ""} min-h-0 w-full grid gap-4 xl:gap-5" data-scroll-surface="workspace">
+      <aside class="board-sidebar ${panelClasses("hidden min-h-0 overflow-hidden p-4 xl:grid xl:grid-rows-[auto_1fr]")}" aria-label="Epic switcher">
         <header class="board-sidebar__header border-b border-[var(--board-border)] pb-4">
           <span class="${sectionLabelClasses()}">Epics</span>
           <h2 class="mt-2 text-lg font-semibold tracking-tight text-[var(--board-text)]">Switch epic</h2>
@@ -1154,7 +1154,7 @@ function renderBoard(model) {
         </div>
       </aside>
 
-      <section class="board-workspace ${panelClasses("grid h-full min-h-0 min-w-0 grid-rows-[auto_1fr] overflow-hidden p-5 sm:p-6")}" aria-label="Workspace">
+      <section class="board-workspace ${panelClasses("grid min-h-0 min-w-0 grid-rows-[auto_1fr] overflow-hidden p-5 sm:p-6")}" aria-label="Workspace">
         ${renderWorkspaceHeader({
           escapeHtml,
           fieldClasses,
@@ -1186,11 +1186,11 @@ function renderBoard(model) {
           visibleTasks,
         })}
 
-        <div class="board-content mt-6 h-full min-h-0 min-w-0 overflow-hidden">
+        <div class="board-content mt-6 min-h-0 min-w-0 overflow-hidden">
           ${store.view === "kanban"
-            ? `<div class="board-kanban board-kanban--dense h-full min-h-0 min-w-0 overflow-y-auto pr-1">${columnsMarkup}</div>`
+            ? `<div class="board-kanban board-kanban--dense min-h-0 min-w-0 overflow-y-auto pr-1">${columnsMarkup}</div>`
             : `
-                <div class="board-list board-list--dense grid h-full min-h-0 gap-4 grid-rows-[auto_1fr]">
+                <div class="board-list board-list--dense grid min-h-0 gap-4 grid-rows-[auto_1fr]">
                   <div class="board-list__header hidden gap-3 px-1 text-[11px] font-semibold uppercase tracking-[0.16em] text-[var(--board-text-soft)] lg:grid lg:grid-cols-[minmax(0,2fr)_150px_minmax(0,210px)_110px]">
                     <span>Task</span>
                     <span>Status</span>
@@ -1203,7 +1203,7 @@ function renderBoard(model) {
       </section>
 
       ${selectedTask && !useTaskModal ? `
-        <aside class="board-panel board-drawer board-detail-surface-frame is-open ${panelClasses("fixed inset-4 z-30 grid h-full min-h-0 overflow-hidden p-5 xl:static xl:inset-auto xl:max-h-full xl:p-5")}" aria-label="Task inspector">
+        <aside class="board-panel board-drawer board-detail-surface-frame is-open ${panelClasses("fixed inset-4 z-30 grid max-h-[calc(100dvh-2rem)] min-h-0 overflow-hidden p-5 xl:static xl:inset-auto xl:max-h-none xl:p-5")}" aria-label="Task inspector">
           ${renderTaskSurface(selectedTask, store.snapshot.epics, store.snapshot, store.isMutating, {
             closeLabel: "Close inspector",
             containerClassName: "board-detail-surface board-detail-surface--inspector",
@@ -1218,7 +1218,7 @@ function renderBoard(model) {
 
   appElement.innerHTML = `
     ${renderNotice(store.notice)}
-    <div class="board-layout ${screen === "tasks" ? "board-layout--workspace" : "board-layout--overview"} mx-auto flex w-full max-w-[1600px] flex-col gap-4 px-4 py-4 sm:px-6 sm:py-6 xl:px-8 ${screen === "tasks" ? "h-full min-h-0" : "min-h-screen"}" data-scroll-surface="page">
+    <div class="board-layout ${screen === "tasks" ? "board-layout--workspace" : "board-layout--overview"} mx-auto flex w-full max-w-[1600px] flex-col gap-4 px-4 py-4 sm:px-6 sm:py-6 xl:px-8 ${screen === "tasks" ? "min-h-0" : "min-h-screen"}" data-scroll-surface="page">
       ${topbarMarkup}
       ${screen === "tasks" ? tasksWorkspaceMarkup : epicsOverviewMarkup}
       ${selectedSubtask ? renderSubtaskModal(selectedSubtask, store.isMutating) : ""}
