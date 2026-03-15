@@ -11,6 +11,7 @@
     "bin",
     "docs",
     "src",
+    "src/board/assets",
     ".agents/skills/trekoon/SKILL.md",
     "README.md",
     "LICENSE"
