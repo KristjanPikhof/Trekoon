@@ -93,7 +93,13 @@ export function startBoardServer(options: StartBoardServerOptions = {}): BoardSe
     },
   });
 
-  const port: number = server.port;
+  const port: number | undefined = server.port;
+  if (port === undefined) {
+    server.stop(true);
+    database.close();
+    throw new Error("Board server did not expose a listening port");
+  }
+
   const origin: string = `http://127.0.0.1:${port}`;
   const url: string = `${origin}/?token=${encodeURIComponent(token)}`;
 
