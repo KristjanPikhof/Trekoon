@@ -11,6 +11,104 @@ const STATUS_LABELS = {
   done: "Done",
 };
 
+const NAV_ITEMS = [
+  { id: "epics", label: "Epics", icon: "layers" },
+  { id: "board", label: "Board", icon: "view_kanban" },
+  { id: "detail", label: "Detail", icon: "assignment" },
+];
+
+const STATUS_BADGE_STYLES = {
+  todo: "border-white/10 bg-white/[0.05] text-[var(--board-text-muted)]",
+  blocked: "border-amber-500/20 bg-amber-500/10 text-amber-300",
+  in_progress: "border-sky-400/20 bg-sky-400/10 text-sky-300",
+  done: "border-emerald-500/20 bg-emerald-500/10 text-emerald-300",
+  default: "border-[var(--board-border)] bg-white/[0.04] text-[var(--board-text-muted)]",
+};
+
+function cx(...classNames) {
+  return classNames.filter(Boolean).join(" ");
+}
+
+function renderIcon(name, className = "") {
+  return `<span class="${cx("material-symbols-rounded shrink-0", className)}" aria-hidden="true">${name}</span>`;
+}
+
+function panelClasses(extra = "") {
+  return cx(
+    "rounded-[28px] border border-[var(--board-border)] bg-[var(--board-surface)] shadow-panel",
+    extra,
+  );
+}
+
+function secondaryPanelClasses(extra = "") {
+  return cx(
+    "rounded-[24px] border border-[var(--board-border)] bg-[var(--board-surface-2)]",
+    extra,
+  );
+}
+
+function buttonClasses(options = {}) {
+  const kind = options.kind ?? "secondary";
+  const iconOnly = options.iconOnly ?? false;
+
+  return cx(
+    "inline-flex items-center justify-center gap-2 rounded-2xl border text-sm font-medium transition duration-200",
+    "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--board-border-strong)] focus-visible:ring-offset-2 focus-visible:ring-offset-[var(--board-bg)]",
+    iconOnly ? "h-10 w-10 px-0" : "min-h-10 px-4 py-2.5",
+    kind === "primary"
+      ? "border-[var(--board-accent)] bg-[var(--board-accent)] text-white hover:bg-[var(--board-accent-strong)] hover:border-[var(--board-accent-strong)]"
+      : "border-[var(--board-border)] bg-white/[0.04] text-[var(--board-text)] hover:bg-white/[0.08] hover:border-[var(--board-border-strong)]",
+  );
+}
+
+function fieldClasses() {
+  return cx(
+    "w-full rounded-2xl border border-[var(--board-border)] bg-[var(--board-surface-2)] px-3.5 py-3 text-sm text-[var(--board-text)] shadow-sm transition",
+    "placeholder:text-[var(--board-text-soft)] focus:border-[var(--board-border-strong)] focus:outline-none focus:ring-2 focus:ring-[var(--board-accent-soft)]",
+    "disabled:cursor-not-allowed disabled:opacity-60",
+  );
+}
+
+function sectionLabelClasses() {
+  return "text-[11px] font-semibold uppercase tracking-[0.18em] text-[var(--board-text-soft)]";
+}
+
+function neutralChipClasses() {
+  return "inline-flex items-center gap-1 rounded-full border border-[var(--board-border)] bg-white/[0.04] px-2.5 py-1 text-[11px] font-medium text-[var(--board-text-muted)]";
+}
+
+function metricCardClasses() {
+  return panelClasses("p-4 sm:p-5");
+}
+
+function statusBadgeClasses(status) {
+  return cx(
+    "inline-flex items-center gap-1 rounded-full border px-2.5 py-1 text-[11px] font-semibold uppercase tracking-[0.14em]",
+    STATUS_BADGE_STYLES[normalizeStatus(status)] ?? STATUS_BADGE_STYLES.default,
+  );
+}
+
+function renderStatusBadge(rawStatus, label = readStatusLabel(rawStatus)) {
+  return `<span class="${statusBadgeClasses(rawStatus)}">${escapeHtml(label)}</span>`;
+}
+
+function renderMetricCard(icon, label, value, detail) {
+  return `
+    <section class="${metricCardClasses()}">
+      <div class="flex items-start justify-between gap-4">
+        <div>
+          <p class="${sectionLabelClasses()}">${escapeHtml(label)}</p>
+          <p class="mt-3 text-2xl font-semibold tracking-tight text-[var(--board-text)]">${escapeHtml(value)}</p>
+          <p class="mt-2 text-sm text-[var(--board-text-muted)]">${escapeHtml(detail)}</p>
+        </div>
+        <div class="flex h-11 w-11 items-center justify-center rounded-2xl bg-[var(--board-accent-soft)] text-[var(--board-accent)] ring-1 ring-[var(--board-border-strong)]">
+          ${renderIcon(icon, "text-[20px]")}
+        </div>
+      </div>
+    </section>
+  `;
+}
+
 const appElement = document.querySelector("#app");
 
 function readSessionTokenFromStorage() {
@@ -144,10 +242,12 @@ function escapeHtml(value) {
 
 function renderEmptyState(title, description, shortcut) {
   return `
-    <div class="board-empty">
-      <strong>${escapeHtml(title)}</strong>
-      <p>${escapeHtml(description)}</p>
-      ${shortcut ? `<p class="board-hint">Try <span class="board-kbd">${escapeHtml(shortcut)}</span></p>` : ""}
+    <div class="rounded-[24px] border border-dashed border-[var(--board-border-strong)] bg-[var(--board-accent-soft)]/40 px-5 py-6 text-center">
+      <strong class="block text-base font-semibold text-[var(--board-text)]">${escapeHtml(title)}</strong>
+      <p class="mt-2 text-sm leading-6 text-[var(--board-text-muted)]">${escapeHtml(description)}</p>
+      ${shortcut
+        ? `<p class="mt-3 text-xs text-[var(--board-text-soft)]">Try <span class="inline-flex items-center rounded-lg border border-[var(--board-border)] bg-white/[0.04] px-2 py-1 font-medium text-[var(--board-text-muted)]">${escapeHtml(shortcut)}</span></p>`
+        : ""}
     </div>
   `;
 }
@@ -542,7 +642,7 @@ function removeDependencyInSnapshot(snapshot, sourceId, dependsOnId) {
 
 function renderStatusSelect(name, selectedStatus, disabled = false) {
   return `
-    <select name="${escapeHtml(name)}" ${disabled ? "disabled" : ""}>
+    <select class="${fieldClasses()}" name="${escapeHtml(name)}" ${disabled ? "disabled" : ""}>
       ${STATUS_ORDER.map((status) => `
         <option value="${escapeHtml(status)}" ${selectedStatus === status ? "selected" : ""}>${escapeHtml(STATUS_LABELS[status] ?? status)}</option>
       `).join("")}
@@ -556,14 +656,19 @@ function renderNotice(notice) {
   }
 
   return `
-    <section class="board-panel board-notice" aria-live="polite">
-      <span class="board-pill">${notice.type === "error" ? "Action blocked" : "Saved"}</span>
-      <p>${escapeHtml(notice.message)}</p>
+    <section class="${panelClasses("mb-4 flex items-start gap-3 p-4 sm:p-5")}" aria-live="polite">
+      <div class="flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl ${notice.type === "error" ? "bg-red-500/10 text-red-300 ring-1 ring-red-500/20" : "bg-emerald-500/10 text-emerald-300 ring-1 ring-emerald-500/20"}">
+        ${renderIcon(notice.type === "error" ? "warning" : "check_circle", "text-[20px]")}
+      </div>
+      <div class="min-w-0">
+        <p class="${sectionLabelClasses()}">${notice.type === "error" ? "Action blocked" : "Saved"}</p>
+        <p class="mt-1 text-sm leading-6 text-[var(--board-text-muted)]">${escapeHtml(notice.message)}</p>
+      </div>
     </section>
   `;
 }
 
-function renderDescriptionPreview(description, className = "board-summary") {
+function renderDescriptionPreview(description, className = "mt-1 text-sm leading-6 text-[var(--board-text-muted)]") {
   if (!description || description.trim().length === 0) {
     return "";
   }
@@ -576,9 +681,9 @@ function renderEpicCountSummary(epic) {
   const counts = epic.counts || { todo: 0, blocked: 0, in_progress: 0, done: 0 };
 
   return `
-    <span class="board-chip">${totalTasks} task${totalTasks === 1 ? "" : "s"}</span>
-    <span class="board-chip">${counts.in_progress ?? 0} doing</span>
-    <span class="board-chip">${counts.done ?? 0} done</span>
+    <span class="${neutralChipClasses()}">${totalTasks} task${totalTasks === 1 ? "" : "s"}</span>
+    <span class="${neutralChipClasses()}">${counts.in_progress ?? 0} doing</span>
+    <span class="${neutralChipClasses()}">${counts.done ?? 0} done</span>
   `;
 }
 
@@ -587,12 +692,24 @@ function renderEpicSidebarItem(epic, selected) {
   return `
     <button
       type="button"
-      class="board-sidebar-item ${selected ? "is-selected" : ""}"
+      class="board-sidebar-item ${cx(
+        "w-full rounded-2xl border px-3.5 py-3 text-left transition duration-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--board-border-strong)] focus-visible:ring-offset-2 focus-visible:ring-offset-[var(--board-surface)]",
+        selected
+          ? "border-[var(--board-border-strong)] bg-[var(--board-accent-soft)] text-[var(--board-text)] shadow-focus"
+          : "border-[var(--board-border)] bg-white/[0.03] text-[var(--board-text-muted)] hover:border-[var(--board-border-strong)] hover:bg-white/[0.06]",
+      )}"
       aria-current="${selected}"
       data-open-epic="${escapeHtml(epic.id)}"
     >
-      <strong>${escapeHtml(epic.title)}</strong>
-      <span>${totalTasks} task${totalTasks === 1 ? "" : "s"}</span>
+      <div class="flex items-start gap-3">
+        <div class="mt-0.5 flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl ${selected ? "bg-[var(--board-accent)] text-white" : "bg-[var(--board-surface-3)] text-[var(--board-accent)]"}">
+          ${renderIcon("folder", "text-[18px]")}
+        </div>
+        <div class="min-w-0">
+          <strong class="block truncate text-sm font-semibold text-[var(--board-text)]">${escapeHtml(epic.title)}</strong>
+          <span class="mt-1 block text-xs text-[var(--board-text-soft)]">${totalTasks} task${totalTasks === 1 ? "" : "s"}</span>
+        </div>
+      </div>
     </button>
   `;
 }
@@ -602,34 +719,49 @@ function renderEpicRow(epic, selected) {
   return `
     <button
       type="button"
-      class="board-epic-row ${selected ? "is-selected" : ""}"
+      class="board-epic-row ${cx(
+        "grid w-full gap-4 rounded-3xl border px-4 py-4 text-left transition duration-200 md:grid-cols-[minmax(0,1.8fr)_140px_90px_170px_84px] md:items-center",
+        "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--board-border-strong)] focus-visible:ring-offset-2 focus-visible:ring-offset-[var(--board-surface)]",
+        selected
+          ? "border-[var(--board-border-strong)] bg-[var(--board-accent-soft)] shadow-focus"
+          : "border-[var(--board-border)] bg-white/[0.02] hover:border-[var(--board-border-strong)] hover:bg-white/[0.04]",
+      )}"
       data-open-epic="${escapeHtml(epic.id)}"
       aria-current="${selected}"
     >
-      <div class="board-epic-row__summary">
-        <strong>${escapeHtml(epic.title)}</strong>
+      <div class="board-epic-row__summary min-w-0">
+        <div class="flex items-center gap-2 text-xs font-semibold uppercase tracking-[0.16em] text-[var(--board-text-soft)]">
+          <span class="${neutralChipClasses()}">${escapeHtml(epic.id)}</span>
+        </div>
+        <strong class="mt-3 block text-base font-semibold leading-6 text-[var(--board-text)]">${escapeHtml(epic.title)}</strong>
         ${renderDescriptionPreview(epic.description)}
       </div>
-      <span class="board-status-pill">${escapeHtml(readStatusLabel(epic.status ?? "Epic"))}</span>
-      <span class="board-epic-row__meta">${totalTasks}</span>
-      <span class="board-epic-row__meta">${escapeHtml(formatDate(epic.updatedAt))}</span>
-      <span class="board-epic-row__action">Open</span>
+      <div class="flex items-center md:justify-start">${renderStatusBadge(epic.status ?? "todo", readStatusLabel(epic.status ?? "Epic"))}</div>
+      <span class="text-sm font-medium text-[var(--board-text-muted)]">${totalTasks}</span>
+      <span class="text-sm text-[var(--board-text-muted)]">${escapeHtml(formatDate(epic.updatedAt))}</span>
+      <span class="inline-flex items-center gap-1 text-sm font-medium text-[var(--board-accent)]">Open ${renderIcon("chevron_right", "text-[16px]")}</span>
     </button>
   `;
 }
 
 function renderTaskMeta(task, includeStatus = false) {
   return `
-    ${includeStatus ? `<span class="board-chip">${escapeHtml(readStatusLabel(task.status))}</span>` : ""}
-    <span class="board-chip">${task.subtasks.length} subtask${task.subtasks.length === 1 ? "" : "s"}</span>
-    ${task.blockedBy.length > 0 ? `<span class="board-chip">${task.blockedBy.length} blocker${task.blockedBy.length === 1 ? "" : "s"}</span>` : ""}
+    ${includeStatus ? renderStatusBadge(task.status) : ""}
+    <span class="${neutralChipClasses()}">${task.subtasks.length} subtask${task.subtasks.length === 1 ? "" : "s"}</span>
+    ${task.blockedBy.length > 0 ? `<span class="${neutralChipClasses()}">${task.blockedBy.length} blocker${task.blockedBy.length === 1 ? "" : "s"}</span>` : ""}
   `;
 }
 
 function renderTaskCard(task, selected, isMutating = false) {
   return `
     <article
-      class="board-task-card ${selected ? "is-selected" : ""}"
+      class="board-task-card ${cx(
+        "rounded-3xl border p-4 transition duration-200",
+        "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--board-border-strong)] focus-visible:ring-offset-2 focus-visible:ring-offset-[var(--board-surface)]",
+        selected
+          ? "border-[var(--board-border-strong)] bg-[var(--board-accent-soft)] shadow-focus"
+          : "border-[var(--board-border)] bg-[var(--board-surface-2)] shadow-[0_10px_30px_rgba(0,0,0,0.18)] hover:-translate-y-0.5 hover:border-[var(--board-border-strong)] hover:shadow-lift",
+      )}"
       tabindex="0"
       draggable="${isMutating ? "false" : "true"}"
       data-task-id="${escapeHtml(task.id)}"
@@ -637,9 +769,13 @@ function renderTaskCard(task, selected, isMutating = false) {
       role="button"
       aria-pressed="${selected}"
     >
-      <strong>${escapeHtml(task.title)}</strong>
-      ${renderDescriptionPreview(task.description)}
-      <div class="board-task-meta">${renderTaskMeta(task)}</div>
+      <div class="flex items-start justify-between gap-3">
+        ${renderStatusBadge(task.status)}
+        <span class="text-xs uppercase tracking-[0.16em] text-[var(--board-text-soft)]">Task</span>
+      </div>
+      <strong class="mt-4 block text-base font-semibold leading-6 text-[var(--board-text)]">${escapeHtml(task.title)}</strong>
+      ${renderDescriptionPreview(task.description, "mt-2 text-sm leading-6 text-[var(--board-text-muted)]")}
+      <div class="mt-4 flex flex-wrap gap-2">${renderTaskMeta(task)}</div>
     </article>
   `;
 }
@@ -647,19 +783,25 @@ function renderTaskCard(task, selected, isMutating = false) {
 function renderListRow(task, selected) {
   return `
     <article
-      class="board-list-row ${selected ? "is-selected" : ""}"
+      class="board-list-row ${cx(
+        "grid gap-4 rounded-3xl border px-4 py-4 transition duration-200 md:grid-cols-[minmax(0,1.8fr)_140px_90px_170px] md:items-center",
+        "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--board-border-strong)] focus-visible:ring-offset-2 focus-visible:ring-offset-[var(--board-surface)]",
+        selected
+          ? "border-[var(--board-border-strong)] bg-[var(--board-accent-soft)] shadow-focus"
+          : "border-[var(--board-border)] bg-white/[0.02] hover:border-[var(--board-border-strong)] hover:bg-white/[0.04]",
+      )}"
       data-task-id="${escapeHtml(task.id)}"
       tabindex="0"
       role="button"
       aria-pressed="${selected}"
     >
-      <div class="board-list-row__summary">
-        <strong>${escapeHtml(task.title)}</strong>
+      <div class="board-list-row__summary min-w-0">
+        <strong class="block text-sm font-semibold text-[var(--board-text)] sm:text-base">${escapeHtml(task.title)}</strong>
         ${renderDescriptionPreview(task.description)}
       </div>
-      <span class="board-list-row__status">${escapeHtml(readStatusLabel(task.status))}</span>
-      <span class="board-list-row__meta">${task.subtasks.length}</span>
-      <span class="board-list-row__meta">${escapeHtml(formatDate(task.updatedAt))}</span>
+      <span>${renderStatusBadge(task.status)}</span>
+      <span class="text-sm font-medium text-[var(--board-text-muted)]">${task.subtasks.length}</span>
+      <span class="text-sm text-[var(--board-text-muted)]">${escapeHtml(formatDate(task.updatedAt))}</span>
     </article>
   `;
 }
@@ -692,14 +834,14 @@ function renderDependencyList(task, snapshot, isMutating = false) {
   return task.blockedBy.map((dependencyId) => {
     const dependency = lookupNode(snapshot, dependencyId);
     return `
-      <article class="board-inline-row">
-        <div>
-          <strong>${escapeHtml(readNodeLabel(dependency?.kind ?? "task", dependency?.title ?? dependencyId))}</strong>
+      <article class="grid gap-4 rounded-3xl border border-[var(--board-border)] bg-white/[0.03] px-4 py-4 md:grid-cols-[minmax(0,1fr)_auto] md:items-start">
+        <div class="min-w-0">
+          <strong class="block text-sm font-semibold text-[var(--board-text)]">${escapeHtml(readNodeLabel(dependency?.kind ?? "task", dependency?.title ?? dependencyId))}</strong>
           ${renderDescriptionPreview(dependency?.description ?? "")}
         </div>
-        <div class="board-inline-row__actions">
-          <span class="board-status-pill">${escapeHtml(readStatusLabel(dependency?.status ?? "Unknown"))}</span>
-          <button type="button" class="board-button" data-remove-dependency-source="${escapeHtml(task.id)}" data-remove-dependency-target="${escapeHtml(dependencyId)}" ${isMutating ? "disabled" : ""}>Remove</button>
+        <div class="flex flex-wrap items-center gap-2">
+          ${renderStatusBadge(dependency?.status ?? "todo", readStatusLabel(dependency?.status ?? "Unknown"))}
+          <button type="button" class="${buttonClasses()}" data-remove-dependency-source="${escapeHtml(task.id)}" data-remove-dependency-target="${escapeHtml(dependencyId)}" ${isMutating ? "disabled" : ""}>Remove</button>
         </div>
       </article>
     `;
@@ -712,16 +854,16 @@ function renderSubtaskList(task) {
   }
 
   return `
-    <div class="board-inline-list">
+    <div class="space-y-3">
       ${task.subtasks.map((subtask) => `
-        <article class="board-inline-row">
-          <div>
-            <strong>${escapeHtml(subtask.title)}</strong>
+        <article class="grid gap-4 rounded-3xl border border-[var(--board-border)] bg-white/[0.03] px-4 py-4 md:grid-cols-[minmax(0,1fr)_auto] md:items-start">
+          <div class="min-w-0">
+            <strong class="block text-sm font-semibold text-[var(--board-text)]">${escapeHtml(subtask.title)}</strong>
             ${renderDescriptionPreview(subtask.description)}
           </div>
-          <div class="board-inline-row__actions">
-            <span class="board-status-pill">${escapeHtml(readStatusLabel(subtask.status))}</span>
-            <button type="button" class="board-button" data-open-subtask="${escapeHtml(subtask.id)}">Open</button>
+          <div class="flex flex-wrap items-center gap-2">
+            ${renderStatusBadge(subtask.status)}
+            <button type="button" class="${buttonClasses()}" data-open-subtask="${escapeHtml(subtask.id)}">Open</button>
           </div>
         </article>
       `).join("")}
@@ -731,32 +873,32 @@ function renderSubtaskList(task) {
 
 function renderSubtaskModal(subtask, isMutating = false) {
   return `
-    <div class="board-modal-backdrop" data-close-subtask>
-      <section class="board-panel board-modal" role="dialog" aria-modal="true" aria-labelledby="board-subtask-modal-title">
-        <header class="board-modal__header">
+    <div class="board-modal-backdrop fixed inset-0 z-40 grid place-items-center bg-slate-950/70 p-4 backdrop-blur-md" data-close-subtask>
+      <section class="board-modal ${panelClasses("grid max-h-[calc(100vh-2rem)] w-full max-w-2xl grid-rows-[auto_1fr] overflow-hidden p-5 sm:p-6")}" role="dialog" aria-modal="true" aria-labelledby="board-subtask-modal-title">
+        <header class="board-modal__header border-b border-[var(--board-border)] pb-5">
           <div>
-            <span class="board-pill">Subtask</span>
-            <h3 id="board-subtask-modal-title">${escapeHtml(subtask.title)}</h3>
+            <span class="${sectionLabelClasses()}">Subtask editor</span>
+            <h3 id="board-subtask-modal-title" class="mt-2 text-xl font-semibold tracking-tight text-[var(--board-text)]">${escapeHtml(subtask.title)}</h3>
           </div>
-          <button type="button" class="board-button" data-close-subtask>Close</button>
+          <button type="button" class="${buttonClasses()} mt-4 sm:mt-0" data-close-subtask>Close</button>
         </header>
-        <div class="board-modal__body">
-          <form data-subtask-form="${escapeHtml(subtask.id)}">
-            <label>
-              <span>Title</span>
-              <input name="title" value="${escapeHtml(subtask.title)}" required ${isMutating ? "disabled" : ""} />
+        <div class="board-modal__body overflow-auto pt-5">
+          <form class="grid gap-4" data-subtask-form="${escapeHtml(subtask.id)}">
+            <label class="grid gap-2">
+              <span class="${sectionLabelClasses()}">Title</span>
+              <input class="${fieldClasses()}" name="title" value="${escapeHtml(subtask.title)}" required ${isMutating ? "disabled" : ""} />
             </label>
-            <label>
-              <span>Description</span>
-              <textarea name="description" rows="5" ${isMutating ? "disabled" : ""}>${escapeHtml(subtask.description)}</textarea>
+            <label class="grid gap-2">
+              <span class="${sectionLabelClasses()}">Description</span>
+              <textarea class="${fieldClasses()} min-h-[144px]" name="description" rows="5" ${isMutating ? "disabled" : ""}>${escapeHtml(subtask.description)}</textarea>
             </label>
-            <label>
-              <span>Status</span>
+            <label class="grid gap-2">
+              <span class="${sectionLabelClasses()}">Status</span>
               ${renderStatusSelect("status", subtask.status, isMutating)}
             </label>
-            <div class="board-modal__actions">
-              <button type="submit" class="board-button" ${isMutating ? "disabled" : ""}>Save subtask</button>
-              <button type="button" class="board-button" data-close-subtask>Cancel</button>
+            <div class="board-modal__actions mt-2 flex flex-wrap justify-end gap-3">
+              <button type="button" class="${buttonClasses()}" data-close-subtask>Cancel</button>
+              <button type="submit" class="${buttonClasses({ kind: "primary" })}" ${isMutating ? "disabled" : ""}>Save subtask</button>
             </div>
           </form>
         </div>
@@ -769,70 +911,70 @@ function renderDrawer(task, epics, snapshot, isMutating = false) {
   const epic = epics.find((candidate) => candidate.id === task.epicId) ?? null;
   const dependencyOptions = renderDependencyOptions(task, snapshot);
   return `
-    <header class="board-drawer__header">
-      <div class="board-drawer__title">
+    <header class="board-drawer__header border-b border-[var(--board-border)] pb-5">
+      <div class="board-drawer__title flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
         <div>
-          <span class="board-pill">Task view</span>
-          <h3>${escapeHtml(task.title)}</h3>
+          <span class="${sectionLabelClasses()}">Task detail</span>
+          <h3 class="mt-2 text-2xl font-semibold tracking-tight text-[var(--board-text)]">${escapeHtml(task.title)}</h3>
         </div>
-        <button type="button" class="board-button" data-close-task>Close</button>
+        <button type="button" class="${buttonClasses()} shrink-0" data-close-task>Close</button>
       </div>
-      <div class="board-drawer__actions">
-        <span class="board-chip">Epic ${escapeHtml(epic?.title ?? "Unknown")}</span>
-        <span class="board-chip">${escapeHtml(readStatusLabel(task.status))}</span>
+      <div class="board-drawer__actions mt-4 flex flex-wrap gap-2">
+        <span class="${neutralChipClasses()}">Epic ${escapeHtml(epic?.title ?? "Unknown")}</span>
+        ${renderStatusBadge(task.status)}
       </div>
       ${task.description.trim().length > 0
-        ? `<div class="board-drawer__description">${escapeHtml(task.description).replaceAll("\n", "<br />")}</div>`
-        : `<p class="board-muted">No task description provided.</p>`}
+        ? `<div class="board-drawer__description mt-4 rounded-3xl border border-[var(--board-border)] bg-white/[0.03] px-4 py-4 text-sm leading-7 text-[var(--board-text-muted)]">${escapeHtml(task.description).replaceAll("\n", "<br />")}</div>`
+        : `<p class="mt-4 text-sm leading-6 text-[var(--board-text-muted)]">No task description provided.</p>`}
     </header>
-    <div class="board-drawer__body">
-      <section class="board-section">
-        <div class="board-meta-grid">
-          <span class="board-chip">Updated ${escapeHtml(formatDate(task.updatedAt))}</span>
-          <span class="board-chip">Depends on ${task.blockedBy.length}</span>
-          <span class="board-chip">Blocks ${task.blocks.length}</span>
+    <div class="board-drawer__body space-y-4 overflow-auto pt-5">
+      <section class="${secondaryPanelClasses("p-4")}">
+        <div class="board-meta-grid flex flex-wrap gap-2">
+          <span class="${neutralChipClasses()}">Updated ${escapeHtml(formatDate(task.updatedAt))}</span>
+          <span class="${neutralChipClasses()}">Depends on ${task.blockedBy.length}</span>
+          <span class="${neutralChipClasses()}">Blocks ${task.blocks.length}</span>
         </div>
       </section>
-      <details class="board-disclosure">
-        <summary>Edit task</summary>
-        <form data-task-form="${escapeHtml(task.id)}">
-          <label>
-            <span>Title</span>
-            <input name="title" value="${escapeHtml(task.title)}" required ${isMutating ? "disabled" : ""} />
+      <details class="board-disclosure ${secondaryPanelClasses("p-4")}" open>
+        <summary class="cursor-pointer list-none text-sm font-semibold text-[var(--board-text)]">Edit task</summary>
+        <form class="mt-4 grid gap-4" data-task-form="${escapeHtml(task.id)}">
+          <label class="grid gap-2">
+            <span class="${sectionLabelClasses()}">Title</span>
+            <input class="${fieldClasses()}" name="title" value="${escapeHtml(task.title)}" required ${isMutating ? "disabled" : ""} />
           </label>
-          <label>
-            <span>Description</span>
-            <textarea name="description" rows="4" ${isMutating ? "disabled" : ""}>${escapeHtml(task.description)}</textarea>
+          <label class="grid gap-2">
+            <span class="${sectionLabelClasses()}">Description</span>
+            <textarea class="${fieldClasses()} min-h-[120px]" name="description" rows="4" ${isMutating ? "disabled" : ""}>${escapeHtml(task.description)}</textarea>
           </label>
-          <label>
-            <span>Status</span>
+          <label class="grid gap-2">
+            <span class="${sectionLabelClasses()}">Status</span>
             ${renderStatusSelect("status", task.status, isMutating)}
           </label>
-          <button type="submit" class="board-button" ${isMutating ? "disabled" : ""}>Save task</button>
+          <button type="submit" class="${buttonClasses({ kind: "primary" })}" ${isMutating ? "disabled" : ""}>Save task</button>
         </form>
       </details>
-      <details class="board-disclosure">
-        <summary>Dependencies</summary>
-        <form data-dependency-form="${escapeHtml(task.id)}">
-          <label>
-            <span>Add dependency</span>
-            <select name="dependsOnId" required ${isMutating ? "disabled" : ""}>
+      <details class="board-disclosure ${secondaryPanelClasses("p-4")}" open>
+        <summary class="cursor-pointer list-none text-sm font-semibold text-[var(--board-text)]">Dependencies</summary>
+        <form class="mt-4 grid gap-4" data-dependency-form="${escapeHtml(task.id)}">
+          <label class="grid gap-2">
+            <span class="${sectionLabelClasses()}">Add dependency</span>
+            <select class="${fieldClasses()}" name="dependsOnId" required ${isMutating ? "disabled" : ""}>
               <option value="">Select a task or subtask</option>
               ${dependencyOptions}
             </select>
           </label>
-          <button type="submit" class="board-button" ${isMutating ? "disabled" : ""}>Add dependency</button>
+          <button type="submit" class="${buttonClasses({ kind: "primary" })}" ${isMutating ? "disabled" : ""}>Add dependency</button>
         </form>
-        <div class="board-inline-list">
+        <div class="board-inline-list mt-4 space-y-3">
           ${renderDependencyList(task, snapshot, isMutating)}
         </div>
       </details>
-      <section class="board-section">
-        <div class="board-section__header">
-          <strong>Subtasks</strong>
-          <span class="board-chip">${task.subtasks.length}</span>
+      <section class="${secondaryPanelClasses("p-4")}">
+        <div class="board-section__header flex items-center justify-between gap-3">
+          <strong class="text-sm font-semibold text-[var(--board-text)]">Subtasks</strong>
+          <span class="${neutralChipClasses()}">${task.subtasks.length}</span>
         </div>
-        ${renderSubtaskList(task)}
+        <div class="mt-4">${renderSubtaskList(task)}</div>
       </section>
     </div>
   `;
@@ -846,6 +988,11 @@ function renderBoard(model) {
   const selectedTask = getSelectedTask();
   const selectedSubtask = getSubtaskById(store.selectedSubtaskId);
   const screen = store.screen === "tasks" && selectedEpic ? "tasks" : "epics";
+  const currentNav = selectedTask ? "detail" : screen === "tasks" ? "board" : "epics";
+  const overallCounts = deriveCounts(store.snapshot.tasks);
+  const completionRate = store.snapshot.tasks.length === 0
+    ? 0
+    : Math.round(((overallCounts.done ?? 0) / store.snapshot.tasks.length) * 100);
 
   if (screen !== store.screen) {
     store.screen = screen;
@@ -854,7 +1001,7 @@ function renderBoard(model) {
 
   const columnsMarkup = STATUS_ORDER.map((status) => {
     const columnTasks = visibleTasks.filter((task) => task.status === status);
-      const columnTitle = readStatusLabel(status);
+    const columnTitle = readStatusLabel(status);
     const content = columnTasks.length === 0
       ? renderEmptyState(`No ${columnTitle.toLowerCase()} work`, "Adjust search or switch epics to inspect more tasks.")
       : columnTasks
@@ -862,11 +1009,17 @@ function renderBoard(model) {
           .join("");
 
     return `
-      <section class="board-column" aria-labelledby="column-${status}">
-        <header>
-          <div class="board-status-pill">${escapeHtml(columnTitle)} · ${columnTasks.length}</div>
+      <section class="board-column ${secondaryPanelClasses("grid min-h-0 grid-rows-[auto_1fr] p-3 sm:p-4")}" aria-labelledby="column-${status}">
+        <header class="flex items-center justify-between gap-3 border-b border-[var(--board-border)] pb-3">
+          <div>
+            <p class="${sectionLabelClasses()}">${escapeHtml(columnTitle)}</p>
+            <div class="mt-2">${renderStatusBadge(status, `${columnTasks.length} item${columnTasks.length === 1 ? "" : "s"}`)}</div>
+          </div>
+          <div class="flex h-9 w-9 items-center justify-center rounded-2xl bg-white/[0.04] text-[var(--board-text-soft)]">
+            ${renderIcon("add", "text-[18px]")}
+          </div>
         </header>
-        <div class="board-column__tasks" id="column-${status}" data-drop-status="${escapeHtml(status)}">${content}</div>
+        <div class="board-column__tasks mt-4 grid min-h-0 content-start gap-3 overflow-auto pr-1" id="column-${status}" data-drop-status="${escapeHtml(status)}">${content}</div>
       </section>
     `;
   }).join("");
@@ -876,82 +1029,121 @@ function renderBoard(model) {
     : visibleTasks.map((task) => renderListRow(task, selectedTask?.id === task.id)).join("");
 
   const topbarMarkup = `
-    <header class="board-panel board-topbar">
-      <div class="board-topbar__identity">
-        <span class="board-pill">${screen === "tasks" ? "Epic workspace" : "Epics overview"}</span>
-        <h1>Trekoon board</h1>
-        <p>${screen === "tasks"
-          ? "Compact task board for moving work inside a selected epic."
-          : "Start with an epic, then switch into a focused task board."}</p>
-      </div>
-      <div class="board-topbar__actions">
-        ${screen === "tasks" ? `<button type="button" class="board-button" data-nav="epics">All epics</button>` : ""}
-        <label class="board-search" aria-label="Search tasks and epics">
-          <span class="board-kbd">/</span>
-          <input id="board-search-input" type="search" placeholder="Search epics, tasks, subtasks" value="${escapeHtml(store.search)}" />
-        </label>
-        <button type="button" class="board-button" data-action="toggle-theme">${store.theme === "dark" ? "Light" : "Dark"}</button>
+    <header class="sticky top-4 z-20 ${panelClasses("bg-[var(--board-shell)]/95 p-4 backdrop-blur-xl sm:p-5")}">
+      <div class="flex flex-col gap-4 xl:flex-row xl:items-center xl:justify-between">
+        <div class="flex flex-col gap-4 lg:flex-row lg:items-center lg:gap-6">
+          <div class="flex items-center gap-3">
+            <div class="flex h-12 w-12 items-center justify-center rounded-2xl bg-[var(--board-accent-soft)] text-[var(--board-accent)] ring-1 ring-[var(--board-border-strong)]">
+              ${renderIcon("rocket_launch", "text-[22px]")}
+            </div>
+            <div>
+              <span class="${sectionLabelClasses()}">${screen === "tasks" ? "Task workspace" : "Product ops"}</span>
+              <h1 class="mt-1 text-xl font-semibold tracking-tight text-[var(--board-text)] sm:text-2xl">Trekoon</h1>
+            </div>
+          </div>
+          <nav class="flex flex-wrap items-center gap-2">
+            ${NAV_ITEMS.map((item) => {
+              const isActive = currentNav === item.id;
+              const common = cx(
+                "inline-flex items-center gap-2 rounded-2xl border px-3.5 py-2 text-sm font-medium transition",
+                isActive
+                  ? "border-[var(--board-border-strong)] bg-[var(--board-accent-soft)] text-[var(--board-text)]"
+                  : "border-[var(--board-border)] bg-white/[0.03] text-[var(--board-text-muted)]",
+              );
+
+              if (item.id === "epics") {
+                return `<button type="button" class="${common}" data-nav="epics">${renderIcon(item.icon, "text-[18px]")} ${escapeHtml(item.label)}</button>`;
+              }
+
+              if (item.id === "board") {
+                return `<button type="button" class="${common}" data-nav-board="true" ${selectedEpic ? "" : "disabled"}>${renderIcon(item.icon, "text-[18px]")} ${escapeHtml(item.label)}</button>`;
+              }
+
+              return `<span class="${common}">${renderIcon(item.icon, "text-[18px]")} ${escapeHtml(item.label)}</span>`;
+            }).join("")}
+          </nav>
+        </div>
+        <div class="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-end">
+          <label class="flex min-h-11 items-center gap-3 rounded-2xl border border-[var(--board-border)] bg-[var(--board-surface-2)] px-3.5 text-sm text-[var(--board-text-muted)] lg:min-w-[320px]" aria-label="Search tasks and epics">
+            ${renderIcon("search", "text-[18px] text-[var(--board-text-soft)]")}
+            <input id="board-search-input" class="w-full border-0 bg-transparent py-2 text-sm text-[var(--board-text)] outline-none placeholder:text-[var(--board-text-soft)]" type="search" placeholder="Search epics, tasks, subtasks" value="${escapeHtml(store.search)}" />
+            <span class="inline-flex items-center rounded-lg border border-[var(--board-border)] bg-white/[0.04] px-2 py-1 text-[11px] font-medium text-[var(--board-text-soft)]">/</span>
+          </label>
+          <button type="button" class="${buttonClasses()}" data-action="toggle-theme">${renderIcon(store.theme === "dark" ? "light_mode" : "dark_mode", "text-[18px]")} ${store.theme === "dark" ? "Light" : "Dark"}</button>
+          <div class="inline-flex items-center gap-3 rounded-2xl border border-[var(--board-border)] bg-white/[0.03] px-3.5 py-2.5 text-sm text-[var(--board-text-muted)]">
+            <span class="flex h-9 w-9 items-center justify-center rounded-2xl bg-[var(--board-surface-3)] text-sm font-semibold text-[var(--board-text)]">JD</span>
+            <div>
+              <div class="font-medium text-[var(--board-text)]">Local board</div>
+              <div class="text-xs text-[var(--board-text-soft)]">Repo workspace</div>
+            </div>
+          </div>
+        </div>
       </div>
     </header>
   `;
 
   const epicsOverviewMarkup = `
-    <div class="board-root board-root--epics">
-      <section class="board-panel board-overview" aria-label="Epics overview">
-        <header class="board-section-head">
+    <div class="board-root board-root--epics grid gap-5 xl:grid-cols-[minmax(0,1fr)_320px]" >
+      <section class="board-overview ${panelClasses("p-5 sm:p-6")}" aria-label="Epics overview">
+        <header class="board-section-head flex flex-col gap-5 border-b border-[var(--board-border)] pb-5">
           <div>
-            <span class="board-pill">Pick an epic</span>
-            <h2>Epics</h2>
-            <p>Open an epic to see a compact GitLab-style task board and list view.</p>
+            <span class="${sectionLabelClasses()}">Epics overview</span>
+            <h2 class="mt-2 text-2xl font-semibold tracking-tight text-[var(--board-text)] sm:text-3xl">Manage high-level initiatives</h2>
+            <p class="mt-3 max-w-3xl text-sm leading-6 text-[var(--board-text-muted)] sm:text-base">Open an epic to move into a focused task workspace with kanban, rows, and an integrated detail drawer.</p>
           </div>
-          <div class="board-legend">
-            <span class="board-chip">${visibleEpics.length} visible epic${visibleEpics.length === 1 ? "" : "s"}</span>
-            <span class="board-chip">${store.snapshot.tasks.length} total tasks</span>
-            ${store.isMutating ? `<span class="board-chip">Saving…</span>` : ""}
+          <div class="board-legend flex flex-wrap gap-2">
+            <span class="${neutralChipClasses()}">${visibleEpics.length} visible epic${visibleEpics.length === 1 ? "" : "s"}</span>
+            <span class="${neutralChipClasses()}">${store.snapshot.tasks.length} total tasks</span>
+            ${store.isMutating ? `<span class="${neutralChipClasses()}">Saving…</span>` : ""}
           </div>
         </header>
-        <div class="board-table">
-          <div class="board-table__header">
+        <div class="board-table mt-6 grid gap-4">
+          <div class="board-table__header hidden gap-3 px-1 text-[11px] font-semibold uppercase tracking-[0.16em] text-[var(--board-text-soft)] md:grid md:grid-cols-[minmax(0,1.8fr)_140px_90px_170px_84px]">
             <span>Epic</span>
             <span>Status</span>
             <span>Tasks</span>
             <span>Updated</span>
-            <span></span>
+            <span>Open</span>
           </div>
-          <div class="board-table__rows">
+          <div class="board-table__rows space-y-3">
             ${visibleEpics.length === 0
               ? renderEmptyState("No matching epics", "Try a different search or publish more work to the board.", "/")
               : visibleEpics.map((epic) => renderEpicRow(epic, store.selectedEpicId === epic.id)).join("")}
           </div>
         </div>
       </section>
+      <aside class="grid gap-4">
+        ${renderMetricCard("pending_actions", "Active epics", String(visibleEpics.length), "Published epics currently visible in this board slice.")}
+        ${renderMetricCard("task_alt", "Tasks in play", String(store.snapshot.tasks.length), `${overallCounts.in_progress ?? 0} in progress · ${overallCounts.blocked ?? 0} blocked.`)}
+        ${renderMetricCard("query_stats", "Completion", `${completionRate}%`, `${overallCounts.done ?? 0} completed tasks in the current snapshot.`)}
+      </aside>
     </div>
   `;
 
   const tasksWorkspaceMarkup = selectedEpic ? `
-    <div class="board-root board-root--tasks ${selectedTask ? "has-detail" : ""}">
-      <aside class="board-panel board-sidebar" aria-label="Epic switcher">
-        <header class="board-sidebar__header">
-          <span class="board-pill">Epics</span>
-          <h2>Switch epic</h2>
-          <p>Titles only for faster navigation.</p>
+    <div class="board-root board-root--tasks ${selectedTask ? "has-detail" : ""} grid gap-5 ${selectedTask ? "2xl:grid-cols-[280px_minmax(0,1fr)_420px]" : "xl:grid-cols-[280px_minmax(0,1fr)]"}">
+      <aside class="board-sidebar ${panelClasses("hidden p-4 xl:block")}" aria-label="Epic switcher">
+        <header class="board-sidebar__header border-b border-[var(--board-border)] pb-4">
+          <span class="${sectionLabelClasses()}">Epics</span>
+          <h2 class="mt-2 text-lg font-semibold tracking-tight text-[var(--board-text)]">Switch epic</h2>
+          <p class="mt-2 text-sm leading-6 text-[var(--board-text-muted)]">Titles only for faster navigation through dense workstreams.</p>
         </header>
-        <div class="board-sidebar__list">
+        <div class="board-sidebar__list mt-4 grid content-start gap-2.5">
           ${store.snapshot.epics.map((epic) => renderEpicSidebarItem(epic, store.selectedEpicId === epic.id)).join("")}
         </div>
       </aside>
 
-      <section class="board-panel board-workspace" aria-label="Workspace">
-        <header class="board-section-head board-section-head--workspace">
+      <section class="board-workspace ${panelClasses("p-5 sm:p-6")}" aria-label="Workspace">
+        <header class="board-section-head board-section-head--workspace flex flex-col gap-5 border-b border-[var(--board-border)] pb-5">
           <div>
-            <span class="board-pill">Selected epic</span>
-            <h2>${escapeHtml(selectedEpic.title)}</h2>
-            <p>${escapeHtml(selectedEpic.description || "No epic description yet.")}</p>
+            <span class="${sectionLabelClasses()}">Selected epic</span>
+            <h2 class="mt-2 text-2xl font-semibold tracking-tight text-[var(--board-text)] sm:text-3xl">${escapeHtml(selectedEpic.title)}</h2>
+            <p class="mt-3 max-w-3xl text-sm leading-6 text-[var(--board-text-muted)] sm:text-base">${escapeHtml(selectedEpic.description || "No epic description yet.")}</p>
           </div>
-          <div class="board-workspace__toolbar">
-            <label class="board-select" aria-label="Choose epic">
-              <span>Epic</span>
-              <select id="board-epic-select">
+          <div class="board-workspace__toolbar flex flex-col gap-4 xl:flex-row xl:items-end xl:justify-between">
+            <label class="board-select grid gap-2 xl:min-w-[280px]" aria-label="Choose epic">
+              <span class="${sectionLabelClasses()}">Epic</span>
+              <select class="${fieldClasses()}" id="board-epic-select">
                 ${store.snapshot.epics.map((epic) => `
                   <option value="${escapeHtml(epic.id)}" ${store.selectedEpicId === epic.id ? "selected" : ""}>
                     ${escapeHtml(epic.title)}
@@ -959,37 +1151,39 @@ function renderBoard(model) {
                 `).join("")}
               </select>
             </label>
-            <div class="board-tabs" role="tablist" aria-label="Board views">
-              ${VIEW_MODES.map((view) => `<button class="board-tab" type="button" role="tab" aria-selected="${store.view === view}" data-view="${view}">${view === "kanban" ? "Kanban" : "Rows"}</button>`).join("")}
+            <div class="flex flex-col gap-3 xl:items-end">
+              <div class="board-tabs inline-flex rounded-2xl border border-[var(--board-border)] bg-white/[0.03] p-1" role="tablist" aria-label="Board views">
+                ${VIEW_MODES.map((view) => `<button class="${cx("rounded-2xl px-4 py-2 text-sm font-medium transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--board-border-strong)] focus-visible:ring-offset-2 focus-visible:ring-offset-[var(--board-surface)]", store.view === view ? "bg-[var(--board-accent-soft)] text-[var(--board-text)] shadow-[inset_0_0_0_1px_var(--board-border-strong)]" : "text-[var(--board-text-muted)] hover:text-[var(--board-text)]")}" type="button" role="tab" aria-selected="${store.view === view}" data-view="${view}">${renderIcon(view === "kanban" ? "view_kanban" : "list", "text-[18px]")} ${view === "kanban" ? "Kanban" : "Rows"}</button>`).join("")}
+              </div>
+              <div class="board-legend flex flex-wrap gap-2">
+                ${renderEpicCountSummary(selectedEpic)}
+                <span class="${neutralChipClasses()}">${visibleTasks.length} visible</span>
+                <span class="${neutralChipClasses()}">Click a task to open details</span>
+                ${store.view === "kanban" ? `<span class="${neutralChipClasses()}">Drag to move</span>` : ""}
+                ${store.isMutating ? `<span class="${neutralChipClasses()}">Saving…</span>` : ""}
+              </div>
             </div>
-          </div>
-          <div class="board-legend">
-            ${renderEpicCountSummary(selectedEpic)}
-            <span class="board-chip">${visibleTasks.length} visible</span>
-            <span class="board-chip">Click a task to open details</span>
-            ${store.view === "kanban" ? `<span class="board-chip">Drag to move</span>` : ""}
-            ${store.isMutating ? `<span class="board-chip">Saving…</span>` : ""}
           </div>
         </header>
 
-        <div class="board-content">
+        <div class="board-content mt-6 min-h-0">
           ${store.view === "kanban"
-            ? `<div class="board-kanban">${columnsMarkup}</div>`
+            ? `<div class="board-kanban grid min-h-0 gap-4 md:grid-cols-2 2xl:grid-cols-4">${columnsMarkup}</div>`
             : `
-                <div class="board-list">
-                  <div class="board-list__header">
+                <div class="board-list grid gap-4">
+                  <div class="board-list__header hidden gap-3 px-1 text-[11px] font-semibold uppercase tracking-[0.16em] text-[var(--board-text-soft)] md:grid md:grid-cols-[minmax(0,1.8fr)_140px_90px_170px]">
                     <span>Task</span>
                     <span>Status</span>
                     <span>Subtasks</span>
                     <span>Updated</span>
                   </div>
-                  <div class="board-list__rows">${listRows}</div>
+                  <div class="board-list__rows space-y-3">${listRows}</div>
                 </div>`}
         </div>
       </section>
 
       ${selectedTask ? `
-        <aside class="board-panel board-drawer is-open" aria-label="Task drawer">
+        <aside class="board-panel board-drawer is-open ${panelClasses("fixed inset-4 z-30 p-5 xl:static xl:inset-auto xl:p-5")}" aria-label="Task drawer">
           ${renderDrawer(selectedTask, store.snapshot.epics, store.snapshot, store.isMutating)}
         </aside>
       ` : ""}
@@ -998,7 +1192,7 @@ function renderBoard(model) {
 
   appElement.innerHTML = `
     ${renderNotice(store.notice)}
-    <div class="board-layout">
+    <div class="board-layout mx-auto flex min-h-screen w-full max-w-[1600px] flex-col gap-4 px-4 py-4 sm:px-6 sm:py-6 xl:px-8">
       ${topbarMarkup}
       ${screen === "tasks" ? tasksWorkspaceMarkup : epicsOverviewMarkup}
       ${selectedSubtask ? renderSubtaskModal(selectedSubtask, store.isMutating) : ""}
@@ -1008,10 +1202,15 @@ function renderBoard(model) {
 
 function renderError(message) {
   appElement.innerHTML = `
-    <section class="board-state">
-      <span class="board-pill">Board error</span>
-      <h1>Could not load the board snapshot</h1>
-      <p>${escapeHtml(message)}</p>
+    <section class="mx-auto flex min-h-screen max-w-4xl items-center justify-center px-4 py-10 sm:px-6">
+      <div class="${panelClasses("w-full p-8 text-center")}">
+        <div class="mx-auto mb-5 flex h-14 w-14 items-center justify-center rounded-2xl bg-red-500/10 text-red-300 ring-1 ring-red-500/20">
+          ${renderIcon("warning", "text-[22px]")}
+        </div>
+        <span class="${sectionLabelClasses()}">Board error</span>
+        <h1 class="mt-2 text-3xl font-semibold tracking-tight text-[var(--board-text)]">Could not load the board snapshot</h1>
+        <p class="mx-auto mt-3 max-w-2xl text-sm leading-6 text-[var(--board-text-muted)] sm:text-base">${escapeHtml(message)}</p>
+      </div>
     </section>
   `;
 }
