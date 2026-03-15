@@ -85,10 +85,6 @@ function neutralChipClasses() {
   return "inline-flex items-center gap-1 rounded-full border border-[var(--board-border)] bg-white/[0.04] px-2.5 py-1 text-[11px] font-medium text-[var(--board-text-muted)]";
 }
 
-function metricCardClasses() {
-  return panelClasses("p-4 sm:p-5");
-}
-
 function statusBadgeClasses(status) {
   return cx(
     "inline-flex items-center gap-1 rounded-full border px-2.5 py-1 text-[11px] font-semibold uppercase tracking-[0.14em]",
@@ -98,23 +94,6 @@ function statusBadgeClasses(status) {
 
 function renderStatusBadge(rawStatus, label = readStatusLabel(rawStatus)) {
   return `<span class="${statusBadgeClasses(rawStatus)}">${escapeHtml(label)}</span>`;
-}
-
-function renderMetricCard(icon, label, value, detail) {
-  return `
-    <section class="${metricCardClasses()}">
-      <div class="flex items-start justify-between gap-4">
-        <div>
-          <p class="${sectionLabelClasses()}">${escapeHtml(label)}</p>
-          <p class="mt-3 text-2xl font-semibold tracking-tight text-[var(--board-text)]">${escapeHtml(value)}</p>
-          <p class="mt-2 text-sm text-[var(--board-text-muted)]">${escapeHtml(detail)}</p>
-        </div>
-        <div class="flex h-11 w-11 items-center justify-center rounded-2xl bg-[var(--board-accent-soft)] text-[var(--board-accent)] ring-1 ring-[var(--board-border-strong)]">
-          ${renderIcon(icon, "text-[20px]")}
-        </div>
-      </div>
-    </section>
-  `;
 }
 
 let appElement = null;
@@ -906,10 +885,6 @@ function renderBoard(model) {
   const screen = store.screen === "tasks" && selectedEpic ? "tasks" : "epics";
   const useTaskModal = Boolean(selectedTask && store.view === "kanban");
   const currentNav = selectedTask ? "detail" : screen === "tasks" ? "board" : "epics";
-  const overallCounts = deriveCounts(store.snapshot.tasks);
-  const completionRate = store.snapshot.tasks.length === 0
-    ? 0
-    : Math.round(((overallCounts.done ?? 0) / store.snapshot.tasks.length) * 100);
 
   if (screen !== store.screen) {
     store.screen = screen;
