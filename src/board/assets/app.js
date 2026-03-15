@@ -1,9 +1,10 @@
-const THEME_STORAGE_KEY = "trekoon-board-theme";
-const STATE_STORAGE_KEY = "trekoon-board-state";
+import { createBoardActions } from "./state/actions.js";
+import { createApi } from "./state/api.js";
+import { applyTheme, createStore, readThemePreference, VIEW_MODES, STATUS_ORDER } from "./state/store.js";
+import { captureRuntimeState, restoreRuntimeState, syncOverlayScrollLock } from "./utils/dom.js";
+
 const SESSION_TOKEN_STORAGE_KEY = "trekoon-board-session-token";
 const SEARCH_FOCUS_KEYS = new Set(["/", "s"]);
-const VIEW_MODES = ["kanban", "list"];
-const STATUS_ORDER = ["todo", "blocked", "in_progress", "done"];
 const STATUS_LABELS = {
   todo: "Todo",
   blocked: "Blocked",
@@ -201,33 +202,6 @@ function deriveCounts(tasks) {
   }, {});
 }
 
-function readStoredState() {
-  try {
-    return JSON.parse(localStorage.getItem(STATE_STORAGE_KEY) || "{}");
-  } catch {
-    return {};
-  }
-}
-
-function writeStoredState(nextState) {
-  localStorage.setItem(STATE_STORAGE_KEY, JSON.stringify(nextState));
-}
-
-function readThemePreference() {
-  const storedTheme = localStorage.getItem(THEME_STORAGE_KEY);
-  return storedTheme === "light" || storedTheme === "dark" ? storedTheme : "dark";
-}
-
-function applyTheme(theme) {
-  document.documentElement.dataset.theme = theme;
-  localStorage.setItem(THEME_STORAGE_KEY, theme);
-}
-
-function syncOverlayScrollLock(isLocked) {
-  document.documentElement.style.overflow = isLocked ? "hidden" : "";
-  document.body.style.overflow = isLocked ? "hidden" : "";
-}
-
 function formatDate(timestamp) {
   if (!timestamp) return "Unknown";
   return new Intl.DateTimeFormat(undefined, { dateStyle: "medium", timeStyle: "short" }).format(timestamp);
@@ -263,14 +237,6 @@ function renderEmptyState(title, description, shortcut) {
         : ""}
     </div>
   `;
-}
-
-function cloneSnapshot(snapshot) {
-  if (typeof structuredClone === "function") {
-    return structuredClone(snapshot);
-  }
-
-  return JSON.parse(JSON.stringify(snapshot));
 }
 
 function readNodeLabel(kind, title) {
@@ -411,288 +377,6 @@ function normalizeSnapshot(rawSnapshot) {
     subtasks,
     dependencies,
   };
-}
-
-function createStore(snapshot) {
-  const storedState = readStoredState();
-  const selectedEpicId = typeof storedState.selectedEpicId === "string" ? storedState.selectedEpicId : null;
-  const selectedTaskId = typeof storedState.selectedTaskId === "string" ? storedState.selectedTaskId : null;
-  const store = {
-    snapshot,
-    screen: storedState.screen === "tasks" && selectedEpicId ? "tasks" : "epics",
-    selectedEpicId,
-    search: storedState.search ?? "",
-    view: VIEW_MODES.includes(storedState.view) ? storedState.view : "kanban",
-    selectedTaskId,
-    selectedSubtaskId: null,
-    theme: readThemePreference(),
-    focusedEpicIndex: 0,
-    notice: null,
-    isMutating: false,
-  };
-
-  const persist = () => {
-    writeStoredState({
-      screen: store.screen,
-      selectedEpicId: store.selectedEpicId,
-      search: store.search,
-      view: store.view,
-      selectedTaskId: store.selectedTaskId,
-    });
-  };
-
-  const getTaskById = (taskId) => store.snapshot.tasks.find((task) => task.id === taskId) ?? null;
-  const getSubtaskById = (subtaskId) => store.snapshot.subtasks.find((subtask) => subtask.id === subtaskId) ?? null;
-  const getSelectedEpic = () => store.snapshot.epics.find((epic) => epic.id === store.selectedEpicId) ?? null;
-  const getSelectedTask = () => getTaskById(store.selectedTaskId);
-
-  const getVisibleTasks = () => {
-    const query = store.search.trim().toLowerCase();
-    return store.snapshot.tasks
-      .filter((task) => store.screen !== "tasks" || !store.selectedEpicId || task.epicId === store.selectedEpicId)
-      .filter((task) => query.length === 0 || task.searchText.includes(query));
-  };
-
-  const getVisibleEpics = () => {
-    const query = store.search.trim().toLowerCase();
-    if (query.length === 0) return store.snapshot.epics;
-
-    return store.snapshot.epics.filter((epic) => epic.searchText.includes(query));
-  };
-
-  const replaceSnapshot = (nextSnapshot) => {
-    store.snapshot = normalizeSnapshot(nextSnapshot);
-    if (store.selectedEpicId && !getSelectedEpic()) {
-      store.selectedEpicId = null;
-      store.screen = "epics";
-    }
-    if (!getTaskById(store.selectedTaskId)) {
-      store.selectedTaskId = null;
-    }
-    if (store.selectedTaskId) {
-      const selectedTask = getTaskById(store.selectedTaskId);
-      if (store.selectedEpicId && selectedTask?.epicId !== store.selectedEpicId) {
-        store.selectedTaskId = null;
-      }
-    }
-    if (!getSubtaskById(store.selectedSubtaskId)) {
-      store.selectedSubtaskId = null;
-    }
-    persist();
-  };
-
-  return {
-    store,
-    persist,
-    getTaskById,
-    getSubtaskById,
-    getSelectedEpic,
-    getSelectedTask,
-    getVisibleTasks,
-    getVisibleEpics,
-    replaceSnapshot,
-  };
-}
-
-function createApi(model) {
-  const { token: sessionToken } = resolveRuntimeSession();
-
-  async function request(path, options = {}) {
-    const headers = new Headers(options.headers || {});
-    if (sessionToken.length > 0) {
-      headers.set("authorization", `Bearer ${sessionToken}`);
-    }
-    if (options.body && !headers.has("content-type")) {
-      headers.set("content-type", "application/json");
-    }
-
-    const response = await fetch(path, { ...options, headers });
-    const payload = await response.json();
-    if (!payload?.ok) {
-      const message = payload?.error?.message || "Board request failed";
-      const error = new Error(message);
-      error.code = payload?.error?.code;
-      error.details = payload?.error?.details;
-      throw error;
-    }
-
-    return payload.data;
-  }
-
-  async function runMutation({ optimistic, request: mutationRequest, successMessage }) {
-    if (model.store.isMutating) {
-      return;
-    }
-
-    const previousSnapshot = cloneSnapshot(model.store.snapshot);
-    model.store.notice = null;
-    model.store.isMutating = true;
-
-    if (typeof optimistic === "function") {
-      model.store.snapshot = optimistic(cloneSnapshot(model.store.snapshot));
-      renderBoard(model);
-      attachInteractions(model, api);
-    }
-
-    try {
-      const data = await mutationRequest();
-      if (data?.snapshot) {
-        model.replaceSnapshot(data.snapshot);
-      }
-      model.store.notice = successMessage ? { type: "success", message: successMessage } : null;
-    } catch (error) {
-      model.replaceSnapshot(previousSnapshot);
-      model.store.notice = {
-        type: "error",
-        message: error instanceof Error ? error.message : String(error),
-      };
-    } finally {
-      model.store.isMutating = false;
-      renderBoard(model);
-      attachInteractions(model, api);
-    }
-  }
-
-  const api = {
-    patchTask(taskId, updates, optimistic) {
-      return runMutation({
-        optimistic,
-        successMessage: "Task saved.",
-        request: () => request(`/api/tasks/${encodeURIComponent(taskId)}`, {
-          method: "PATCH",
-          body: JSON.stringify(updates),
-        }),
-      });
-    },
-    patchSubtask(subtaskId, updates, optimistic) {
-      return runMutation({
-        optimistic,
-        successMessage: "Subtask saved.",
-        request: () => request(`/api/subtasks/${encodeURIComponent(subtaskId)}`, {
-          method: "PATCH",
-          body: JSON.stringify(updates),
-        }),
-      });
-    },
-    createSubtask(input, optimistic) {
-      return runMutation({
-        optimistic,
-        successMessage: "Subtask added.",
-        request: () => request("/api/subtasks", {
-          method: "POST",
-          body: JSON.stringify(input),
-        }),
-      });
-    },
-    deleteSubtask(subtaskId, optimistic) {
-      return runMutation({
-        optimistic,
-        successMessage: "Subtask removed.",
-        request: () => request(`/api/subtasks/${encodeURIComponent(subtaskId)}`, {
-          method: "DELETE",
-        }),
-      });
-    },
-    addDependency(sourceId, dependsOnId, optimistic) {
-      return runMutation({
-        optimistic,
-        successMessage: "Dependency added.",
-        request: () => request("/api/dependencies", {
-          method: "POST",
-          body: JSON.stringify({ sourceId, dependsOnId }),
-        }),
-      });
-    },
-    removeDependency(sourceId, dependsOnId, optimistic) {
-      return runMutation({
-        optimistic,
-        successMessage: "Dependency removed.",
-        request: () => request(`/api/dependencies?sourceId=${encodeURIComponent(sourceId)}&dependsOnId=${encodeURIComponent(dependsOnId)}`, {
-          method: "DELETE",
-        }),
-      });
-    },
-  };
-
-  return api;
-}
-
-function updateTaskInSnapshot(snapshot, taskId, updates) {
-  const nextSnapshot = cloneSnapshot(snapshot);
-  const task = nextSnapshot.tasks.find((candidate) => candidate.id === taskId);
-  if (!task) {
-    return snapshot;
-  }
-
-  if (updates.title !== undefined) task.title = updates.title;
-  if (updates.description !== undefined) task.description = updates.description;
-  if (updates.status !== undefined) task.status = updates.status;
-  task.updatedAt = Date.now();
-  return normalizeSnapshot(nextSnapshot);
-}
-
-function updateSubtaskInSnapshot(snapshot, subtaskId, updates) {
-  const nextSnapshot = cloneSnapshot(snapshot);
-  const subtask = nextSnapshot.subtasks.find((candidate) => candidate.id === subtaskId);
-  if (!subtask) {
-    return snapshot;
-  }
-
-  if (updates.title !== undefined) subtask.title = updates.title;
-  if (updates.description !== undefined) subtask.description = updates.description;
-  if (updates.status !== undefined) subtask.status = updates.status;
-  subtask.updatedAt = Date.now();
-  return normalizeSnapshot(nextSnapshot);
-}
-
-function addDependencyInSnapshot(snapshot, sourceId, dependsOnId) {
-  const nextSnapshot = cloneSnapshot(snapshot);
-  const duplicate = normalizeArray(nextSnapshot.dependencies).some(
-    (dependency) => dependency.sourceId === sourceId && dependency.dependsOnId === dependsOnId,
-  );
-  if (!duplicate) {
-    normalizeArray(nextSnapshot.dependencies).push({
-      id: crypto.randomUUID(),
-      sourceId,
-      sourceKind: nextSnapshot.subtasks.some((subtask) => subtask.id === sourceId) ? "subtask" : "task",
-      dependsOnId,
-      dependsOnKind: nextSnapshot.subtasks.some((subtask) => subtask.id === dependsOnId) ? "subtask" : "task",
-      createdAt: Date.now(),
-      updatedAt: Date.now(),
-    });
-  }
-  return normalizeSnapshot(nextSnapshot);
-}
-
-function removeDependencyInSnapshot(snapshot, sourceId, dependsOnId) {
-  const nextSnapshot = cloneSnapshot(snapshot);
-  nextSnapshot.dependencies = normalizeArray(nextSnapshot.dependencies).filter(
-    (dependency) => !(dependency.sourceId === sourceId && dependency.dependsOnId === dependsOnId),
-  );
-  return normalizeSnapshot(nextSnapshot);
-}
-
-function createSubtaskInSnapshot(snapshot, input) {
-  const nextSnapshot = cloneSnapshot(snapshot);
-  normalizeArray(nextSnapshot.subtasks).push({
-    id: crypto.randomUUID(),
-    taskId: input.taskId,
-    title: input.title,
-    description: input.description ?? "",
-    status: input.status ?? "todo",
-    createdAt: Date.now(),
-    updatedAt: Date.now(),
-  });
-  return normalizeSnapshot(nextSnapshot);
-}
-
-function deleteSubtaskInSnapshot(snapshot, subtaskId) {
-  const nextSnapshot = cloneSnapshot(snapshot);
-  nextSnapshot.subtasks = normalizeArray(nextSnapshot.subtasks).filter((candidate) => candidate.id !== subtaskId);
-  nextSnapshot.dependencies = normalizeArray(nextSnapshot.dependencies).filter(
-    (dependency) => dependency.sourceId !== subtaskId && dependency.dependsOnId !== subtaskId,
-  );
-  return normalizeSnapshot(nextSnapshot);
 }
 
 function renderStatusSelect(name, selectedStatus, disabled = false) {
@@ -1352,93 +1036,55 @@ function renderError(message) {
   `;
 }
 
-function attachInteractions(model, api) {
-  const { store, persist, getVisibleTasks, getTaskById } = model;
+function attachInteractions(model, api, rerender) {
+  const { store } = model;
+  const actions = createBoardActions({
+    model,
+    api,
+    rerender,
+    normalizeSnapshot,
+    normalizeStatus,
+    applyTheme,
+    searchFocusKeys: SEARCH_FOCUS_KEYS,
+  });
 
   document.querySelector("[data-action='toggle-theme']")?.addEventListener("click", () => {
-    store.theme = store.theme === "dark" ? "light" : "dark";
-    applyTheme(store.theme);
-    renderBoard(model);
-    attachInteractions(model, api);
+    actions.toggleTheme();
   });
 
   document.querySelector("#board-search-input")?.addEventListener("input", (event) => {
-    store.search = event.target.value;
-    if (store.selectedTaskId && !getVisibleTasks().some((task) => task.id === store.selectedTaskId)) {
-      store.selectedTaskId = null;
-      store.selectedSubtaskId = null;
-    }
-    persist();
-    renderBoard(model);
-    attachInteractions(model, api);
-    document.querySelector("#board-search-input")?.focus();
+    actions.updateSearch(event.target.value);
   });
 
   document.querySelectorAll("[data-open-epic]").forEach((button) => {
     button.addEventListener("click", () => {
-      store.screen = "tasks";
-      store.selectedEpicId = button.dataset.openEpic || null;
-      store.selectedTaskId = null;
-      store.selectedSubtaskId = null;
-      persist();
-      renderBoard(model);
-      attachInteractions(model, api);
+      actions.openEpic(button.dataset.openEpic || null);
     });
   });
 
   document.querySelector("#board-epic-select")?.addEventListener("change", (event) => {
-    store.screen = "tasks";
-    store.selectedEpicId = event.target.value || null;
-    store.selectedTaskId = null;
-    store.selectedSubtaskId = null;
-    persist();
-    renderBoard(model);
-    attachInteractions(model, api);
+    actions.selectEpic(event.target.value || null);
   });
 
   document.querySelector("[data-nav='epics']")?.addEventListener("click", () => {
-    store.screen = "epics";
-    store.selectedTaskId = null;
-    store.selectedSubtaskId = null;
-    persist();
-    renderBoard(model);
-    attachInteractions(model, api);
+    actions.showEpics();
   });
 
   document.querySelectorAll("[data-nav-board]").forEach((button) => {
     button.addEventListener("click", () => {
-      const fallbackEpicId = store.selectedEpicId || store.snapshot.epics[0]?.id || null;
-      if (!fallbackEpicId) {
-        return;
-      }
-
-      store.screen = "tasks";
-      store.selectedEpicId = fallbackEpicId;
-      persist();
-      renderBoard(model);
-      attachInteractions(model, api);
+      actions.showBoard();
     });
   });
 
   document.querySelectorAll("[data-view]").forEach((button) => {
     button.addEventListener("click", () => {
-      store.view = button.dataset.view;
-      persist();
-      renderBoard(model);
-      attachInteractions(model, api);
+      actions.setView(button.dataset.view);
     });
   });
 
   document.querySelectorAll("[data-task-id]").forEach((node) => {
     node.addEventListener("click", () => {
-      const taskId = node.dataset.taskId;
-      if (!taskId) {
-        return;
-      }
-      store.selectedTaskId = taskId;
-      persist();
-      renderBoard(model);
-      attachInteractions(model, api);
+      actions.selectTask(node.dataset.taskId);
     });
   });
 
@@ -1447,19 +1093,13 @@ function attachInteractions(model, api) {
       if (event.currentTarget !== event.target && event.currentTarget?.classList?.contains("board-task-modal-backdrop")) {
         return;
       }
-      store.selectedTaskId = null;
-      store.selectedSubtaskId = null;
-      persist();
-      renderBoard(model);
-      attachInteractions(model, api);
+      actions.closeTask();
     });
   });
 
   document.querySelectorAll("[data-open-subtask]").forEach((button) => {
     button.addEventListener("click", () => {
-      store.selectedSubtaskId = button.dataset.openSubtask || null;
-      renderBoard(model);
-      attachInteractions(model, api);
+      actions.openSubtask(button.dataset.openSubtask || null);
     });
   });
 
@@ -1468,9 +1108,7 @@ function attachInteractions(model, api) {
       if (event.currentTarget !== event.target && event.currentTarget?.classList?.contains("board-modal-backdrop")) {
         return;
       }
-      store.selectedSubtaskId = null;
-      renderBoard(model);
-      attachInteractions(model, api);
+      actions.closeSubtask();
     });
   });
 
@@ -1489,13 +1127,7 @@ function attachInteractions(model, api) {
         return;
       }
       const taskId = form.dataset.taskForm;
-      const formData = new FormData(form);
-      const updates = {
-        title: String(formData.get("title") || "").trim(),
-        description: String(formData.get("description") || "").trim(),
-        status: normalizeStatus(String(formData.get("status") || "todo")),
-      };
-      api.patchTask(taskId, updates, (snapshot) => updateTaskInSnapshot(snapshot, taskId, updates));
+      actions.submitTaskForm(taskId, new FormData(form));
     });
   });
 
@@ -1506,14 +1138,7 @@ function attachInteractions(model, api) {
         return;
       }
       const subtaskId = form.dataset.subtaskForm;
-      const formData = new FormData(form);
-      const updates = {
-        title: String(formData.get("title") || "").trim(),
-        description: String(formData.get("description") || "").trim(),
-        status: normalizeStatus(String(formData.get("status") || "todo")),
-      };
-      store.selectedSubtaskId = subtaskId;
-      api.patchSubtask(subtaskId, updates, (snapshot) => updateSubtaskInSnapshot(snapshot, subtaskId, updates));
+      actions.submitSubtaskForm(subtaskId, new FormData(form));
     });
   });
 
@@ -1525,22 +1150,7 @@ function attachInteractions(model, api) {
       }
 
       const taskId = form.dataset.createSubtaskForm;
-      const formData = new FormData(form);
-      const input = {
-        taskId,
-        title: String(formData.get("title") || "").trim(),
-        description: String(formData.get("description") || "").trim(),
-        status: normalizeStatus(String(formData.get("status") || "todo")),
-      };
-
-      if (!taskId || input.title.length === 0) {
-        store.notice = { type: "error", message: "Subtasks need a title before they can be added." };
-        renderBoard(model);
-        attachInteractions(model, api);
-        return;
-      }
-
-      api.createSubtask(input, (snapshot) => createSubtaskInSnapshot(snapshot, input));
+      actions.submitCreateSubtask(taskId, new FormData(form));
     });
   });
 
@@ -1555,7 +1165,7 @@ function attachInteractions(model, api) {
         return;
       }
 
-      api.deleteSubtask(subtaskId, (snapshot) => deleteSubtaskInSnapshot(snapshot, subtaskId));
+      actions.deleteSubtask(subtaskId);
     });
   });
 
@@ -1566,16 +1176,7 @@ function attachInteractions(model, api) {
         return;
       }
       const sourceId = form.dataset.dependencyForm;
-      const formData = new FormData(form);
-      const dependsOnId = String(formData.get("dependsOnId") || "").trim();
-      if (!dependsOnId) {
-        store.notice = { type: "error", message: "Choose a dependency target first." };
-        renderBoard(model);
-        attachInteractions(model, api);
-        return;
-      }
-
-      api.addDependency(sourceId, dependsOnId, (snapshot) => addDependencyInSnapshot(snapshot, sourceId, dependsOnId));
+      actions.addDependency(sourceId, new FormData(form));
     });
   });
 
@@ -1586,7 +1187,7 @@ function attachInteractions(model, api) {
       }
       const sourceId = button.dataset.removeDependencySource;
       const dependsOnId = button.dataset.removeDependencyTarget;
-      api.removeDependency(sourceId, dependsOnId, (snapshot) => removeDependencyInSnapshot(snapshot, sourceId, dependsOnId));
+      actions.removeDependency(sourceId, dependsOnId);
     });
   });
 
@@ -1616,91 +1217,12 @@ function attachInteractions(model, api) {
       }
       const taskId = event.dataTransfer?.getData("text/task-id") || event.dataTransfer?.getData("text/plain");
       const nextStatus = column.dataset.dropStatus;
-      const task = getTaskById(taskId);
-      if (!task || !nextStatus || task.status === nextStatus) {
-        return;
-      }
-      store.selectedTaskId = taskId;
-      persist();
-      api.patchTask(taskId, { status: nextStatus }, (snapshot) => updateTaskInSnapshot(snapshot, taskId, { status: nextStatus }));
+      actions.dropTaskStatus(taskId, nextStatus);
     });
   });
 
   window.onkeydown = (event) => {
-    const activeElement = document.activeElement;
-    const tagName = activeElement?.tagName?.toLowerCase();
-    const isTypingTarget = tagName === "input" || tagName === "textarea" || tagName === "select";
-    const visibleTasks = getVisibleTasks();
-    const currentIndex = visibleTasks.findIndex((task) => task.id === store.selectedTaskId);
-
-    if (SEARCH_FOCUS_KEYS.has(event.key.toLowerCase()) && activeElement?.id !== "board-search-input" && !isTypingTarget) {
-      event.preventDefault();
-      document.querySelector("#board-search-input")?.focus();
-      return;
-    }
-
-    if (event.key === "Escape") {
-      if (activeElement?.id === "board-search-input") {
-        activeElement.blur();
-      } else if (store.selectedSubtaskId) {
-        store.selectedSubtaskId = null;
-        renderBoard(model);
-        attachInteractions(model, api);
-      } else if (store.selectedTaskId) {
-        store.selectedTaskId = null;
-        persist();
-        renderBoard(model);
-        attachInteractions(model, api);
-      } else if (store.screen === "tasks") {
-        store.screen = "epics";
-        persist();
-        renderBoard(model);
-        attachInteractions(model, api);
-      } else {
-        if (store.notice) {
-          store.notice = null;
-          renderBoard(model);
-          attachInteractions(model, api);
-        }
-      }
-      return;
-    }
-
-    if (store.screen !== "tasks" || isTypingTarget || visibleTasks.length === 0) return;
-
-    if (event.key.toLowerCase() === "j" || event.key === "ArrowDown") {
-      event.preventDefault();
-      const nextTask = visibleTasks[Math.min(currentIndex + 1, visibleTasks.length - 1)] ?? visibleTasks[0];
-      store.selectedTaskId = nextTask.id;
-      persist();
-      renderBoard(model);
-      attachInteractions(model, api);
-      return;
-    }
-
-    if (event.key.toLowerCase() === "k" || event.key === "ArrowUp") {
-      event.preventDefault();
-      const previousTask = visibleTasks[Math.max(currentIndex - 1, 0)] ?? visibleTasks[0];
-      store.selectedTaskId = previousTask.id;
-      persist();
-      renderBoard(model);
-      attachInteractions(model, api);
-      return;
-    }
-
-    if (event.key === "Enter" && currentIndex >= 0) {
-      event.preventDefault();
-      document.querySelector(".board-drawer, .board-task-modal")?.scrollIntoView({ block: "nearest", behavior: "smooth" });
-      return;
-    }
-
-    if (event.key === "Enter" && currentIndex === -1 && visibleTasks[0]) {
-      event.preventDefault();
-      store.selectedTaskId = visibleTasks[0].id;
-      persist();
-      renderBoard(model);
-      attachInteractions(model, api);
-    }
+    actions.handleKeydown(event);
   };
 }
 
@@ -1754,11 +1276,18 @@ export async function bootLegacyBoard(options = {}) {
       return;
     }
 
-    const model = createStore(snapshot);
-    const api = createApi(model);
+    const model = createStore(snapshot, { normalizeSnapshot });
+    let api = null;
+    const rerender = () => {
+      const runtimeState = captureRuntimeState(appElement, model.store);
+      renderBoard(model);
+      attachInteractions(model, api, rerender);
+      restoreRuntimeState(appElement, runtimeState);
+    };
+
+    api = createApi(model, { sessionToken: runtimeSession.token, rerender });
     applyTheme(model.store.theme);
-    renderBoard(model);
-    attachInteractions(model, api);
+    rerender();
   } catch (error) {
     renderError(error instanceof Error ? error.message : String(error));
   }
