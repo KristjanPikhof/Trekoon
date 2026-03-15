@@ -1157,6 +1157,12 @@ function attachInteractions(model, api, rerender) {
     });
   });
 
+  document.querySelectorAll(".board-task-card [data-clamped-text], .board-list-row [data-clamped-text]").forEach((node) => {
+    node.addEventListener("click", (event) => {
+      event.stopPropagation();
+    });
+  });
+
   document.querySelectorAll("[data-close-task]").forEach((button) => {
     button.addEventListener("click", (event) => {
       if (event.currentTarget !== event.target && event.currentTarget?.classList?.contains("board-task-modal-backdrop")) {
