@@ -124,4 +124,46 @@ describe("board server", (): void => {
       await closeBlocker(blocker);
     }
   });
+
+  test("serves index fallback with no-store headers for deep board routes", async (): Promise<void> => {
+    const workspace: string = createWorkspace();
+    prepareBoardAssets(workspace);
+
+    const boardServer = startBoardServer({ cwd: workspace, token: "overlay token" });
+
+    try {
+      const response = await fetch(`${boardServer.origin}/epics/mobile/detail`);
+      const body = await response.text();
+
+      expect(boardServer.url).toBe(`${boardServer.origin}/?token=overlay%20token`);
+      expect(boardServer.fallbackUrl).toBe(boardServer.url);
+      expect(response.status).toBe(200);
+      expect(response.headers.get("cache-control")).toBe("no-store");
+      expect(response.headers.get("content-type")).toContain("text/html");
+      expect(body).toContain("board");
+    } finally {
+      boardServer.stop();
+    }
+  });
+
+  test("serves static assets with cache-busting headers", async (): Promise<void> => {
+    const workspace: string = createWorkspace();
+    prepareBoardAssets(workspace);
+    mkdirSync(join(resolveStoragePaths(workspace).boardDir, "static"), { recursive: true });
+    writeFileSync(join(resolveStoragePaths(workspace).boardDir, "static", "app.js"), "console.log('board runtime');\n", "utf8");
+
+    const boardServer = startBoardServer({ cwd: workspace, token: "asset-token" });
+
+    try {
+      const response = await fetch(`${boardServer.origin}/static/app.js`);
+      const body = await response.text();
+
+      expect(response.status).toBe(200);
+      expect(response.headers.get("cache-control")).toBe("no-store");
+      expect(response.headers.get("content-type")).toContain("text/javascript");
+      expect(body).toContain("board runtime");
+    } finally {
+      boardServer.stop();
+    }
+  });
 });
