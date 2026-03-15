@@ -161,6 +161,33 @@ describe("board install", (): void => {
     expect(readFileSync(join(updated.paths.runtimeRoot, "static", "app.js"), "utf8")).toContain("board v2");
   });
 
+  test("replaces stale runtime files when the bundled asset list changes", (): void => {
+    const workspace: string = createWorkspace();
+    const bundledAssetRoot: string = join(workspace, "bundled-assets");
+    createBundledAssets(bundledAssetRoot);
+    writeFileSync(join(bundledAssetRoot, "static", "detail.js"), "console.log('detail overlay');\n", "utf8");
+
+    const initial = ensureBoardInstalled({
+      workingDirectory: workspace,
+      bundledAssetRoot,
+      assetVersion: "1.2.3",
+    });
+
+    expect(existsSync(join(initial.paths.runtimeRoot, "static", "detail.js"))).toBeTrue();
+
+    unlinkSync(join(bundledAssetRoot, "static", "detail.js"));
+
+    const updated = updateBoardInstallation({
+      workingDirectory: workspace,
+      bundledAssetRoot,
+      assetVersion: "1.2.3",
+    });
+
+    expect(updated.action).toBe("updated");
+    expect(updated.manifest.files).toEqual(["index.html", "static/app.js"]);
+    expect(existsSync(join(updated.paths.runtimeRoot, "static", "detail.js"))).toBeFalse();
+  });
+
   test("reinstalls when the runtime manifest is corrupt", (): void => {
     const workspace: string = createWorkspace();
     const bundledAssetRoot: string = join(workspace, "bundled-assets");
