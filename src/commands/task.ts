@@ -43,6 +43,7 @@ const DEFAULT_TASK_LIST_LIMIT = 10;
 const SEARCH_OPTIONS = ["fields", "preview"] as const;
 const REPLACE_OPTIONS = ["search", "replace", "fields", "preview", "apply"] as const;
 const CREATE_MANY_OPTIONS = ["epic", "e", "task"] as const;
+const UPDATE_OPTIONS = ["all", "ids", "append", "description", "d", "status", "s", "title", "t"] as const;
 const STATUS_CASCADE_UPDATE_STATUSES = ["done", "todo"] as const;
 
 function parseIdsOption(rawIds: string | undefined): string[] {
@@ -1023,6 +1024,16 @@ export async function runTask(context: CliContext): Promise<CliResult> {
         });
       }
       case "update": {
+        const updateUnknownOption = findUnknownOption(parsed, UPDATE_OPTIONS);
+        if (updateUnknownOption !== undefined) {
+          return unknownOption("task.update", updateUnknownOption, UPDATE_OPTIONS);
+        }
+
+        const unexpectedUpdatePositionals = readUnexpectedPositionals(parsed, 2);
+        if (unexpectedUpdatePositionals.length > 0) {
+          return failUnexpectedPositionals("task.update", unexpectedUpdatePositionals);
+        }
+
         const missingUpdateOption =
           readMissingOptionValue(parsed.missingOptionValues, "ids") ??
           readMissingOptionValue(parsed.missingOptionValues, "append") ??
