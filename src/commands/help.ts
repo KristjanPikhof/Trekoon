@@ -21,6 +21,7 @@ const ROOT_HELP = [
   "  init         Initialize repo-shared .trekoon storage and DB",
   "  quickstart   Show shared-storage bootstrap + AI execution loop",
   "  wipe         Remove repo-shared Trekoon state (requires --yes)",
+  "  board        Local board asset and browser commands",
   "  epic         Epic lifecycle commands",
   "  task         Task lifecycle commands",
   "  subtask      Subtask lifecycle commands",
@@ -81,6 +82,25 @@ const WIPE_HELP = [
   "",
   "Examples:",
   "  trekoon wipe --yes",
+].join("\n");
+
+const BOARD_HELP = [
+  "Usage: trekoon board <open|update>",
+  "",
+  "Subcommands:",
+  "  open",
+  "      Ensure board assets are installed, start a 127.0.0.1 board server,",
+  "      and launch the browser. Machine output includes server URL, fallback URL,",
+  "      and launch metadata.",
+  "  update",
+  "      Refresh board runtime assets only. Does not start the server or open a browser.",
+  "",
+  "Environment overrides:",
+  "  TREKOON_BOARD_ASSET_ROOT  Optional asset source override for tests and local development.",
+  "",
+  "Examples:",
+  "  trekoon board open",
+  "  trekoon --json board update",
 ].join("\n");
 
 const EPIC_HELP = [
@@ -394,6 +414,7 @@ const SKILLS_HELP = [
 
 const COMMAND_HELP: Record<string, string> = {
   init: INIT_HELP,
+  board: BOARD_HELP,
   quickstart: QUICKSTART_HELP,
   session: SESSION_HELP,
   wipe: WIPE_HELP,
