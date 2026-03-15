@@ -205,7 +205,7 @@ describe("cli shell dispatch", (): void => {
 
     expect(boardUpdate.ok).toBeTrue();
     expect(boardUpdate.command).toBe("board.update");
-    expect((boardUpdate.data as { action: string }).action).toBe("updated");
+    expect((boardUpdate.data as { action: string }).action).toBe("installed");
   });
 
   test("dispatches skills install and creates project-local artifact", async (): Promise<void> => {
