@@ -186,6 +186,69 @@ describe("mutation conformance", (): void => {
     }
   });
 
+  test("subtask update events preserve explicit empty descriptions", async (): Promise<void> => {
+    const cwd = createWorkspace();
+
+    const createdEpic = await runEpic({
+      cwd,
+      mode: "toon",
+      args: ["create", "--title", "Roadmap", "--description", "Scope"],
+    });
+    expect(createdEpic.ok).toBeTrue();
+    const epicId = (createdEpic.data as { epic: { id: string } }).epic.id;
+
+    const createdTask = await runTask({
+      cwd,
+      mode: "toon",
+      args: ["create", "--epic", epicId, "--title", "Implement", "--description", "Code"],
+    });
+    expect(createdTask.ok).toBeTrue();
+    const taskId = (createdTask.data as { task: { id: string } }).task.id;
+
+    const createdSubtask = await runSubtask({
+      cwd,
+      mode: "toon",
+      args: ["create", "--task", taskId, "--title", "Write tests", "--description", "Regression coverage"],
+    });
+    expect(createdSubtask.ok).toBeTrue();
+    const subtaskId = (createdSubtask.data as { subtask: { id: string } }).subtask.id;
+
+    const updatedSubtask = await runSubtask({
+      cwd,
+      mode: "toon",
+      args: ["update", subtaskId, "--description", "", "--status", "done"],
+    });
+    expect(updatedSubtask.ok).toBeTrue();
+    expect((updatedSubtask.data as { subtask: { description: string; status: string } }).subtask).toEqual(
+      expect.objectContaining({ description: "", status: "done" }),
+    );
+
+    expect(eventRowsForEntity(cwd, "subtask", subtaskId)).toEqual([
+      {
+        operation: ENTITY_OPERATIONS.subtask.created,
+        payload: {
+          fields: {
+            task_id: taskId,
+            title: "Write tests",
+            description: "Regression coverage",
+            status: "todo",
+          },
+        },
+      },
+      {
+        operation: ENTITY_OPERATIONS.subtask.updated,
+        payload: {
+          fields: {
+            task_id: taskId,
+            title: "Write tests",
+            description: "",
+            status: "done",
+          },
+        },
+      },
+    ]);
+  });
+
   test("batch create and dependency add-many append canonical events atomically", async (): Promise<void> => {
     const cwd = createWorkspace();
 
