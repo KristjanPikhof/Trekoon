@@ -87,6 +87,7 @@ body {
   background: color-mix(in srgb, var(--board-shell) 94%, transparent);
   box-shadow: var(--board-shadow);
   backdrop-filter: blur(20px);
+  order: -1;
 }
 
 .board-shell-v2__intro {
