@@ -1,6 +1,9 @@
 import { createBoardActions } from "./state/actions.js";
 import { createApi } from "./state/api.js";
 import { renderBoardTopbar } from "./components/BoardTopbar.js";
+import { renderClampedText } from "./components/ClampedText.js";
+import { renderEpicRow as renderEpicOverviewRow } from "./components/EpicRow.js";
+import { renderEpicsOverview } from "./components/EpicsOverview.js";
 import { renderWorkspaceHeader } from "./components/WorkspaceHeader.js";
 import { applyTheme, createStore, readThemePreference, VIEW_MODES, STATUS_ORDER } from "./state/store.js";
 import { captureRuntimeState, restoreRuntimeState, syncOverlayScrollLock } from "./utils/dom.js";
@@ -542,36 +545,6 @@ function renderEpicSidebarItem(epic, selected) {
   `;
 }
 
-function renderEpicRow(epic, selected) {
-  const totalTasks = Array.isArray(epic.taskIds) ? epic.taskIds.length : 0;
-  return `
-    <button
-      type="button"
-      class="board-epic-row ${cx(
-        "grid w-full gap-4 rounded-3xl border px-4 py-4 text-left transition duration-200 md:grid-cols-[minmax(0,1.8fr)_140px_90px_170px_84px] md:items-center",
-        "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--board-border-strong)] focus-visible:ring-offset-2 focus-visible:ring-offset-[var(--board-surface)]",
-        selected
-          ? "border-[var(--board-border-strong)] bg-[var(--board-accent-soft)] shadow-focus"
-          : "border-[var(--board-border)] bg-white/[0.02] hover:border-[var(--board-border-strong)] hover:bg-white/[0.04]",
-      )}"
-      data-open-epic="${escapeHtml(epic.id)}"
-      aria-current="${selected}"
-    >
-      <div class="board-epic-row__summary min-w-0">
-        <div class="flex items-center gap-2 text-xs font-semibold uppercase tracking-[0.16em] text-[var(--board-text-soft)]">
-          <span class="${neutralChipClasses()}">${escapeHtml(epic.id)}</span>
-        </div>
-        <strong class="mt-3 block text-base font-semibold leading-6 text-[var(--board-text)]">${escapeHtml(epic.title)}</strong>
-        ${renderDescriptionPreview(epic.description)}
-      </div>
-      <div class="flex items-center md:justify-start">${renderStatusBadge(epic.status ?? "todo", readStatusLabel(epic.status ?? "Epic"))}</div>
-      <span class="text-sm font-medium text-[var(--board-text-muted)]">${totalTasks}</span>
-      <span class="text-sm text-[var(--board-text-muted)]">${escapeHtml(formatDate(epic.updatedAt))}</span>
-      <span class="inline-flex items-center gap-1 text-sm font-medium text-[var(--board-accent)]">Open ${renderIcon("chevron_right", "text-[16px]")}</span>
-    </button>
-  `;
-}
-
 function renderTaskMeta(task, includeStatus = false) {
   return `
     ${includeStatus ? renderStatusBadge(task.status) : ""}
@@ -988,43 +961,23 @@ function renderBoard(model) {
     theme: store.theme,
   });
 
-  const epicsOverviewMarkup = `
-    <div class="board-root board-root--epics grid gap-5 xl:grid-cols-[minmax(0,1fr)_320px]" >
-      <section class="board-overview ${panelClasses("p-5 sm:p-6")}" aria-label="Epics overview">
-        <header class="board-section-head flex flex-col gap-5 border-b border-[var(--board-border)] pb-5">
-          <div>
-            <span class="${sectionLabelClasses()}">Epics overview</span>
-            <h2 class="mt-2 text-2xl font-semibold tracking-tight text-[var(--board-text)] sm:text-3xl">Manage high-level initiatives</h2>
-            <p class="mt-3 max-w-3xl text-sm leading-6 text-[var(--board-text-muted)] sm:text-base">Open an epic to move into a focused task workspace with kanban, rows, and an integrated detail drawer.</p>
-          </div>
-          <div class="board-legend flex flex-wrap gap-2">
-            <span class="${neutralChipClasses()}">${visibleEpics.length} visible epic${visibleEpics.length === 1 ? "" : "s"}</span>
-            <span class="${neutralChipClasses()}">${store.snapshot.tasks.length} total tasks</span>
-            ${store.isMutating ? `<span class="${neutralChipClasses()}">Saving…</span>` : ""}
-          </div>
-        </header>
-        <div class="board-table mt-6 grid gap-4">
-          <div class="board-table__header hidden gap-3 px-1 text-[11px] font-semibold uppercase tracking-[0.16em] text-[var(--board-text-soft)] md:grid md:grid-cols-[minmax(0,1.8fr)_140px_90px_170px_84px]">
-            <span>Epic</span>
-            <span>Status</span>
-            <span>Tasks</span>
-            <span>Updated</span>
-            <span>Open</span>
-          </div>
-          <div class="board-table__rows space-y-3">
-            ${visibleEpics.length === 0
-              ? renderEmptyState("No matching epics", "Try a different search or publish more work to the board.", "/")
-              : visibleEpics.map((epic) => renderEpicRow(epic, store.selectedEpicId === epic.id)).join("")}
-          </div>
-        </div>
-      </section>
-      <aside class="grid gap-4">
-        ${renderMetricCard("pending_actions", "Active epics", String(visibleEpics.length), "Published epics currently visible in this board slice.")}
-        ${renderMetricCard("task_alt", "Tasks in play", String(store.snapshot.tasks.length), `${overallCounts.in_progress ?? 0} in progress · ${overallCounts.blocked ?? 0} blocked.`)}
-        ${renderMetricCard("query_stats", "Completion", `${completionRate}%`, `${overallCounts.done ?? 0} completed tasks in the current snapshot.`)}
-      </aside>
-    </div>
-  `;
+  const epicsOverviewMarkup = renderEpicsOverview({
+    panelClasses,
+    renderEmptyState,
+    renderEpicRow: (epic) => renderEpicOverviewRow({
+      epic,
+      escapeHtml,
+      formatDate,
+      neutralChipClasses,
+      renderClampedText,
+      renderIcon,
+      renderStatusBadge,
+      selected: store.selectedEpicId === epic.id,
+    }),
+    sectionLabelClasses,
+    store,
+    visibleEpics,
+  });
 
   const tasksWorkspaceMarkup = selectedEpic ? `
     <div class="board-root ${workspaceLayoutClass} ${selectedTask && !useTaskModal ? "has-detail" : ""} h-full flex-1 min-h-0 grid gap-4 xl:gap-5">
