@@ -969,7 +969,7 @@ body {
 
 @media (max-width: 1280px) {
   .board-layout--workspace .board-root--tasks {
-    grid-template-columns: minmax(220px, 260px) minmax(0, 1fr);
+    grid-template-columns: minmax(0, 1fr);
   }
 
   .board-layout--workspace .board-root--detail.board-root--detail-open {
