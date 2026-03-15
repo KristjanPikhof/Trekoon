@@ -78,14 +78,40 @@ browser.
 - `trekoon board update` refreshes the board runtime assets only; it does not
   start the server or open a browser
 
+Keep the operator path simple:
+
+```bash
+trekoon board open
+```
+
+Use `trekoon board update` only when you want to refresh the copied runtime
+assets without opening a session.
+
 The browser flow is local-only by design:
 
-- static assets are bundled with Trekoon and copied into repo-shared storage, so
-  the board does not depend on a separate install step or network CDN at runtime
+- Trekoon copies the board shell and app files into repo-shared storage, so the
+  board still starts with one CLI command and no separate frontend build step
 - the board server binds only to `127.0.0.1`
 - every `board open` session uses a per-session token in the URL/API requests
 - command output always includes a manual fallback URL if the browser launch
   fails
+
+Current runtime expectations:
+
+- the local runtime is served from `.trekoon/board`
+- the shell currently loads Vue from `esm.sh`, Tailwind from
+  `cdn.tailwindcss.com`, and Google-hosted fonts/icons when the page renders
+- if your environment blocks those hosts, `trekoon board open` still starts the
+  local server, but the browser UI may render without the enhanced shell until
+  network access is restored
+
+Current board behavior to expect:
+
+- wide screens show the epic switcher, workspace, and task inspector together
+- narrower screens collapse supporting panels into stacked or drawer-style
+  surfaces so the board remains usable without horizontal overflow
+- long descriptions and dependency/subtask lists use disclosure controls such as
+  “Show more” and “Collapse” instead of expanding dense rows by default
 
 For the full lifecycle and examples, read [Quickstart](docs/quickstart.md) and
 [Command reference](docs/commands.md).
