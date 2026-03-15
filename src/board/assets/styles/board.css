@@ -320,6 +320,213 @@ body {
   min-height: 0;
 }
 
+.board-overview--dense {
+  display: grid;
+  gap: 14px;
+}
+
+.board-overview__header {
+  display: grid;
+  gap: 12px;
+  padding-bottom: 14px;
+  border-bottom: 1px solid var(--board-border);
+}
+
+.board-overview__title {
+  margin: 8px 0 0;
+  font-size: clamp(1.4rem, 1.8vw, 1.9rem);
+  line-height: 1.1;
+}
+
+.board-overview__summary {
+  margin: 8px 0 0;
+  max-width: 72ch;
+  font-size: 0.92rem;
+  line-height: 1.5;
+  color: var(--board-text-muted);
+}
+
+.board-overview__legend {
+  gap: 8px;
+}
+
+.board-table--epics {
+  gap: 10px;
+}
+
+.board-table__header--epics {
+  grid-template-columns: minmax(0, 2.1fr) 120px 190px 110px 88px;
+  gap: 10px;
+  padding: 0 4px 8px;
+}
+
+.board-table__rows--epics {
+  display: grid;
+  gap: 8px;
+}
+
+.board-epic-row {
+  grid-template-columns: minmax(0, 2.1fr) 120px 190px 110px 88px;
+  gap: 10px;
+  padding: 10px 12px;
+  border: 1px solid var(--board-border);
+  border-radius: 18px;
+  background: rgba(255, 255, 255, 0.02);
+  transition: border-color 0.2s ease, background 0.2s ease, box-shadow 0.2s ease;
+}
+
+.board-epic-row:hover {
+  border-color: var(--board-border-strong);
+  background: rgba(255, 255, 255, 0.04);
+}
+
+.board-epic-row--selected {
+  border-color: var(--board-border-strong);
+  background: var(--board-accent-soft);
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--board-accent) 12%, transparent);
+}
+
+.board-epic-row__summary {
+  gap: 6px;
+}
+
+.board-epic-row__title-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+
+.board-epic-row__title-button,
+.board-epic-row__action {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  border: 0;
+  background: transparent;
+  padding: 0;
+  color: inherit;
+  cursor: pointer;
+}
+
+.board-epic-row__title-button {
+  min-width: 0;
+  text-align: left;
+}
+
+.board-epic-row__title-button strong {
+  display: block;
+  font-size: 0.98rem;
+  line-height: 1.4;
+  color: var(--board-text);
+}
+
+.board-epic-row__title-button:focus-visible,
+.board-epic-row__action:focus-visible,
+.board-clamped-text__summary:focus-visible {
+  outline: 2px solid var(--board-border-strong);
+  outline-offset: 4px;
+  border-radius: 12px;
+}
+
+.board-epic-row__status,
+.board-epic-row__action-wrap {
+  display: flex;
+  align-items: center;
+}
+
+.board-epic-row__counts,
+.board-epic-row__updated {
+  display: grid;
+  align-content: start;
+  gap: 6px;
+}
+
+.board-epic-row__counts {
+  grid-template-columns: repeat(2, minmax(0, max-content));
+}
+
+.board-epic-row__updated {
+  font-size: 0.84rem;
+  color: var(--board-text-muted);
+}
+
+.board-epic-row__label {
+  font-size: 0.68rem;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--board-text-soft);
+}
+
+.board-epic-row__action {
+  font-size: 0.84rem;
+  font-weight: 700;
+  color: var(--board-accent);
+}
+
+.board-clamped-text {
+  min-width: 0;
+}
+
+.board-clamped-text__summary {
+  display: grid;
+  gap: 4px;
+  list-style: none;
+  cursor: pointer;
+}
+
+.board-clamped-text__summary::-webkit-details-marker {
+  display: none;
+}
+
+.board-clamped-text__preview,
+.board-clamped-text__body {
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+.board-clamped-text__preview {
+  display: -webkit-box;
+  overflow: hidden;
+  -webkit-box-orient: vertical;
+}
+
+.board-clamped-text__preview--2 {
+  -webkit-line-clamp: 2;
+}
+
+.board-clamped-text__toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 0.78rem;
+  font-weight: 600;
+  color: var(--board-accent);
+}
+
+.board-clamped-text__toggle-less,
+.board-clamped-text__body,
+.board-clamped-text[open] .board-clamped-text__toggle-more {
+  display: none;
+}
+
+.board-clamped-text[open] .board-clamped-text__toggle-less,
+.board-clamped-text[open] .board-clamped-text__body {
+  display: block;
+}
+
+.board-clamped-text[open] .board-clamped-text__preview {
+  -webkit-line-clamp: unset;
+}
+
+.board-clamped-text__body {
+  margin-top: 6px;
+  font-size: 0.9rem;
+  line-height: 1.6;
+  color: var(--board-text-muted);
+}
+
 .board-shell-topbar {
   position: sticky;
   top: 12px;
@@ -635,6 +842,19 @@ body {
   .board-layout--workspace .board-list__rows,
   .board-layout--workspace .board-column__tasks {
     overflow: visible;
+  }
+
+  .board-table__header--epics,
+  .board-epic-row {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .board-epic-row__counts {
+    grid-template-columns: repeat(2, minmax(0, max-content));
+  }
+
+  .board-epic-row__action-wrap {
+    justify-content: flex-start;
   }
 }
 
