@@ -4,6 +4,7 @@ export function renderEpicRow(context) {
     escapeHtml,
     formatDate,
     neutralChipClasses,
+    renderClampedText,
     renderIcon,
     renderStatusBadge,
     selected,
@@ -13,6 +14,16 @@ export function renderEpicRow(context) {
   const counts = epic.counts || { blocked: 0, done: 0, in_progress: 0 };
   const statusLabel = String(epic.status ?? "todo").replace(/_/g, " ");
   const openLabel = `Open epic ${epic.title}`;
+  const descriptionMarkup = epic.description
+    ? renderClampedText({
+      buttonLabel: `epic ${epic.title} description`,
+      className: "board-epic-row__description text-sm text-[var(--board-text-muted)]",
+      escapeHtml,
+      lineClamp: 3,
+      renderIcon,
+      text: epic.description,
+    })
+    : "";
 
   return `
     <button
@@ -27,9 +38,7 @@ export function renderEpicRow(context) {
           <span class="${neutralChipClasses()}">${escapeHtml(epic.id)}</span>
           <strong class="board-epic-row__title">${escapeHtml(epic.title)}</strong>
         </span>
-        ${epic.description
-          ? `<span class="board-epic-row__description text-sm leading-6 text-[var(--board-text-muted)]">${escapeHtml(epic.description)}</span>`
-          : ""}
+        ${descriptionMarkup}
       </span>
       <span class="board-epic-row__status">${renderStatusBadge(epic.status ?? "todo")}</span>
       <span class="board-epic-row__counts" aria-label="Epic progress counts">
