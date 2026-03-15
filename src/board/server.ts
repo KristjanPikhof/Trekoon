@@ -93,7 +93,8 @@ export function startBoardServer(options: StartBoardServerOptions = {}): BoardSe
     },
   });
 
-  const origin: string = `http://127.0.0.1:${server.port}`;
+  const port: number = server.port;
+  const origin: string = `http://127.0.0.1:${port}`;
   const url: string = `${origin}/?token=${encodeURIComponent(token)}`;
 
   return {
@@ -102,7 +103,7 @@ export function startBoardServer(options: StartBoardServerOptions = {}): BoardSe
     fallbackUrl: url,
     token,
     hostname: "127.0.0.1",
-    port: server.port,
+    port,
     stop(): void {
       server.stop(true);
       database.close();
