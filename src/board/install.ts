@@ -1,4 +1,7 @@
 import {
+  createHash,
+} from "node:crypto";
+import {
   cpSync,
   existsSync,
   mkdirSync,
@@ -59,12 +62,26 @@ function readManifest(manifestFile: string): BoardAssetManifest | null {
   return JSON.parse(rawManifest) as BoardAssetManifest;
 }
 
-function createManifest(assetVersion: string, files: readonly string[]): BoardAssetManifest {
+function createAssetDigest(sourceRoot: string, files: readonly string[]): string {
+  const hash = createHash("sha256");
+
+  for (const relativeFile of files) {
+    hash.update(relativeFile);
+    hash.update("\0");
+    hash.update(readFileSync(join(sourceRoot, relativeFile)));
+    hash.update("\0");
+  }
+
+  return hash.digest("hex");
+}
+
+function createManifest(sourceRoot: string, assetVersion: string, files: readonly string[]): BoardAssetManifest {
   return {
     contractVersion: BOARD_ASSET_CONTRACT_VERSION,
     assetVersion,
     entryFile: TREKOON_BOARD_ENTRY_FILENAME,
     files,
+    assetDigest: createAssetDigest(sourceRoot, files),
   };
 }
 
@@ -89,7 +106,8 @@ function determineAction(
     currentManifest.contractVersion !== nextManifest.contractVersion ||
     currentManifest.assetVersion !== nextManifest.assetVersion ||
     currentManifest.entryFile !== nextManifest.entryFile ||
-    JSON.stringify(currentManifest.files) !== JSON.stringify(nextManifest.files)
+    JSON.stringify(currentManifest.files) !== JSON.stringify(nextManifest.files) ||
+    currentManifest.assetDigest !== nextManifest.assetDigest
   ) {
     return "updated";
   }
@@ -124,7 +142,7 @@ export function ensureBoardInstalled(options: EnsureBoardInstalledOptions = {}):
     });
   }
 
-  const manifest: BoardAssetManifest = createManifest(options.assetVersion ?? CLI_VERSION, sourceFiles);
+  const manifest: BoardAssetManifest = createManifest(sourceRoot, options.assetVersion ?? CLI_VERSION, sourceFiles);
   const currentManifest: BoardAssetManifest | null = readManifest(manifestFile);
   const action: BoardInstallAction = determineAction(runtimeRoot, entryFile, currentManifest, manifest);
 
