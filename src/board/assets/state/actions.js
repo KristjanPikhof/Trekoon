@@ -96,6 +96,10 @@ export function createBoardActions(options) {
     normalizeSnapshot,
     normalizeStatus,
     applyTheme,
+    closeTopmostDisclosure,
+    dismissSearch,
+    focusSearch,
+    focusTaskDetail,
     searchFocusKeys,
   } = options;
   const { store, persist, getBoardState, getTaskById, syncState } = model;
@@ -251,20 +255,30 @@ export function createBoardActions(options) {
 
       if (searchFocusKeys.has(event.key.toLowerCase()) && activeElement?.id !== "board-search-input" && !isTypingTarget) {
         event.preventDefault();
-        document.querySelector("#board-search-input")?.focus({ preventScroll: true });
+        focusSearch?.(activeElement);
         return;
       }
 
       if (event.key === "Escape") {
-        if (activeElement?.id === "board-search-input") {
-          activeElement.blur();
-        } else if (boardState.selectedSubtaskId) {
+        if (closeTopmostDisclosure?.(boardState, activeElement)) {
+          event.preventDefault();
+          return;
+        }
+
+        if (boardState.selectedSubtaskId) {
+          event.preventDefault();
           this.closeSubtask();
         } else if (boardState.selectedTaskId) {
+          event.preventDefault();
           this.closeTask();
+        } else if (dismissSearch?.(boardState, activeElement)) {
+          event.preventDefault();
+          return;
         } else if (boardState.screen === "tasks") {
+          event.preventDefault();
           this.showEpics();
         } else if (store.notice) {
+          event.preventDefault();
           store.notice = null;
           rerender();
         }
@@ -291,7 +305,7 @@ export function createBoardActions(options) {
 
       if (event.key === "Enter" && currentIndex >= 0) {
         event.preventDefault();
-        document.querySelector(".board-drawer, .board-task-modal")?.scrollIntoView({ block: "nearest", behavior: "smooth" });
+        focusTaskDetail?.();
         return;
       }
 
