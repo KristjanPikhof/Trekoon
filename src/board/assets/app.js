@@ -122,6 +122,18 @@ function formatDate(timestamp) {
   return new Intl.DateTimeFormat(undefined, { dateStyle: "medium", timeStyle: "short" }).format(timestamp);
 }
 
+function readStatusLabel(rawStatus) {
+  if (typeof rawStatus !== "string" || rawStatus.trim().length === 0) {
+    return "Unknown";
+  }
+
+  if (rawStatus === "todo" || rawStatus === "blocked" || rawStatus === "in_progress" || rawStatus === "done" || rawStatus === "in-progress") {
+    return STATUS_LABELS[normalizeStatus(rawStatus)] ?? rawStatus;
+  }
+
+  return rawStatus.replaceAll("_", " ").replaceAll("-", " ");
+}
+
 function escapeHtml(value) {
   return String(value)
     .replaceAll("&", "&amp;")
@@ -544,7 +556,7 @@ function renderNotice(notice) {
   }
 
   return `
-    <section class="board-panel" aria-live="polite">
+    <section class="board-panel board-notice" aria-live="polite">
       <span class="board-pill">${notice.type === "error" ? "Action blocked" : "Saved"}</span>
       <p>${escapeHtml(notice.message)}</p>
     </section>
@@ -598,7 +610,7 @@ function renderEpicRow(epic, selected) {
         <strong>${escapeHtml(epic.title)}</strong>
         ${renderDescriptionPreview(epic.description)}
       </div>
-      <span class="board-status-pill">${escapeHtml(STATUS_LABELS[normalizeStatus(epic.status)] ?? epic.status ?? "Epic")}</span>
+      <span class="board-status-pill">${escapeHtml(readStatusLabel(epic.status ?? "Epic"))}</span>
       <span class="board-epic-row__meta">${totalTasks}</span>
       <span class="board-epic-row__meta">${escapeHtml(formatDate(epic.updatedAt))}</span>
       <span class="board-epic-row__action">Open</span>
@@ -767,7 +779,7 @@ function renderDrawer(task, epics, snapshot, isMutating = false) {
       </div>
       <div class="board-drawer__actions">
         <span class="board-chip">Epic ${escapeHtml(epic?.title ?? "Unknown")}</span>
-        <span class="board-chip">${escapeHtml(STATUS_LABELS[task.status] ?? task.status)}</span>
+        <span class="board-chip">${escapeHtml(readStatusLabel(task.status))}</span>
       </div>
       ${task.description.trim().length > 0
         ? `<div class="board-drawer__description">${escapeHtml(task.description).replaceAll("\n", "<br />")}</div>`
