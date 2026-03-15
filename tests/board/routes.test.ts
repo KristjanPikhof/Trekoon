@@ -108,6 +108,27 @@ describe("board routes", (): void => {
     }
   });
 
+  test("accepts bearer token auth for board API requests", async (): Promise<void> => {
+    const cwd = createWorkspace();
+    const storage = openTrekoonDatabase(cwd);
+
+    try {
+      const handler = createBoardApiHandler({ db: storage.db, cwd, token: "secret-token" });
+      const response = await handler(new Request("http://board.test/api/snapshot", {
+        headers: {
+          authorization: "Bearer secret-token",
+        },
+      }));
+      const body = await response.json() as { ok: boolean; data: { snapshot: { epics: unknown[] } } };
+
+      expect(response.status).toBe(200);
+      expect(body.ok).toBeTrue();
+      expect(Array.isArray(body.data.snapshot.epics)).toBeTrue();
+    } finally {
+      storage.close();
+    }
+  });
+
   test("returns readable dependency blocked errors for mutation routes", async (): Promise<void> => {
     const cwd = createWorkspace();
     const storage = openTrekoonDatabase(cwd);
