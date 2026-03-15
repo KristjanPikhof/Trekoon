@@ -986,7 +986,7 @@ function renderCreateSubtaskForm(task, isMutating = false) {
 function renderSubtaskModal(subtask, isMutating = false) {
   return `
     <div class="board-modal-backdrop fixed inset-0 z-40 grid place-items-center bg-slate-950/70 p-4 backdrop-blur-md" data-close-subtask>
-      <section class="board-modal ${panelClasses("grid max-h-[calc(100vh-2rem)] w-full max-w-2xl grid-rows-[auto_1fr] overflow-hidden p-5 sm:p-6")}" role="dialog" aria-modal="true" aria-labelledby="board-subtask-modal-title">
+      <section class="board-modal ${panelClasses("grid max-h-[calc(100dvh-2rem)] w-full max-w-2xl grid-rows-[auto_1fr] overflow-hidden p-5 sm:p-6")}" role="dialog" aria-modal="true" aria-labelledby="board-subtask-modal-title">
         <header class="board-modal__header border-b border-[var(--board-border)] pb-5">
           <div>
             <span class="${sectionLabelClasses()}">Subtask editor</span>
@@ -1333,7 +1333,7 @@ function renderBoard(model) {
     </div>
   `;
 
-  syncOverlayScrollLock(Boolean(useTaskModal || selectedSubtask));
+  syncOverlayScrollLock(Boolean(selectedTask || selectedSubtask));
 }
 
 function renderError(message) {
