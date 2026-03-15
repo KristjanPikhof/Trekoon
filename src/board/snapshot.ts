@@ -106,8 +106,14 @@ function normalizeStatusBucket(status: string): keyof Omit<StatusCounts, "total"
   return "other";
 }
 
-function countStatuses(records: readonly Array<{ readonly status: string }>): StatusCounts {
-  const counts: StatusCounts = {
+function countStatuses(records: readonly { readonly status: string }[]): StatusCounts {
+  const counts: {
+    total: number;
+    todo: number;
+    inProgress: number;
+    done: number;
+    other: number;
+  } = {
     total: records.length,
     todo: 0,
     inProgress: 0,
