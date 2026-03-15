@@ -1218,7 +1218,7 @@ function renderBoard(model) {
 
   appElement.innerHTML = `
     ${renderNotice(store.notice)}
-    <div class="board-layout ${screen === "tasks" ? "board-layout--workspace" : "board-layout--overview"} mx-auto flex w-full max-w-[1600px] flex-col gap-4 px-4 py-4 sm:px-6 sm:py-6 xl:px-8 ${screen === "tasks" ? "h-[100dvh]" : "min-h-screen"}" data-scroll-surface="page">
+    <div class="board-layout ${screen === "tasks" ? "board-layout--workspace" : "board-layout--overview"} mx-auto flex w-full max-w-[1600px] flex-col gap-4 px-4 py-4 sm:px-6 sm:py-6 xl:px-8 ${screen === "tasks" ? "h-full min-h-0" : "min-h-screen"}" data-scroll-surface="page">
       ${topbarMarkup}
       ${screen === "tasks" ? tasksWorkspaceMarkup : epicsOverviewMarkup}
       ${selectedSubtask ? renderSubtaskModal(selectedSubtask, store.isMutating) : ""}
