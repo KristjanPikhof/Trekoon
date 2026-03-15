@@ -61,7 +61,7 @@ function readPreferredBoardPort(stateFile: string): number | null {
     const state = JSON.parse(rawState) as Partial<BoardServerState>;
     const preferredPort = state.preferredPort;
 
-    if (!Number.isInteger(preferredPort) || preferredPort < 1 || preferredPort > 65535) {
+    if (typeof preferredPort !== "number" || !Number.isInteger(preferredPort) || preferredPort < 1 || preferredPort > 65535) {
       return null;
     }
 
