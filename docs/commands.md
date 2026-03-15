@@ -79,7 +79,7 @@ Current shell/runtime notes:
 
 - the runtime copied into `.trekoon/board` includes the HTML shell, local app
   modules, and shared styles
-- the current shell also requests Vue from `esm.sh`, Tailwind from
+- the current shell also requests Vue from `unpkg.com`, Tailwind from
   `cdn.tailwindcss.com`, and Google-hosted fonts/icons in the browser
 - if those remote dependencies are blocked, the local server still starts and
   the fallback URL remains valid, but the browser UI may not fully load until
