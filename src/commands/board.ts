@@ -29,9 +29,10 @@ function usageResult(): CliResult {
 }
 
 function boardInstallOptions(context: CliContext): EnsureBoardInstalledOptions {
+  const bundledAssetRoot: string | undefined = process.env.TREKOON_BOARD_ASSET_ROOT;
   return {
     workingDirectory: context.cwd,
-    bundledAssetRoot: process.env.TREKOON_BOARD_ASSET_ROOT,
+    ...(bundledAssetRoot === undefined ? {} : { bundledAssetRoot }),
   };
 }
 
