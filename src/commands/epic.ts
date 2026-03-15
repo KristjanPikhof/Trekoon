@@ -889,8 +889,8 @@ export async function runEpic(context: CliContext): Promise<CliResult> {
         }
 
         const includeAll: boolean = hasFlag(parsed.flags, "all");
-        const rawStatuses: string | undefined = readOption(parsed.options, "status");
-        const rawLimit: string | undefined = readOption(parsed.options, "limit");
+        const rawStatuses: string | undefined = readOption(parsed.options, "status", "s");
+        const rawLimit: string | undefined = readOption(parsed.options, "limit", "l");
         const rawCursor: string | undefined = readOption(parsed.options, "cursor");
         const rawView: string | undefined = readOption(parsed.options, "view");
         const view = readEnumOption(parsed.options, VIEW_MODES, "view");
