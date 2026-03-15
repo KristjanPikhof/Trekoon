@@ -40,6 +40,9 @@ function formatTask(task: TaskRecord): string {
 const VIEW_MODES = ["table", "compact", "tree", "detail"] as const;
 const LIST_VIEW_MODES = ["table", "compact"] as const;
 const DEFAULT_TASK_LIST_LIMIT = 10;
+const CREATE_OPTIONS = ["epic", "e", "title", "t", "description", "d", "status", "s"] as const;
+const LIST_OPTIONS = ["epic", "e", "status", "s", "limit", "l", "cursor", "all", "view"] as const;
+const SHOW_OPTIONS = ["view", "all"] as const;
 const SEARCH_OPTIONS = ["fields", "preview"] as const;
 const REPLACE_OPTIONS = ["search", "replace", "fields", "preview", "apply"] as const;
 const CREATE_MANY_OPTIONS = ["epic", "e", "task"] as const;
@@ -461,6 +464,16 @@ export async function runTask(context: CliContext): Promise<CliResult> {
 
     switch (subcommand) {
       case "create": {
+        const createUnknownOption = findUnknownOption(parsed, CREATE_OPTIONS);
+        if (createUnknownOption !== undefined) {
+          return unknownOption("task.create", createUnknownOption, CREATE_OPTIONS);
+        }
+
+        const unexpectedCreatePositionals = readUnexpectedPositionals(parsed, 1);
+        if (unexpectedCreatePositionals.length > 0) {
+          return failUnexpectedPositionals("task.create", unexpectedCreatePositionals);
+        }
+
         const missingCreateOption =
           readMissingOptionValue(parsed.missingOptionValues, "epic", "e") ??
           readMissingOptionValue(parsed.missingOptionValues, "description", "d") ??
@@ -537,6 +550,16 @@ export async function runTask(context: CliContext): Promise<CliResult> {
         });
       }
       case "list": {
+        const listUnknownOption = findUnknownOption(parsed, LIST_OPTIONS);
+        if (listUnknownOption !== undefined) {
+          return unknownOption("task.list", listUnknownOption, LIST_OPTIONS);
+        }
+
+        const unexpectedListPositionals = readUnexpectedPositionals(parsed, 1);
+        if (unexpectedListPositionals.length > 0) {
+          return failUnexpectedPositionals("task.list", unexpectedListPositionals);
+        }
+
         const missingListOption =
           readMissingOptionValue(parsed.missingOptionValues, "view") ??
           readMissingOptionValue(parsed.missingOptionValues, "status", "s") ??
@@ -695,6 +718,16 @@ export async function runTask(context: CliContext): Promise<CliResult> {
         });
       }
       case "show": {
+        const showUnknownOption = findUnknownOption(parsed, SHOW_OPTIONS);
+        if (showUnknownOption !== undefined) {
+          return unknownOption("task.show", showUnknownOption, SHOW_OPTIONS);
+        }
+
+        const unexpectedShowPositionals = readUnexpectedPositionals(parsed, 2);
+        if (unexpectedShowPositionals.length > 0) {
+          return failUnexpectedPositionals("task.show", unexpectedShowPositionals);
+        }
+
         const missingShowOption = readMissingOptionValue(parsed.missingOptionValues, "view");
         if (missingShowOption !== undefined) {
           return failMissingOptionValue("task.show", missingShowOption);
