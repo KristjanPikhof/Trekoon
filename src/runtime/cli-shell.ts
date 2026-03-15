@@ -1,3 +1,4 @@
+import { runBoard } from "../commands/board";
 import { runHelp } from "../commands/help";
 import { runDep } from "../commands/dep";
 import { runEpic } from "../commands/epic";
@@ -19,6 +20,7 @@ import { resolveStoragePaths } from "../storage/path";
 
 const SUPPORTED_ROOT_COMMANDS: readonly string[] = [
   "help",
+  "board",
   "init",
   "quickstart",
   "session",
@@ -333,6 +335,9 @@ export async function executeShell(parsed: ParsedInvocation, cwd: string = proce
   switch (parsed.command) {
     case "help":
       result = await runHelp(context);
+      break;
+    case "board":
+      result = await runBoard(context);
       break;
     case "init":
       result = await runInit(context);
