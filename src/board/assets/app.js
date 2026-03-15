@@ -155,13 +155,16 @@ function closeTopmostDisclosure(boardState, activeElement = document.activeEleme
 
   if (!(candidate instanceof HTMLDetailsElement)) {
     candidate = openDisclosures
-      .map((disclosure, index) => ({
-        disclosure,
-        index,
-        depth: disclosure.parentElement?.closest("details[open]")
-          ? disclosure.closest("details[open]")?.querySelectorAll("details[open]").length ?? 0
-          : 0,
-      }))
+      .map((disclosure, index) => {
+        let depth = 0;
+        let parentDisclosure = disclosure.parentElement?.closest("details[open]") ?? null;
+        while (parentDisclosure instanceof HTMLDetailsElement) {
+          depth += 1;
+          parentDisclosure = parentDisclosure.parentElement?.closest("details[open]") ?? null;
+        }
+
+        return { disclosure, index, depth };
+      })
       .sort((left, right) => {
         if (left.depth !== right.depth) {
           return right.depth - left.depth;
