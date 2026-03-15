@@ -1257,7 +1257,11 @@ function attachInteractions(model, api) {
         renderBoard(model);
         attachInteractions(model, api);
       } else {
-        store.notice = null;
+        if (store.notice) {
+          store.notice = null;
+          renderBoard(model);
+          attachInteractions(model, api);
+        }
       }
       return;
     }
