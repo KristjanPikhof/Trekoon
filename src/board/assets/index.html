@@ -32,69 +32,8 @@
       };
     </script>
     <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="./styles/board.css" />
     <style>
-      :root {
-        color-scheme: dark;
-        --board-bg: #0b0d12;
-        --board-bg-alt: #10131b;
-        --board-shell: rgba(15, 18, 24, 0.88);
-        --board-surface: #141922;
-        --board-surface-2: #191f2b;
-        --board-surface-3: #202636;
-        --board-border: rgba(255, 255, 255, 0.1);
-        --board-border-strong: rgba(167, 139, 250, 0.38);
-        --board-text: #f5f7fb;
-        --board-text-muted: #b6becc;
-        --board-text-soft: #8891a1;
-        --board-accent: #8b5cf6;
-        --board-accent-strong: #9f75ff;
-        --board-accent-soft: rgba(139, 92, 246, 0.15);
-        --board-success: #22c55e;
-        --board-warning: #f59e0b;
-        --board-danger: #ef4444;
-        --board-info: #38bdf8;
-        --board-shadow: 0 24px 80px rgba(0, 0, 0, 0.42);
-        --board-glow: rgba(139, 92, 246, 0.18);
-      }
-
-      :root[data-theme="light"] {
-        color-scheme: light;
-        --board-bg: #f4f6fb;
-        --board-bg-alt: #edf1f7;
-        --board-shell: rgba(255, 255, 255, 0.82);
-        --board-surface: #ffffff;
-        --board-surface-2: #f8faff;
-        --board-surface-3: #eef2ff;
-        --board-border: rgba(15, 23, 42, 0.1);
-        --board-border-strong: rgba(124, 58, 237, 0.28);
-        --board-text: #111827;
-        --board-text-muted: #4b5563;
-        --board-text-soft: #6b7280;
-        --board-accent: #7c3aed;
-        --board-accent-strong: #6d28d9;
-        --board-accent-soft: rgba(124, 58, 237, 0.12);
-        --board-success: #16a34a;
-        --board-warning: #d97706;
-        --board-danger: #dc2626;
-        --board-info: #0284c7;
-        --board-shadow: 0 24px 60px rgba(15, 23, 42, 0.12);
-        --board-glow: rgba(124, 58, 237, 0.1);
-      }
-
-      html,
-      body {
-        min-height: 100%;
-      }
-
-      body {
-        margin: 0;
-        font-family: Inter, ui-sans-serif, system-ui, sans-serif;
-        background:
-          radial-gradient(circle at top left, var(--board-glow), transparent 28%),
-          linear-gradient(180deg, var(--board-bg), var(--board-bg-alt));
-        color: var(--board-text);
-      }
-
       .material-symbols-rounded {
         font-family: "Material Symbols Rounded";
         font-weight: 400;
@@ -132,6 +71,6 @@
       </section>
     </main>
 
-    <script type="module" src="./app.js"></script>
+    <script type="module" src="./main.js"></script>
   </body>
 </html>
