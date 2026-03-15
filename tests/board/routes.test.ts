@@ -227,4 +227,91 @@ describe("board routes", (): void => {
       storage.close();
     }
   });
+
+  test("edits empty-description subtasks and allows clearing descriptions", async (): Promise<void> => {
+    const cwd = createWorkspace();
+    const storage = openTrekoonDatabase(cwd);
+
+    try {
+      const mutations = new MutationService(storage.db, cwd);
+      const epic = mutations.createEpic({ title: "Roadmap", description: "Plan release" });
+      const task = mutations.createTask({ epicId: epic.id, title: "Implement", description: "Ship board" });
+      const emptySubtask = mutations.createSubtask({ taskId: task.id, title: "Triage bug" });
+      const describedSubtask = mutations.createSubtask({
+        taskId: task.id,
+        title: "Document fix",
+        description: "Capture before/after behaviour",
+      });
+
+      const handler = createBoardApiHandler({ db: storage.db, cwd, token: "secret-token" });
+
+      const emptyResponse = await handler(new Request(`http://board.test/api/subtasks/${emptySubtask.id}?token=secret-token`, {
+        method: "PATCH",
+        headers: {
+          "content-type": "application/json",
+        },
+        body: JSON.stringify({
+          title: "Triage regression",
+          description: "",
+          status: "done",
+        }),
+      }));
+      const emptyBody = await emptyResponse.json() as {
+        ok: boolean;
+        data: {
+          subtask: { id: string; title: string; description: string; status: string };
+          snapshot: { subtasks: Array<{ id: string; title: string; description: string; status: string }> };
+        };
+      };
+
+      expect(emptyResponse.status).toBe(200);
+      expect(emptyBody.ok).toBeTrue();
+      expect(emptyBody.data.subtask).toEqual(expect.objectContaining({
+        id: emptySubtask.id,
+        title: "Triage regression",
+        description: "",
+        status: "done",
+      }));
+      expect(emptyBody.data.snapshot.subtasks).toContainEqual(expect.objectContaining({
+        id: emptySubtask.id,
+        title: "Triage regression",
+        description: "",
+        status: "done",
+      }));
+
+      const clearResponse = await handler(new Request(`http://board.test/api/subtasks/${describedSubtask.id}?token=secret-token`, {
+        method: "PATCH",
+        headers: {
+          "content-type": "application/json",
+        },
+        body: JSON.stringify({
+          title: describedSubtask.title,
+          description: "",
+          status: "in_progress",
+        }),
+      }));
+      const clearBody = await clearResponse.json() as {
+        ok: boolean;
+        data: {
+          subtask: { id: string; description: string; status: string };
+          snapshot: { subtasks: Array<{ id: string; description: string; status: string }> };
+        };
+      };
+
+      expect(clearResponse.status).toBe(200);
+      expect(clearBody.ok).toBeTrue();
+      expect(clearBody.data.subtask).toEqual(expect.objectContaining({
+        id: describedSubtask.id,
+        description: "",
+        status: "in_progress",
+      }));
+      expect(clearBody.data.snapshot.subtasks).toContainEqual(expect.objectContaining({
+        id: describedSubtask.id,
+        description: "",
+        status: "in_progress",
+      }));
+    } finally {
+      storage.close();
+    }
+  });
 });
