@@ -7,6 +7,7 @@ export function renderBoardTopbar(context) {
     renderIcon,
     screen,
     search,
+    searchScope,
     sectionLabelClasses,
     selectedEpic,
     theme,
@@ -47,7 +48,12 @@ export function renderBoardTopbar(context) {
           <div class="board-shell-topbar__title-row">
             <h1>Trekoon</h1>
             <span class="${neutralChipClasses()}">Local repo</span>
+            <span class="${neutralChipClasses()}">${escapeHtml(searchScope?.summary ?? "Epic overview")}</span>
           </div>
+          <p class="mt-2 text-sm text-[var(--board-text-muted)]">
+            ${escapeHtml(searchScope?.detail ?? "Keep epic, task, and search context aligned.")}
+            ${selectedEpic ? ` · Active epic ${escapeHtml(selectedEpic.title)}` : ""}
+          </p>
         </div>
       </div>
 
@@ -72,6 +78,7 @@ export function renderBoardTopbar(context) {
             </summary>
             <div>
               <p>Repo-backed board state and view preferences stay local to this workspace.</p>
+              <p class="mt-2 text-sm text-[var(--board-text-muted)]">Current scope: ${escapeHtml(searchScope?.summary ?? "Epic overview")}</p>
             </div>
           </details>
         </div>
