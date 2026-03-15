@@ -838,6 +838,9 @@ function renderBoard(model) {
   const listRows = visibleTasks.length === 0
     ? renderEmptyState("No matching tasks", "Nothing in this slice matches the active search and epic filters.", "/")
     : visibleTasks.map((task) => renderListRow(task, selectedTask?.id === task.id)).join("");
+  const workspaceLayoutClass = selectedTask && !useTaskModal
+    ? "board-root--tasks board-root--detail board-root--detail-open"
+    : "board-root--tasks";
 
   const topbarMarkup = renderBoardTopbar({
     buttonClasses,
@@ -891,7 +894,7 @@ function renderBoard(model) {
   `;
 
   const tasksWorkspaceMarkup = selectedEpic ? `
-    <div class="board-root board-root--tasks ${selectedTask && !useTaskModal ? "has-detail" : ""} h-full flex-1 min-h-0 grid gap-5 ${selectedTask && !useTaskModal ? "2xl:grid-cols-[280px_minmax(0,1fr)_420px]" : "xl:grid-cols-[280px_minmax(0,1fr)]"}">
+    <div class="board-root ${workspaceLayoutClass} ${selectedTask && !useTaskModal ? "has-detail" : ""} h-full flex-1 min-h-0 grid gap-4 xl:gap-5">
       <aside class="board-sidebar ${panelClasses("hidden h-full min-h-0 overflow-hidden p-4 xl:grid xl:grid-rows-[auto_1fr]")}" aria-label="Epic switcher">
         <header class="board-sidebar__header border-b border-[var(--board-border)] pb-4">
           <span class="${sectionLabelClasses()}">Epics</span>
@@ -961,7 +964,7 @@ function renderBoard(model) {
 
   appElement.innerHTML = `
     ${renderNotice(store.notice)}
-    <div class="board-layout mx-auto flex w-full max-w-[1600px] flex-col gap-4 px-4 py-4 sm:px-6 sm:py-6 xl:px-8 ${screen === "tasks" ? "h-[100dvh] overflow-hidden" : "min-h-screen"}">
+    <div class="board-layout ${screen === "tasks" ? "board-layout--workspace" : "board-layout--overview"} mx-auto flex w-full max-w-[1600px] flex-col gap-4 px-4 py-4 sm:px-6 sm:py-6 xl:px-8 ${screen === "tasks" ? "h-[100dvh] overflow-hidden" : "min-h-screen"}">
       ${topbarMarkup}
       ${screen === "tasks" ? tasksWorkspaceMarkup : epicsOverviewMarkup}
       ${selectedSubtask ? renderSubtaskModal(selectedSubtask, store.isMutating) : ""}
