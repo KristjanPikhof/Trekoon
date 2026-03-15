@@ -53,13 +53,31 @@ function listRelativeFiles(rootPath: string, currentPath: string = rootPath): st
   return files.sort((left, right) => left.localeCompare(right));
 }
 
-function readManifest(manifestFile: string): BoardAssetManifest | null {
+interface ReadManifestResult {
+  readonly manifest: BoardAssetManifest | null;
+  readonly damaged: boolean;
+}
+
+function readManifest(manifestFile: string): ReadManifestResult {
   if (!existsSync(manifestFile)) {
-    return null;
+    return {
+      manifest: null,
+      damaged: false,
+    };
   }
 
-  const rawManifest: string = readFileSync(manifestFile, "utf8");
-  return JSON.parse(rawManifest) as BoardAssetManifest;
+  try {
+    const rawManifest: string = readFileSync(manifestFile, "utf8");
+    return {
+      manifest: JSON.parse(rawManifest) as BoardAssetManifest,
+      damaged: false,
+    };
+  } catch {
+    return {
+      manifest: null,
+      damaged: true,
+    };
+  }
 }
 
 function createAssetDigest(sourceRoot: string, files: readonly string[]): string {
@@ -96,10 +114,15 @@ function determineAction(
   runtimeRoot: string,
   entryFile: string,
   currentManifest: BoardAssetManifest | null,
+  manifestDamaged: boolean,
   nextManifest: BoardAssetManifest,
 ): BoardInstallAction {
+  if (manifestDamaged) {
+    return "reinstalled";
+  }
+
   if (!existsSync(runtimeRoot) || !existsSync(entryFile) || currentManifest === null) {
-    return currentManifest === null ? "installed" : "reinstalled";
+    return currentManifest === null && !existsSync(runtimeRoot) ? "installed" : "reinstalled";
   }
 
   if (
@@ -143,8 +166,14 @@ export function ensureBoardInstalled(options: EnsureBoardInstalledOptions = {}):
   }
 
   const manifest: BoardAssetManifest = createManifest(sourceRoot, options.assetVersion ?? CLI_VERSION, sourceFiles);
-  const currentManifest: BoardAssetManifest | null = readManifest(manifestFile);
-  const action: BoardInstallAction = determineAction(runtimeRoot, entryFile, currentManifest, manifest);
+  const currentManifestResult: ReadManifestResult = readManifest(manifestFile);
+  const action: BoardInstallAction = determineAction(
+    runtimeRoot,
+    entryFile,
+    currentManifestResult.manifest,
+    currentManifestResult.damaged,
+    manifest,
+  );
 
   if (action !== "unchanged") {
     installBoardFiles(sourceRoot, runtimeRoot, manifest);
