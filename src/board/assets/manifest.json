@@ -5,7 +5,6 @@
   "files": [
     "app.js",
     "components/AppShell.js",
-    "components/assetMap.js",
     "index.html",
     "main.js",
     "styles/board.css"
