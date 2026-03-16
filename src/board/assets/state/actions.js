@@ -116,6 +116,8 @@ export function createBoardActions(options) {
     return boardState;
   };
 
+  let searchTimer = null;
+
   return {
     toggleTheme() {
       store.theme = store.theme === "dark" ? "light" : "dark";
@@ -123,7 +125,14 @@ export function createBoardActions(options) {
       rerender();
     },
     updateSearch(value) {
-      transition({ search: value });
+      store.search = typeof value === "string" ? value : "";
+      if (searchTimer !== null) {
+        clearTimeout(searchTimer);
+      }
+      searchTimer = setTimeout(() => {
+        searchTimer = null;
+        transition({ search: store.search });
+      }, 180);
     },
     openEpic(epicId) {
       transition({

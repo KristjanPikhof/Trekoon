@@ -1081,13 +1081,11 @@ function renderBoard(model) {
     buttonClasses,
     currentNav,
     escapeHtml,
-    isCompactViewport: compactViewport,
     neutralChipClasses,
     renderIcon,
     screen,
     search: store.search,
     searchScope: boardState.searchScope,
-    sectionLabelClasses,
     selectedEpic,
     theme: store.theme,
   });

@@ -987,38 +987,6 @@ body {
     padding: 10px;
   }
 
-  .board-shell-topbar {
-    gap: 10px;
-    padding: 10px 12px;
-  }
-
-  .board-shell-topbar__nav {
-    display: grid;
-    grid-template-columns: repeat(3, minmax(0, 1fr));
-    gap: 8px;
-  }
-
-  .board-shell-topbar__nav-item {
-    min-height: 68px;
-    padding: 10px 12px;
-    border-radius: 20px;
-    align-items: flex-start;
-    justify-content: space-between;
-    flex-direction: column;
-    text-align: left;
-  }
-
-  .board-shell-topbar__nav-item-helper {
-    display: block;
-    color: var(--board-text-soft);
-    font-size: 0.7rem;
-    line-height: 1.35;
-  }
-
-  .board-shell-topbar__nav-item.is-active .board-shell-topbar__nav-item-helper {
-    color: var(--board-text-muted);
-  }
-
   .board-shell-topbar__tools,
   .board-workspace-header__intro,
   .board-workspace-header__toolbar {
@@ -1170,34 +1138,18 @@ body {
 }
 
 @media (max-width: 640px) {
-  .board-shell-v2__header,
   .board-shell-topbar {
-    padding: 10px;
-    border-radius: 20px;
+    padding: 8px 10px;
+    border-radius: 14px;
   }
 
   .board-shell-topbar__identity {
-    gap: 10px;
+    flex: 1 1 100%;
   }
 
-  .board-shell-topbar__brand-mark {
-    width: 36px;
-    height: 36px;
-    border-radius: 12px;
-  }
-
-  .board-shell-topbar__nav {
-    grid-template-columns: 1fr;
-  }
-
-  .board-shell-topbar__nav-item {
-    min-height: 60px;
-    padding: 10px 12px;
-  }
-
-  .board-shell-topbar__actions {
-    width: 100%;
-    justify-content: space-between;
+  .board-shell-topbar__search {
+    flex-basis: 100%;
+    max-width: none;
   }
 
   .board-detail-surface__title-row,
@@ -1235,9 +1187,6 @@ body {
     margin-top: 10px;
   }
 
-  .board-shell-topbar__meta summary span {
-    display: none;
-  }
 
   .board-workspace-header__details {
     min-width: 0;
