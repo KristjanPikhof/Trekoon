@@ -65,8 +65,9 @@ body {
 
 .board-shell-v2 {
   display: grid;
-  min-height: 100vh;
-  min-height: 100dvh;
+  height: 100vh;
+  height: 100dvh;
+  overflow: hidden;
   padding: 12px;
 }
 
@@ -75,8 +76,8 @@ body {
   grid-template-rows: auto minmax(0, 1fr);
   gap: 12px;
   width: min(1600px, 100%);
-  min-height: calc(100vh - 24px);
-  min-height: calc(100dvh - 24px);
+  height: calc(100vh - 24px);
+  height: calc(100dvh - 24px);
   margin: 0 auto;
 }
 
@@ -203,6 +204,11 @@ body {
 .board-layout--workspace {
   align-content: start;
   min-height: 0;
+  height: 100%;
+}
+
+.board-layout--workspace [data-scroll-surface="workspace"] {
+  flex: 1;
 }
 
 .board-layout[data-scroll-owner] {
