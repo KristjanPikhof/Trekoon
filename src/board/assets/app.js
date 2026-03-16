@@ -663,27 +663,6 @@ function hasLongTaskTitle(title) {
   return trimmed.length > 72 || trimmed.split("\n").length > 2;
 }
 
-function renderTaskTextDisclosure(description, options = {}) {
-  const {
-    buttonLabel = "task description",
-    className = "",
-    lineClamp = 2,
-  } = options;
-
-  if (!description || description.trim().length === 0) {
-    return "";
-  }
-
-  return renderClampedText({
-    buttonLabel,
-    className,
-    escapeHtml,
-    lineClamp,
-    renderIcon,
-    text: description,
-  });
-}
-
 function renderTaskCard(task, selected, isMutating = false) {
   const longTitle = hasLongTaskTitle(task.title);
 
@@ -712,11 +691,7 @@ function renderTaskCard(task, selected, isMutating = false) {
       </div>
       <div class="board-task-card__body mt-3 grid gap-3">
         <strong class="board-task-card__title block text-sm font-semibold leading-5 text-[var(--board-text)] sm:text-[0.95rem]">${escapeHtml(task.title)}</strong>
-        ${renderTaskTextDisclosure(task.description, {
-          buttonLabel: "task description",
-          className: "board-task-card__description text-sm leading-5 text-[var(--board-text-muted)]",
-          lineClamp: 2,
-        })}
+        ${task.description?.trim() ? `<p class="board-task-card__description text-sm leading-5 text-[var(--board-text-muted)] board-clamped-text__preview board-clamped-text__preview--2">${escapeHtml(task.description.trim())}</p>` : ""}
       </div>
       <div class="board-task-card__footer mt-3 flex flex-wrap items-center gap-2.5">${renderTaskMeta(task)}</div>
     </article>
@@ -745,11 +720,7 @@ function renderListRow(task, selected) {
           <strong class="board-list-row__title block min-w-0 text-sm font-semibold text-[var(--board-text)] sm:text-[0.98rem]">${escapeHtml(task.title)}</strong>
           ${longTitle ? `<span class="board-list-row__cue ${neutralChipClasses()}">Open</span>` : ""}
         </div>
-        ${renderTaskTextDisclosure(task.description, {
-          buttonLabel: "task row description",
-          className: "board-list-row__description mt-2 text-sm leading-5 text-[var(--board-text-muted)]",
-          lineClamp: 2,
-        })}
+        ${task.description?.trim() ? `<p class="board-list-row__description mt-2 text-sm leading-5 text-[var(--board-text-muted)] board-clamped-text__preview board-clamped-text__preview--2">${escapeHtml(task.description.trim())}</p>` : ""}
       </div>
       <div class="board-list-row__status">${renderStatusBadge(task.status)}</div>
       <div class="board-list-row__meta flex min-w-0 flex-wrap gap-2">${renderTaskMeta(task)}</div>
@@ -1309,11 +1280,6 @@ function attachInteractions(model, api, rerender) {
     });
   });
 
-  document.querySelectorAll(".board-task-card [data-clamped-text], .board-list-row [data-clamped-text]").forEach((node) => {
-    node.addEventListener("click", (event) => {
-      event.stopPropagation();
-    });
-  });
 
   document.querySelectorAll("[data-close-task]").forEach((button) => {
     button.addEventListener("click", (event) => {
