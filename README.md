@@ -107,20 +107,20 @@ Current runtime expectations:
 
 Current board behavior to expect:
 
-- wide screens show the epic switcher, workspace, and task inspector together
-- narrower screens collapse supporting panels into stacked or drawer-style
-  surfaces so the board remains usable without horizontal overflow
-- long descriptions and dependency/subtask lists use disclosure controls such as
-  “Show more” and “Collapse” instead of expanding dense rows by default
-- overview cards are the primary entry point into an epic; the topbar then keeps
-  the active scope visible as you switch between overview, board, and detail
-  contexts
-- compact/mobile layouts use explicit `Epics`, `Board`, and `Detail` modes so
-  one dominant region owns attention at a time instead of stacking multiple
-  competing panes
-- scroll ownership moves with the active surface: page in overview, workspace in
-  an epic, inspector/task modal for detail, and subtask modal for the top-most
-  overlay; background layers stay locked while overlays are open
+- the topbar is a compact single-row navbar showing the workspace name, active
+  epic context, Epics and Board navigation, search, theme toggle, and a
+  workspace info popover
+- wide screens show the epic switcher sidebar, task workspace, and task
+  inspector together; narrower screens collapse these into stacked panels or
+  drawer-style views
+- the page scrolls naturally as a single SPA surface; modal overlays (task
+  detail, subtask editor) lock body scroll while open
+- overview cards are the primary entry point into an epic; clicking a card opens
+  that epic's board workspace
+- task cards show truncated descriptions; clicking anywhere on a card opens the
+  task detail modal with the full description
+- search is debounced and filters client-side across titles, descriptions,
+  statuses, and subtask content
 
 For the full lifecycle and examples, read [Quickstart](docs/quickstart.md) and
 [Command reference](docs/commands.md).

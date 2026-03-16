@@ -83,49 +83,34 @@ Current runtime expectations for operators:
 
 Current layout behavior:
 
-- on wide displays, expect a three-surface workspace: epic switcher, task
-  workspace, and task inspector
+- the topbar is a compact navbar with workspace identity, Epics and Board
+  navigation, debounced search, theme toggle, and workspace info
+- on wide displays, expect a three-surface workspace: epic switcher sidebar,
+  task workspace, and task inspector
 - on medium and small displays, secondary surfaces collapse into stacked panels
   or drawer-style views so the board remains navigable on narrower widths
-- long descriptions, dependency lists, and subtask lists stay collapsed behind
-  disclosure controls until the operator expands them
+- the page scrolls naturally as one document; modal overlays lock body scroll
+  while open
+- task cards show truncated descriptions; clicking a card opens the task detail
+  modal with the full description and edit controls
+- search filters client-side across titles, descriptions, statuses, and subtask
+  content with a 180ms debounce
 
-Operator notes for responsive modes and scroll ownership:
-
-- start in the epic overview; each overview card is the open action and moves
-  you into that epic's board workspace
-- the topbar always echoes current scope so you can confirm whether search is
-  acting on all epics or only the active epic
-- compact/mobile layouts switch between explicit `Epics`, `Board`, and `Detail`
-  modes instead of leaving overview, board, and detail stacked on top of each
-  other
-- opening task detail on smaller screens uses the dedicated detail sheet/modal;
-  nested subtask work then appears above that detail surface rather than inside
-  the background board list
-- scrolling belongs to exactly one surface at a time: page in overview,
-  workspace inside an epic, inspector or task modal when detail is open, and the
-  subtask modal for the top-most nested layer
-- when you close a nested layer, scroll ownership returns to the previous
-  surface so you land back in the same board context instead of losing position
-
-Desktop/mobile verification checklist for operators:
+Verification checklist for operators:
 
 1. Open the board with `trekoon board open` and confirm the first view is the
-   epic overview.
-2. Activate an epic from the overview card, then confirm the topbar scope label
-   changes from overview to the active epic.
-3. Type in search and verify the scope copy updates to searching-all-epics or
-   searching-the-active-epic depending on the current mode; clear search and
-   confirm the prior scope summary returns immediately.
-4. On desktop width, open task detail and confirm the inspector/modal sits above
-   the workspace without the background page taking over scroll.
-5. From task detail, open a subtask modal and confirm the subtask layer owns
-   scroll until it closes.
-6. Repeat the same flow on an iPhone-sized viewport and confirm the top nav can
-   move between `Epics`, `Board`, and `Detail` while only one dominant region is
-   visible at a time.
-7. Close nested layers from the top down and confirm you return to the prior
-   workspace/detail context instead of the page top.
+   epic overview with all epics listed and scrollable.
+2. Click an epic card and confirm you enter the board workspace with the topbar
+   showing the active epic context.
+3. Type in search and verify results filter as you type; confirm focus stays in
+   the search input while typing.
+4. Click a task card and confirm the task detail modal opens with the full
+   description, edit form, and subtask list.
+5. On desktop width, confirm the epic switcher sidebar, workspace, and detail
+   panel can all be visible simultaneously.
+6. Resize to a narrow viewport and confirm the layout stacks cleanly without
+   horizontal overflow.
+7. Close modals and confirm you return to the previous board context.
 
 ## Create an epic, task, and subtask
 

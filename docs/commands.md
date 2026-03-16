@@ -85,45 +85,51 @@ Current shell/runtime notes:
   the fallback URL remains valid, but the browser UI may not fully load until
   network access is restored
 
-Current board layout behavior:
+Board UI architecture:
 
-- extra-wide layouts can show the epic rail, workspace, and task inspector at
-  once
+- the board is a single-page application served from `.trekoon/board` with Vue 3
+  (shell) and vanilla JS (board app) loaded from CDN dependencies
+- the backend is a Bun HTTP server exposing a REST API at `/api/*` with
+  token-based authentication; every mutation response includes an updated
+  snapshot so the client always has fresh state
+- the frontend uses optimistic updates: the UI changes immediately on user
+  action, then rolls back if the server rejects the mutation
+
+Board layout behavior:
+
+- the topbar is a compact flex-row navbar with workspace identity, Epics and
+  Board navigation pills, a debounced search input, theme toggle, and a
+  workspace info popover
+- extra-wide layouts show the epic switcher sidebar, task workspace, and task
+  inspector or detail modal together
 - narrower layouts progressively collapse support surfaces into stacked panels
-  or a drawer-style inspector
-- long descriptions and oversized dependency or subtask sections are intentionally
-  hidden behind disclosure controls until expanded
+  or drawer-style views
+- task cards show truncated descriptions; clicking anywhere on a card opens the
+  task detail modal
 
-Responsive mode and overlay guide for operators:
+Scroll and overlay behavior:
 
-- overview mode is the default entry point; every epic card is the primary
-  activation target and opens that epic into the board workspace
-- on desktop and other wide layouts, expect three named surfaces when a task is
-  active: the epic rail, the task workspace, and either the inspector or the
-  modal detail surface
-- on phone-sized layouts, the top navigation switches between explicit `Epics`,
-  `Board`, and `Detail` modes so only one dominant region owns attention at a
-  time
-- the search box always reports the current scope in the topbar: either `Epic
-  overview`, `Searching all epics`, or the active epic label when you are inside
-  a board
-- opening task detail from compact layouts promotes detail into the dedicated
-  modal or sheet surface instead of stacking a second independently scrolling
-  workspace underneath it
+- the page scrolls naturally as a single document; there are no internal scroll
+  containers trapping wheel events in the main content area
+- when a modal overlay opens (task detail, subtask editor), body scroll is
+  locked and the modal surface becomes the scroll container
+- close overlays from the top down: subtask modal → task detail → broader board
+  context; each close unlocks body scroll and returns to the previous context
 
-Scroll authority and layer ownership:
+Board API endpoints (all require token authentication):
 
-- the root page owns scrolling only in overview or other page-level states
-- once you are inside an epic workspace, the workspace becomes the primary
-  scroll owner and the background page stops scrolling
-- opening the desktop inspector transfers scroll ownership to the inspector
-  surface; opening the task modal transfers ownership to the task modal; opening
-  a nested subtask modal transfers ownership again to the subtask modal
-- when an overlay is open, background regions are intentionally locked to avoid
-  double scrollbars and accidental scroll bleed on desktop and mobile
-- close overlays from the top down: disclosure → subtask modal → task detail →
-  broader board context; each close returns you to the previous scroll owner and
-  scope instead of jumping back to the page root
+- `GET /api/snapshot` — full board state (epics, tasks, subtasks, dependencies,
+  counts)
+- `PATCH /api/epics/{id}` — update epic title, description, or status
+- `PATCH /api/tasks/{id}` — update task title, description, or status
+- `PATCH /api/subtasks/{id}` — update subtask title, description, or status
+- `POST /api/subtasks` — create subtask (requires taskId, title)
+- `DELETE /api/subtasks/{id}` — delete subtask
+- `POST /api/dependencies` — add dependency edge (sourceId, dependsOnId)
+- `DELETE /api/dependencies?sourceId=...&dependsOnId=...` — remove dependency
+
+Token is sent as `Authorization: Bearer {token}` header or `x-trekoon-token`
+header or `?token={token}` query parameter. Invalid tokens return `401`.
 
 Examples:
 
