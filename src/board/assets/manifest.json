@@ -3,7 +3,6 @@
   "contractVersion": "1.0.0",
   "entryFile": "index.html",
   "files": [
-    "app.css",
     "app.js",
     "components/AppShell.js",
     "components/assetMap.js",
