@@ -635,7 +635,7 @@ function renderEpicSidebarItem(epic, selected) {
           ${renderIcon("folder", "text-[18px]")}
         </div>
         <div class="min-w-0">
-          <strong class="block truncate text-sm font-semibold text-[var(--board-text)]">${escapeHtml(epic.title)}</strong>
+          <strong class="block text-sm font-semibold leading-snug text-[var(--board-text)]">${escapeHtml(epic.title)}</strong>
           <div class="mt-2 flex flex-wrap items-center gap-2">
             ${renderStatusBadge(epic.status)}
             <span class="text-xs text-[var(--board-text-soft)]">${totalTasks} task${totalTasks === 1 ? "" : "s"}</span>
