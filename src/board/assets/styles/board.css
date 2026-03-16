@@ -237,12 +237,6 @@ body {
   min-height: 0;
 }
 
-.board-layout--workspace .board-content,
-.board-layout--workspace .board-list,
-.board-layout--workspace .board-kanban,
-.board-layout--workspace .board-list__rows,
-.board-layout--workspace .board-column__tasks,
-.board-layout--workspace .board-sidebar__list,
 .board-layout--workspace .board-drawer__body,
 .board-layout--workspace .board-modal__body {
   overscroll-behavior: contain;
@@ -344,9 +338,6 @@ body {
   width: min(80vw, 960px);
 }
 
-.board-layout--overview .board-overview {
-  overflow: hidden;
-}
 
 .board-layout--overview .board-table {
   min-height: 0;
