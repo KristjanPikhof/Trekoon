@@ -131,7 +131,14 @@ export function createBoardActions(options) {
       }
       searchTimer = setTimeout(() => {
         searchTimer = null;
-        transition({ search: store.search });
+        syncState({ search: store.search });
+        persist();
+        rerender({ preserveFocus: false });
+        const input = document.querySelector("#board-search-input");
+        if (input instanceof HTMLInputElement) {
+          input.focus({ preventScroll: true });
+          input.setSelectionRange(input.value.length, input.value.length);
+        }
       }, 180);
     },
     openEpic(epicId) {
