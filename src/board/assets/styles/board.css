@@ -203,46 +203,18 @@ body {
 .board-layout--workspace {
   align-content: start;
   min-height: 0;
-  height: 100%;
-}
-
-.board-layout--workspace [data-scroll-surface="workspace"] {
-  flex: 1;
-}
-
-.board-layout[data-scroll-owner] {
-  overflow: hidden;
-}
-
-.board-layout[data-scroll-owner="page"] {
-  overflow-y: auto;
-  overscroll-behavior: contain;
-  -webkit-overflow-scrolling: touch;
 }
 
 .board-layout [data-scroll-surface] {
   min-height: 0;
-  overflow: hidden;
 }
 
-.board-layout[data-scroll-owner="workspace"] [data-scroll-surface="workspace"],
 .board-layout[data-scroll-owner="inspector"] [data-scroll-surface="inspector"],
 .board-layout[data-scroll-owner="task-modal"] [data-scroll-surface="task-modal"],
 .board-layout[data-scroll-owner="subtask-modal"] [data-scroll-surface="subtask-modal"] {
   overflow-y: auto;
   overscroll-behavior: contain;
   -webkit-overflow-scrolling: touch;
-}
-
-.board-layout[data-scroll-owner="workspace"] .board-sidebar__list,
-.board-layout[data-scroll-owner="workspace"] .board-content,
-.board-layout[data-scroll-owner="workspace"] .board-kanban,
-.board-layout[data-scroll-owner="workspace"] .board-list__rows,
-.board-layout[data-scroll-owner="workspace"] .board-column__tasks,
-.board-layout[data-scroll-owner="workspace"] .board-sidebar,
-.board-layout[data-scroll-owner="workspace"] .board-workspace {
-  overflow: visible;
-  overscroll-behavior: auto;
 }
 
 .board-layout[data-scroll-owner="inspector"] [data-scroll-surface="workspace"],
