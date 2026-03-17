@@ -2,6 +2,28 @@
 
 All notable changes to Trekoon are documented in this file.
 
+## 0.2.8
+
+### Added
+
+- Board UI: web-based interface for visualizing and managing epics, tasks, and
+  subtasks. Launch with `trekoon board`.
+- `trekoon board` command: starts a local web server and opens the board in your
+  default browser, with real-time sync of tracker state.
+- Board server with WebSocket support for live updates and mutation streaming.
+- Board components for epic/task overview, workspace navigation, search, and
+  status management.
+- Board state management with actions, API layer, and local store for UI state.
+- Comprehensive documentation updates: README now includes board overview,
+  quickstart guide expanded with board workflow, and new docs/commands.md with
+  full CLI reference.
+
+### Changed
+
+- SKILL.md agent documentation updated with board workflow guidance.
+- README restructured to surface board UI and agent onboarding flows.
+- Package now includes bundled documentation in distributions.
+
 ## 0.2.7
 
 ### Added
