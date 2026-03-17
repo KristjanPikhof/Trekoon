@@ -7,9 +7,12 @@ All notable changes to Trekoon are documented in this file.
 ### Added
 
 - Board UI: web-based interface for visualizing and managing epics, tasks, and
-  subtasks. Launch with `trekoon board`.
-- `trekoon board` command: starts a local web server and opens the board in your
-  default browser, with real-time sync of tracker state.
+  subtasks.
+- `trekoon board start` command: starts the board web server and keeps it running.
+- `trekoon board open` command: opens the board in your default browser (starts
+  the server if not already running).
+- `trekoon board` command: shorthand that starts the server and opens the board
+  in one call, with real-time sync of tracker state.
 - Board server with WebSocket support for live updates and mutation streaming.
 - Board components for epic/task overview, workspace navigation, search, and
   status management.
