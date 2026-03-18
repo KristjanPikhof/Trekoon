@@ -1,11 +1,115 @@
+/**
+ * API layer with serial mutation queue.
+ *
+ * Replaces the boolean isMutating gate with a proper queue that processes
+ * mutations sequentially, applies optimistic updates immediately, and
+ * reverts on error.
+ */
+
 function cloneSnapshot(snapshot) {
   if (typeof structuredClone === "function") {
     return structuredClone(snapshot);
   }
-
   return JSON.parse(JSON.stringify(snapshot));
 }
 
+/**
+ * Create a serial mutation queue.
+ *
+ * Mutations are enqueued and processed one at a time in FIFO order.
+ * Each mutation can apply an optimistic update, make an async request,
+ * and handle success or error.
+ *
+ * @returns {{
+ *   enqueue: (mutation: object) => void,
+ *   isPending: boolean,
+ *   flush: () => Promise<void>,
+ * }}
+ */
+function createMutationQueue(model, rerender) {
+  /** @type {Array<{ optimistic?: function, request: function, onSuccess?: function, onError?: function, successMessage?: string }>} */
+  const queue = [];
+  let processing = false;
+
+  async function processNext() {
+    if (processing || queue.length === 0) return;
+    processing = true;
+    model.store.isMutating = true;
+
+    while (queue.length > 0) {
+      const mutation = queue.shift();
+      const previousSnapshot = cloneSnapshot(model.store.snapshot);
+      model.store.notice = null;
+
+      // Apply optimistic update
+      if (typeof mutation.optimistic === "function") {
+        model.store.snapshot = mutation.optimistic(cloneSnapshot(model.store.snapshot));
+        rerender();
+      }
+
+      try {
+        const data = await mutation.request();
+
+        if (data?.snapshot) {
+          model.replaceSnapshot(data.snapshot);
+        }
+
+        if (typeof mutation.onSuccess === "function") {
+          mutation.onSuccess(data);
+        }
+
+        model.store.notice = mutation.successMessage
+          ? { type: "success", message: mutation.successMessage }
+          : null;
+      } catch (error) {
+        // Revert to pre-optimistic snapshot
+        model.replaceSnapshot(previousSnapshot);
+
+        const message = error instanceof Error ? error.message : String(error);
+        model.store.notice = { type: "error", message };
+
+        if (typeof mutation.onError === "function") {
+          mutation.onError(error);
+        }
+
+        // Clear remaining queue on error to prevent cascading failures
+        queue.length = 0;
+      }
+    }
+
+    processing = false;
+    model.store.isMutating = false;
+    rerender();
+  }
+
+  return {
+    enqueue(mutation) {
+      queue.push(mutation);
+      processNext();
+    },
+
+    get isPending() {
+      return processing || queue.length > 0;
+    },
+
+    async flush() {
+      // Wait for current processing to complete
+      while (processing || queue.length > 0) {
+        await new Promise((resolve) => setTimeout(resolve, 0));
+      }
+    },
+  };
+}
+
+/**
+ * Create the API layer with mutation queue.
+ *
+ * @param {object} model - Store model from createStore
+ * @param {object} options
+ * @param {string} options.sessionToken - Auth token for API requests
+ * @param {function} options.rerender - Trigger a UI rerender
+ * @returns {object} API methods: patchTask, patchSubtask, createSubtask, deleteSubtask, addDependency, removeDependency
+ */
 export function createApi(model, options) {
   const { sessionToken, rerender } = options;
 
@@ -31,41 +135,11 @@ export function createApi(model, options) {
     return payload.data;
   }
 
-  async function runMutation({ optimistic, request: mutationRequest, successMessage }) {
-    if (model.store.isMutating) {
-      return;
-    }
-
-    const previousSnapshot = cloneSnapshot(model.store.snapshot);
-    model.store.notice = null;
-    model.store.isMutating = true;
-
-    if (typeof optimistic === "function") {
-      model.store.snapshot = optimistic(cloneSnapshot(model.store.snapshot));
-      rerender();
-    }
-
-    try {
-      const data = await mutationRequest();
-      if (data?.snapshot) {
-        model.replaceSnapshot(data.snapshot);
-      }
-      model.store.notice = successMessage ? { type: "success", message: successMessage } : null;
-    } catch (error) {
-      model.replaceSnapshot(previousSnapshot);
-      model.store.notice = {
-        type: "error",
-        message: error instanceof Error ? error.message : String(error),
-      };
-    } finally {
-      model.store.isMutating = false;
-      rerender();
-    }
-  }
+  const queue = createMutationQueue(model, rerender);
 
   return {
     patchTask(taskId, updates, optimistic) {
-      return runMutation({
+      queue.enqueue({
         optimistic,
         successMessage: "Task saved.",
         request: () => request(`/api/tasks/${encodeURIComponent(taskId)}`, {
@@ -74,8 +148,9 @@ export function createApi(model, options) {
         }),
       });
     },
+
     patchSubtask(subtaskId, updates, optimistic) {
-      return runMutation({
+      queue.enqueue({
         optimistic,
         successMessage: "Subtask saved.",
         request: () => request(`/api/subtasks/${encodeURIComponent(subtaskId)}`, {
@@ -84,8 +159,9 @@ export function createApi(model, options) {
         }),
       });
     },
+
     createSubtask(input, optimistic) {
-      return runMutation({
+      queue.enqueue({
         optimistic,
         successMessage: "Subtask added.",
         request: () => request("/api/subtasks", {
@@ -94,8 +170,9 @@ export function createApi(model, options) {
         }),
       });
     },
+
     deleteSubtask(subtaskId, optimistic) {
-      return runMutation({
+      queue.enqueue({
         optimistic,
         successMessage: "Subtask removed.",
         request: () => request(`/api/subtasks/${encodeURIComponent(subtaskId)}`, {
@@ -103,8 +180,9 @@ export function createApi(model, options) {
         }),
       });
     },
+
     addDependency(sourceId, dependsOnId, optimistic) {
-      return runMutation({
+      queue.enqueue({
         optimistic,
         successMessage: "Dependency added.",
         request: () => request("/api/dependencies", {
@@ -113,8 +191,9 @@ export function createApi(model, options) {
         }),
       });
     },
+
     removeDependency(sourceId, dependsOnId, optimistic) {
-      return runMutation({
+      queue.enqueue({
         optimistic,
         successMessage: "Dependency removed.",
         request: () => request(`/api/dependencies?sourceId=${encodeURIComponent(sourceId)}&dependsOnId=${encodeURIComponent(dependsOnId)}`, {
