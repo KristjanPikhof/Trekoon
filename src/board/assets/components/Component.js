@@ -141,7 +141,8 @@ function restoreSelection(el, selectionStart, selectionEnd) {
  * @param {HTMLElement} container
  * @param {() => void}  writeFn
  */
-export function preserveFormState(container, writeFn) {
+export function preserveFormState(container, writeFn, options = {}) {
+  const resetFormIds = new Set(options.resetFormIds ?? []);
   const inputs = getManagedControls(container);
 
   const activeElement = document.activeElement;
@@ -178,6 +179,9 @@ export function preserveFormState(container, writeFn) {
 
   for (const state of savedStates) {
     const { formId, controlId } = state.identity;
+    if (resetFormIds.has(formId)) {
+      continue;
+    }
     const form = formsByIdentity.get(formId) ?? container;
     const restored = getManagedControls(form).find((control) => getControlIdentity(control, form) === controlId);
     if (restored && restored.value !== state.value) {
@@ -191,6 +195,9 @@ export function preserveFormState(container, writeFn) {
 
   if (focusedIdentity) {
     const { formId, controlId } = focusedIdentity;
+    if (resetFormIds.has(formId)) {
+      return;
+    }
     const form = formsByIdentity.get(formId) ?? container;
     const restored = getManagedControls(form).find((control) => getControlIdentity(control, form) === controlId);
     if (restored) {
