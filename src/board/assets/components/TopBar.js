@@ -71,8 +71,8 @@ function render(props) {
           <span class="board-shell-topbar__search-kbd">/</span>
         </label>
         <div class="board-shell-topbar__actions">
-          <button type="button" class="${buttonClasses({ iconOnly: true })}" data-action="toggle-theme" aria-label="Toggle ${theme === "dark" ? "light" : "dark"} theme">
-            ${renderIcon(theme === "dark" ? "light_mode" : "dark_mode", "text-[18px]")}
+          <button type="button" class="board-shell-topbar__icon-btn" data-action="toggle-theme" aria-label="Toggle ${theme === "dark" ? "light" : "dark"} theme">
+            ${renderIcon(theme === "dark" ? "light_mode" : "dark_mode", "text-[16px]")}
           </button>
           <details class="board-shell-topbar__meta">
             <summary aria-label="Board information">${renderIcon("info", "text-[16px]")}</summary>
