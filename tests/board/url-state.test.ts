@@ -107,12 +107,13 @@ function createMockWindow(pathname = "/board") {
   return {
     calls,
     emit(type: string) {
+      const event = { type } as Event;
       for (const listener of listeners.get(type) ?? []) {
         if (typeof listener === "function") {
-          listener(new PopStateEvent(type));
+          listener(event);
           continue;
         }
-        listener.handleEvent(new PopStateEvent(type));
+        listener.handleEvent(event);
       }
     },
     listeners,
