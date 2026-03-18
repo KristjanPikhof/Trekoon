@@ -53,9 +53,10 @@ describe("workspace epic selector", () => {
     });
 
     const html = getHtml();
-    const optionValues = [...html.matchAll(/<option value="([^"]+)"/g)].map((match) => match[1]);
+    const epicSelectMarkup = html.match(/<select[^>]*id="board-epic-select"[^>]*>([\s\S]*?)<\/select>/)?.[1] ?? "";
+    const optionValues = [...epicSelectMarkup.matchAll(/<option value="([^"]+)"/g)].map((match) => match[1]);
 
-    expect(optionValues.slice(1, 4)).toEqual([
+    expect(optionValues).toEqual([
       "epic-newest",
       "epic-middle",
       "epic-older",
