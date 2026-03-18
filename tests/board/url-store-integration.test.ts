@@ -412,6 +412,7 @@ describe("board URL/store integration", () => {
 
     actions.showBoard();
     setActiveElement(mockDocument, searchInput);
+    searchInput.value = "ship";
     actions.updateSearch("ship");
 
     mockWindow.window.location.hash = "#epic=epic-2";
@@ -419,6 +420,7 @@ describe("board URL/store integration", () => {
 
     await new Promise((resolve) => setTimeout(resolve, 220));
 
+    expect(searchInput.value).toBe("");
     expect(model.getBoardState()).toMatchObject({
       screen: "tasks",
       selectedEpicId: "epic-2",
