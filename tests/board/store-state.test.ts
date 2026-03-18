@@ -65,7 +65,7 @@ describe("board state store reconciliation", () => {
       selectedSubtaskId: "subtask-1",
     });
 
-    const reconciled = store.syncState({ selectedEpicId: "epic-2" });
+    const reconciled = store.syncState({ selectedTaskId: "missing-task" });
 
     expect(reconciled.selectedTaskId).toBeNull();
     expect(reconciled.selectedSubtaskId).toBeNull();
