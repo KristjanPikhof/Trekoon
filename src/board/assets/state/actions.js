@@ -157,11 +157,22 @@ export function createBoardActions(options) {
   let searchTimer = null;
   let pendingSearchValue = null;
 
-  const cancelPendingSearch = () => {
+  const syncSearchInputToState = () => {
+    const input = document.querySelector("#board-search-input");
+    if (input instanceof HTMLInputElement) {
+      input.value = store.search;
+    }
+  };
+
+  const cancelPendingSearch = (options = {}) => {
+    const { syncInput = true } = options;
     pendingSearchValue = null;
     if (searchTimer !== null) {
       clearTimeout(searchTimer);
       searchTimer = null;
+    }
+    if (syncInput) {
+      syncSearchInputToState();
     }
   };
 
@@ -177,7 +188,7 @@ export function createBoardActions(options) {
 
   const commitSearch = (nextSearch, options = {}) => {
     const { focusInput = false } = options;
-    cancelPendingSearch();
+    cancelPendingSearch({ syncInput: false });
     syncState({ search: nextSearch });
     persist();
     rerender({ preserveFocus: false });
@@ -199,7 +210,7 @@ export function createBoardActions(options) {
     },
     updateSearch(value) {
       const nextSearch = typeof value === "string" ? value : "";
-      cancelPendingSearch();
+      cancelPendingSearch({ syncInput: false });
       pendingSearchValue = nextSearch;
       searchTimer = setTimeout(() => {
         if (pendingSearchValue !== nextSearch) {
