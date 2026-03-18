@@ -235,7 +235,8 @@ body {
 }
 
 .board-task-modal {
-  width: min(80vw, 1100px);
+  width: min(60vw, 1100px);
+  max-width: 80vw;
 }
 
 .board-modal--sheet {
