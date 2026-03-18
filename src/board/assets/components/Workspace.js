@@ -27,8 +27,6 @@ import { VIEW_MODES } from "../state/utils.js";
 
 function renderWorkspaceHeader(props) {
   const {
-    isCompact,
-    primarySurfaceLabel,
     searchScope,
     selectedEpic,
     snapshotEpics,
@@ -36,76 +34,72 @@ function renderWorkspaceHeader(props) {
     visibleTasks,
   } = props;
 
-  const description = selectedEpic.description?.trim() || "No epic description yet.";
+  const description = selectedEpic.description?.trim() || "";
+  const inlineSelect = `${fieldClasses()} !py-1 !px-2 !text-xs !min-h-0 !rounded-xl`;
 
   return `
-    <header class="board-section-head board-section-head--workspace board-workspace-header">
-      <div class="board-workspace-header__intro">
-        <div class="board-workspace-header__title-block">
-          <span class="${sectionLabelClasses()}">${escapeHtml(searchScope?.summary ?? "Selected epic")}</span>
-          <div class="board-workspace-header__title-row">
-            <h2>${escapeHtml(selectedEpic.title)}</h2>
-            <form class="inline-flex" data-epic-status-form="${escapeHtml(selectedEpic.id)}">
-              <select class="${fieldClasses()} !py-1 !px-2 !text-xs !min-h-0" name="status">
-                ${STATUS_ORDER.map(s => `<option value="${escapeHtml(s)}" ${selectedEpic.status === s ? 'selected' : ''}>${escapeHtml(STATUS_LABELS[s] ?? s)}</option>`).join('')}
-              </select>
-            </form>
-            <form class="inline-flex" data-bulk-status-form="${escapeHtml(selectedEpic.id)}">
-              <label class="flex items-center gap-2">
-                <span class="text-xs font-medium text-[var(--board-text-muted)]">Set all:</span>
-                <select class="${fieldClasses()} !py-1 !px-2 !text-xs !min-h-0" name="status">
-                  <option value="">Choose status\u2026</option>
-                  ${STATUS_ORDER.map(s => `<option value="${escapeHtml(s)}">${escapeHtml(STATUS_LABELS[s] ?? s)}</option>`).join('')}
-                </select>
-              </label>
-            </form>
-            ${isCompact ? `<span class="${neutralChipClasses()}">Primary surface \u00b7 ${escapeHtml(primarySurfaceLabel)}</span>` : ""}
-          </div>
-          <div class="mt-3 flex flex-wrap gap-2">
-            <span class="${neutralChipClasses()}">${escapeHtml(searchScope?.detail ?? "")}</span>
-            <span class="${neutralChipClasses()}">${visibleTasks.length} visible task${visibleTasks.length === 1 ? "" : "s"}</span>
-          </div>
+    <header class="board-workspace-header">
+      <div class="board-wh__row-1">
+        <h2 class="board-wh__title">${escapeHtml(selectedEpic.title)}</h2>
+        <div class="board-wh__controls">
+          <form class="inline-flex" data-epic-status-form="${escapeHtml(selectedEpic.id)}">
+            <select class="${inlineSelect}" name="status" aria-label="Epic status">
+              ${STATUS_ORDER.map(s => `<option value="${escapeHtml(s)}" ${selectedEpic.status === s ? 'selected' : ''}>${escapeHtml(STATUS_LABELS[s] ?? s)}</option>`).join('')}
+            </select>
+          </form>
+          <span class="board-wh__sep" aria-hidden="true"></span>
+          <label class="board-wh__inline-label" aria-label="Choose epic">
+            <select class="${inlineSelect}" id="board-epic-select">
+              ${snapshotEpics.map((epic) => `
+                <option value="${escapeHtml(epic.id)}" ${store.selectedEpicId === epic.id ? "selected" : ""}>
+                  ${escapeHtml(epic.title)}
+                </option>
+              `).join("")}
+            </select>
+          </label>
+          <span class="board-wh__sep" aria-hidden="true"></span>
+          <form class="inline-flex" data-bulk-status-form="${escapeHtml(selectedEpic.id)}">
+            <select class="${inlineSelect}" name="status" aria-label="Set all tasks to status">
+              <option value="">Set all\u2026</option>
+              ${STATUS_ORDER.map(s => `<option value="${escapeHtml(s)}">${escapeHtml(STATUS_LABELS[s] ?? s)}</option>`).join('')}
+            </select>
+          </form>
         </div>
       </div>
 
-      <div class="board-workspace__toolbar board-workspace-header__toolbar">
-        <label class="board-select grid gap-2 xl:min-w-[240px]" aria-label="Choose epic">
-          <span class="${sectionLabelClasses()}">Epic</span>
-          <select class="${fieldClasses()}" id="board-epic-select">
-            ${snapshotEpics.map((epic) => `
-              <option value="${escapeHtml(epic.id)}" ${store.selectedEpicId === epic.id ? "selected" : ""}>
-                ${escapeHtml(epic.title)}
-              </option>
-            `).join("")}
-          </select>
-        </label>
-        <div class="board-workspace-header__controls">
-          <div class="board-tabs inline-flex rounded-2xl border border-[var(--board-border)] bg-white/[0.03] p-1" role="tablist" aria-label="Board views">
+      <div class="board-wh__row-2">
+        <div class="board-wh__meta">
+          ${renderEpicCountSummary(selectedEpic)}
+          <span class="${neutralChipClasses()}">${visibleTasks.length} visible</span>
+          ${store.isMutating ? `<span class="${neutralChipClasses()}">Saving\u2026</span>` : ""}
+        </div>
+        <div class="board-wh__actions">
+          ${description ? `
+            <button type="button" class="board-wh__notes-btn" data-toggle-notes aria-label="Toggle epic notes">
+              ${renderIcon("subject", "text-[16px]")}
+              <span>Notes</span>
+            </button>
+          ` : ""}
+          <div class="board-tabs inline-flex rounded-xl border border-[var(--board-border)] bg-white/[0.03] p-0.5" role="tablist" aria-label="Board views">
             ${store.viewModes.map((view) => {
               const icon = view.id === "kanban"
-                ? '<svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M3 3h6v18H3V3zm8 0h6v12h-6V3zm8 0h2v8h-2V3z"/></svg>'
-                : '<svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M3 4h18v2H3V4zm0 7h18v2H3v-2zm0 7h18v2H3v-2z"/></svg>';
-              return `<button class="${view.classes}" type="button" role="tab" aria-selected="${view.active}" data-view="${view.id}">${icon} ${view.label}</button>`;
+                ? '<svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M3 3h6v18H3V3zm8 0h6v12h-6V3zm8 0h2v8h-2V3z"/></svg>'
+                : '<svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M3 4h18v2H3V4zm0 7h18v2H3v-2zm0 7h18v2H3v-2z"/></svg>';
+              return `<button class="${cx(
+                "rounded-[10px] px-3 py-1.5 text-xs font-medium transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--board-border-strong)]",
+                view.active
+                  ? "bg-[var(--board-accent-soft)] text-[var(--board-text)] shadow-[inset_0_0_0_1px_var(--board-border-strong)]"
+                  : "text-[var(--board-text-muted)] hover:text-[var(--board-text)]",
+              )}" type="button" role="tab" aria-selected="${view.active}" data-view="${view.id}">${icon} ${view.label}</button>`;
             }).join("")}
-          </div>
-          <div class="board-legend board-workspace-header__legend">
-            ${renderEpicCountSummary(selectedEpic)}
-            <span class="${neutralChipClasses()}">${escapeHtml(searchScope?.summary ?? "Current scope")}</span>
-            ${store.view === "kanban" ? `<span class="${neutralChipClasses()}">Drag to move</span>` : ""}
-            ${store.isMutating ? `<span class="${neutralChipClasses()}">Saving\u2026</span>` : ""}
           </div>
         </div>
       </div>
 
-      ${description.trim() ? `
-        <details class="board-workspace-header__notes">
-          <summary class="board-workspace-header__notes-toggle" aria-label="Epic description and scope">
-            ${renderIcon("subject", "text-[18px]")}
-            <span>${searchScope?.kind === "epic_search" ? "Epic scope" : "Epic notes"}</span>
-            ${renderIcon("expand_more", "text-[18px] board-workspace-header__notes-chevron")}
-          </summary>
-          <div class="board-workspace-header__notes-body">${escapeHtml(description)}</div>
-        </details>
+      ${description ? `
+        <div class="board-wh__notes-panel" data-notes-panel hidden>
+          <div class="board-wh__notes-body">${escapeHtml(description)}</div>
+        </div>
       ` : ""}
     </header>
   `;

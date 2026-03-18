@@ -91,6 +91,19 @@ export function createDelegation(rootElement, actions) {
       return;
     }
 
+    // -- Notes panel toggle ---------------------------------------------------
+
+    const toggleNotesEl = target.closest("[data-toggle-notes]");
+    if (toggleNotesEl) {
+      const panel = rootElement.querySelector("[data-notes-panel]");
+      if (panel) {
+        const isHidden = panel.hidden;
+        panel.hidden = !isHidden;
+        toggleNotesEl.classList.toggle("board-wh__notes-btn--active", isHidden);
+      }
+      return;
+    }
+
     // -- View switching -------------------------------------------------------
 
     const viewEl = target.closest("[data-view]");
