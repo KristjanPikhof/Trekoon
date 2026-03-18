@@ -926,12 +926,13 @@ body {
     padding-bottom: 12px;
   }
 
-  .board-workspace-header__title-row {
-    gap: 8px;
-  }
-
-  .board-workspace-header__title-row h2 {
-    font-size: clamp(1.25rem, 4.2vw, 1.6rem);
+  .board-wh__title {
+    max-width: 100%;
+    white-space: normal;
+    -webkit-line-clamp: 2;
+    display: -webkit-box;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
   }
 
   .board-layout--workspace {
