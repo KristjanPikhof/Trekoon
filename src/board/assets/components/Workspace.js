@@ -16,6 +16,7 @@ import {
   renderTaskMeta,
   secondaryPanelClasses,
   sectionLabelClasses,
+  STATUS_LABELS,
   STATUS_ORDER,
 } from "./helpers.js";
 import { VIEW_MODES } from "../state/utils.js";
