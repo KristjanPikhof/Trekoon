@@ -68,7 +68,6 @@ export const BOARD_ASSET_MAP = {
   runtime: {
     files: [
       "src/board/assets/runtime/delegation.js",
-      "src/board/assets/utils/dom.js",
     ],
     owner: "runtime-lane",
     description: "Event delegation and DOM utility helpers.",
