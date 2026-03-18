@@ -202,6 +202,22 @@ export function createBoardApiHandler(context: BoardRouteContext): (request: Req
         });
       }
 
+      const epicCascadeMatch = request.method === "PATCH" ? url.pathname.match(/^\/api\/epics\/([^/]+)\/cascade$/u) : null;
+      if (epicCascadeMatch) {
+        const body = await parseJsonBody(request);
+        const status = readRequiredString(body, "status");
+        const plan = mutations.updateEpicStatusCascade(epicCascadeMatch[1] ?? "", status);
+        return buildMutationResponse(domain, { plan });
+      }
+
+      const taskCascadeMatch = request.method === "PATCH" ? url.pathname.match(/^\/api\/tasks\/([^/]+)\/cascade$/u) : null;
+      if (taskCascadeMatch) {
+        const body = await parseJsonBody(request);
+        const status = readRequiredString(body, "status");
+        const plan = mutations.updateTaskStatusCascade(taskCascadeMatch[1] ?? "", status);
+        return buildMutationResponse(domain, { plan });
+      }
+
       const epicMatch = request.method === "PATCH" ? url.pathname.match(/^\/api\/epics\/([^/]+)$/u) : null;
       if (epicMatch) {
         const body = await parseJsonBody(request);
