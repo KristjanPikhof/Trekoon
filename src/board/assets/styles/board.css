@@ -71,6 +71,11 @@ body {
   color: var(--board-text);
 }
 
+html.board-scroll-locked,
+body.board-scroll-locked {
+  overflow: hidden;
+}
+
 .board-shell-v2 {
   display: grid;
   min-height: 100vh;
@@ -239,8 +244,38 @@ body {
   max-width: 80vw;
 }
 
+.board-task-modal:focus,
+.board-modal[role="dialog"]:focus,
+[data-overlay-root][role="alertdialog"]:focus {
+  outline: none;
+}
+
 .board-modal--sheet {
   width: min(80vw, 960px);
+}
+
+.board-button--destructive {
+  border-color: color-mix(in srgb, var(--board-danger) 58%, var(--board-border));
+  background:
+    linear-gradient(135deg, color-mix(in srgb, var(--board-danger) 88%, #f97316 12%), color-mix(in srgb, var(--board-danger) 68%, #7f1d1d 32%));
+  color: #fff;
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.14),
+    0 14px 28px rgba(127, 29, 29, 0.26);
+}
+
+.board-button--destructive:hover {
+  border-color: color-mix(in srgb, var(--board-danger) 74%, white 8%);
+  background:
+    linear-gradient(135deg, color-mix(in srgb, var(--board-danger) 100%, #fb7185 10%), color-mix(in srgb, var(--board-danger) 78%, #991b1b 22%));
+}
+
+.board-button--destructive:focus-visible {
+  outline: none;
+  box-shadow:
+    0 0 0 2px color-mix(in srgb, var(--board-bg) 78%, transparent),
+    0 0 0 4px color-mix(in srgb, var(--board-danger) 42%, white 12%),
+    0 14px 28px rgba(127, 29, 29, 0.26);
 }
 
 
@@ -1568,6 +1603,7 @@ body {
 /* --- Z-Index --- */
 .z-30 { z-index: 30; }
 .z-40 { z-index: 40; }
+.z-50 { z-index: 50; }
 
 /* --- Hover states --- */
 .hover\:bg-white\/\[0\.04\]:hover { background-color: rgba(255, 255, 255, 0.04); }
