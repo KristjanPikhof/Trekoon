@@ -64,7 +64,7 @@ export function normalizeSnapshot(rawSnapshot) {
       kind: "task",
       epicId: task.epicId ?? task.epic?.id ?? null,
       title: String(task.title ?? "Untitled task"),
-      description: String(task.description ?? ""),
+      description: String(task.description ?? "").replace(/\\n/g, "\n"),
       status: normalizeStatus(task.status),
       createdAt: Number(task.createdAt ?? Date.now()),
       updatedAt: Number(task.updatedAt ?? task.createdAt ?? Date.now()),
