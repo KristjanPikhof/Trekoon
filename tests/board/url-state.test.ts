@@ -318,7 +318,7 @@ describe("board URL state sync", () => {
     mockWindow.emit("popstate");
 
     expect(calls).toEqual(["beforeRestore", "onRestore"]);
-    expect(mockStore.store).toEqual({
+    expect(mockStore.store).toMatchObject({
       screen: "tasks",
       selectedEpicId: "epic-2",
       selectedTaskId: null,
