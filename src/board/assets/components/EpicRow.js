@@ -53,7 +53,7 @@ export function renderEpicRow(props) {
       </span>
       <span class="board-epic-row__action-wrap" aria-hidden="true">
         <span class="board-epic-row__action">
-          <span>View board</span>
+          <span>View</span>
           ${renderIcon("chevron_right", "text-[16px]")}
         </span>
       </span>
