@@ -396,6 +396,7 @@ export async function bootLegacyBoard(options = {}) {
         searchScope: boardState.searchScope,
         selectedEpic: boardState.selectedEpic,
         theme: store.theme,
+        isMutating: store.isMutating,
       });
 
       notice.update({
