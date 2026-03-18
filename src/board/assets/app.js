@@ -75,10 +75,8 @@ function createBoardShell(appElement) {
       <div data-slot="notice"></div>
       <div data-slot="topbar"></div>
       <div data-slot="epics-overview"></div>
-      <div data-slot="tasks-root" class="board-root board-root--tasks min-h-0 w-full grid gap-4 xl:gap-5" style="display:none">
-        <div data-slot="sidebar"></div>
+      <div data-slot="tasks-root" class="board-root board-root--tasks min-h-0 w-full" style="display:none">
         <div data-slot="workspace"></div>
-        <div data-slot="inspector" class="board-panel board-drawer board-detail-surface-frame"></div>
       </div>
       <div data-slot="task-modal"></div>
       <div data-slot="subtask-modal"></div>
