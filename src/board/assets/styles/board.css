@@ -146,13 +146,11 @@ body.board-scroll-locked {
   overscroll-behavior: contain;
 }
 
-.board-layout .board-sidebar,
 .board-layout .board-workspace,
 .board-layout .board-content,
 .board-layout .board-kanban,
 .board-layout .board-column__tasks,
-.board-layout .board-list__rows,
-.board-layout .board-sidebar__list {
+.board-layout .board-list__rows {
   overflow: visible;
   overscroll-behavior: auto;
 }
