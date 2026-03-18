@@ -351,14 +351,6 @@ export function createBoardActions(options) {
       const visibleTasks = boardState.visibleTasks;
       const currentIndex = visibleTasks.findIndex((task) => task.id === boardState.selectedTaskId);
 
-      if (hasOpenOverlay?.()) {
-        if (event.key === "Escape") {
-          event.preventDefault();
-          closeActiveOverlay?.();
-        }
-        return;
-      }
-
       if (searchFocusKeys.has(event.key.toLowerCase()) && activeElement?.id !== "board-search-input" && !isTypingTarget) {
         event.preventDefault();
         focusSearch?.(activeElement);
@@ -384,6 +376,12 @@ export function createBoardActions(options) {
           return;
         }
 
+        if (hasOpenOverlay?.()) {
+          event.preventDefault();
+          closeActiveOverlay?.();
+          return;
+        }
+
         if (boardState.selectedSubtaskId) {
           event.preventDefault();
           this.closeSubtask();
@@ -398,6 +396,10 @@ export function createBoardActions(options) {
           store.notice = null;
           rerender();
         }
+        return;
+      }
+
+      if (hasOpenOverlay?.()) {
         return;
       }
 
