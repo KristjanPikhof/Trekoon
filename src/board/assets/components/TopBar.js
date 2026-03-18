@@ -19,6 +19,7 @@ function render(props) {
     searchScope,
     selectedEpic,
     theme,
+    isMutating,
   } = props;
 
   const navItems = [
@@ -49,7 +50,7 @@ function render(props) {
     ].filter(Boolean).join(" ");
 
     return `
-      <button type="button" class="${classes}" ${item.action} ${item.disabled ? "disabled" : ""} ${isActive ? 'aria-current="page"' : ""} aria-label="${escapeHtml(item.label)} view" title="${escapeHtml(item.tooltip)}">
+      <button type="button" class="${classes}" ${item.action} ${item.disabled ? "disabled" : ""} aria-pressed="${isActive}" aria-label="${escapeHtml(item.label)} view" title="${escapeHtml(item.tooltip)}">
         ${renderIcon(item.icon, "text-[16px]")} <span>${escapeHtml(item.label)}</span>
       </button>
     `;
@@ -82,13 +83,16 @@ function render(props) {
       </nav>
 
       <div class="board-shell-topbar__tools">
-        <label class="board-shell-topbar__search" aria-label="Search tasks and epics">
+        <label class="board-shell-topbar__search" for="board-search-input">
+          <span class="board-shell-topbar__search-label">Search board</span>
           ${renderIcon("search", "text-[16px] text-[var(--board-text-soft)]")}
-          <input id="board-search-input" type="search" autocomplete="off" placeholder="Search epics, tasks, subtasks\u2026" value="${escapeHtml(search)}" />
+          <input id="board-search-input" type="search" autocomplete="off" placeholder="Search epics, tasks, subtasks\u2026" value="${escapeHtml(search)}" aria-describedby="board-search-shortcut board-search-scope" />
           <span class="board-shell-topbar__search-kbd">/</span>
         </label>
+        <span id="board-search-scope" class="board-shell-topbar__assistive-copy">${escapeHtml(searchScope?.detail ?? "Search across epics, tasks, and subtasks.")}</span>
+        <span id="board-search-shortcut" class="board-shell-topbar__assistive-copy">Press slash to focus search. Press Escape to clear search before navigating away.</span>
         <div class="board-shell-topbar__actions">
-          <button type="button" class="board-shell-topbar__icon-btn" data-action="toggle-theme" aria-label="Toggle ${theme === "dark" ? "light" : "dark"} theme">
+          <button type="button" class="board-shell-topbar__icon-btn" data-action="toggle-theme" aria-label="Switch to ${theme === "dark" ? "light" : "dark"} theme" title="Switch to ${theme === "dark" ? "light" : "dark"} theme" ${isMutating ? "disabled" : ""}>
             ${renderIcon(theme === "dark" ? "light_mode" : "dark_mode", "text-[16px]")}
           </button>
           <details class="board-shell-topbar__meta">
