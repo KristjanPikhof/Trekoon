@@ -63,10 +63,10 @@ function renderDependencySection(task, snapshot, isMutating) {
         <span>Dependencies</span>
         <span class="${neutralChipClasses()}">${task.blockedBy.length}</span>
       </summary>
-      <form class="mt-4 grid gap-4" data-dependency-form="${escapeHtml(task.id)}">
+      <form class="mt-4 grid gap-4" data-form-id="task-dependency:${escapeHtml(task.id)}" data-dependency-form="${escapeHtml(task.id)}">
         <label class="grid gap-2">
           <span class="${sectionLabelClasses()}">Add dependency</span>
-          <select class="${fieldClasses()}" name="dependsOnId" required ${isMutating ? "disabled" : ""}>
+          <select class="${fieldClasses()}" name="dependsOnId" data-control-id="dependency-target" required ${isMutating ? "disabled" : ""}>
             <option value="">Select a task or subtask\u2026</option>
             ${renderDependencyOptions(task, snapshot)}
           </select>
@@ -116,18 +116,18 @@ function renderSubtaskItems(subtasks) {
 
 function renderCreateSubtaskForm(task, isMutating) {
   return `
-    <form class="grid gap-4 rounded-3xl border border-[var(--board-border)] bg-white/[0.03] p-4" data-create-subtask-form="${escapeHtml(task.id)}">
+    <form class="grid gap-4 rounded-3xl border border-[var(--board-border)] bg-white/[0.03] p-4" data-form-id="task-create-subtask:${escapeHtml(task.id)}" data-create-subtask-form="${escapeHtml(task.id)}">
       <div>
         <span class="${sectionLabelClasses()}">Add subtask</span>
         <p class="mt-2 text-sm leading-6 text-[var(--board-text-muted)]">Create a new subtask directly from the task detail panel.</p>
       </div>
       <label class="grid gap-2">
         <span class="${sectionLabelClasses()}">Title</span>
-        <input class="${fieldClasses()}" name="title" placeholder="Write tests\u2026" required ${isMutating ? "disabled" : ""} />
+        <input class="${fieldClasses()}" name="title" data-control-id="subtask-title" placeholder="Write tests\u2026" required ${isMutating ? "disabled" : ""} />
       </label>
       <label class="grid gap-2">
         <span class="${sectionLabelClasses()}">Description</span>
-        <textarea class="${fieldClasses()} min-h-[96px]" name="description" rows="3" placeholder="Optional context for this subtask\u2026" ${isMutating ? "disabled" : ""}></textarea>
+        <textarea class="${fieldClasses()} min-h-[96px]" name="description" data-control-id="subtask-description" rows="3" placeholder="Optional context for this subtask\u2026" ${isMutating ? "disabled" : ""}></textarea>
       </label>
       <label class="grid gap-2">
         <span class="${sectionLabelClasses()}">Status</span>
@@ -229,14 +229,14 @@ export function renderTaskSurface(props) {
               <span>Edit task</span>
               ${renderStatusBadge(task.status)}
             </summary>
-            <form class="mt-4 grid gap-4" data-task-form="${escapeHtml(task.id)}">
+            <form class="mt-4 grid gap-4" data-form-id="task-edit:${escapeHtml(task.id)}" data-task-form="${escapeHtml(task.id)}">
               <label class="grid gap-2">
                 <span class="${sectionLabelClasses()}">Title</span>
-                <input class="${fieldClasses()}" name="title" value="${escapeHtml(task.title)}" placeholder="Task title\u2026" required ${isMutating ? "disabled" : ""} />
+                <input class="${fieldClasses()}" name="title" data-control-id="task-title" value="${escapeHtml(task.title)}" placeholder="Task title\u2026" required ${isMutating ? "disabled" : ""} />
               </label>
               <label class="grid gap-2">
                 <span class="${sectionLabelClasses()}">Description</span>
-                <textarea class="${fieldClasses()} min-h-[180px]" name="description" rows="7" placeholder="Task description\u2026" ${isMutating ? "disabled" : ""}>${escapeHtml(task.description)}</textarea>
+                <textarea class="${fieldClasses()} min-h-[180px]" name="description" data-control-id="task-description" rows="7" placeholder="Task description\u2026" ${isMutating ? "disabled" : ""}>${escapeHtml(task.description)}</textarea>
               </label>
               <label class="grid gap-2">
                 <span class="${sectionLabelClasses()}">Status</span>
