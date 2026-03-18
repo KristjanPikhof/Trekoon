@@ -59,15 +59,25 @@ function createSelector(getDeps, compute) {
   };
 }
 
+function compareEpicOverviewOrder(leftEpic, rightEpic) {
+  if (leftEpic.createdAt !== rightEpic.createdAt) {
+    return rightEpic.createdAt - leftEpic.createdAt;
+  }
+
+  return leftEpic.id.localeCompare(rightEpic.id);
+}
+
 // --- Derived state selectors ---
 
 const selectVisibleEpics = createSelector(
   (s) => [s.snapshot?.epics, s.searchQuery],
   (epics, searchQuery) => {
     if (!epics) return [];
-    return searchQuery.length === 0
+    const matchingEpics = searchQuery.length === 0
       ? epics
       : epics.filter((epic) => epic.searchText.includes(searchQuery));
+
+    return [...matchingEpics].sort(compareEpicOverviewOrder);
   },
 );
 
