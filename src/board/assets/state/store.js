@@ -16,17 +16,6 @@ function normalizeSearch(value) {
   return typeof value === "string" ? value : "";
 }
 
-function shallowEqual(a, b) {
-  if (a === b) return true;
-  if (!a || !b) return false;
-  const keysA = Object.keys(a);
-  if (keysA.length !== Object.keys(b).length) return false;
-  for (const key of keysA) {
-    if (a[key] !== b[key]) return false;
-  }
-  return true;
-}
-
 function compareEpicsForSidebar(left, right) {
   const leftStatus = normalizeStatus(left.status);
   const rightStatus = normalizeStatus(right.status);
