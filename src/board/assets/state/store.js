@@ -1,7 +1,5 @@
 import { normalizeSnapshot, normalizeStatus, STATUS_ORDER, VIEW_MODES } from "./utils.js";
 
-export { normalizeSnapshot, normalizeStatus, STATUS_ORDER, VIEW_MODES };
-
 export const THEME_STORAGE_KEY = "trekoon-board-theme";
 export const STATE_STORAGE_KEY = "trekoon-board-state";
 

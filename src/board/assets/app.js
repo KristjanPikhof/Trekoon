@@ -283,8 +283,17 @@ export async function bootLegacyBoard(options = {}) {
       scrollToDetail: () => document.querySelector(".board-drawer, .board-task-modal")?.scrollIntoView({ block: "nearest", behavior: "smooth" }),
       setView: (view) => actions.setView(view),
       toggleTheme: () => actions.toggleTheme(),
-      confirmDelete: () => {},
-      cancelDelete: () => {},
+      confirmDelete: () => {
+        if (pendingConfirm) {
+          pendingConfirm.action();
+          pendingConfirm = null;
+          confirmDialog.update(null);
+        }
+      },
+      cancelDelete: () => {
+        pendingConfirm = null;
+        confirmDialog.update(null);
+      },
       openEpic: (id) => actions.openEpic(id),
       selectEpic: (id) => actions.selectEpic(id),
       selectTask: (id) => actions.selectTask(id),
