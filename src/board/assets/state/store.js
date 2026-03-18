@@ -67,6 +67,14 @@ function compareEpicOverviewOrder(leftEpic, rightEpic) {
   return leftEpic.id.localeCompare(rightEpic.id);
 }
 
+export function orderEpicsNewestFirst(epics) {
+  if (!Array.isArray(epics)) {
+    return [];
+  }
+
+  return [...epics].sort(compareEpicOverviewOrder);
+}
+
 // --- Derived state selectors ---
 
 const selectVisibleEpics = createSelector(
@@ -77,7 +85,7 @@ const selectVisibleEpics = createSelector(
       ? epics
       : epics.filter((epic) => epic.searchText.includes(searchQuery));
 
-    return [...matchingEpics].sort(compareEpicOverviewOrder);
+    return orderEpicsNewestFirst(matchingEpics);
   },
 );
 
