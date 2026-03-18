@@ -12,6 +12,22 @@ import {
 export function createTaskModal() {
   let container = null;
   let currentTaskId = null;
+  let previousTask = null;
+
+  function getResetFormIds(nextTask) {
+    if (!previousTask || previousTask.id !== nextTask.id) {
+      return [];
+    }
+
+    const resetFormIds = [];
+    if (nextTask.subtasks.length > previousTask.subtasks.length) {
+      resetFormIds.push(`form:task-create-subtask:${nextTask.id}`);
+    }
+    if (nextTask.blockedBy.length > previousTask.blockedBy.length) {
+      resetFormIds.push(`form:task-dependency:${nextTask.id}`);
+    }
+    return resetFormIds;
+  }
 
   function render(props) {
     const { task, epics, snapshot, isMutating = false } = props;
@@ -52,26 +68,32 @@ export function createTaskModal() {
         if (currentTaskId) {
           container.innerHTML = "";
           currentTaskId = null;
+          previousTask = null;
         }
         return;
       }
+
+      const resetFormIds = getResetFormIds(props.task);
 
       if (currentTaskId === props.task.id) {
         preserveDetailsState(container, () => {
           preserveFormState(container, () => {
             container.innerHTML = render(props);
-          });
+          }, { resetFormIds });
         });
       } else {
         container.innerHTML = render(props);
         currentTaskId = props.task.id;
       }
+
+      previousTask = props.task;
     },
 
     unmount() {
       if (container) container.innerHTML = "";
       container = null;
       currentTaskId = null;
+      previousTask = null;
     },
   };
 }
