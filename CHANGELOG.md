@@ -2,6 +2,46 @@
 
 All notable changes to Trekoon are documented in this file.
 
+## 0.2.9
+
+### Added
+
+- Board top bar with epic/board navigation, global search, theme toggle, and a
+  storage-state explainer.
+- Task inspector and modal workflow for inline task editing, dependency
+  management, direct subtask creation, and compact-screen task focus.
+- Subtask editor modal, destructive-action confirmation dialog, and live-region
+  notices for board mutation feedback.
+- URL hash syncing for selected epic/task, search, view mode, and board/epics
+  screen state, including back/forward restoration and deep-link
+  canonicalization.
+- `PATCH /api/epics/:id/cascade` board API endpoint for atomic epic-wide status
+  cascades with returned plan metadata and refreshed snapshots.
+- Board regression coverage for URL state, top-bar restoration, store
+  reconciliation, and atomic epic cascade behavior.
+
+### Changed
+
+- Board frontend was rewritten around a zero-dependency component runtime with
+  delegated DOM events, extracted render helpers, reusable mount/update/unmount
+  components, and locally bundled CSS/fonts.
+- `app.js` now acts as a board orchestrator while shared UI behavior lives in
+  focused component and state modules instead of one monolithic renderer.
+- Board mutations are now serialized through a client-side queue with optimistic
+  updates and rollback on failure instead of being ignored while another
+  mutation is in flight.
+- Board workspace controls now support epic switching, epic status editing,
+  bulk task status updates, notes-panel toggling, and kanban/rows view changes.
+- Board API errors now include request-scoped context, and `.woff2` assets are
+  served with the correct MIME type.
+
+### Fixed
+
+- Epic status cascades now stay atomic across snapshot updates and emitted
+  events when dependency blockers prevent completion.
+- Restored board state now keeps the visible search input, selected task/epic,
+  and URL history in sync after refresh, deep links, and popstate restores.
+
 ## 0.2.8
 
 ### Added
