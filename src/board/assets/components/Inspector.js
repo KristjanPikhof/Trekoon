@@ -187,7 +187,7 @@ export function renderTaskSurface(props) {
   } = options;
 
   return `
-    <div class="${containerClassName} grid h-full min-h-0 grid-rows-[auto_1fr] overflow-hidden">
+    <div class="${containerClassName} grid h-full min-h-0 grid-rows-[auto_1fr] overflow-hidden overflow-y-auto">
       <header class="board-detail-surface__header board-drawer__header border-b border-[var(--board-border)] pb-5">
         <div class="board-detail-surface__hero flex flex-col gap-4">
           <div class="board-detail-surface__title-row flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
