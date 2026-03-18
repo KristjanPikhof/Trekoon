@@ -41,6 +41,33 @@ afterEach(() => {
 });
 
 describe("board state store reconciliation", () => {
+  test("orders visible epics newest-first with deterministic ties", () => {
+    globalThis.localStorage = createMockStorage() as Storage;
+
+    const store = createStore({
+      epics: [
+        { id: "epic-z", title: "Older epic", createdAt: 100 },
+        { id: "epic-b", title: "Newest beta epic", createdAt: 300 },
+        { id: "epic-a", title: "Newest alpha epic", createdAt: 300 },
+        { id: "epic-c", title: "Middle epic", createdAt: 200 },
+      ],
+      tasks: [],
+      subtasks: [],
+      dependencies: [],
+    });
+
+    expect(store.getBoardState().visibleEpics.map((epic) => epic.id)).toEqual([
+      "epic-a",
+      "epic-b",
+      "epic-c",
+      "epic-z",
+    ]);
+
+    const searched = store.syncState({ search: "newest" });
+
+    expect(searched.visibleEpics.map((epic) => epic.id)).toEqual(["epic-a", "epic-b"]);
+  });
+
   test("clears stale selectedSubtaskId when selectedTaskId is reconciled away", () => {
     globalThis.localStorage = createMockStorage() as Storage;
 
