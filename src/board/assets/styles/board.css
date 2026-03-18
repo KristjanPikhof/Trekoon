@@ -71,6 +71,14 @@ body {
   color: var(--board-text);
 }
 
+:where(button, select, input, summary, a, [role="button"], [role="tab"]):focus-visible {
+  outline: none;
+  box-shadow:
+    0 0 0 2px color-mix(in srgb, var(--board-bg) 78%, transparent),
+    0 0 0 4px var(--board-border-strong),
+    0 10px 24px color-mix(in srgb, var(--board-accent) 18%, transparent);
+}
+
 html.board-scroll-locked,
 body.board-scroll-locked {
   overflow: hidden;
@@ -674,6 +682,11 @@ body.board-scroll-locked {
   font-weight: 600;
   cursor: pointer;
   white-space: nowrap;
+  transition:
+    border-color 0.15s ease,
+    background-color 0.15s ease,
+    color 0.15s ease,
+    box-shadow 0.15s ease;
 }
 
 .board-shell-topbar__nav-item.is-active {
@@ -683,7 +696,8 @@ body.board-scroll-locked {
 }
 
 .board-shell-topbar__nav-item[disabled] {
-  display: none;
+  opacity: 0.45;
+  cursor: not-allowed;
 }
 
 .board-shell-topbar__tools {
@@ -710,6 +724,28 @@ body.board-scroll-locked {
   background: var(--board-surface-2);
   color: var(--board-text-muted);
   font-size: 0.82rem;
+}
+
+.board-shell-topbar__search:focus-within {
+  border-color: var(--board-border-strong);
+  box-shadow:
+    inset 0 0 0 1px color-mix(in srgb, var(--board-accent) 24%, transparent),
+    0 0 0 2px color-mix(in srgb, var(--board-bg) 78%, transparent),
+    0 0 0 4px var(--board-border-strong);
+}
+
+.board-shell-topbar__search-label,
+.board-shell-topbar__assistive-copy,
+.board-wh__control-text {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
 }
 
 .board-shell-topbar__search input {
@@ -753,6 +789,16 @@ body.board-scroll-locked {
 .board-shell-topbar__icon-btn:hover {
   border-color: var(--board-border-strong);
   color: var(--board-text);
+}
+
+.board-shell-topbar__icon-btn:disabled,
+.board-shell-topbar__meta summary:disabled,
+.board-view-switch__tab:disabled,
+.board-wh__notes-btn:disabled,
+.board-wh__controls select:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+  box-shadow: none;
 }
 
 .board-shell-topbar__meta {
@@ -867,6 +913,12 @@ body.board-scroll-locked {
   align-items: center;
   gap: 6px;
   margin-left: auto;
+}
+
+.board-wh__control-label {
+  display: inline-flex;
+  align-items: center;
+  min-width: 0;
 }
 
 .board-wh__sep {
