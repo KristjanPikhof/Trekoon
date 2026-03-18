@@ -5,9 +5,7 @@ import { normalizeSnapshot, normalizeStatus } from "./state/utils.js";
 import { syncUrlHash } from "./state/url.js";
 import { createDelegation } from "./runtime/delegation.js";
 import { createTopBar } from "./components/TopBar.js";
-import { createSidebar } from "./components/Sidebar.js";
 import { createWorkspace } from "./components/Workspace.js";
-import { createInspector } from "./components/Inspector.js";
 import { createTaskModal } from "./components/TaskModal.js";
 import { createSubtaskModal } from "./components/SubtaskModal.js";
 import { createNotice } from "./components/Notice.js";
@@ -152,9 +150,7 @@ export async function bootLegacyBoard(options = {}) {
 
     // Mount components
     const topBar = createTopBar().mount(slots.topbar);
-    const sidebar = createSidebar().mount(slots.sidebar);
     const workspace = createWorkspace().mount(slots.workspace);
-    const inspector = createInspector().mount(slots.inspector);
     const taskModal = createTaskModal().mount(slots.taskModal);
     const subtaskModal = createSubtaskModal().mount(slots.subtaskModal);
     const notice = createNotice().mount(slots.notice);
