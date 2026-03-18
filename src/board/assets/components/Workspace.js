@@ -83,7 +83,7 @@ function renderWorkspaceHeader(props) {
             ${store.viewModes.map((view) => {
               const icon = view.id === "kanban"
                 ? renderIcon("view_kanban", "board-view-switch__icon text-[16px]")
-                : renderIcon("table_rows", "board-view-switch__icon text-[16px]");
+                : renderIcon("view_list", "board-view-switch__icon text-[16px]");
               return `<button class="${cx(
                 "board-view-switch__tab",
                 view.active
