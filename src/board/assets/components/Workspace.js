@@ -79,7 +79,7 @@ function renderWorkspaceHeader(props) {
               <span>Notes</span>
             </button>
           ` : ""}
-          <div class="board-tabs inline-flex rounded-xl border border-[var(--board-border)] bg-white/[0.03] p-0.5" role="tablist" aria-label="Board views">
+          <div class="board-tabs inline-flex rounded-xl border border-[var(--board-border)] p-0.5" role="tablist" aria-label="Board views">
             ${store.viewModes.map((view) => {
               const icon = view.id === "kanban"
                 ? '<svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M3 3h6v18H3V3zm8 0h6v12h-6V3zm8 0h2v8h-2V3z"/></svg>'
