@@ -107,12 +107,7 @@ export function createDelegation(rootElement, actions) {
 
     const toggleNotesEl = target.closest("[data-toggle-notes]");
     if (toggleNotesEl) {
-      const panel = rootElement.querySelector("[data-notes-panel]");
-      if (panel) {
-        const isHidden = panel.hidden;
-        panel.hidden = !isHidden;
-        toggleNotesEl.classList.toggle("board-wh__notes-btn--active", isHidden);
-      }
+      actions.toggleNotesPanel();
       return;
     }
 
@@ -172,12 +167,14 @@ export function createDelegation(rootElement, actions) {
 
     const epicStatusForm = event.target.closest("[data-epic-status-form]");
     if (epicStatusForm) {
+      if (actions.isMutating()) return;
       actions.changeEpicStatus(epicStatusForm.dataset.epicStatusForm, event.target.value);
       return;
     }
 
     const bulkStatusForm = event.target.closest("[data-bulk-status-form]");
     if (bulkStatusForm) {
+      if (actions.isMutating()) return;
       const newStatus = event.target.value;
       if (newStatus) {
         actions.bulkSetStatus(bulkStatusForm.dataset.bulkStatusForm, newStatus);
