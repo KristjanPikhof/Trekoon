@@ -1,3 +1,5 @@
+import { orderEpicsNewestFirst } from "./store.js";
+
 function cloneSnapshot(snapshot) {
   if (typeof structuredClone === "function") {
     return structuredClone(snapshot);
@@ -234,7 +236,11 @@ export function createBoardActions(options) {
       });
     },
     showBoard() {
-      const fallbackEpicId = getBoardState().selectedEpicId || store.snapshot.epics[0]?.id || null;
+      const boardState = getBoardState();
+      const fallbackEpicId = boardState.selectedEpicId
+        || boardState.visibleEpics[0]?.id
+        || orderEpicsNewestFirst(store.snapshot.epics)[0]?.id
+        || null;
       if (!fallbackEpicId) {
         return;
       }
