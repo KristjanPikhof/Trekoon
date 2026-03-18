@@ -1,0 +1,299 @@
+import { renderTaskCard } from "./TaskCard.js";
+import {
+  cx,
+  escapeHtml,
+  fieldClasses,
+  isCompactViewport,
+  neutralChipClasses,
+  panelClasses,
+  readStatusLabel,
+  renderEpicCountSummary,
+  renderEmptyState,
+  renderIcon,
+  renderStatusBadge,
+  secondaryPanelClasses,
+  sectionLabelClasses,
+  STATUS_ORDER,
+} from "./helpers.js";
+import { VIEW_MODES } from "../state/utils.js";
+
+// ---------------------------------------------------------------------------
+// Workspace header (inlined from WorkspaceHeader.js)
+// ---------------------------------------------------------------------------
+
+function renderWorkspaceHeader(props) {
+  const {
+    isCompact,
+    primarySurfaceLabel,
+    searchScope,
+    selectedEpic,
+    snapshotEpics,
+    store,
+    visibleTasks,
+  } = props;
+
+  const description = selectedEpic.description?.trim() || "No epic description yet.";
+
+  return `
+    <header class="board-section-head board-section-head--workspace board-workspace-header">
+      <div class="board-workspace-header__intro">
+        <div class="board-workspace-header__title-block">
+          <span class="${sectionLabelClasses()}">${escapeHtml(searchScope?.summary ?? "Selected epic")}</span>
+          <div class="board-workspace-header__title-row">
+            <h2>${escapeHtml(selectedEpic.title)}</h2>
+            ${renderStatusBadge(selectedEpic.status)}
+            ${isCompact ? `<span class="${neutralChipClasses()}">Primary surface \u00b7 ${escapeHtml(primarySurfaceLabel)}</span>` : ""}
+          </div>
+          <div class="mt-3 flex flex-wrap gap-2">
+            <span class="${neutralChipClasses()}">${escapeHtml(searchScope?.detail ?? "")}</span>
+            <span class="${neutralChipClasses()}">${visibleTasks.length} visible task${visibleTasks.length === 1 ? "" : "s"}</span>
+          </div>
+        </div>
+        <details class="board-workspace-header__details">
+          <summary aria-label="Epic description and scope">
+            ${renderIcon("subject", "text-[18px]")}
+            <span>${searchScope?.kind === "epic_search" ? "Epic scope" : "Epic notes"}</span>
+          </summary>
+          <p>${escapeHtml(description)}</p>
+        </details>
+      </div>
+
+      <div class="board-workspace__toolbar board-workspace-header__toolbar">
+        <label class="board-select grid gap-2 xl:min-w-[240px]" aria-label="Choose epic">
+          <span class="${sectionLabelClasses()}">Epic</span>
+          <select class="${fieldClasses()}" id="board-epic-select">
+            ${snapshotEpics.map((epic) => `
+              <option value="${escapeHtml(epic.id)}" ${store.selectedEpicId === epic.id ? "selected" : ""}>
+                ${escapeHtml(epic.title)}
+              </option>
+            `).join("")}
+          </select>
+        </label>
+        <div class="board-workspace-header__controls">
+          <div class="board-tabs inline-flex rounded-2xl border border-[var(--board-border)] bg-white/[0.03] p-1" role="tablist" aria-label="Board views">
+            ${store.viewModes.map((view) => `<button class="${view.classes}" type="button" role="tab" aria-selected="${view.active}" data-view="${view.id}">${renderIcon(view.icon, "text-[18px]")} ${view.label}</button>`).join("")}
+          </div>
+          <div class="board-legend board-workspace-header__legend">
+            ${renderEpicCountSummary(selectedEpic)}
+            <span class="${neutralChipClasses()}">${escapeHtml(searchScope?.summary ?? "Current scope")}</span>
+            ${store.view === "kanban" ? `<span class="${neutralChipClasses()}">Drag to move</span>` : ""}
+            ${store.isMutating ? `<span class="${neutralChipClasses()}">Saving\u2026</span>` : ""}
+          </div>
+        </div>
+      </div>
+    </header>
+  `;
+}
+
+// ---------------------------------------------------------------------------
+// Kanban columns
+// ---------------------------------------------------------------------------
+
+function renderKanbanColumns(props) {
+  const { visibleTasks, selectedTaskId, isMutating } = props;
+
+  const columnsMarkup = STATUS_ORDER.map((status) => {
+    const columnTasks = visibleTasks.filter((t) => t.status === status);
+    const columnTitle = readStatusLabel(status);
+    const content = columnTasks.length === 0
+      ? renderEmptyState(`No ${columnTitle.toLowerCase()} work`, "Adjust search or switch epics to inspect more tasks.")
+      : columnTasks.map((task) => renderTaskCard({ task, selected: selectedTaskId === task.id, isMutating })).join("");
+
+    return `
+      <section class="board-column board-column--dense ${secondaryPanelClasses("flex min-h-[20rem] min-w-0 flex-col p-3")}" aria-labelledby="column-${status}">
+        <header class="board-column__header flex items-start justify-between gap-3 border-b border-[var(--board-border)] pb-3">
+          <div class="min-w-0">
+            <p class="${sectionLabelClasses()}">${escapeHtml(columnTitle)}</p>
+            <div class="mt-2 flex flex-wrap items-center gap-2">
+              ${renderStatusBadge(status)}
+              <span class="${neutralChipClasses()}">${columnTasks.length} item${columnTasks.length === 1 ? "" : "s"}</span>
+            </div>
+          </div>
+          ${columnTasks.length > 0 ? `<span class="board-column__count text-xs font-medium text-[var(--board-text-soft)]">${columnTasks.length === 1 ? "1 task" : `${columnTasks.length} tasks`}</span>` : ""}
+        </header>
+        <div class="board-column__tasks mt-3 grid min-h-0 flex-1 content-start gap-2.5 overflow-auto pr-1 overscroll-contain" id="column-${status}" data-drop-status="${escapeHtml(status)}">${content}</div>
+      </section>
+    `;
+  }).join("");
+
+  return `<div class="board-kanban board-kanban--dense min-h-0 min-w-0 overflow-y-auto pr-1">${columnsMarkup}</div>`;
+}
+
+// ---------------------------------------------------------------------------
+// List rows
+// ---------------------------------------------------------------------------
+
+function renderListRows(props) {
+  const { visibleTasks, selectedTaskId } = props;
+  const { cx: _cx, escapeHtml: _e, formatDate: _f, hasLongTaskTitle: _h, neutralChipClasses: _n, renderStatusBadge: _r, renderTaskMeta: _m } = _getRowHelpers();
+
+  if (visibleTasks.length === 0) {
+    return `
+      <div class="board-list board-list--dense grid min-h-0 gap-4 grid-rows-[auto_1fr]">
+        <div class="board-list__rows min-h-0 space-y-3 overflow-auto pr-1 overscroll-contain">
+          ${renderEmptyState("No matching tasks", "Nothing in this slice matches the active search and epic filters.", "/")}
+        </div>
+      </div>
+    `;
+  }
+
+  // Import the list rendering from TaskList
+  const rows = visibleTasks.map((task) => renderListRowInline(task, selectedTaskId === task.id)).join("");
+
+  return `
+    <div class="board-list board-list--dense grid min-h-0 gap-4 grid-rows-[auto_1fr]">
+      <div class="board-list__header hidden gap-3 px-1 text-[11px] font-semibold uppercase tracking-[0.16em] text-[var(--board-text-soft)] lg:grid lg:grid-cols-[minmax(0,2fr)_150px_minmax(0,210px)_110px]">
+        <span>Task</span>
+        <span>Status</span>
+        <span>Workflow</span>
+        <span>Updated</span>
+      </div>
+      <div class="board-list__rows min-h-0 space-y-3 overflow-auto pr-1 overscroll-contain">${rows}</div>
+    </div>
+  `;
+}
+
+function _getRowHelpers() {
+  // Lazy import to avoid circular deps - just re-export our existing helpers
+  return { cx, escapeHtml, neutralChipClasses, renderStatusBadge };
+}
+
+function renderListRowInline(task, selected) {
+  const { formatDate: fmt, hasLongTaskTitle: longCheck, renderTaskMeta: meta } = await_helpers();
+  const longTitle = longCheck(task.title);
+
+  return `
+    <button
+      type="button"
+      class="board-list-row ${cx(
+        "w-full text-left grid gap-3 rounded-[22px] border px-4 py-3 transition duration-200 lg:grid-cols-[minmax(0,2fr)_150px_minmax(0,210px)_110px] lg:items-start",
+        "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--board-border-strong)] focus-visible:ring-offset-2 focus-visible:ring-offset-[var(--board-surface)]",
+        selected
+          ? "border-[var(--board-border-strong)] bg-[var(--board-accent-soft)] shadow-focus"
+          : "border-[var(--board-border)] bg-white/[0.02] hover:border-[var(--board-border-strong)] hover:bg-white/[0.04]",
+      )}"
+      data-task-id="${escapeHtml(task.id)}"
+      aria-pressed="${selected}"
+      aria-label="${escapeHtml(task.title)}"
+    >
+      <div class="board-list-row__summary min-w-0">
+        <div class="board-list-row__summary-head flex min-w-0 flex-wrap items-start justify-between gap-2">
+          <strong class="board-list-row__title block min-w-0 text-sm font-semibold text-[var(--board-text)] sm:text-[0.98rem]">${escapeHtml(task.title)}</strong>
+          ${longTitle ? `<span class="board-list-row__cue ${neutralChipClasses()}">Open</span>` : ""}
+        </div>
+        ${task.description?.trim() ? `<p class="board-list-row__description mt-2 text-sm leading-5 text-[var(--board-text-muted)] board-clamped-text__preview board-clamped-text__preview--2">${escapeHtml(task.description.trim())}</p>` : ""}
+      </div>
+      <div class="board-list-row__status">${renderStatusBadge(task.status)}</div>
+      <div class="board-list-row__meta flex min-w-0 flex-wrap gap-2">${meta(task)}</div>
+      <span class="board-list-row__updated text-sm text-[var(--board-text-muted)]">${escapeHtml(fmt(task.updatedAt))}</span>
+    </button>
+  `;
+}
+
+function await_helpers() {
+  // Direct imports - no async needed
+  const { formatDate, hasLongTaskTitle, renderTaskMeta } = require_helpers();
+  return { formatDate, hasLongTaskTitle, renderTaskMeta };
+}
+
+function require_helpers() {
+  return { formatDate: _fmt, hasLongTaskTitle: _hlt, renderTaskMeta: _rtm };
+}
+
+import { formatDate as _fmt, hasLongTaskTitle as _hlt, renderTaskMeta as _rtm } from "./helpers.js";
+
+// ---------------------------------------------------------------------------
+// Workspace component
+// ---------------------------------------------------------------------------
+
+/**
+ * Render the full workspace HTML (header + content area).
+ *
+ * @param {object} props
+ * @returns {string}
+ */
+function render(props) {
+  const {
+    selectedEpic,
+    selectedTask,
+    useTaskModal,
+    searchScope,
+    snapshotEpics,
+    store,
+    visibleTasks,
+  } = props;
+
+  const compact = isCompactViewport();
+  const selectedTaskId = selectedTask?.id ?? null;
+  const currentNav = selectedTask ? "detail" : "board";
+  const primarySurfaceLabel = currentNav === "detail" ? "Detail" : "Board";
+
+  const viewModes = VIEW_MODES.map((view) => ({
+    active: store.view === view,
+    classes: cx(
+      "rounded-2xl px-4 py-2 text-sm font-medium transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--board-border-strong)] focus-visible:ring-offset-2 focus-visible:ring-offset-[var(--board-surface)]",
+      store.view === view
+        ? "bg-[var(--board-accent-soft)] text-[var(--board-text)] shadow-[inset_0_0_0_1px_var(--board-border-strong)]"
+        : "text-[var(--board-text-muted)] hover:text-[var(--board-text)]",
+    ),
+    icon: view === "kanban" ? "view_kanban" : "list",
+    id: view,
+    label: view === "kanban" ? "Kanban" : "Rows",
+  }));
+
+  const headerMarkup = renderWorkspaceHeader({
+    isCompact: compact,
+    primarySurfaceLabel,
+    searchScope,
+    selectedEpic,
+    snapshotEpics,
+    store: {
+      isMutating: store.isMutating,
+      selectedEpicId: selectedEpic.id,
+      view: store.view,
+      viewModes,
+    },
+    visibleTasks,
+  });
+
+  const contentMarkup = store.view === "kanban"
+    ? renderKanbanColumns({ visibleTasks, selectedTaskId, isMutating: store.isMutating })
+    : renderListRows({ visibleTasks, selectedTaskId });
+
+  return `
+    <section class="board-workspace ${panelClasses("grid min-h-0 min-w-0 grid-rows-[auto_1fr] overflow-hidden p-5 sm:p-6")}" aria-label="Workspace">
+      ${headerMarkup}
+      <div class="board-content mt-6 min-h-0 min-w-0 overflow-hidden">
+        ${contentMarkup}
+      </div>
+    </section>
+  `;
+}
+
+/**
+ * Workspace component — workspace header + content (kanban or list view).
+ */
+export function createWorkspace() {
+  let container = null;
+  let lastHtml = null;
+
+  return {
+    mount(el) {
+      container = el;
+      return this;
+    },
+    update(props) {
+      if (!container) return;
+      const html = render(props);
+      if (html !== lastHtml) {
+        container.innerHTML = html;
+        lastHtml = html;
+      }
+    },
+    unmount() {
+      if (container) container.innerHTML = "";
+      container = null;
+      lastHtml = null;
+    },
+  };
+}
