@@ -166,13 +166,13 @@ export function createBoardActions(options) {
       rerender();
     },
     updateSearch(value) {
-      store.search = typeof value === "string" ? value : "";
+      const nextSearch = typeof value === "string" ? value : "";
       if (searchTimer !== null) {
         clearTimeout(searchTimer);
       }
       searchTimer = setTimeout(() => {
         searchTimer = null;
-        syncState({ search: store.search });
+        syncState({ search: nextSearch });
         persist();
         rerender({ preserveFocus: false });
         const input = document.querySelector("#board-search-input");
