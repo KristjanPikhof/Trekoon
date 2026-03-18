@@ -276,6 +276,7 @@ export async function bootLegacyBoard(options = {}) {
     }
 
     function syncOverlayEnvironment() {
+      const hadOverlay = activeOverlay instanceof HTMLElement;
       const nextOverlay = getActiveOverlayElement();
       if (nextOverlay === activeOverlay) {
         return;
@@ -283,15 +284,19 @@ export async function bootLegacyBoard(options = {}) {
 
       if (nextOverlay) {
         activeOverlay = nextOverlay;
-        lockBackgroundScroll();
-        setBackgroundInert(true);
+        if (!hadOverlay) {
+          lockBackgroundScroll();
+          setBackgroundInert(true);
+        }
         queueMicrotask(() => focusOverlay(nextOverlay));
         return;
       }
 
       activeOverlay = null;
-      unlockBackgroundScroll();
-      setBackgroundInert(false);
+      if (hadOverlay) {
+        unlockBackgroundScroll();
+        setBackgroundInert(false);
+      }
       queueMicrotask(() => restoreOverlayFocus());
     }
 
@@ -448,6 +453,27 @@ export async function bootLegacyBoard(options = {}) {
       applyTheme,
       closeTopmostDisclosure,
       dismissSearch,
+      hasOpenOverlay: () => activeOverlay instanceof HTMLElement,
+      closeActiveOverlay: () => {
+        if (pendingConfirm) {
+          restoreFocusPending = true;
+          pendingConfirm = null;
+          confirmDialog.update(null);
+          syncOverlayEnvironment();
+          return;
+        }
+
+        if (model.getBoardState().selectedSubtaskId) {
+          restoreFocusPending = true;
+          actions.closeSubtask();
+          return;
+        }
+
+        if (model.getBoardState().selectedTaskId) {
+          restoreFocusPending = true;
+          actions.closeTask();
+        }
+      },
       focusSearch: () => document.querySelector("#board-search-input")?.focus({ preventScroll: true }),
       focusTaskDetail: () => document.querySelector(".board-drawer, .board-task-modal")?.scrollIntoView({ block: "nearest", behavior: getScrollBehavior() }),
       searchFocusKeys: SEARCH_FOCUS_KEYS,
@@ -519,7 +545,7 @@ export async function bootLegacyBoard(options = {}) {
     });
 
     // URL hash sync
-    syncUrlHash(model);
+    syncUrlHash(model, { onRestore: rerender });
 
     // Initial render
     applyTheme(model.store.theme);
