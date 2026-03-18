@@ -150,8 +150,8 @@ afterEach(() => {
 function createSnapshot() {
   return {
     epics: [
-      { id: "epic-1", title: "Epic 1", status: "todo" },
-      { id: "epic-2", title: "Epic 2", status: "todo" },
+      { id: "epic-1", title: "Epic 1", status: "todo", createdAt: 100 },
+      { id: "epic-2", title: "Epic 2", status: "todo", createdAt: 200 },
     ],
     tasks: [
       { id: "task-1", epicId: "epic-1", title: "Task 1", status: "todo" },
