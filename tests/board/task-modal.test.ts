@@ -1,4 +1,4 @@
-import { describe, expect, test } from "bun:test";
+import { afterEach, describe, expect, test } from "bun:test";
 
 // @ts-expect-error Untyped browser asset module is exercised directly in tests.
 import { preserveFormState } from "../../src/board/assets/components/Component.js";
@@ -140,7 +140,19 @@ function createMockContainer(forms: FormSeed[]) {
 }
 
 describe("task create-form preservation", () => {
+  const originalDocument = globalThis.document;
+
+  afterEach(() => {
+    if (originalDocument === undefined) {
+      Reflect.deleteProperty(globalThis, "document");
+      return;
+    }
+
+    globalThis.document = originalDocument;
+  });
+
   test("preserves in-progress drafts on same-task rerenders", () => {
+    globalThis.document = { activeElement: null } as Document;
     const { container, getControl } = createMockContainer([
       {
         identity: "task-create-subtask:task-1",
@@ -168,6 +180,7 @@ describe("task create-form preservation", () => {
   });
 
   test("skips restoring submitted create-form values after success", () => {
+    globalThis.document = { activeElement: null } as Document;
     const { container, getControl } = createMockContainer([
       {
         identity: "task-create-subtask:task-1",
