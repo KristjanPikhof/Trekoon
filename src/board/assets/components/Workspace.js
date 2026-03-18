@@ -79,17 +79,17 @@ function renderWorkspaceHeader(props) {
               <span>Notes</span>
             </button>
           ` : ""}
-          <div class="board-tabs inline-flex rounded-xl border border-[var(--board-border)] p-0.5" role="tablist" aria-label="Board views">
+          <div class="board-view-switch" role="tablist" aria-label="Board views">
             ${store.viewModes.map((view) => {
               const icon = view.id === "kanban"
-                ? '<svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M3 3h6v18H3V3zm8 0h6v12h-6V3zm8 0h2v8h-2V3z"/></svg>'
-                : '<svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M3 4h18v2H3V4zm0 7h18v2H3v-2zm0 7h18v2H3v-2z"/></svg>';
+                ? renderIcon("view_kanban", "board-view-switch__icon text-[16px]")
+                : renderIcon("table_rows", "board-view-switch__icon text-[16px]");
               return `<button class="${cx(
-                "rounded-[10px] px-3 py-1.5 text-xs font-medium transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--board-border-strong)]",
+                "board-view-switch__tab",
                 view.active
-                  ? "bg-white/[0.08] text-[var(--board-text)]"
-                  : "text-[var(--board-text-muted)] hover:text-[var(--board-text)]",
-              )}" type="button" role="tab" aria-selected="${view.active}" data-view="${view.id}">${icon} ${view.label}</button>`;
+                  ? "board-view-switch__tab--active"
+                  : "",
+              )}" type="button" role="tab" aria-selected="${view.active}" data-view="${view.id}">${icon}<span class="board-view-switch__label">${escapeHtml(view.label)}</span></button>`;
             }).join("")}
           </div>
         </div>
