@@ -33,10 +33,9 @@ function render(props) {
       label: "Board",
       icon: "view_kanban",
       action: 'data-nav-board="true"',
-      disabled: !selectedEpic,
       tooltip: selectedEpic
         ? "Open the selected epic board."
-        : "Select an epic to open its board.",
+        : "Open the newest epic board.",
     },
   ];
 
@@ -48,7 +47,7 @@ function render(props) {
     ].filter(Boolean).join(" ");
 
     return `
-      <button type="button" class="${classes}" ${item.action} ${item.disabled ? "disabled" : ""} aria-current="${isActive ? "page" : "false"}" aria-label="${escapeHtml(item.label)} view" title="${escapeHtml(item.tooltip)}">
+      <button type="button" class="${classes}" ${item.action} aria-current="${isActive ? "page" : "false"}" aria-label="${escapeHtml(item.label)} view" title="${escapeHtml(item.tooltip)}">
         ${renderIcon(item.icon, "text-[16px]")} <span>${escapeHtml(item.label)}</span>
       </button>
     `;
