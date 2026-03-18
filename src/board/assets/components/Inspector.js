@@ -261,6 +261,22 @@ export function renderTaskSurface(props) {
 export function createInspector() {
   let container = null;
   let currentTaskId = null;
+  let previousTask = null;
+
+  function getResetFormIds(nextTask) {
+    if (!previousTask || previousTask.id !== nextTask.id) {
+      return [];
+    }
+
+    const resetFormIds = [];
+    if (nextTask.subtasks.length > previousTask.subtasks.length) {
+      resetFormIds.push(`form:task-create-subtask:${nextTask.id}`);
+    }
+    if (nextTask.blockedBy.length > previousTask.blockedBy.length) {
+      resetFormIds.push(`form:task-dependency:${nextTask.id}`);
+    }
+    return resetFormIds;
+  }
 
   return {
     mount(el) {
@@ -278,6 +294,7 @@ export function createInspector() {
         if (currentTaskId) {
           container.innerHTML = "";
           currentTaskId = null;
+          previousTask = null;
         }
         return;
       }
@@ -290,24 +307,29 @@ export function createInspector() {
         scrollSurface: "inspector",
       };
 
+      const resetFormIds = getResetFormIds(task);
+
       if (currentTaskId === task.id) {
         // Same task — preserve form state and details open/closed state
         preserveDetailsState(container, () => {
           preserveFormState(container, () => {
             container.innerHTML = renderTaskSurface({ ...props, options: surfaceOptions });
-          });
+          }, { resetFormIds });
         });
       } else {
         // Different task — full re-render
         container.innerHTML = renderTaskSurface({ ...props, options: surfaceOptions });
         currentTaskId = task.id;
       }
+
+      previousTask = task;
     },
 
     unmount() {
       if (container) container.innerHTML = "";
       container = null;
       currentTaskId = null;
+      previousTask = null;
     },
   };
 }
