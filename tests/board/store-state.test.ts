@@ -73,4 +73,38 @@ describe("board state store reconciliation", () => {
     expect(store.getState().selectedTaskId).toBeNull();
     expect(store.getState().selectedSubtaskId).toBeNull();
   });
+
+  test("canonicalizes conflicting selectedEpicId to the selected task owner", () => {
+    globalThis.localStorage = createMockStorage() as Storage;
+
+    const store = createStore({
+      epics: [
+        { id: "epic-1", title: "Epic 1" },
+        { id: "epic-2", title: "Epic 2" },
+      ],
+      tasks: [
+        { id: "task-1", epicId: "epic-1", title: "Task 1", status: "todo" },
+      ],
+      subtasks: [],
+      dependencies: [],
+    });
+
+    const reconciled = store.syncState({
+      screen: "tasks",
+      selectedEpicId: "epic-2",
+      selectedTaskId: "task-1",
+    });
+
+    expect(reconciled.selectedEpicId).toBe("epic-1");
+    expect(reconciled.selectedTaskId).toBe("task-1");
+    expect(reconciled.selectedTask).toMatchObject({
+      id: "task-1",
+      epicId: "epic-1",
+    });
+    expect(store.getState()).toMatchObject({
+      screen: "tasks",
+      selectedEpicId: "epic-1",
+      selectedTaskId: "task-1",
+    });
+  });
 });
