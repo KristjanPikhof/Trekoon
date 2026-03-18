@@ -8,6 +8,22 @@
 
 const DEFAULT_VIEW = "kanban";
 
+function toHistoryState(state) {
+  return {
+    selectedEpicId: state.selectedEpicId || null,
+    view: state.view || DEFAULT_VIEW,
+  };
+}
+
+function shouldPushHistoryEntry(previousState, nextState) {
+  if (!previousState) {
+    return false;
+  }
+
+  return previousState.selectedEpicId !== nextState.selectedEpicId
+    || previousState.view !== nextState.view;
+}
+
 /**
  * Serialize board-relevant state fields into a URL hash string.
  * Omits default values to keep the URL clean.
@@ -78,6 +94,7 @@ export function syncUrlHash(store, options = {}) {
   const { onRestore } = options;
   let isApplyingLocation = false;
   let lastSerializedState = "";
+  let lastHistoryState = toHistoryState(store.store);
 
   function serializeCurrentState() {
     return stateToHash(store.store);
@@ -110,6 +127,7 @@ export function syncUrlHash(store, options = {}) {
     store.syncState(urlState);
     store.persist();
     lastSerializedState = serializeCurrentState();
+    lastHistoryState = toHistoryState(store.store);
     isApplyingLocation = false;
     onRestore?.();
   }
@@ -129,7 +147,10 @@ export function syncUrlHash(store, options = {}) {
 
     const hash = serializeCurrentState();
     if (hash !== lastSerializedState) {
-      applyLocation(hash, "push");
+      const nextHistoryState = toHistoryState(store.store);
+      const mode = shouldPushHistoryEntry(lastHistoryState, nextHistoryState) ? "push" : "replace";
+      applyLocation(hash, mode);
+      lastHistoryState = nextHistoryState;
     }
   });
 
