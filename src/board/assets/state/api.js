@@ -60,10 +60,22 @@ function buildRequestError(method, path, response, payload) {
  *   flush: () => Promise<void>,
  * }}
  */
-function createMutationQueue(model, rerender) {
+export function createMutationQueue(model, rerender) {
   /** @type {Array<{ optimistic?: function, request: function, onSuccess?: function, onError?: function, successMessage?: string }>} */
   const queue = [];
   let processing = false;
+  /** @type {Array<() => void>} */
+  let flushResolvers = [];
+
+  function resolveFlushes() {
+    if (processing || queue.length > 0 || flushResolvers.length === 0) {
+      return;
+    }
+
+    const pendingResolvers = flushResolvers;
+    flushResolvers = [];
+    pendingResolvers.forEach((resolve) => resolve());
+  }
 
   async function processNext() {
     if (processing || queue.length === 0) return;
@@ -114,6 +126,7 @@ function createMutationQueue(model, rerender) {
     processing = false;
     model.store.isMutating = false;
     rerender();
+    resolveFlushes();
   }
 
   return {
@@ -129,14 +142,7 @@ function createMutationQueue(model, rerender) {
     flush() {
       if (!processing && queue.length === 0) return Promise.resolve();
       return new Promise((resolve) => {
-        const check = () => {
-          if (!processing && queue.length === 0) {
-            resolve();
-          } else {
-            queueMicrotask(check);
-          }
-        };
-        queueMicrotask(check);
+        flushResolvers.push(resolve);
       });
     },
   };
