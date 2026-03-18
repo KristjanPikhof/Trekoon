@@ -357,13 +357,15 @@ export async function bootLegacyBoard(options = {}) {
       }
 
       const searchHasValue = boardState.search.trim().length > 0;
+      const pendingSearchHasValue = searchInput.value.trim().length > 0;
       const searchIsFocused = activeElement === searchInput;
-      if (!searchHasValue && !searchIsFocused) {
+      if (!searchHasValue && !pendingSearchHasValue && !searchIsFocused) {
         return false;
       }
 
-      if (searchHasValue) {
-        actions.updateSearch("");
+      if (searchHasValue || pendingSearchHasValue) {
+        searchInput.value = "";
+        actions.clearSearch();
       }
 
       searchInput.blur();
