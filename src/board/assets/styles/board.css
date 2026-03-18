@@ -1522,3 +1522,10 @@ textarea,
 .focus\:px-4:focus { padding-inline: 1rem; }
 .focus\:py-2:focus { padding-block: 0.5rem; }
 .focus\:text-white:focus { color: #fff; }
+
+/* ───── Important overrides for compact form selects ───── */
+
+.\!py-1 { padding-block: 0.25rem !important; }
+.\!px-2 { padding-inline: 0.5rem !important; }
+.\!text-xs { font-size: 0.75rem !important; line-height: 1rem !important; }
+.\!min-h-0 { min-height: 0 !important; }
