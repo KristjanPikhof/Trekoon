@@ -47,9 +47,13 @@ function createMockStorage(seed: Record<string, string> = {}): StorageShape {
   };
 }
 
-function createMockDocument() {
+function createMockDocument(searchInput: HTMLInputElement | null = null) {
   return {
-    querySelector() {
+    activeElement: null,
+    querySelector(selector: string) {
+      if (selector === "#board-search-input") {
+        return searchInput;
+      }
       return null;
     },
   } as unknown as Document;
@@ -191,6 +195,24 @@ function createActions(model: ReturnType<typeof createStore>) {
   });
 }
 
+function createMockSearchInput() {
+  class MockSearchInput {
+    id = "board-search-input";
+    value = "";
+    blurred = false;
+
+    focus() {}
+
+    blur() {
+      this.blurred = true;
+    }
+
+    setSelectionRange() {}
+  }
+
+  return new MockSearchInput() as HTMLInputElement & { blurred: boolean };
+}
+
 describe("board URL/store integration", () => {
   test("round-trips selected epic overview separately from board view", () => {
     globalThis.document = createMockDocument();
@@ -231,8 +253,9 @@ describe("board URL/store integration", () => {
   });
 
   test("debounced search updates sync into the URL", async () => {
-    globalThis.document = createMockDocument();
-    globalThis.HTMLInputElement = class {} as typeof HTMLInputElement;
+    const searchInput = createMockSearchInput();
+    globalThis.document = createMockDocument(searchInput);
+    globalThis.HTMLInputElement = searchInput.constructor as typeof HTMLInputElement;
     globalThis.localStorage = createMockStorage() as Storage;
     const mockWindow = createMockWindow();
     globalThis.window = mockWindow.window as unknown as Window & typeof globalThis;
@@ -250,6 +273,45 @@ describe("board URL/store integration", () => {
       mode: "replace",
       url: "/board#epic=epic-1&search=ship",
     });
+
+    cleanup();
+  });
+
+  test("escape cancels a pending debounced search before it reaches state or URL", async () => {
+    const searchInput = createMockSearchInput();
+    const mockDocument = createMockDocument(searchInput);
+    globalThis.document = mockDocument;
+    globalThis.HTMLInputElement = searchInput.constructor as typeof HTMLInputElement;
+    globalThis.localStorage = createMockStorage() as Storage;
+    const mockWindow = createMockWindow();
+    globalThis.window = mockWindow.window as unknown as Window & typeof globalThis;
+
+    const model = createStore(createSnapshot());
+    const actions = createActions(model);
+    const cleanup = syncUrlHash(model);
+
+    actions.showBoard();
+    searchInput.value = "ship";
+    mockDocument.activeElement = searchInput;
+    actions.updateSearch("ship");
+
+    let prevented = false;
+    actions.handleKeydown({
+      key: "Escape",
+      preventDefault() {
+        prevented = true;
+      },
+    } as KeyboardEvent);
+
+    await new Promise((resolve) => setTimeout(resolve, 220));
+
+    expect(prevented).toBe(true);
+    expect(searchInput.value).toBe("");
+    expect(searchInput.blurred).toBe(true);
+    expect(model.getBoardState().search).toBe("");
+    expect(mockWindow.calls).toEqual([
+      { mode: "push", url: "/board#epic=epic-1" },
+    ]);
 
     cleanup();
   });
