@@ -141,6 +141,12 @@ export function createTopBar() {
         return;
       }
 
+      if (props.search !== lastProps.search) {
+        container.innerHTML = render(props);
+        lastProps = props;
+        return;
+      }
+
       // Preserve search input value and cursor across re-renders
       preserveInput(container, "#board-search-input", () => {
         container.innerHTML = render(props);
