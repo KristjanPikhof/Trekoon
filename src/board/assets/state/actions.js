@@ -158,6 +158,11 @@ export function createBoardActions(options) {
       applyTheme(store.theme);
       rerender();
     },
+    toggleNotesPanel() {
+      store.notesPanelOpen = !store.notesPanelOpen;
+      persist();
+      rerender();
+    },
     updateSearch(value) {
       store.search = typeof value === "string" ? value : "";
       if (searchTimer !== null) {
@@ -329,15 +334,17 @@ export function createBoardActions(options) {
           return;
         }
 
+        if (dismissSearch?.(boardState, activeElement)) {
+          event.preventDefault();
+          return;
+        }
+
         if (boardState.selectedSubtaskId) {
           event.preventDefault();
           this.closeSubtask();
         } else if (boardState.selectedTaskId) {
           event.preventDefault();
           this.closeTask();
-        } else if (dismissSearch?.(boardState, activeElement)) {
-          event.preventDefault();
-          return;
         } else if (boardState.screen === "tasks") {
           event.preventDefault();
           this.showEpics();
