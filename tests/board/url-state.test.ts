@@ -293,4 +293,38 @@ describe("board URL state sync", () => {
 
     cleanup();
   });
+
+  test("restores cancel stale pending work before applying popstate state", () => {
+    const calls: string[] = [];
+    const mockStore = createMockStore({
+      selectedEpicId: "epic-1",
+      selectedTaskId: null,
+      search: "",
+      view: "kanban",
+    });
+    const mockWindow = createMockWindow();
+    globalThis.window = mockWindow.window as unknown as Window & typeof globalThis;
+
+    const cleanup = syncUrlHash(mockStore, {
+      beforeRestore() {
+        calls.push("beforeRestore");
+      },
+      onRestore() {
+        calls.push("onRestore");
+      },
+    });
+
+    mockWindow.window.location.hash = "#epic=epic-2&search=ship";
+    mockWindow.emit("popstate");
+
+    expect(calls).toEqual(["beforeRestore", "onRestore"]);
+    expect(mockStore.store).toEqual({
+      selectedEpicId: "epic-2",
+      selectedTaskId: null,
+      search: "ship",
+      view: "kanban",
+    });
+
+    cleanup();
+  });
 });
