@@ -1,6 +1,5 @@
 import { preserveInput } from "./Component.js";
 import {
-  cx,
   escapeHtml,
   renderIcon,
 } from "./helpers.js";
