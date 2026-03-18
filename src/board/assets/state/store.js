@@ -172,7 +172,7 @@ function deriveBoardState(state) {
   const requestedTask = state.selectedTaskId
     ? state.snapshot?.tasks?.find((task) => task.id === state.selectedTaskId) ?? null
     : null;
-  const requestedEpicId = requestedTask?.epicId ?? state.selectedEpicId;
+  const requestedEpicId = state.selectedEpicId ?? requestedTask?.epicId ?? null;
   const selectedEpic = requestedEpicId
     ? state.snapshot?.epics?.find((epic) => epic.id === requestedEpicId) ?? null
     : null;
