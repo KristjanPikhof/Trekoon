@@ -21,6 +21,7 @@ export function renderEpicRow(props) {
   const counts = epic.counts || { blocked: 0, done: 0, in_progress: 0 };
   const statusLabel = String(epic.status ?? "todo").replace(/_/g, " ");
   const openLabel = `Open epic ${epic.title}`;
+  const tooltip = `${openLabel}. ${totalTasks} task${totalTasks === 1 ? "" : "s"}.`;
   const descriptionMarkup = epic.description?.trim()
     ? `<p class="board-epic-row__description text-sm text-[var(--board-text-muted)] board-clamped-text__preview board-clamped-text__preview--2">${escapeHtml(epic.description.trim())}</p>`
     : "";
@@ -31,6 +32,7 @@ export function renderEpicRow(props) {
       class="board-epic-row ${selected ? "board-epic-row--selected" : ""}"
       aria-current="${selected}"
       aria-label="${escapeHtml(`${openLabel}. ${totalTasks} tasks. Status ${statusLabel}.`)}"
+      title="${escapeHtml(tooltip)}"
       data-open-epic="${escapeHtml(epic.id)}"
     >
       <span class="board-epic-row__summary">
