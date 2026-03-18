@@ -74,7 +74,12 @@ function renderWorkspaceHeader(props) {
         </label>
         <div class="board-workspace-header__controls">
           <div class="board-tabs inline-flex rounded-2xl border border-[var(--board-border)] bg-white/[0.03] p-1" role="tablist" aria-label="Board views">
-            ${store.viewModes.map((view) => `<button class="${view.classes}" type="button" role="tab" aria-selected="${view.active}" data-view="${view.id}">${renderIcon(view.icon, "text-[18px]")} ${view.label}</button>`).join("")}
+            ${store.viewModes.map((view) => {
+              const icon = view.id === "kanban"
+                ? '<svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M3 3h6v18H3V3zm8 0h6v12h-6V3zm8 0h2v8h-2V3z"/></svg>'
+                : '<svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M3 4h18v2H3V4zm0 7h18v2H3v-2zm0 7h18v2H3v-2z"/></svg>';
+              return `<button class="${view.classes}" type="button" role="tab" aria-selected="${view.active}" data-view="${view.id}">${icon} ${view.label}</button>`;
+            }).join("")}
           </div>
           <div class="board-legend board-workspace-header__legend">
             ${renderEpicCountSummary(selectedEpic)}
