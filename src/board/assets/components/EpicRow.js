@@ -1,14 +1,22 @@
-export function renderEpicRow(context) {
-  const {
-    epic,
-    escapeHtml,
-    formatDate,
-    neutralChipClasses,
-    renderClampedText,
-    renderIcon,
-    renderStatusBadge,
-    selected,
-  } = context;
+import { renderClampedText } from "./ClampedText.js";
+import {
+  escapeHtml,
+  formatDate,
+  neutralChipClasses,
+  renderIcon,
+  renderStatusBadge,
+} from "./helpers.js";
+
+/**
+ * Render a single epic row for the overview table.
+ *
+ * @param {object} props
+ * @param {object} props.epic
+ * @param {boolean} [props.selected]
+ * @returns {string}
+ */
+export function renderEpicRow(props) {
+  const { epic, selected = false } = props;
 
   const totalTasks = Array.isArray(epic.taskIds) ? epic.taskIds.length : 0;
   const counts = epic.counts || { blocked: 0, done: 0, in_progress: 0 };
@@ -16,13 +24,13 @@ export function renderEpicRow(context) {
   const openLabel = `Open epic ${epic.title}`;
   const descriptionMarkup = epic.description
     ? renderClampedText({
-      buttonLabel: `epic ${epic.title} description`,
-      className: "board-epic-row__description text-sm text-[var(--board-text-muted)]",
-      escapeHtml,
-      lineClamp: 3,
-      renderIcon,
-      text: epic.description,
-    })
+        buttonLabel: `epic ${epic.title} description`,
+        className: "board-epic-row__description text-sm text-[var(--board-text-muted)]",
+        escapeHtml,
+        lineClamp: 3,
+        renderIcon,
+        text: epic.description,
+      })
     : "";
 
   return `

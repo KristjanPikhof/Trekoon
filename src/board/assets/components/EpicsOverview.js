@@ -1,12 +1,21 @@
-export function renderEpicsOverview(context) {
-  const {
-    panelClasses,
-    renderEmptyState,
-    renderEpicRow,
-    sectionLabelClasses,
-    store,
-    visibleEpics,
-  } = context;
+import { renderEpicRow } from "./EpicRow.js";
+import {
+  panelClasses,
+  renderEmptyState,
+  sectionLabelClasses,
+} from "./helpers.js";
+
+/**
+ * Render the epics overview HTML.
+ *
+ * @param {object} props
+ * @param {object[]} props.visibleEpics
+ * @param {string|null} props.selectedEpicId
+ * @param {{ snapshot: object, isMutating: boolean }} props.store
+ * @returns {string}
+ */
+function render(props) {
+  const { visibleEpics, selectedEpicId, store } = props;
 
   return `
     <div class="board-root board-root--epics">
@@ -20,7 +29,7 @@ export function renderEpicsOverview(context) {
           <div class="board-legend board-overview__legend">
             <span class="board-chip board-chip--neutral">${visibleEpics.length} visible epic${visibleEpics.length === 1 ? "" : "s"}</span>
             <span class="board-chip board-chip--neutral">${store.snapshot.tasks.length} total tasks</span>
-            ${store.isMutating ? '<span class="board-chip board-chip--neutral">Saving…</span>' : ""}
+            ${store.isMutating ? '<span class="board-chip board-chip--neutral">Saving\u2026</span>' : ""}
           </div>
         </header>
         <div class="board-table board-table--epics">
@@ -34,10 +43,38 @@ export function renderEpicsOverview(context) {
           <div class="board-table__rows board-table__rows--epics">
             ${visibleEpics.length === 0
               ? renderEmptyState("No matching epics", "Try a different search or publish more work to the board.", "/")
-              : visibleEpics.map((epic) => renderEpicRow(epic)).join("")}
+              : visibleEpics.map((epic) => renderEpicRow({ epic, selected: selectedEpicId === epic.id })).join("")}
           </div>
         </div>
       </section>
     </div>
   `;
+}
+
+/**
+ * EpicsOverview component with mount/update/unmount lifecycle.
+ */
+export function createEpicsOverview() {
+  let container = null;
+  let lastHtml = null;
+
+  return {
+    mount(el) {
+      container = el;
+      return this;
+    },
+    update(props) {
+      if (!container) return;
+      const html = render(props);
+      if (html !== lastHtml) {
+        container.innerHTML = html;
+        lastHtml = html;
+      }
+    },
+    unmount() {
+      if (container) container.innerHTML = "";
+      container = null;
+      lastHtml = null;
+    },
+  };
 }

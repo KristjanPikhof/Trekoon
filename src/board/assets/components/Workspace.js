@@ -3,6 +3,8 @@ import {
   cx,
   escapeHtml,
   fieldClasses,
+  formatDate,
+  hasLongTaskTitle,
   isCompactViewport,
   neutralChipClasses,
   panelClasses,
@@ -11,6 +13,7 @@ import {
   renderEmptyState,
   renderIcon,
   renderStatusBadge,
+  renderTaskMeta,
   secondaryPanelClasses,
   sectionLabelClasses,
   STATUS_ORDER,
@@ -18,7 +21,7 @@ import {
 import { VIEW_MODES } from "../state/utils.js";
 
 // ---------------------------------------------------------------------------
-// Workspace header (inlined from WorkspaceHeader.js)
+// Workspace header
 // ---------------------------------------------------------------------------
 
 function renderWorkspaceHeader(props) {
@@ -123,44 +126,8 @@ function renderKanbanColumns(props) {
 // List rows
 // ---------------------------------------------------------------------------
 
-function renderListRows(props) {
-  const { visibleTasks, selectedTaskId } = props;
-  const { cx: _cx, escapeHtml: _e, formatDate: _f, hasLongTaskTitle: _h, neutralChipClasses: _n, renderStatusBadge: _r, renderTaskMeta: _m } = _getRowHelpers();
-
-  if (visibleTasks.length === 0) {
-    return `
-      <div class="board-list board-list--dense grid min-h-0 gap-4 grid-rows-[auto_1fr]">
-        <div class="board-list__rows min-h-0 space-y-3 overflow-auto pr-1 overscroll-contain">
-          ${renderEmptyState("No matching tasks", "Nothing in this slice matches the active search and epic filters.", "/")}
-        </div>
-      </div>
-    `;
-  }
-
-  // Import the list rendering from TaskList
-  const rows = visibleTasks.map((task) => renderListRowInline(task, selectedTaskId === task.id)).join("");
-
-  return `
-    <div class="board-list board-list--dense grid min-h-0 gap-4 grid-rows-[auto_1fr]">
-      <div class="board-list__header hidden gap-3 px-1 text-[11px] font-semibold uppercase tracking-[0.16em] text-[var(--board-text-soft)] lg:grid lg:grid-cols-[minmax(0,2fr)_150px_minmax(0,210px)_110px]">
-        <span>Task</span>
-        <span>Status</span>
-        <span>Workflow</span>
-        <span>Updated</span>
-      </div>
-      <div class="board-list__rows min-h-0 space-y-3 overflow-auto pr-1 overscroll-contain">${rows}</div>
-    </div>
-  `;
-}
-
-function _getRowHelpers() {
-  // Lazy import to avoid circular deps - just re-export our existing helpers
-  return { cx, escapeHtml, neutralChipClasses, renderStatusBadge };
-}
-
-function renderListRowInline(task, selected) {
-  const { formatDate: fmt, hasLongTaskTitle: longCheck, renderTaskMeta: meta } = await_helpers();
-  const longTitle = longCheck(task.title);
+function renderListRow(task, selected) {
+  const longTitle = hasLongTaskTitle(task.title);
 
   return `
     <button
@@ -184,39 +151,40 @@ function renderListRowInline(task, selected) {
         ${task.description?.trim() ? `<p class="board-list-row__description mt-2 text-sm leading-5 text-[var(--board-text-muted)] board-clamped-text__preview board-clamped-text__preview--2">${escapeHtml(task.description.trim())}</p>` : ""}
       </div>
       <div class="board-list-row__status">${renderStatusBadge(task.status)}</div>
-      <div class="board-list-row__meta flex min-w-0 flex-wrap gap-2">${meta(task)}</div>
-      <span class="board-list-row__updated text-sm text-[var(--board-text-muted)]">${escapeHtml(fmt(task.updatedAt))}</span>
+      <div class="board-list-row__meta flex min-w-0 flex-wrap gap-2">${renderTaskMeta(task)}</div>
+      <span class="board-list-row__updated text-sm text-[var(--board-text-muted)]">${escapeHtml(formatDate(task.updatedAt))}</span>
     </button>
   `;
 }
 
-function await_helpers() {
-  // Direct imports - no async needed
-  const { formatDate, hasLongTaskTitle, renderTaskMeta } = require_helpers();
-  return { formatDate, hasLongTaskTitle, renderTaskMeta };
-}
+function renderListView(props) {
+  const { visibleTasks, selectedTaskId } = props;
 
-function require_helpers() {
-  return { formatDate: _fmt, hasLongTaskTitle: _hlt, renderTaskMeta: _rtm };
-}
+  const rows = visibleTasks.length === 0
+    ? renderEmptyState("No matching tasks", "Nothing in this slice matches the active search and epic filters.", "/")
+    : visibleTasks.map((task) => renderListRow(task, selectedTaskId === task.id)).join("");
 
-import { formatDate as _fmt, hasLongTaskTitle as _hlt, renderTaskMeta as _rtm } from "./helpers.js";
+  return `
+    <div class="board-list board-list--dense grid min-h-0 gap-4 grid-rows-[auto_1fr]">
+      <div class="board-list__header hidden gap-3 px-1 text-[11px] font-semibold uppercase tracking-[0.16em] text-[var(--board-text-soft)] lg:grid lg:grid-cols-[minmax(0,2fr)_150px_minmax(0,210px)_110px]">
+        <span>Task</span>
+        <span>Status</span>
+        <span>Workflow</span>
+        <span>Updated</span>
+      </div>
+      <div class="board-list__rows min-h-0 space-y-3 overflow-auto pr-1 overscroll-contain">${rows}</div>
+    </div>
+  `;
+}
 
 // ---------------------------------------------------------------------------
 // Workspace component
 // ---------------------------------------------------------------------------
 
-/**
- * Render the full workspace HTML (header + content area).
- *
- * @param {object} props
- * @returns {string}
- */
 function render(props) {
   const {
     selectedEpic,
     selectedTask,
-    useTaskModal,
     searchScope,
     snapshotEpics,
     store,
@@ -258,7 +226,7 @@ function render(props) {
 
   const contentMarkup = store.view === "kanban"
     ? renderKanbanColumns({ visibleTasks, selectedTaskId, isMutating: store.isMutating })
-    : renderListRows({ visibleTasks, selectedTaskId });
+    : renderListView({ visibleTasks, selectedTaskId });
 
   return `
     <section class="board-workspace ${panelClasses("grid min-h-0 min-w-0 grid-rows-[auto_1fr] overflow-hidden p-5 sm:p-6")}" aria-label="Workspace">
