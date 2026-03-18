@@ -216,14 +216,9 @@ export async function bootLegacyBoard(options = {}) {
           visibleTasks: boardState.visibleTasks,
         });
 
-        inspector.update(selectedTask && !useModal ? {
-          task: selectedTask,
-          epics: store.snapshot.epics,
-          snapshot: store.snapshot,
-          isMutating: store.isMutating,
-        } : null);
+        inspector.update(null);
 
-        taskModal.update(useModal && selectedTask ? {
+        taskModal.update(selectedTask ? {
           task: selectedTask,
           epics: store.snapshot.epics,
           snapshot: store.snapshot,
