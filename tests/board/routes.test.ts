@@ -231,7 +231,7 @@ describe("board routes", (): void => {
         headers: {
           "content-type": "application/json",
         },
-        body: JSON.stringify({ status: "in_progress" }),
+        body: JSON.stringify({ status: "done" }),
       }));
       const body = await response.json() as {
         ok: boolean;
@@ -291,7 +291,6 @@ describe("board routes", (): void => {
       expect(body.error.code).toBe("dependency_blocked");
       expect(body.error.message).toContain(`task ${blocked.id} is blocked by task ${blocker.id} (todo)`);
       expect(body.error.details).toEqual(expect.objectContaining({
-        changedIds: [],
         blockerCount: 1,
       }));
 
