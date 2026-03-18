@@ -104,7 +104,7 @@ export function hashToState(hash) {
  * @returns {() => void} Cleanup function that removes event listeners and unsubscribes
  */
 export function syncUrlHash(store, options = {}) {
-  const { onRestore } = options;
+  const { beforeRestore, onRestore } = options;
   let isApplyingLocation = false;
   let lastSerializedState = "";
   let lastHistoryState = toHistoryState(store.store);
@@ -135,6 +135,7 @@ export function syncUrlHash(store, options = {}) {
   }
 
   function restoreFromLocation() {
+    beforeRestore?.();
     isApplyingLocation = true;
     const urlState = hashToState(window.location.hash);
     const restoredState = store.syncState(urlState);
