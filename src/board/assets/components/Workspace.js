@@ -237,7 +237,6 @@ function render(props) {
   const {
     selectedEpic,
     selectedTask,
-    searchScope,
     snapshotEpics,
     store,
     visibleTasks,
