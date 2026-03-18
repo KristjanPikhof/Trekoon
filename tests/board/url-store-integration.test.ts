@@ -204,6 +204,8 @@ function createMockSearchInput() {
     id = "board-search-input";
     value = "";
     blurred = false;
+    focused = false;
+    focusCalls = 0;
 
     focus() {}
 
@@ -258,7 +260,8 @@ describe("board URL/store integration", () => {
 
   test("debounced search updates sync into the URL", async () => {
     const searchInput = createMockSearchInput();
-    globalThis.document = createMockDocument(searchInput);
+    const mockDocument = createMockDocument(searchInput);
+    globalThis.document = mockDocument;
     globalThis.HTMLInputElement = searchInput.constructor as typeof HTMLInputElement;
     globalThis.localStorage = createMockStorage() as Storage;
     const mockWindow = createMockWindow();
@@ -269,6 +272,7 @@ describe("board URL/store integration", () => {
     const cleanup = syncUrlHash(model);
 
     actions.showBoard();
+    setActiveElement(mockDocument, searchInput);
     actions.updateSearch("ship");
     await new Promise((resolve) => setTimeout(resolve, 220));
 
@@ -277,6 +281,37 @@ describe("board URL/store integration", () => {
       mode: "replace",
       url: "/board#epic=epic-1&search=ship",
     });
+
+    cleanup();
+  });
+
+  test("debounced search does not steal focus back after blur", async () => {
+    const searchInput = createMockSearchInput();
+    let focusCalls = 0;
+    searchInput.focus = () => {
+      focusCalls += 1;
+    };
+    const otherButton = { id: "other-button" } as Element;
+    const mockDocument = createMockDocument(searchInput);
+    globalThis.document = mockDocument;
+    globalThis.HTMLInputElement = searchInput.constructor as typeof HTMLInputElement;
+    globalThis.localStorage = createMockStorage() as Storage;
+    const mockWindow = createMockWindow();
+    globalThis.window = mockWindow.window as unknown as Window & typeof globalThis;
+
+    const model = createStore(createSnapshot());
+    const actions = createActions(model);
+    const cleanup = syncUrlHash(model);
+
+    actions.showBoard();
+    setActiveElement(mockDocument, searchInput);
+    actions.updateSearch("ship");
+    setActiveElement(mockDocument, otherButton);
+
+    await new Promise((resolve) => setTimeout(resolve, 220));
+
+    expect(model.getBoardState().search).toBe("ship");
+    expect(focusCalls).toBe(0);
 
     cleanup();
   });
