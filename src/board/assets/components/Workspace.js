@@ -49,7 +49,6 @@ function renderViewModeIcon(viewId) {
 
 function renderWorkspaceHeader(props) {
   const {
-    searchScope,
     selectedEpic,
     snapshotEpics,
     store,
@@ -253,7 +252,6 @@ function render(props) {
   }));
 
   const headerMarkup = renderWorkspaceHeader({
-    searchScope,
     selectedEpic,
     snapshotEpics,
     store: {
