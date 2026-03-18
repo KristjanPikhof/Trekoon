@@ -48,7 +48,7 @@ function render(props) {
     ].filter(Boolean).join(" ");
 
     return `
-      <button type="button" class="${classes}" ${item.action} ${item.disabled ? "disabled" : ""} role="tab" aria-selected="${isActive}" tabindex="${isActive ? "0" : "-1"}" aria-label="${escapeHtml(item.label)} view" title="${escapeHtml(item.tooltip)}">
+      <button type="button" class="${classes}" ${item.action} ${item.disabled ? "disabled" : ""} aria-current="${isActive ? "page" : "false"}" aria-label="${escapeHtml(item.label)} view" title="${escapeHtml(item.tooltip)}">
         ${renderIcon(item.icon, "text-[16px]")} <span>${escapeHtml(item.label)}</span>
       </button>
     `;
@@ -76,7 +76,7 @@ function render(props) {
         </div>
       </div>
 
-      <nav class="board-shell-topbar__nav" role="tablist" aria-label="Board sections">
+      <nav class="board-shell-topbar__nav" aria-label="Board sections">
         ${navMarkup}
       </nav>
 
