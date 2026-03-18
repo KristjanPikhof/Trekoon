@@ -48,6 +48,34 @@ For Bun/TypeScript code:
 - For CLI changes, prioritize startup speed and low-latency UX
 - Keep commands compatible with macOS and Linux shells
 
+## Board UI and mutation guidance
+
+- Treat `src/board/assets/app.js` as the board orchestrator. Put shared UI
+  logic in focused component/state/runtime modules instead of growing a new
+  monolith.
+- Prefer the board component lifecycle pattern (`mount`, `update`, `unmount`)
+  for stateful or rerendered UI.
+- Use delegated `data-*` event hooks through
+  `src/board/assets/runtime/delegation.js` instead of attaching ad hoc DOM
+  listeners after each render.
+- Reuse shared helpers from `src/board/assets/components/helpers.js` and
+  `src/board/assets/state/utils.js` for rendering, escaping, formatting,
+  status/view constants, and snapshot normalization.
+- Preserve rerender stability. Do not regress input values, cursor position,
+  search text, or `<details>` open state when updating board UI.
+- Preserve overlay accessibility behavior: inert background, focus trap,
+  opener-focus restoration, and dialog/live-region semantics.
+- If UI state should survive refresh or deep links, wire it through
+  `src/board/assets/state/url.js`. If it is local-only, persist it explicitly
+  in board storage instead of inventing a parallel mechanism.
+- Board client mutations are intentionally serialized through the queue in
+  `src/board/assets/state/api.js`. Do not reintroduce "drop while mutating"
+  behavior or bypass rollback handling with one-off fetch flows.
+- For board/API mutations, preserve CLI-equivalent canonical per-entity events
+  and full payloads.
+- Multi-entity cascades must stay atomic: no partial writes, snapshots, or
+  emitted events on dependency-blocked failures.
+
 ## Security
 
 - Never commit secrets (tokens, credentials)
