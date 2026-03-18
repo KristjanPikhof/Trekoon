@@ -162,7 +162,12 @@ function createSnapshot() {
   };
 }
 
-function createActions(model: ReturnType<typeof createStore>) {
+function createActions(model: ReturnType<typeof createStore>, overrides: Partial<{
+  closeActiveOverlay: () => void;
+  closeTopmostDisclosure: () => boolean;
+  dismissSearch: () => boolean;
+  hasOpenOverlay: () => boolean;
+}> = {}) {
   return createBoardActions({
     model,
     api: {
@@ -196,6 +201,7 @@ function createActions(model: ReturnType<typeof createStore>) {
     focusSearch() {},
     focusTaskDetail() {},
     searchFocusKeys: new Set(["/"]),
+    ...overrides,
   });
 }
 
@@ -355,12 +361,78 @@ describe("board URL/store integration", () => {
     cleanup();
   });
 
+  test("escape closes nested disclosures before the active overlay", () => {
+    globalThis.document = createMockDocument();
+    globalThis.HTMLInputElement = class {} as typeof HTMLInputElement;
+    globalThis.localStorage = createMockStorage() as Storage;
+
+    const model = createStore(createSnapshot());
+    model.syncState({
+      screen: "tasks",
+      selectedEpicId: "epic-1",
+      selectedTaskId: "task-1",
+      selectedSubtaskId: null,
+    });
+
+    let prevented = false;
+    let overlayClosed = false;
+    let disclosuresClosed = 0;
+    const actions = createActions(model, {
+      closeActiveOverlay() {
+        overlayClosed = true;
+      },
+      closeTopmostDisclosure() {
+        disclosuresClosed += 1;
+        return true;
+      },
+      hasOpenOverlay() {
+        return true;
+      },
+    });
+
+    actions.handleKeydown({
+      key: "Escape",
+      preventDefault() {
+        prevented = true;
+      },
+    } as KeyboardEvent);
+
+    expect(prevented).toBe(true);
+    expect(disclosuresClosed).toBe(1);
+    expect(overlayClosed).toBe(false);
+    expect(model.getBoardState()).toMatchObject({
+      selectedTaskId: "task-1",
+      selectedSubtaskId: null,
+    });
+  });
+
   test("task-only deep links canonicalize to the owning epic board state", () => {
     globalThis.document = createMockDocument();
     globalThis.HTMLInputElement = class {} as typeof HTMLInputElement;
     globalThis.localStorage = createMockStorage() as Storage;
     const mockWindow = createMockWindow();
     mockWindow.window.location.hash = "#task=task-1";
+    globalThis.window = mockWindow.window as unknown as Window & typeof globalThis;
+
+    const model = createStore(createSnapshot());
+    syncUrlHash(model);
+
+    expect(model.getBoardState()).toMatchObject({
+      screen: "tasks",
+      selectedEpicId: "epic-1",
+      selectedTaskId: "task-1",
+    });
+    expect(mockWindow.calls).toEqual([
+      { mode: "replace", url: "/board#epic=epic-1&task=task-1" },
+    ]);
+  });
+
+  test("conflicting epic and task deep links canonicalize to the task owning epic", () => {
+    globalThis.document = createMockDocument();
+    globalThis.HTMLInputElement = class {} as typeof HTMLInputElement;
+    globalThis.localStorage = createMockStorage() as Storage;
+    const mockWindow = createMockWindow();
+    mockWindow.window.location.hash = "#epic=epic-2&task=task-1";
     globalThis.window = mockWindow.window as unknown as Window & typeof globalThis;
 
     const model = createStore(createSnapshot());
