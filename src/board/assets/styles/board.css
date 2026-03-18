@@ -826,7 +826,7 @@ body {
   flex-wrap: wrap;
   align-items: center;
   justify-content: space-between;
-  gap: 8px;
+  gap: 10px 14px;
 }
 
 .board-wh__meta {
@@ -840,43 +840,57 @@ body {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
-  gap: 6px;
+  justify-content: flex-end;
+  gap: 8px;
+  margin-left: auto;
+}
+
+.board-wh__action-group {
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
 }
 
 .board-view-switch {
   display: inline-flex;
   align-items: center;
-  gap: 4px;
-  padding: 4px;
-  border: 1px solid color-mix(in srgb, var(--board-border) 92%, transparent);
-  border-radius: 14px;
-  background:
-    linear-gradient(180deg, rgba(255, 255, 255, 0.03), rgba(255, 255, 255, 0.015)),
-    color-mix(in srgb, var(--board-surface-2) 84%, transparent);
-  box-shadow:
-    inset 0 1px 0 rgba(255, 255, 255, 0.03),
-    0 10px 24px rgba(0, 0, 0, 0.12);
+  gap: 2px;
+  min-height: 36px;
+  padding: 3px;
+  border: 1px solid var(--board-border);
+  border-radius: 10px;
+  background: rgba(255, 255, 255, 0.03);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.025);
 }
 
 .board-view-switch__tab {
   display: inline-flex;
   align-items: center;
+  justify-content: center;
   gap: 7px;
-  min-height: 34px;
-  padding: 0 12px;
+  min-height: 28px;
+  min-width: 0;
+  padding: 0 10px;
   border: 1px solid transparent;
-  border-radius: 10px;
+  border-radius: 8px;
   background: transparent;
   color: var(--board-text-muted);
-  font-size: 0.78rem;
+  font-size: 0.75rem;
   font-weight: 600;
   letter-spacing: 0.01em;
+  white-space: nowrap;
   cursor: pointer;
-  transition: background-color 0.18s ease, border-color 0.18s ease, color 0.18s ease, box-shadow 0.18s ease, transform 0.18s ease;
+  touch-action: manipulation;
+  transition:
+    background-color 0.18s ease,
+    border-color 0.18s ease,
+    color 0.18s ease,
+    box-shadow 0.18s ease;
 }
 
 .board-view-switch__tab:hover {
-  background: rgba(255, 255, 255, 0.04);
+  background: rgba(255, 255, 255, 0.045);
   color: var(--board-text);
 }
 
@@ -886,22 +900,22 @@ body {
 }
 
 .board-view-switch__tab--active {
-  border-color: color-mix(in srgb, var(--board-border-strong) 78%, var(--board-border));
-  background:
-    linear-gradient(180deg, rgba(255, 255, 255, 0.06), rgba(255, 255, 255, 0.02)),
-    color-mix(in srgb, var(--board-surface) 88%, var(--board-surface-3));
+  border-color: color-mix(in srgb, var(--board-border-strong) 60%, var(--board-border));
+  background: color-mix(in srgb, var(--board-accent-soft) 55%, rgba(255, 255, 255, 0.03));
   color: var(--board-text);
-  box-shadow:
-    inset 0 1px 0 rgba(255, 255, 255, 0.05),
-    0 8px 18px rgba(0, 0, 0, 0.18);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.04);
 }
 
 .board-view-switch__tab--active:hover {
-  transform: none;
+  background: color-mix(in srgb, var(--board-accent-soft) 65%, rgba(255, 255, 255, 0.03));
 }
 
 .board-view-switch__icon {
-  color: color-mix(in srgb, var(--board-text-muted) 76%, white);
+  width: 16px;
+  height: 16px;
+  flex-shrink: 0;
+  color: color-mix(in srgb, var(--board-text-muted) 82%, white);
+  transition: color 0.18s ease;
 }
 
 .board-view-switch__tab:hover .board-view-switch__icon,
@@ -916,27 +930,42 @@ body {
 .board-wh__notes-btn {
   display: inline-flex;
   align-items: center;
-  gap: 5px;
-  padding: 4px 10px;
+  justify-content: center;
+  gap: 6px;
+  min-height: 36px;
+  padding: 0 10px;
   border: 1px solid var(--board-border);
   border-radius: 10px;
   background: rgba(255, 255, 255, 0.03);
   color: var(--board-text-muted);
   font-size: 0.75rem;
-  font-weight: 500;
+  font-weight: 600;
+  white-space: nowrap;
   cursor: pointer;
-  transition: all 0.15s ease;
+  touch-action: manipulation;
+  transition:
+    border-color 0.15s ease,
+    background-color 0.15s ease,
+    color 0.15s ease,
+    box-shadow 0.15s ease;
 }
 
 .board-wh__notes-btn:hover {
   border-color: var(--board-border-strong);
+  background: rgba(255, 255, 255, 0.045);
   color: var(--board-text);
 }
 
+.board-wh__notes-btn:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--board-bg) 78%, transparent), 0 0 0 4px var(--board-border-strong);
+}
+
 .board-wh__notes-btn--active {
-  border-color: var(--board-accent);
-  background: var(--board-accent-soft);
+  border-color: color-mix(in srgb, var(--board-border-strong) 60%, var(--board-border));
+  background: color-mix(in srgb, var(--board-accent-soft) 55%, rgba(255, 255, 255, 0.03));
   color: var(--board-text);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.04);
 }
 
 /* ── Notes panel (full-width collapsible) ── */
