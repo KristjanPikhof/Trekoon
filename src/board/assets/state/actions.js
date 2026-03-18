@@ -171,6 +171,8 @@ export function createBoardActions(options) {
     }
   };
 
+  const shouldRefocusSearchInput = () => document.activeElement?.id === "board-search-input";
+
   const commitSearch = (nextSearch, options = {}) => {
     const { focusInput = false } = options;
     cancelPendingSearch();
@@ -197,11 +199,12 @@ export function createBoardActions(options) {
       const nextSearch = typeof value === "string" ? value : "";
       cancelPendingSearch();
       pendingSearchValue = nextSearch;
+      const shouldRestoreFocus = shouldRefocusSearchInput();
       searchTimer = setTimeout(() => {
         if (pendingSearchValue !== nextSearch) {
           return;
         }
-        commitSearch(nextSearch, { focusInput: true });
+        commitSearch(nextSearch, { focusInput: shouldRestoreFocus });
       }, 180);
     },
     clearSearch() {
