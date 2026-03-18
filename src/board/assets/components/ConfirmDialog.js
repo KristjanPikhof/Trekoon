@@ -27,6 +27,7 @@ export function createConfirmDialog() {
      *   message?: string,
      *   confirmLabel?: string,
      *   cancelLabel?: string,
+     *   tone?: string,
      * } | null} props
      */
     update(props) {
@@ -45,11 +46,12 @@ export function createConfirmDialog() {
         message = "This action cannot be undone. Are you sure?",
         confirmLabel = "Confirm",
         cancelLabel = "Cancel",
+        tone = "destructive",
       } = props;
 
       container.innerHTML = `
-        <div class="fixed inset-0 z-50 grid place-items-center bg-slate-950/70 p-4 backdrop-blur-md" data-action="cancel-delete" role="presentation">
-          <section class="${panelClasses("w-full max-w-md p-6")}" role="alertdialog" aria-modal="true" aria-labelledby="confirm-dialog-title" aria-describedby="confirm-dialog-desc">
+        <div class="board-confirm-backdrop fixed inset-0 z-50 grid place-items-center bg-slate-950/70 p-4 backdrop-blur-md" data-close-confirm role="presentation">
+          <section class="${panelClasses("w-full max-w-md p-6")}" role="alertdialog" aria-modal="true" aria-labelledby="confirm-dialog-title" aria-describedby="confirm-dialog-desc" data-overlay-root tabindex="-1">
             <div class="flex items-start gap-4">
               <div class="flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl bg-red-500/10 text-red-300 ring-1 ring-red-500/20">
                 ${renderIcon("warning", "text-[20px]")}
@@ -61,8 +63,8 @@ export function createConfirmDialog() {
               </div>
             </div>
             <div class="mt-6 flex justify-end gap-3">
-              <button type="button" class="${buttonClasses()}" data-action="cancel-delete">${escapeHtml(cancelLabel)}</button>
-              <button type="button" class="${buttonClasses({ kind: "primary" })}" data-action="confirm-delete" autofocus>${escapeHtml(confirmLabel)}</button>
+              <button type="button" class="${buttonClasses()}" data-action="cancel-delete" data-overlay-initial-focus>${escapeHtml(cancelLabel)}</button>
+              <button type="button" class="${buttonClasses({ kind: "primary" })} ${tone === "destructive" ? "board-button--destructive" : ""}" data-action="confirm-delete">${escapeHtml(confirmLabel)}</button>
             </div>
           </section>
         </div>
