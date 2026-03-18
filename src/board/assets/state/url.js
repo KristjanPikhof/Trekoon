@@ -73,53 +73,71 @@ export function hashToState(hash) {
  * @returns {() => void} Cleanup function that removes event listeners and unsubscribes
  */
 export function syncUrlHash(store) {
-  let suppressHashChange = false;
+  let isApplyingLocation = false;
+  let lastSerializedState = "";
 
-  // Restore state from current URL hash on init
-  if (window.location.hash.length > 1) {
+  function serializeCurrentState() {
+    return stateToHash(store.store);
+  }
+
+  function buildUrl(hash) {
+    const { pathname, search } = window.location;
+    return `${pathname}${search}${hash.length > 0 ? `#${hash}` : ""}`;
+  }
+
+  function applyLocation(hash, mode) {
+    const nextUrl = buildUrl(hash);
+    const currentUrl = `${window.location.pathname}${window.location.search}${window.location.hash}`;
+    lastSerializedState = hash;
+    if (nextUrl === currentUrl) {
+      return;
+    }
+
+    if (mode === "push") {
+      window.history.pushState({ boardHash: hash }, "", nextUrl);
+      return;
+    }
+
+    window.history.replaceState({ boardHash: hash }, "", nextUrl);
+  }
+
+  function restoreFromLocation() {
+    isApplyingLocation = true;
     const urlState = hashToState(window.location.hash);
     store.syncState(urlState);
     store.persist();
+    lastSerializedState = serializeCurrentState();
+    isApplyingLocation = false;
+  }
+
+  // Restore state from current URL hash on init
+  if (window.location.hash.length > 1) {
+    restoreFromLocation();
   } else {
-    // Write current state to URL
-    const state = store.store;
-    const hash = stateToHash(state);
-    if (hash.length > 0) {
-      window.history.replaceState(null, "", `#${hash}`);
-    }
+    applyLocation(serializeCurrentState(), "replace");
   }
 
   // Store → URL: update hash when state changes
   const unsubscribe = store.subscribe(() => {
-    const state = store.store;
-    const hash = stateToHash(state);
-    const currentHash = window.location.hash.startsWith("#")
-      ? window.location.hash.slice(1)
-      : window.location.hash;
+    if (isApplyingLocation) {
+      return;
+    }
 
-    if (hash !== currentHash) {
-      suppressHashChange = true;
-      const url = hash.length > 0 ? `#${hash}` : window.location.pathname;
-      window.history.replaceState(null, "", url);
-      // Allow hashchange to fire and be ignored
-      queueMicrotask(() => {
-        suppressHashChange = false;
-      });
+    const hash = serializeCurrentState();
+    if (hash !== lastSerializedState) {
+      applyLocation(hash, "push");
     }
   });
 
   // URL → Store: respond to browser back/forward
-  function onHashChange() {
-    if (suppressHashChange) return;
-    const urlState = hashToState(window.location.hash);
-    store.syncState(urlState);
-    store.persist();
+  function onPopState() {
+    restoreFromLocation();
   }
 
-  window.addEventListener("hashchange", onHashChange);
+  window.addEventListener("popstate", onPopState);
 
   return () => {
     unsubscribe();
-    window.removeEventListener("hashchange", onHashChange);
+    window.removeEventListener("popstate", onPopState);
   };
 }
