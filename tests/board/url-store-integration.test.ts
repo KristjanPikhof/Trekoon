@@ -361,6 +361,41 @@ describe("board URL/store integration", () => {
     cleanup();
   });
 
+  test("popstate restore cancels a stale pending debounced search", async () => {
+    const searchInput = createMockSearchInput();
+    const mockDocument = createMockDocument(searchInput);
+    globalThis.document = mockDocument;
+    globalThis.HTMLInputElement = searchInput.constructor as typeof HTMLInputElement;
+    globalThis.localStorage = createMockStorage() as Storage;
+    const mockWindow = createMockWindow();
+    globalThis.window = mockWindow.window as unknown as Window & typeof globalThis;
+
+    const model = createStore(createSnapshot());
+    const actions = createActions(model);
+    const cleanup = syncUrlHash(model, { beforeRestore: actions.cancelPendingSearch });
+
+    actions.showBoard();
+    setActiveElement(mockDocument, searchInput);
+    actions.updateSearch("ship");
+
+    mockWindow.window.location.hash = "#epic=epic-2";
+    mockWindow.emit("popstate");
+
+    await new Promise((resolve) => setTimeout(resolve, 220));
+
+    expect(model.getBoardState()).toMatchObject({
+      screen: "tasks",
+      selectedEpicId: "epic-2",
+      search: "",
+    });
+    expect(mockWindow.calls).toEqual([
+      { mode: "push", url: "/board#epic=epic-1" },
+      { mode: "replace", url: "/board#epic=epic-2" },
+    ]);
+
+    cleanup();
+  });
+
   test("escape closes nested disclosures before the active overlay", () => {
     globalThis.document = createMockDocument();
     globalThis.HTMLInputElement = class {} as typeof HTMLInputElement;
