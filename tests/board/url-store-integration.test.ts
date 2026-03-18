@@ -59,6 +59,10 @@ function createMockDocument(searchInput: HTMLInputElement | null = null) {
   } as unknown as Document;
 }
 
+function setActiveElement(documentRef: Document, element: Element | null) {
+  (documentRef as { activeElement: Element | null }).activeElement = element;
+}
+
 function createMockWindow(pathname = "/board") {
   const listeners = new Map<string, Set<EventListenerOrEventListenerObject>>();
   const calls: Array<{ mode: "push" | "replace"; url: string }> = [];
@@ -210,7 +214,7 @@ function createMockSearchInput() {
     setSelectionRange() {}
   }
 
-  return new MockSearchInput() as HTMLInputElement & { blurred: boolean };
+  return new MockSearchInput() as unknown as HTMLInputElement & { blurred: boolean };
 }
 
 describe("board URL/store integration", () => {
@@ -292,7 +296,7 @@ describe("board URL/store integration", () => {
 
     actions.showBoard();
     searchInput.value = "ship";
-    mockDocument.activeElement = searchInput;
+    setActiveElement(mockDocument, searchInput);
     actions.updateSearch("ship");
 
     let prevented = false;
