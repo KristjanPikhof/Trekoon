@@ -27,7 +27,7 @@ export function createTaskModal() {
 
     return `
       <div class="board-task-modal-backdrop fixed inset-0 z-30 grid place-items-center bg-slate-950/70 p-4 backdrop-blur-md" data-close-task>
-        <section class="board-task-modal ${panelClasses("grid max-h-[calc(100dvh-2rem)] w-full grid-rows-[1fr] overflow-hidden p-5 sm:p-6")}" role="dialog" aria-modal="true" aria-labelledby="board-task-modal-title">
+        <section class="board-task-modal ${panelClasses("grid max-h-[calc(100dvh-2rem)] w-full grid-rows-[1fr] overflow-hidden p-5 sm:p-6")}" role="dialog" aria-modal="true" aria-labelledby="board-task-modal-title" data-overlay-root tabindex="-1">
           <div class="h-full min-h-0">
             ${renderTaskSurface({ task, epics, snapshot, isMutating, options: surfaceOptions })}
           </div>
