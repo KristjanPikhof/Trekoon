@@ -184,9 +184,8 @@ export async function bootLegacyBoard(options = {}) {
       slots.tasksRoot.style.display = showTasks ? "" : "none";
 
       if (showTasks) {
-        const hasInspector = selectedTask && !useModal;
-        slots.tasksRoot.className = `board-root ${hasInspector ? "board-root--tasks board-root--detail board-root--detail-open has-detail" : "board-root--tasks"} min-h-0 w-full grid gap-4 xl:gap-5`;
-        slots.inspector.style.display = hasInspector ? "" : "none";
+        slots.tasksRoot.className = "board-root board-root--tasks min-h-0 w-full grid gap-4 xl:gap-5";
+        slots.inspector.style.display = "none";
       }
 
       slots.shell.className = `board-layout ${screen === "tasks" ? "board-layout--workspace" : "board-layout--overview"} mx-auto flex w-full max-w-[1600px] flex-col gap-4 px-4 py-4 sm:px-6 sm:py-6 xl:px-8 ${screen === "tasks" ? "min-h-0" : "min-h-screen"}`;

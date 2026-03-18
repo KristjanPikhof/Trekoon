@@ -234,7 +234,7 @@ export function isCompactViewport() {
 }
 
 export function shouldUseTaskModal(boardState, store) {
-  return Boolean(boardState?.selectedTask && (store?.view === "kanban" || isCompactViewport()));
+  return Boolean(boardState?.selectedTask);
 }
 
 export function lookupNode(snapshot, id) {
