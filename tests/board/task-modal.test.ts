@@ -5,6 +5,8 @@ import { createTaskModal } from "../../src/board/assets/components/TaskModal.js"
 
 function createProps(overrides: Partial<{
   task: Record<string, unknown>;
+  epics: Array<Record<string, unknown>>;
+  snapshot: Record<string, unknown>;
   isMutating: boolean;
 }> = {}) {
   return {
