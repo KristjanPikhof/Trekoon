@@ -135,6 +135,7 @@ afterEach(() => {
 describe("board URL state sync", () => {
   test("round-trips serialized board state", () => {
     const hash = stateToHash({
+      screen: "tasks",
       selectedEpicId: "epic-1",
       selectedTaskId: "task-1",
       search: "roadmap",
@@ -148,6 +149,25 @@ describe("board URL state sync", () => {
       search: "roadmap",
       view: "list",
       screen: "tasks",
+    });
+  });
+
+  test("serializes selected epic overview distinctly from board view", () => {
+    const hash = stateToHash({
+      screen: "epics",
+      selectedEpicId: "epic-1",
+      selectedTaskId: null,
+      search: "",
+      view: "kanban",
+    });
+
+    expect(hash).toBe("epic=epic-1&screen=epics");
+    expect(hashToState(hash)).toEqual({
+      selectedEpicId: "epic-1",
+      selectedTaskId: null,
+      search: "",
+      view: "kanban",
+      screen: "epics",
     });
   });
 
