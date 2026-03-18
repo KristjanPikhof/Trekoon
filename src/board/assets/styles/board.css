@@ -861,11 +861,14 @@ body {
     padding: 10px;
   }
 
-  .board-shell-topbar__tools,
   .board-workspace-header__intro,
   .board-workspace-header__toolbar {
     display: grid;
     justify-items: stretch;
+  }
+
+  .board-shell-topbar__tools {
+    flex-wrap: wrap;
   }
 
   .board-workspace-header__controls,
