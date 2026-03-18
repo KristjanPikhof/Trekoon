@@ -24,6 +24,29 @@ import { VIEW_MODES } from "../state/utils.js";
 // Workspace header
 // ---------------------------------------------------------------------------
 
+function renderViewModeIcon(viewId) {
+  if (viewId === "kanban") {
+    return `
+      <svg class="board-view-switch__icon" aria-hidden="true" viewBox="0 0 16 16" fill="none">
+        <rect x="2.25" y="3" width="3" height="10" rx="1.1" fill="currentColor"></rect>
+        <rect x="6.5" y="5" width="3" height="8" rx="1.1" fill="currentColor" opacity="0.92"></rect>
+        <rect x="10.75" y="4" width="3" height="9" rx="1.1" fill="currentColor" opacity="0.8"></rect>
+      </svg>
+    `;
+  }
+
+  return `
+    <svg class="board-view-switch__icon" aria-hidden="true" viewBox="0 0 16 16" fill="none">
+      <circle cx="3" cy="4" r="1" fill="currentColor"></circle>
+      <circle cx="3" cy="8" r="1" fill="currentColor"></circle>
+      <circle cx="3" cy="12" r="1" fill="currentColor"></circle>
+      <path d="M6 4H13" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"></path>
+      <path d="M6 8H13" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"></path>
+      <path d="M6 12H13" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"></path>
+    </svg>
+  `;
+}
+
 function renderWorkspaceHeader(props) {
   const {
     searchScope,
@@ -73,24 +96,24 @@ function renderWorkspaceHeader(props) {
           ${store.isMutating ? `<span class="${neutralChipClasses()}">Saving\u2026</span>` : ""}
         </div>
         <div class="board-wh__actions">
-          ${description ? `
-            <button type="button" class="board-wh__notes-btn" data-toggle-notes aria-label="Toggle epic notes">
-              ${renderIcon("subject", "text-[16px]")}
-              <span>Notes</span>
-            </button>
-          ` : ""}
-          <div class="board-view-switch" role="tablist" aria-label="Board views">
-            ${store.viewModes.map((view) => {
-              const icon = view.id === "kanban"
-                ? renderIcon("view_kanban", "board-view-switch__icon text-[16px]")
-                : renderIcon("subject", "board-view-switch__icon text-[16px]");
-              return `<button class="${cx(
-                "board-view-switch__tab",
-                view.active
-                  ? "board-view-switch__tab--active"
-                  : "",
-              )}" type="button" role="tab" aria-selected="${view.active}" data-view="${view.id}">${icon}<span class="board-view-switch__label">${escapeHtml(view.label)}</span></button>`;
-            }).join("")}
+          <div class="board-wh__action-group">
+            ${description ? `
+              <button type="button" class="board-wh__notes-btn" data-toggle-notes aria-label="Toggle epic notes">
+                ${renderIcon("subject", "text-[16px]")}
+                <span>Notes</span>
+              </button>
+            ` : ""}
+            <div class="board-view-switch" role="tablist" aria-label="Board views">
+              ${store.viewModes.map((view) => {
+                const icon = renderViewModeIcon(view.id);
+                return `<button class="${cx(
+                 "board-view-switch__tab",
+                 view.active
+                   ? "board-view-switch__tab--active"
+                   : "",
+                )}" type="button" role="tab" tabindex="${view.active ? "0" : "-1"}" aria-label="${escapeHtml(view.label)} view" aria-selected="${view.active}" data-view="${view.id}">${icon}<span class="board-view-switch__label">${escapeHtml(view.label)}</span></button>`;
+              }).join("")}
+            </div>
           </div>
         </div>
       </div>
