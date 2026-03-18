@@ -153,6 +153,34 @@ export function createBoardActions(options) {
   };
 
   let searchTimer = null;
+  let pendingSearchValue = null;
+
+  const cancelPendingSearch = () => {
+    pendingSearchValue = null;
+    if (searchTimer !== null) {
+      clearTimeout(searchTimer);
+      searchTimer = null;
+    }
+  };
+
+  const focusSearchInput = () => {
+    const input = document.querySelector("#board-search-input");
+    if (input instanceof HTMLInputElement) {
+      input.focus({ preventScroll: true });
+      input.setSelectionRange(input.value.length, input.value.length);
+    }
+  };
+
+  const commitSearch = (nextSearch, options = {}) => {
+    const { focusInput = false } = options;
+    cancelPendingSearch();
+    syncState({ search: nextSearch });
+    persist();
+    rerender({ preserveFocus: false });
+    if (focusInput) {
+      focusSearchInput();
+    }
+  };
 
   return {
     toggleTheme() {
@@ -167,20 +195,17 @@ export function createBoardActions(options) {
     },
     updateSearch(value) {
       const nextSearch = typeof value === "string" ? value : "";
-      if (searchTimer !== null) {
-        clearTimeout(searchTimer);
-      }
+      cancelPendingSearch();
+      pendingSearchValue = nextSearch;
       searchTimer = setTimeout(() => {
-        searchTimer = null;
-        syncState({ search: nextSearch });
-        persist();
-        rerender({ preserveFocus: false });
-        const input = document.querySelector("#board-search-input");
-        if (input instanceof HTMLInputElement) {
-          input.focus({ preventScroll: true });
-          input.setSelectionRange(input.value.length, input.value.length);
+        if (pendingSearchValue !== nextSearch) {
+          return;
         }
+        commitSearch(nextSearch, { focusInput: true });
       }, 180);
+    },
+    clearSearch() {
+      commitSearch("");
     },
     openEpic(epicId) {
       transition({
@@ -339,6 +364,14 @@ export function createBoardActions(options) {
       }
 
       if (event.key === "Escape") {
+        if (activeElement?.id === "board-search-input" && pendingSearchValue !== null) {
+          event.preventDefault();
+          activeElement.value = "";
+          this.clearSearch();
+          activeElement.blur();
+          return;
+        }
+
         if (closeTopmostDisclosure?.(boardState, activeElement)) {
           event.preventDefault();
           return;
