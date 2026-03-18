@@ -1,6 +1,5 @@
 import { preserveInput } from "./Component.js";
 import {
-  buttonClasses,
   cx,
   escapeHtml,
   neutralChipClasses,
