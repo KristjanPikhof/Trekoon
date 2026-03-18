@@ -194,7 +194,6 @@ export function renderTaskSurface(props) {
             <div class="min-w-0">
               <span class="${sectionLabelClasses()}">${escapeHtml(detailEyebrow)}</span>
               <h3 ${titleId ? `id="${escapeHtml(titleId)}"` : ""} class="mt-2 text-2xl font-semibold tracking-tight text-[var(--board-text)]">${escapeHtml(task.title)}</h3>
-              <p class="board-detail-surface__context mt-2 text-sm text-[var(--board-text-muted)]">One dominant task surface with sticky context, close, and constrained internal scrolling.</p>
             </div>
             <button type="button" class="${buttonClasses()} shrink-0" data-close-task aria-label="${escapeHtml(closeLabel)}">${escapeHtml(closeLabel)}</button>
           </div>
