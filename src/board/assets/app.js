@@ -560,7 +560,10 @@ export async function bootLegacyBoard(options = {}) {
     });
 
     // URL hash sync
-    syncUrlHash(model, { onRestore: rerender });
+    syncUrlHash(model, {
+      beforeRestore: actions.cancelPendingSearch,
+      onRestore: rerender,
+    });
 
     // Initial render
     applyTheme(model.store.theme);
