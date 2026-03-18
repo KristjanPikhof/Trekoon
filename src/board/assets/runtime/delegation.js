@@ -142,6 +142,23 @@ export function createDelegation(rootElement, actions) {
   function handleChange(event) {
     if (event.target.id === "board-epic-select") {
       actions.selectEpic(event.target.value || null);
+      return;
+    }
+
+    const epicStatusForm = event.target.closest("[data-epic-status-form]");
+    if (epicStatusForm) {
+      actions.changeEpicStatus(epicStatusForm.dataset.epicStatusForm, event.target.value);
+      return;
+    }
+
+    const bulkStatusForm = event.target.closest("[data-bulk-status-form]");
+    if (bulkStatusForm) {
+      const newStatus = event.target.value;
+      if (newStatus) {
+        actions.bulkSetStatus(bulkStatusForm.dataset.bulkStatusForm, newStatus);
+        event.target.value = "";
+      }
+      return;
     }
   }
 

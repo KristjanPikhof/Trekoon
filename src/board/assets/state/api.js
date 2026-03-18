@@ -145,6 +145,17 @@ export function createApi(model, options) {
   const queue = createMutationQueue(model, rerender);
 
   return {
+    patchEpic(epicId, updates, optimistic) {
+      queue.enqueue({
+        optimistic,
+        successMessage: "Epic saved.",
+        request: () => request(`/api/epics/${encodeURIComponent(epicId)}`, {
+          method: "PATCH",
+          body: JSON.stringify(updates),
+        }),
+      });
+    },
+
     patchTask(taskId, updates, optimistic) {
       queue.enqueue({
         optimistic,
