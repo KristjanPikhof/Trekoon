@@ -58,6 +58,10 @@ function renderWorkspaceHeader(props) {
 
   const description = selectedEpic.description?.trim() || "";
   const inlineSelect = `${fieldClasses()} !py-1 !px-2 !text-xs !min-h-0 !rounded-xl`;
+  const epicStatusTooltip = "Change this epic's overall status.";
+  const epicSelectTooltip = "Switch the workspace to a different epic.";
+  const bulkStatusTooltip = "Set the same status for every task in this epic.";
+  const notesTooltip = "Show or hide this epic's description.";
 
   return `
     <header class="board-workspace-header">
@@ -65,13 +69,13 @@ function renderWorkspaceHeader(props) {
         <h2 class="board-wh__title">${escapeHtml(selectedEpic.title)}</h2>
         <div class="board-wh__controls">
           <form class="inline-flex" data-epic-status-form="${escapeHtml(selectedEpic.id)}">
-            <select class="${inlineSelect}" name="status" aria-label="Epic status">
+            <select class="${inlineSelect}" name="status" aria-label="Epic status" title="${escapeHtml(epicStatusTooltip)}">
               ${STATUS_ORDER.map(s => `<option value="${escapeHtml(s)}" ${selectedEpic.status === s ? 'selected' : ''}>${escapeHtml(STATUS_LABELS[s] ?? s)}</option>`).join('')}
             </select>
           </form>
           <span class="board-wh__sep" aria-hidden="true"></span>
           <label class="board-wh__inline-label" aria-label="Choose epic">
-            <select class="${inlineSelect}" id="board-epic-select">
+            <select class="${inlineSelect}" id="board-epic-select" title="${escapeHtml(epicSelectTooltip)}">
               ${snapshotEpics.map((epic) => `
                 <option value="${escapeHtml(epic.id)}" ${store.selectedEpicId === epic.id ? "selected" : ""}>
                   ${escapeHtml(epic.title)}
@@ -81,7 +85,7 @@ function renderWorkspaceHeader(props) {
           </label>
           <span class="board-wh__sep" aria-hidden="true"></span>
           <form class="inline-flex" data-bulk-status-form="${escapeHtml(selectedEpic.id)}">
-            <select class="${inlineSelect}" name="status" aria-label="Set all tasks to status">
+            <select class="${inlineSelect}" name="status" aria-label="Set all tasks to status" title="${escapeHtml(bulkStatusTooltip)}">
               <option value="">Set all\u2026</option>
               ${STATUS_ORDER.map(s => `<option value="${escapeHtml(s)}">${escapeHtml(STATUS_LABELS[s] ?? s)}</option>`).join('')}
             </select>
@@ -98,7 +102,7 @@ function renderWorkspaceHeader(props) {
         <div class="board-wh__actions">
           <div class="board-wh__action-group">
             ${description ? `
-              <button type="button" class="board-wh__notes-btn" data-toggle-notes aria-label="Toggle epic notes">
+              <button type="button" class="board-wh__notes-btn" data-toggle-notes aria-label="Toggle epic notes" title="${escapeHtml(notesTooltip)}">
                 ${renderIcon("subject", "text-[16px]")}
                 <span>Description</span>
               </button>
@@ -111,7 +115,7 @@ function renderWorkspaceHeader(props) {
                  view.active
                    ? "board-view-switch__tab--active"
                    : "",
-                )}" type="button" role="tab" tabindex="${view.active ? "0" : "-1"}" aria-label="${escapeHtml(view.label)} view" aria-selected="${view.active}" data-view="${view.id}">${icon}<span class="board-view-switch__label">${escapeHtml(view.label)}</span></button>`;
+                 )}" type="button" role="tab" tabindex="${view.active ? "0" : "-1"}" aria-label="${escapeHtml(view.label)} view" aria-selected="${view.active}" data-view="${view.id}" title="${escapeHtml(`Switch to the ${view.label.toLowerCase()} view.`)}">${icon}<span class="board-view-switch__label">${escapeHtml(view.label)}</span></button>`;
               }).join("")}
             </div>
           </div>
@@ -167,6 +171,7 @@ function renderKanbanColumns(props) {
 
 function renderListRow(task, selected) {
   const longTitle = hasLongTaskTitle(task.title);
+  const taskTooltip = `Open task details for ${task.title}.`;
 
   return `
     <button
@@ -181,6 +186,7 @@ function renderListRow(task, selected) {
       data-task-id="${escapeHtml(task.id)}"
       aria-pressed="${selected}"
       aria-label="${escapeHtml(task.title)}"
+      title="${escapeHtml(taskTooltip)}"
     >
       <div class="board-list-row__summary min-w-0">
         <div class="board-list-row__summary-head flex min-w-0 flex-wrap items-start justify-between gap-2">
