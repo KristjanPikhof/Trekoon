@@ -145,6 +145,7 @@ describe("top bar search input", () => {
 
   test("keeps the info disclosure open across unrelated rerenders", () => {
     const { container, getDisclosure } = createMockContainer();
+    globalThis.document = { activeElement: null } as Document;
     const topBar = createTopBar().mount(container);
 
     topBar.update(createProps());
