@@ -47,6 +47,10 @@ export function preserveInput(container, selector, writeFn) {
  * Capture the full state of every form input inside a container, execute a DOM
  * write, then restore all captured values and focus.
  *
+ * It uses a hierarchical identity (closest [data-form-id] or [data-task-form] etc.
+ * plus the input name/id) to ensure correct restoration even when multiple
+ * forms with similar field names exist in the same container.
+ *
  * @param {HTMLElement} container
  * @param {() => void}  writeFn
  */
@@ -54,23 +58,60 @@ export function preserveFormState(container, writeFn) {
   const inputs = Array.from(
     container.querySelectorAll("input, textarea, select"),
   );
-  const focusedId = document.activeElement?.id || null;
-  const focusedName = document.activeElement?.name || null;
-  const savedStates = inputs.map((el) => ({
-    selector: el.id ? `#${CSS.escape(el.id)}` : `[name="${CSS.escape(el.name)}"]`,
-    value: el.value,
-    selectionStart: el.selectionStart,
-    selectionEnd: el.selectionEnd,
-  }));
+
+  const activeElement = document.activeElement;
+  let focusedIdentity = null;
+
+  function getFormIdentity(el) {
+    const form = el.closest("form, [data-form-id], [data-task-form], [data-subtask-form], [data-create-subtask-form], [data-dependency-form]");
+    if (!form) return "default-form";
+    return form.getAttribute("data-form-id")
+      || form.getAttribute("data-task-form")
+      || form.getAttribute("data-subtask-form")
+      || form.getAttribute("data-create-subtask-form")
+      || form.getAttribute("data-dependency-form")
+      || form.id
+      || "anonymous-form";
+  }
+
+  function getControlSelector(el) {
+    if (el.id) return `#${CSS.escape(el.id)}`;
+    if (el.name) return `[name="${CSS.escape(el.name)}"]`;
+    return null;
+  }
+
+  const savedStates = inputs.map((el) => {
+    const formId = getFormIdentity(el);
+    const selector = getControlSelector(el);
+    const identity = selector ? { formId, selector } : null;
+
+    if (activeElement === el) {
+      focusedIdentity = identity;
+    }
+
+    return {
+      identity,
+      value: el.value,
+      selectionStart: el.selectionStart,
+      selectionEnd: el.selectionEnd,
+    };
+  }).filter(s => s.identity);
 
   writeFn();
 
   for (const state of savedStates) {
-    const restored = container.querySelector(state.selector);
+    const { formId, selector } = state.identity;
+    // Find the form first to avoid cross-form collisions
+    const forms = Array.from(container.querySelectorAll("form, [data-form-id], [data-task-form], [data-subtask-form], [data-create-subtask-form], [data-dependency-form]"));
+    const form = forms.find(f => getFormIdentity(f) === formId) || container;
+    
+    const restored = form.querySelector(selector);
     if (restored && restored.value !== state.value) {
       restored.value = state.value;
       try {
-        restored.setSelectionRange(state.selectionStart, state.selectionEnd);
+        if (state.selectionStart !== null) {
+          restored.setSelectionRange(state.selectionStart, state.selectionEnd);
+        }
       } catch {
         // not all elements support setSelectionRange
       }
@@ -78,10 +119,11 @@ export function preserveFormState(container, writeFn) {
   }
 
   // Restore focus
-  if (focusedId) {
-    container.querySelector(`#${CSS.escape(focusedId)}`)?.focus({ preventScroll: true });
-  } else if (focusedName) {
-    container.querySelector(`[name="${CSS.escape(focusedName)}"]`)?.focus({ preventScroll: true });
+  if (focusedIdentity) {
+    const { formId, selector } = focusedIdentity;
+    const forms = Array.from(container.querySelectorAll("form, [data-form-id], [data-task-form], [data-subtask-form], [data-create-subtask-form], [data-dependency-form]"));
+    const form = forms.find(f => getFormIdentity(f) === formId) || container;
+    form.querySelector(selector)?.focus({ preventScroll: true });
   }
 }
 
