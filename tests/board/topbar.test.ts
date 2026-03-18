@@ -92,6 +92,17 @@ afterEach(() => {
 });
 
 describe("top bar search input", () => {
+  test("keeps the board navigation button enabled without a selected epic", () => {
+    const { container } = createMockContainer();
+
+    const topBar = createTopBar().mount(container);
+    topBar.update(createProps({ selectedEpic: null }));
+
+    expect(container.innerHTML).toContain('data-nav-board="true"');
+    expect(container.innerHTML).toContain('title="Open the newest epic board."');
+    expect(container.innerHTML).not.toMatch(/data-nav-board="true"[^>]*disabled/);
+  });
+
   test("applies externally restored search values to the visible input", () => {
     const { container, getInput } = createMockContainer();
     globalThis.document = { activeElement: null } as Document;
