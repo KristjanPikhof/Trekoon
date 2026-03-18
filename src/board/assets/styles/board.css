@@ -1189,6 +1189,7 @@ body {
 /* --- Overflow --- */
 .overflow-hidden { overflow: hidden; }
 .overflow-auto { overflow: auto; }
+.overflow-y-auto { overflow-y: auto; }
 .overscroll-contain { overscroll-behavior: contain; }
 
 /* --- Width --- */
