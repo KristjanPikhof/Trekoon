@@ -843,6 +843,10 @@ body {
   gap: 6px;
 }
 
+.board-tabs [role="tab"]:focus-visible {
+  box-shadow: none;
+}
+
 .board-wh__notes-btn {
   display: inline-flex;
   align-items: center;
