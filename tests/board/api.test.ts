@@ -3,22 +3,35 @@ import { describe, expect, test } from "bun:test";
 // @ts-expect-error Untyped browser asset module is exercised directly in tests.
 import { createMutationQueue } from "../../src/board/assets/state/api.js";
 
+type Snapshot = {
+  epics: unknown[];
+  tasks: unknown[];
+  subtasks: unknown[];
+  dependencies: unknown[];
+};
+
+type Notice = {
+  type: string;
+  message: string;
+} | null;
+
 describe("mutation queue", () => {
   test("flush resolves after the pending mutation queue drains", async () => {
-    let resolveRequest = (_value?: unknown) => {};
+    let resolveRequest: (value?: { snapshot?: Snapshot }) => void = () => {};
     const rerenders: number[] = [];
+    const initialSnapshot: Snapshot = {
+      epics: [],
+      tasks: [],
+      subtasks: [],
+      dependencies: [],
+    };
     const model = {
       store: {
-        snapshot: {
-          epics: [],
-          tasks: [],
-          subtasks: [],
-          dependencies: [],
-        },
-        notice: null,
+        snapshot: initialSnapshot,
+        notice: null as Notice,
         isMutating: false,
       },
-      replaceSnapshot(snapshot: unknown) {
+      replaceSnapshot(snapshot: Snapshot) {
         this.store.snapshot = snapshot;
       },
     };
