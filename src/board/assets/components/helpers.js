@@ -93,8 +93,9 @@ export function readStatusLabel(rawStatus) {
     return "Unknown";
   }
 
-  if (STATUS_LABELS[normalizeStatus(rawStatus)]) {
-    return STATUS_LABELS[normalizeStatus(rawStatus)];
+  const normalized = normalizeStatus(rawStatus);
+  if (STATUS_LABELS[normalized]) {
+    return STATUS_LABELS[normalized];
   }
 
   return rawStatus.replaceAll("_", " ").replaceAll("-", " ");
