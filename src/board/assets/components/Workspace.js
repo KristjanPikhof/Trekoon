@@ -45,7 +45,20 @@ function renderWorkspaceHeader(props) {
           <span class="${sectionLabelClasses()}">${escapeHtml(searchScope?.summary ?? "Selected epic")}</span>
           <div class="board-workspace-header__title-row">
             <h2>${escapeHtml(selectedEpic.title)}</h2>
-            ${renderStatusBadge(selectedEpic.status)}
+            <form class="inline-flex" data-epic-status-form="${escapeHtml(selectedEpic.id)}">
+              <select class="${fieldClasses()} !py-1 !px-2 !text-xs !min-h-0" name="status">
+                ${STATUS_ORDER.map(s => `<option value="${escapeHtml(s)}" ${selectedEpic.status === s ? 'selected' : ''}>${escapeHtml(STATUS_LABELS[s] ?? s)}</option>`).join('')}
+              </select>
+            </form>
+            <form class="inline-flex" data-bulk-status-form="${escapeHtml(selectedEpic.id)}">
+              <label class="flex items-center gap-2">
+                <span class="text-xs font-medium text-[var(--board-text-muted)]">Set all:</span>
+                <select class="${fieldClasses()} !py-1 !px-2 !text-xs !min-h-0" name="status">
+                  <option value="">Choose status\u2026</option>
+                  ${STATUS_ORDER.map(s => `<option value="${escapeHtml(s)}">${escapeHtml(STATUS_LABELS[s] ?? s)}</option>`).join('')}
+                </select>
+              </label>
+            </form>
             ${isCompact ? `<span class="${neutralChipClasses()}">Primary surface \u00b7 ${escapeHtml(primarySurfaceLabel)}</span>` : ""}
           </div>
           <div class="mt-3 flex flex-wrap gap-2">
