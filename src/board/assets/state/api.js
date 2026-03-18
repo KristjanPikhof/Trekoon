@@ -13,6 +13,40 @@ function cloneSnapshot(snapshot) {
   return JSON.parse(JSON.stringify(snapshot));
 }
 
+async function readJsonPayload(response) {
+  const text = await response.text();
+  if (text.length === 0) {
+    return null;
+  }
+
+  try {
+    return JSON.parse(text);
+  } catch {
+    const error = new Error(`Board API returned malformed JSON (${response.status} ${response.statusText || "unknown"})`);
+    error.code = "invalid_response";
+    error.status = response.status;
+    error.statusText = response.statusText;
+    error.details = {
+      responseText: text.slice(0, 240),
+    };
+    throw error;
+  }
+}
+
+function buildRequestError(method, path, response, payload) {
+  const code = payload?.error?.code;
+  const routeMessage = payload?.error?.message;
+  const message = routeMessage
+    ? `${method} ${path} failed (${response.status}${code ? ` ${code}` : ""}): ${routeMessage}`
+    : `${method} ${path} failed with ${response.status} ${response.statusText || "unknown error"}`;
+  const error = new Error(message);
+  error.code = code;
+  error.status = response.status;
+  error.statusText = response.statusText;
+  error.details = payload?.error?.details;
+  return error;
+}
+
 /**
  * Create a serial mutation queue.
  *
@@ -121,6 +155,7 @@ export function createApi(model, options) {
   const { sessionToken, rerender } = options;
 
   async function request(path, requestOptions = {}) {
+    const method = typeof requestOptions.method === "string" ? requestOptions.method.toUpperCase() : "GET";
     const headers = new Headers(requestOptions.headers || {});
     if (sessionToken.length > 0) {
       headers.set("authorization", `Bearer ${sessionToken}`);
@@ -129,14 +164,20 @@ export function createApi(model, options) {
       headers.set("content-type", "application/json");
     }
 
-    const response = await fetch(path, { ...requestOptions, headers });
-    const payload = await response.json();
-    if (!payload?.ok) {
-      const message = payload?.error?.message || "Board request failed";
-      const error = new Error(message);
-      error.code = payload?.error?.code;
-      error.details = payload?.error?.details;
-      throw error;
+    let response;
+    try {
+      response = await fetch(path, { ...requestOptions, headers });
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      const requestError = new Error(`${method} ${path} failed before a response was received: ${message}`);
+      requestError.code = "network_error";
+      requestError.cause = error;
+      throw requestError;
+    }
+
+    const payload = await readJsonPayload(response);
+    if (!response.ok || !payload?.ok) {
+      throw buildRequestError(method, path, response, payload);
     }
 
     return payload.data;
