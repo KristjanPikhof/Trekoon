@@ -35,14 +35,12 @@ export const BOARD_ASSET_MAP = {
   workspace: {
     files: [
       "src/board/assets/components/TopBar.js",
-      "src/board/assets/components/Sidebar.js",
       "src/board/assets/components/Workspace.js",
       "src/board/assets/components/TaskCard.js",
-      "src/board/assets/components/TaskList.js",
       "src/board/assets/components/Notice.js",
     ],
     owner: "workspace-lane",
-    description: "Task browsing surfaces, topbar, sidebar, and drag-friendly work views.",
+    description: "Task browsing surfaces, topbar, notices, and drag-friendly work views.",
   },
   detail: {
     files: [
