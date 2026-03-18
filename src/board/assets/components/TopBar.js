@@ -53,7 +53,6 @@ function render(props) {
         <div class="min-w-0">
           <div class="board-shell-topbar__title-row">
             <h1>Trekoon</h1>
-            <span class="${neutralChipClasses()}">Local repo</span>
           </div>
           <p class="board-shell-topbar__context">${epicContext}</p>
         </div>
