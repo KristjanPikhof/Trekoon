@@ -261,6 +261,31 @@ export function createBoardActions(options) {
       transition({ selectedTaskId: taskId }, { rerenderBoard: false });
       api.patchTask(taskId, { status: nextStatus }, (snapshot) => updateTaskInSnapshot(snapshot, taskId, { status: nextStatus }, normalizeSnapshot));
     },
+    changeEpicStatus(epicId, newStatus) {
+      const normalizedStatus = normalizeStatus(newStatus);
+      api.patchEpic(epicId, { status: normalizedStatus }, (snapshot) => {
+        const epic = snapshot.epics.find(e => e.id === epicId);
+        if (epic) epic.status = normalizedStatus;
+        return snapshot;
+      });
+    },
+    bulkSetStatus(epicId, newStatus) {
+      const normalizedStatus = normalizeStatus(newStatus);
+      const snapshot = store.snapshot;
+      const epicTasks = snapshot.tasks.filter(t => t.epicId === epicId);
+
+      for (const task of epicTasks) {
+        api.patchTask(task.id, { status: normalizedStatus }, (snap) =>
+          updateTaskInSnapshot(snap, task.id, { status: normalizedStatus }, normalizeSnapshot),
+        );
+
+        for (const subtask of task.subtasks) {
+          api.patchSubtask(subtask.id, { status: normalizedStatus }, (snap) =>
+            updateSubtaskInSnapshot(snap, subtask.id, { status: normalizedStatus }, normalizeSnapshot),
+          );
+        }
+      }
+    },
     handleKeydown(event) {
       const boardState = getBoardState();
       const activeElement = document.activeElement;
