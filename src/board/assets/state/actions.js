@@ -38,6 +38,40 @@ export function updateSubtaskInSnapshot(snapshot, subtaskId, updates, normalizeS
   return normalizeSnapshot(nextSnapshot);
 }
 
+export function cascadeEpicStatusInSnapshot(snapshot, epicId, status, normalizeSnapshot) {
+  const nextSnapshot = cloneSnapshot(snapshot);
+  const epic = nextSnapshot.epics.find((candidate) => candidate.id === epicId);
+  if (!epic) {
+    return snapshot;
+  }
+
+  const updatedAt = Date.now();
+  epic.status = status;
+  epic.updatedAt = updatedAt;
+
+  const taskIds = new Set();
+  for (const task of nextSnapshot.tasks) {
+    if (task.epicId !== epicId) {
+      continue;
+    }
+
+    task.status = status;
+    task.updatedAt = updatedAt;
+    taskIds.add(task.id);
+  }
+
+  for (const subtask of nextSnapshot.subtasks) {
+    if (!taskIds.has(subtask.taskId)) {
+      continue;
+    }
+
+    subtask.status = status;
+    subtask.updatedAt = updatedAt;
+  }
+
+  return normalizeSnapshot(nextSnapshot);
+}
+
 export function addDependencyInSnapshot(snapshot, sourceId, dependsOnId, normalizeSnapshot) {
   const nextSnapshot = cloneSnapshot(snapshot);
   const duplicate = normalizeArray(nextSnapshot.dependencies).some(
@@ -271,20 +305,9 @@ export function createBoardActions(options) {
     },
     bulkSetStatus(epicId, newStatus) {
       const normalizedStatus = normalizeStatus(newStatus);
-      const snapshot = store.snapshot;
-      const epicTasks = snapshot.tasks.filter(t => t.epicId === epicId);
-
-      for (const task of epicTasks) {
-        api.patchTask(task.id, { status: normalizedStatus }, (snap) =>
-          updateTaskInSnapshot(snap, task.id, { status: normalizedStatus }, normalizeSnapshot),
-        );
-
-        for (const subtask of task.subtasks) {
-          api.patchSubtask(subtask.id, { status: normalizedStatus }, (snap) =>
-            updateSubtaskInSnapshot(snap, subtask.id, { status: normalizedStatus }, normalizeSnapshot),
-          );
-        }
-      }
+      api.cascadeEpicStatus(epicId, normalizedStatus, (snapshot) =>
+        cascadeEpicStatusInSnapshot(snapshot, epicId, normalizedStatus, normalizeSnapshot),
+      );
     },
     handleKeydown(event) {
       const boardState = getBoardState();
