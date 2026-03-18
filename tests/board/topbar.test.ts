@@ -119,4 +119,23 @@ describe("top bar search input", () => {
 
     expect(getInput().value).toBe("");
   });
+
+  test("keeps the info disclosure open across unrelated rerenders", () => {
+    const container = document.createElement("div");
+    const topBar = createTopBar().mount(container);
+
+    topBar.update(createProps());
+
+    const disclosure = container.querySelector("details");
+    if (!(disclosure instanceof HTMLDetailsElement)) {
+      throw new Error("Expected topbar disclosure");
+    }
+
+    disclosure.open = true;
+    topBar.update(createProps({ theme: "light" }));
+
+    const rerenderedDisclosure = container.querySelector("details");
+    expect(rerenderedDisclosure?.hasAttribute("open")).toBe(true);
+    expect((rerenderedDisclosure as HTMLDetailsElement | null)?.open).toBe(true);
+  });
 });
