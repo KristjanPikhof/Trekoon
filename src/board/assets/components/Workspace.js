@@ -208,27 +208,15 @@ function render(props) {
     visibleTasks,
   } = props;
 
-  const compact = isCompactViewport();
   const selectedTaskId = selectedTask?.id ?? null;
-  const currentNav = selectedTask ? "detail" : "board";
-  const primarySurfaceLabel = currentNav === "detail" ? "Detail" : "Board";
 
   const viewModes = VIEW_MODES.map((view) => ({
     active: store.view === view,
-    classes: cx(
-      "rounded-2xl px-4 py-2 text-sm font-medium transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--board-border-strong)] focus-visible:ring-offset-2 focus-visible:ring-offset-[var(--board-surface)]",
-      store.view === view
-        ? "bg-[var(--board-accent-soft)] text-[var(--board-text)] shadow-[inset_0_0_0_1px_var(--board-border-strong)]"
-        : "text-[var(--board-text-muted)] hover:text-[var(--board-text)]",
-    ),
-    icon: view === "kanban" ? "view_kanban" : "list",
     id: view,
     label: view === "kanban" ? "Kanban" : "Rows",
   }));
 
   const headerMarkup = renderWorkspaceHeader({
-    isCompact: compact,
-    primarySurfaceLabel,
     searchScope,
     selectedEpic,
     snapshotEpics,

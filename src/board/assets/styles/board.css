@@ -1009,17 +1009,6 @@ body {
 }
 
 @media (max-width: 1100px) {
-  .board-workspace-header__toolbar {
-    grid-template-columns: minmax(0, 1fr);
-    justify-items: stretch;
-  }
-
-  .board-workspace-header__controls,
-  .board-workspace-header__legend {
-    justify-items: start;
-    justify-content: flex-start;
-  }
-
   .board-table__header--epics,
   .board-list__header {
     display: none !important;
