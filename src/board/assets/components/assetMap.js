@@ -1,7 +1,6 @@
 export const BOARD_SHARED_TOKENS = {
   theme: "src/board/assets/styles/board.css",
   fonts: "src/board/assets/styles/fonts.css",
-  shell: "src/board/assets/components/AppShell.js",
   bootstrap: "src/board/assets/main.js",
   legacyRuntime: "src/board/assets/app.js",
 };

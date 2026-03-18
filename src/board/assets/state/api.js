@@ -92,11 +92,18 @@ function createMutationQueue(model, rerender) {
       return processing || queue.length > 0;
     },
 
-    async flush() {
-      // Wait for current processing to complete
-      while (processing || queue.length > 0) {
-        await new Promise((resolve) => setTimeout(resolve, 0));
-      }
+    flush() {
+      if (!processing && queue.length === 0) return Promise.resolve();
+      return new Promise((resolve) => {
+        const check = () => {
+          if (!processing && queue.length === 0) {
+            resolve();
+          } else {
+            queueMicrotask(check);
+          }
+        };
+        queueMicrotask(check);
+      });
     },
   };
 }
