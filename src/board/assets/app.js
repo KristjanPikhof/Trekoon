@@ -82,6 +82,7 @@ function createBoardShell(appElement) {
       </div>
       <div data-slot="task-modal"></div>
       <div data-slot="subtask-modal"></div>
+      <div data-slot="confirm-dialog"></div>
     </div>
   `;
 
