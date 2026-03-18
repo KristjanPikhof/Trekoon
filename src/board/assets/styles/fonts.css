@@ -1,0 +1,22 @@
+/* Inter — variable, Latin subset, weights 400–700 */
+@font-face {
+  font-family: "Inter";
+  font-style: normal;
+  font-weight: 400 700;
+  font-display: swap;
+  src: url("../fonts/inter-latin.woff2") format("woff2");
+  unicode-range: U+0020-007E, U+00A0, U+00A9, U+00AB, U+00AD, U+00AE, U+00B7,
+    U+00BB, U+00C0-00C1, U+00C9, U+00CD, U+00D1, U+00D3, U+00D7, U+00DA,
+    U+00DC, U+00E0-00E1, U+00E9, U+00ED, U+00F1, U+00F3, U+00F7, U+00FA,
+    U+00FC, U+2013-2014, U+2018-2019, U+201C-201D, U+2026, U+2039, U+203A,
+    U+20AC, U+2122, U+2212;
+}
+
+/* Material Symbols Rounded — subset of 16 glyphs used in board UI */
+@font-face {
+  font-family: "Material Symbols Rounded";
+  font-style: normal;
+  font-weight: 400;
+  font-display: block;
+  src: url("../fonts/material-symbols-rounded.woff2") format("woff2");
+}
