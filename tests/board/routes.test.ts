@@ -214,6 +214,110 @@ describe("board routes", (): void => {
     }
   });
 
+  test("cascades epic status updates atomically through one board route", async (): Promise<void> => {
+    const cwd = createWorkspace();
+    const storage = openTrekoonDatabase(cwd);
+
+    try {
+      const mutations = new MutationService(storage.db, cwd);
+      const epic = mutations.createEpic({ title: "Roadmap", description: "Plan release" });
+      const firstTask = mutations.createTask({ epicId: epic.id, title: "Implement", description: "Ship board" });
+      const secondTask = mutations.createTask({ epicId: epic.id, title: "Verify", description: "Check output" });
+      const subtask = mutations.createSubtask({ taskId: firstTask.id, title: "Write tests", description: "Cover cascade" });
+
+      const handler = createBoardApiHandler({ db: storage.db, cwd, token: "secret-token" });
+      const response = await handler(new Request(`http://board.test/api/epics/${epic.id}/cascade?token=secret-token`, {
+        method: "PATCH",
+        headers: {
+          "content-type": "application/json",
+        },
+        body: JSON.stringify({ status: "done" }),
+      }));
+      const body = await response.json() as {
+        ok: boolean;
+        data: {
+          plan: { atomic: boolean; changedIds: string[]; blockers: unknown[] };
+          snapshot: {
+            epics: Array<{ id: string; status: string }>;
+            tasks: Array<{ id: string; status: string }>;
+            subtasks: Array<{ id: string; status: string }>;
+          };
+        };
+      };
+
+      expect(response.status).toBe(200);
+      expect(body.ok).toBeTrue();
+      expect(body.data.plan).toEqual(expect.objectContaining({
+        atomic: true,
+        changedIds: expect.arrayContaining([epic.id, firstTask.id, secondTask.id, subtask.id]),
+        blockers: [],
+      }));
+      expect(body.data.snapshot.epics).toContainEqual(expect.objectContaining({ id: epic.id, status: "done" }));
+      expect(body.data.snapshot.tasks).toContainEqual(expect.objectContaining({ id: firstTask.id, status: "done" }));
+      expect(body.data.snapshot.tasks).toContainEqual(expect.objectContaining({ id: secondTask.id, status: "done" }));
+      expect(body.data.snapshot.subtasks).toContainEqual(expect.objectContaining({ id: subtask.id, status: "done" }));
+    } finally {
+      storage.close();
+    }
+  });
+
+  test("rejects blocked epic cascades without partial snapshot changes", async (): Promise<void> => {
+    const cwd = createWorkspace();
+    const storage = openTrekoonDatabase(cwd);
+
+    try {
+      const mutations = new MutationService(storage.db, cwd);
+      const epic = mutations.createEpic({ title: "Roadmap", description: "Plan release" });
+      const blocker = mutations.createTask({ epicId: epic.id, title: "Blocker", description: "Finish first" });
+      const blocked = mutations.createTask({ epicId: epic.id, title: "Blocked", description: "Depends on blocker" });
+      const blockedSubtask = mutations.createSubtask({ taskId: blocked.id, title: "Wait on unblock", description: "Cannot finish yet" });
+      mutations.addDependency(blocked.id, blocker.id);
+
+      const handler = createBoardApiHandler({ db: storage.db, cwd, token: "secret-token" });
+      const response = await handler(new Request(`http://board.test/api/epics/${epic.id}/cascade?token=secret-token`, {
+        method: "PATCH",
+        headers: {
+          "content-type": "application/json",
+        },
+        body: JSON.stringify({ status: "done" }),
+      }));
+      const body = await response.json() as {
+        ok: boolean;
+        error: { code: string; message: string; details: { changedIds: string[]; blockerCount: number } };
+      };
+
+      expect(response.status).toBe(409);
+      expect(body.ok).toBeFalse();
+      expect(body.error.code).toBe("dependency_blocked");
+      expect(body.error.message).toContain(`task ${blocked.id} is blocked by task ${blocker.id} (todo)`);
+      expect(body.error.details).toEqual(expect.objectContaining({
+        changedIds: [],
+        blockerCount: 1,
+      }));
+
+      const snapshotResponse = await handler(new Request("http://board.test/api/snapshot?token=secret-token"));
+      const snapshotBody = await snapshotResponse.json() as {
+        ok: boolean;
+        data: {
+          snapshot: {
+            epics: Array<{ id: string; status: string }>;
+            tasks: Array<{ id: string; status: string }>;
+            subtasks: Array<{ id: string; status: string }>;
+          };
+        };
+      };
+
+      expect(snapshotResponse.status).toBe(200);
+      expect(snapshotBody.ok).toBeTrue();
+      expect(snapshotBody.data.snapshot.epics).toContainEqual(expect.objectContaining({ id: epic.id, status: "todo" }));
+      expect(snapshotBody.data.snapshot.tasks).toContainEqual(expect.objectContaining({ id: blocker.id, status: "todo" }));
+      expect(snapshotBody.data.snapshot.tasks).toContainEqual(expect.objectContaining({ id: blocked.id, status: "todo" }));
+      expect(snapshotBody.data.snapshot.subtasks).toContainEqual(expect.objectContaining({ id: blockedSubtask.id, status: "todo" }));
+    } finally {
+      storage.close();
+    }
+  });
+
   test("returns invalid_input for malformed JSON bodies", async (): Promise<void> => {
     const cwd = createWorkspace();
     const storage = openTrekoonDatabase(cwd);
