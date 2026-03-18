@@ -22,7 +22,7 @@ export function createDelegation(rootElement, actions) {
     if (deleteSubtaskEl) {
       if (actions.isMutating()) return;
       const subtaskId = deleteSubtaskEl.dataset.deleteSubtask;
-      if (subtaskId) actions.deleteSubtask(subtaskId);
+      if (subtaskId) actions.deleteSubtask(subtaskId, deleteSubtaskEl);
       return;
     }
 
@@ -31,7 +31,7 @@ export function createDelegation(rootElement, actions) {
       if (actions.isMutating()) return;
       const sourceId = removeDependencyEl.dataset.removeDependencySource;
       const dependsOnId = removeDependencyEl.dataset.removeDependencyTarget;
-      actions.removeDependency(sourceId, dependsOnId);
+      actions.removeDependency(sourceId, dependsOnId, removeDependencyEl);
       return;
     }
 
@@ -68,6 +68,18 @@ export function createDelegation(rootElement, actions) {
         return;
       }
       actions.closeTask();
+      return;
+    }
+
+    const closeConfirmEl = target.closest("[data-close-confirm]");
+    if (closeConfirmEl) {
+      if (
+        closeConfirmEl.classList.contains("board-confirm-backdrop") &&
+        target !== closeConfirmEl
+      ) {
+        return;
+      }
+      actions.cancelDelete();
       return;
     }
 
