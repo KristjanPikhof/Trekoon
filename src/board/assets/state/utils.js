@@ -86,7 +86,7 @@ export function normalizeSnapshot(rawSnapshot) {
       kind: "subtask",
       taskId: subtask.taskId ?? subtask.task?.id ?? null,
       title: String(subtask.title ?? "Untitled subtask"),
-      description: String(subtask.description ?? ""),
+      description: String(subtask.description ?? "").replace(/\\n/g, "\n"),
       status: normalizeStatus(subtask.status),
       createdAt: Number(subtask.createdAt ?? Date.now()),
       updatedAt: Number(subtask.updatedAt ?? subtask.createdAt ?? Date.now()),
@@ -142,7 +142,7 @@ export function normalizeSnapshot(rawSnapshot) {
     const normalizedEpic = {
       id: epicId,
       title: String(epic.title ?? "Untitled epic"),
-      description: String(epic.description ?? ""),
+      description: String(epic.description ?? "").replace(/\\n/g, "\n"),
       status: String(epic.status ?? "todo"),
       createdAt: Number(epic.createdAt ?? Date.now()),
       updatedAt: Number(epic.updatedAt ?? epic.createdAt ?? Date.now()),

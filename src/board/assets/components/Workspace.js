@@ -66,13 +66,6 @@ function renderWorkspaceHeader(props) {
             <span class="${neutralChipClasses()}">${visibleTasks.length} visible task${visibleTasks.length === 1 ? "" : "s"}</span>
           </div>
         </div>
-        <details class="board-workspace-header__details">
-          <summary aria-label="Epic description and scope">
-            ${renderIcon("subject", "text-[18px]")}
-            <span>${searchScope?.kind === "epic_search" ? "Epic scope" : "Epic notes"}</span>
-          </summary>
-          <p>${escapeHtml(description)}</p>
-        </details>
       </div>
 
       <div class="board-workspace__toolbar board-workspace-header__toolbar">
@@ -103,6 +96,17 @@ function renderWorkspaceHeader(props) {
           </div>
         </div>
       </div>
+
+      ${description.trim() ? `
+        <details class="board-workspace-header__notes">
+          <summary class="board-workspace-header__notes-toggle" aria-label="Epic description and scope">
+            ${renderIcon("subject", "text-[18px]")}
+            <span>${searchScope?.kind === "epic_search" ? "Epic scope" : "Epic notes"}</span>
+            ${renderIcon("expand_more", "text-[18px] board-workspace-header__notes-chevron")}
+          </summary>
+          <div class="board-workspace-header__notes-body">${escapeHtml(description)}</div>
+        </details>
+      ` : ""}
     </header>
   `;
 }

@@ -732,8 +732,7 @@ body {
   box-shadow: var(--board-shadow);
 }
 
-.board-shell-topbar__meta p,
-.board-workspace-header__details p {
+.board-shell-topbar__meta p {
   margin: 0;
   color: var(--board-text-muted);
   font-size: 0.84rem;
@@ -746,10 +745,7 @@ body {
 }
 
 .board-workspace-header__intro {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) minmax(220px, 360px);
-  align-items: start;
-  gap: 12px;
+  min-width: 0;
 }
 
 .board-workspace-header__title-block {
@@ -775,13 +771,12 @@ body {
   max-width: 56ch;
 }
 
-.board-workspace-header__details {
+.board-workspace-header__notes {
+  grid-column: 1 / -1;
   min-width: 0;
-  max-width: 360px;
-  justify-self: end;
 }
 
-.board-workspace-header__details summary {
+.board-workspace-header__notes-toggle {
   display: inline-flex;
   align-items: center;
   gap: 8px;
@@ -793,14 +788,36 @@ body {
   color: var(--board-text-muted);
   cursor: pointer;
   list-style: none;
+  font-size: 0.85rem;
+  font-weight: 500;
 }
 
-.board-workspace-header__details summary::-webkit-details-marker {
+.board-workspace-header__notes-toggle::-webkit-details-marker {
   display: none;
 }
 
-.board-workspace-header__details[open] p {
-  margin-top: 10px;
+.board-workspace-header__notes-chevron {
+  transition: transform 0.2s ease;
+}
+
+.board-workspace-header__notes[open] .board-workspace-header__notes-chevron {
+  transform: rotate(180deg);
+}
+
+.board-workspace-header__notes-body {
+  margin-top: 12px;
+  padding: 16px;
+  border: 1px solid var(--board-border);
+  border-radius: 16px;
+  background: rgba(255, 255, 255, 0.02);
+  white-space: pre-wrap;
+  word-break: break-word;
+  font-size: 0.875rem;
+  line-height: 1.65;
+  color: var(--board-text-muted);
+  max-height: 280px;
+  overflow-y: auto;
+  overscroll-behavior: contain;
 }
 
 .board-workspace-header__toolbar {
@@ -829,8 +846,7 @@ body {
 .board-detail-copy,
 .board-shell-topbar__identity,
 .board-shell-topbar__title-row,
-.board-workspace-header__title-block,
-.board-workspace-header__details p {
+.board-workspace-header__title-block {
   overflow-wrap: anywhere;
 }
 
@@ -978,8 +994,7 @@ body {
     justify-items: stretch;
   }
 
-  .board-workspace-header__details {
-    max-width: none;
+  .board-workspace-header__notes {
     justify-self: stretch;
   }
 
@@ -1082,10 +1097,6 @@ body {
     margin-top: 10px;
   }
 
-
-  .board-workspace-header__details {
-    min-width: 0;
-  }
 
   .board-layout--workspace {
     height: 100%;
