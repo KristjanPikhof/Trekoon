@@ -140,7 +140,7 @@ export function renderDescriptionBody(description, className = "text-sm leading-
   if (!description || description.trim().length === 0) {
     return `<p class="${escapeHtml(className)}">No description provided.</p>`;
   }
-  return `<div class="${escapeHtml(className)}">${escapeHtml(description).replaceAll("\n", "<br />")}</div>`;
+  return `<div class="${escapeHtml(className)}" style="white-space:pre-wrap;word-break:break-word">${escapeHtml(description)}</div>`;
 }
 
 export function shouldCollapseDescription(description) {

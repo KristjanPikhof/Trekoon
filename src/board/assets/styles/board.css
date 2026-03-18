@@ -881,7 +881,6 @@ body {
     padding: 10px;
   }
 
-  .board-workspace-header__intro,
   .board-workspace-header__toolbar {
     display: grid;
     justify-items: stretch;

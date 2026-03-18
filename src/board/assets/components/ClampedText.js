@@ -24,7 +24,7 @@ export function renderClampedText(context) {
         </span>
       </summary>
       <div class="board-clamped-text__body ${escapeHtml(className)}">
-        ${escapeHtml(trimmed).replaceAll("\n", "<br />")}
+        ${escapeHtml(trimmed)}
       </div>
     </details>
   `;
