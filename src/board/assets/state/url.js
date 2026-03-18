@@ -82,7 +82,8 @@ export function hashToState(hash) {
 /**
  * Set up bidirectional URL hash synchronization with a store.
  *
- * - On store changes, updates the URL hash via replaceState (no history entry).
+ * - On store changes, pushes history for major navigation changes and replaces
+ *   the current entry for noisy state like transient selection/search.
  * - On hashchange (browser back/forward), reads the hash and updates store state.
  *
  * @param {object} store - Observable store from createStore
