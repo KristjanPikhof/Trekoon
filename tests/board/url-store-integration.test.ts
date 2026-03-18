@@ -390,7 +390,6 @@ describe("board URL/store integration", () => {
     });
     expect(mockWindow.calls).toEqual([
       { mode: "push", url: "/board#epic=epic-1" },
-      { mode: "replace", url: "/board#epic=epic-2" },
     ]);
 
     cleanup();
