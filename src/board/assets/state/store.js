@@ -178,6 +178,10 @@ function deriveBoardState(state) {
   const selectedTaskId = selectedTask && visibleTasks.some((t) => t.id === selectedTask.id)
     ? selectedTask.id
     : null;
+  const stateWithTaskSelection = stateWithScreen.selectedTaskId !== selectedTaskId
+    ? { ...stateWithScreen, selectedTaskId }
+    : stateWithScreen;
+  const selectedSubtask = selectedTaskId ? selectSelectedSubtask(stateWithTaskSelection) : null;
 
   return {
     screen,
@@ -185,8 +189,8 @@ function deriveBoardState(state) {
     selectedEpic,
     selectedTaskId,
     selectedTask: selectedTaskId ? selectedTask : null,
-    selectedSubtaskId: selectSelectedSubtask(stateWithScreen)?.id ?? null,
-    selectedSubtask: selectedTaskId ? selectSelectedSubtask(stateWithScreen) : null,
+    selectedSubtaskId: selectedSubtask?.id ?? null,
+    selectedSubtask,
     search: stateWithScreen.search,
     searchQuery: stateWithScreen.searchQuery,
     searchScope: selectSearchScope(stateWithScreen),
