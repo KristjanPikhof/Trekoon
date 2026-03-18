@@ -99,9 +99,9 @@ const selectSelectedEpic = createSelector(
 );
 
 const selectSelectedTask = createSelector(
-  (s) => [selectVisibleTasks(s), selectTasksInScope(s), s.selectedTaskId],
-  (visibleTasks, tasksInScope, selectedTaskId) => {
-    if (!selectedTaskId) return null;
+  (s) => [s.screen, selectVisibleTasks(s), selectTasksInScope(s), s.selectedTaskId],
+  (screen, visibleTasks, tasksInScope, selectedTaskId) => {
+    if (screen !== "tasks" || !selectedTaskId) return null;
     const fromVisible = visibleTasks.find((task) => task.id === selectedTaskId);
     if (fromVisible) return fromVisible;
     return tasksInScope.find((task) => task.id === selectedTaskId) ?? null;
@@ -169,9 +169,22 @@ function selectSearchScope(state) {
  * @returns {BoardState}
  */
 function deriveBoardState(state) {
-  const selectedEpic = selectSelectedEpic(state);
-  const screen = state.screen === "tasks" && selectedEpic ? "tasks" : "epics";
-  const stateWithScreen = state.screen !== screen ? { ...state, screen } : state;
+  const requestedTask = state.selectedTaskId
+    ? state.snapshot?.tasks?.find((task) => task.id === state.selectedTaskId) ?? null
+    : null;
+  const requestedEpicId = requestedTask?.epicId ?? state.selectedEpicId;
+  const selectedEpic = requestedEpicId
+    ? state.snapshot?.epics?.find((epic) => epic.id === requestedEpicId) ?? null
+    : null;
+  const screen = requestedTask && selectedEpic
+    ? "tasks"
+    : state.screen === "tasks" && selectedEpic
+      ? "tasks"
+      : "epics";
+  const normalizedSelectedEpicId = selectedEpic?.id ?? null;
+  const stateWithScreen = state.screen !== screen || state.selectedEpicId !== normalizedSelectedEpicId
+    ? { ...state, screen, selectedEpicId: normalizedSelectedEpicId }
+    : state;
 
   const visibleTasks = selectVisibleTasks(stateWithScreen);
   const selectedTask = selectSelectedTask(stateWithScreen);
