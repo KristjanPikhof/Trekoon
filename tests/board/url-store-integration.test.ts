@@ -52,7 +52,7 @@ function createMockDocument() {
     querySelector() {
       return null;
     },
-  } as Document;
+  } as unknown as Document;
 }
 
 function createMockWindow(pathname = "/board") {
