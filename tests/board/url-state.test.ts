@@ -319,6 +319,7 @@ describe("board URL state sync", () => {
 
     expect(calls).toEqual(["beforeRestore", "onRestore"]);
     expect(mockStore.store).toEqual({
+      screen: "tasks",
       selectedEpicId: "epic-2",
       selectedTaskId: null,
       search: "ship",
