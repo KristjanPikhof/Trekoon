@@ -745,12 +745,35 @@ body {
   position: absolute;
   right: 0;
   top: calc(100% + 8px);
-  width: min(280px, 80vw);
-  padding: 12px;
+  width: min(360px, 88vw);
+  padding: 14px;
   border: 1px solid var(--board-border);
   border-radius: 16px;
   background: var(--board-surface);
   box-shadow: var(--board-shadow);
+}
+
+.board-shell-topbar__meta-title {
+  margin: 0 0 10px;
+  font-size: 0.92rem;
+  font-weight: 600;
+  color: var(--board-text);
+}
+
+.board-shell-topbar__meta-section + .board-shell-topbar__meta-section {
+  margin-top: 12px;
+  padding-top: 12px;
+  border-top: 1px solid var(--board-border);
+}
+
+.board-shell-topbar__meta-section strong {
+  display: block;
+  margin: 0 0 4px;
+  font-size: 0.78rem;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--board-text-soft);
 }
 
 .board-shell-topbar__meta p {
@@ -758,6 +781,15 @@ body {
   color: var(--board-text-muted);
   font-size: 0.84rem;
   line-height: 1.5;
+}
+
+.board-shell-topbar__meta-scope {
+  margin-top: 6px !important;
+  color: var(--board-text) !important;
+  font-size: 0.88rem !important;
+  font-weight: 500;
+  line-height: 1.45;
+  word-break: break-word;
 }
 
 .board-workspace-header {
