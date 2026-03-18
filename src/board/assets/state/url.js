@@ -10,6 +10,7 @@ const DEFAULT_VIEW = "kanban";
 
 function toHistoryState(state) {
   return {
+    screen: state.screen || "epics",
     selectedEpicId: state.selectedEpicId || null,
     view: state.view || DEFAULT_VIEW,
   };
@@ -21,6 +22,7 @@ function shouldPushHistoryEntry(previousState, nextState) {
   }
 
   return previousState.selectedEpicId !== nextState.selectedEpicId
+    || previousState.screen !== nextState.screen
     || previousState.view !== nextState.view;
 }
 
@@ -31,6 +33,7 @@ function shouldPushHistoryEntry(previousState, nextState) {
  * @param {object} state
  * @param {string|null} state.selectedEpicId
  * @param {string|null} state.selectedTaskId
+ * @param {string} state.screen
  * @param {string} state.search
  * @param {string} state.view
  * @returns {string} Hash string without leading '#'
@@ -43,6 +46,9 @@ export function stateToHash(state) {
   }
   if (state.selectedTaskId) {
     params.set("task", state.selectedTaskId);
+  }
+  if (state.screen === "epics" && state.selectedEpicId) {
+    params.set("screen", "epics");
   }
   if (state.search && state.search.trim().length > 0) {
     params.set("search", state.search);
@@ -67,15 +73,21 @@ export function hashToState(hash) {
 
   const epicId = params.get("epic") || null;
   const taskId = params.get("task") || null;
+  const screenParam = params.get("screen");
   const search = params.get("search") || "";
   const view = params.get("view") || DEFAULT_VIEW;
+  const screen = screenParam === "epics" || screenParam === "tasks"
+    ? screenParam
+    : epicId || taskId
+      ? "tasks"
+      : "epics";
 
   return {
     selectedEpicId: epicId,
     selectedTaskId: taskId,
     search,
     view,
-    screen: epicId ? "tasks" : "epics",
+    screen,
   };
 }
 
