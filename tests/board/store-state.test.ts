@@ -56,7 +56,7 @@ describe("board state store reconciliation", () => {
       dependencies: [],
     });
 
-    expect(store.getBoardState().visibleEpics.map((epic) => epic.id)).toEqual([
+    expect(store.getBoardState().visibleEpics.map((epic: { id: string }) => epic.id)).toEqual([
       "epic-a",
       "epic-b",
       "epic-c",
@@ -65,7 +65,7 @@ describe("board state store reconciliation", () => {
 
     const searched = store.syncState({ search: "newest" });
 
-    expect(searched.visibleEpics.map((epic) => epic.id)).toEqual(["epic-a", "epic-b"]);
+    expect(searched.visibleEpics.map((epic: { id: string }) => epic.id)).toEqual(["epic-a", "epic-b"]);
   });
 
   test("clears stale selectedSubtaskId when selectedTaskId is reconciled away", () => {
