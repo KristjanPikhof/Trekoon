@@ -43,6 +43,93 @@ export function preserveInput(container, selector, writeFn) {
   }
 }
 
+const FORM_ROOT_SELECTOR = [
+  "form",
+  "[data-form-id]",
+  "[data-task-form]",
+  "[data-subtask-form]",
+  "[data-create-subtask-form]",
+  "[data-dependency-form]",
+].join(", ");
+
+function getFormRoot(el) {
+  if (!el) return null;
+  return el.matches(FORM_ROOT_SELECTOR) ? el : el.closest(FORM_ROOT_SELECTOR);
+}
+
+function getNamespacedFormIdentity(form) {
+  if (!form) return "default-form";
+  if (form.hasAttribute("data-form-id")) {
+    return `form:${form.getAttribute("data-form-id")}`;
+  }
+  if (form.hasAttribute("data-task-form")) {
+    return `task:${form.getAttribute("data-task-form")}`;
+  }
+  if (form.hasAttribute("data-subtask-form")) {
+    return `subtask:${form.getAttribute("data-subtask-form")}`;
+  }
+  if (form.hasAttribute("data-create-subtask-form")) {
+    return `create-subtask:${form.getAttribute("data-create-subtask-form")}`;
+  }
+  if (form.hasAttribute("data-dependency-form")) {
+    return `dependency:${form.getAttribute("data-dependency-form")}`;
+  }
+  if (form.id) {
+    return `id:${form.id}`;
+  }
+  return "anonymous-form";
+}
+
+function getManagedControls(root) {
+  return Array.from(root.querySelectorAll("input, textarea, select"));
+}
+
+function getControlIdentity(el, form) {
+  const controlKey = el.getAttribute("data-control-id");
+  if (controlKey) {
+    return `control:${controlKey}`;
+  }
+
+  if (el.id) {
+    return `id:${el.id}`;
+  }
+
+  const name = el.getAttribute("name");
+  if (name) {
+    const tagName = el.tagName.toLowerCase();
+    const type = tagName === "input" ? (el.getAttribute("type") ?? "text") : tagName;
+    const peers = getManagedControls(form).filter((candidate) => candidate.getAttribute("name") === name);
+    const index = peers.indexOf(el);
+    return `name:${name}:${type}:${index}`;
+  }
+
+  const index = getManagedControls(form).indexOf(el);
+  return `index:${index}:${el.tagName.toLowerCase()}`;
+}
+
+function captureSelection(el) {
+  if (typeof el.selectionStart !== "number") {
+    return { selectionStart: null, selectionEnd: null };
+  }
+
+  return {
+    selectionStart: el.selectionStart,
+    selectionEnd: el.selectionEnd,
+  };
+}
+
+function restoreSelection(el, selectionStart, selectionEnd) {
+  if (typeof selectionStart !== "number") {
+    return;
+  }
+
+  try {
+    el.setSelectionRange(selectionStart, selectionEnd ?? selectionStart);
+  } catch {
+    // setSelectionRange is not supported on all controls
+  }
+}
+
 /**
  * Capture the full state of every form input inside a container, execute a DOM
  * write, then restore all captured values and focus.
@@ -55,75 +142,64 @@ export function preserveInput(container, selector, writeFn) {
  * @param {() => void}  writeFn
  */
 export function preserveFormState(container, writeFn) {
-  const inputs = Array.from(
-    container.querySelectorAll("input, textarea, select"),
-  );
+  const inputs = getManagedControls(container);
 
   const activeElement = document.activeElement;
   let focusedIdentity = null;
 
-  function getFormIdentity(el) {
-    const form = el.closest("form, [data-form-id], [data-task-form], [data-subtask-form], [data-create-subtask-form], [data-dependency-form]");
-    if (!form) return "default-form";
-    return form.getAttribute("data-form-id")
-      || form.getAttribute("data-task-form")
-      || form.getAttribute("data-subtask-form")
-      || form.getAttribute("data-create-subtask-form")
-      || form.getAttribute("data-dependency-form")
-      || form.id
-      || "anonymous-form";
-  }
-
-  function getControlSelector(el) {
-    if (el.id) return `#${CSS.escape(el.id)}`;
-    if (el.name) return `[name="${CSS.escape(el.name)}"]`;
-    return null;
-  }
-
   const savedStates = inputs.map((el) => {
-    const formId = getFormIdentity(el);
-    const selector = getControlSelector(el);
-    const identity = selector ? { formId, selector } : null;
+    const form = getFormRoot(el);
+    const formId = getNamespacedFormIdentity(form);
+    const controlId = form ? getControlIdentity(el, form) : null;
+    const identity = controlId ? { formId, controlId } : null;
 
     if (activeElement === el) {
       focusedIdentity = identity;
     }
 
+    const { selectionStart, selectionEnd } = captureSelection(el);
+
     return {
       identity,
       value: el.value,
-      selectionStart: el.selectionStart,
-      selectionEnd: el.selectionEnd,
+      selectionStart,
+      selectionEnd,
     };
   }).filter(s => s.identity);
 
   writeFn();
 
+  const formsByIdentity = new Map(
+    Array.from(container.querySelectorAll(FORM_ROOT_SELECTOR)).map((form) => [
+      getNamespacedFormIdentity(form),
+      form,
+    ]),
+  );
+
   for (const state of savedStates) {
-    const { formId, selector } = state.identity;
-    // Find the form first to avoid cross-form collisions
-    const forms = Array.from(container.querySelectorAll("form, [data-form-id], [data-task-form], [data-subtask-form], [data-create-subtask-form], [data-dependency-form]"));
-    const form = forms.find(f => getFormIdentity(f) === formId) || container;
-    
-    const restored = form.querySelector(selector);
+    const { formId, controlId } = state.identity;
+    const form = formsByIdentity.get(formId) ?? container;
+    const restored = getManagedControls(form).find((control) => getControlIdentity(control, form) === controlId);
     if (restored && restored.value !== state.value) {
       restored.value = state.value;
-      try {
-        if (state.selectionStart !== null) {
-          restored.setSelectionRange(state.selectionStart, state.selectionEnd);
-        }
-      } catch {
-        // not all elements support setSelectionRange
-      }
+    }
+
+    if (restored && activeElement === container.ownerDocument?.body) {
+      restoreSelection(restored, state.selectionStart, state.selectionEnd);
     }
   }
 
-  // Restore focus
   if (focusedIdentity) {
-    const { formId, selector } = focusedIdentity;
-    const forms = Array.from(container.querySelectorAll("form, [data-form-id], [data-task-form], [data-subtask-form], [data-create-subtask-form], [data-dependency-form]"));
-    const form = forms.find(f => getFormIdentity(f) === formId) || container;
-    form.querySelector(selector)?.focus({ preventScroll: true });
+    const { formId, controlId } = focusedIdentity;
+    const form = formsByIdentity.get(formId) ?? container;
+    const restored = getManagedControls(form).find((control) => getControlIdentity(control, form) === controlId);
+    if (restored) {
+      restored.focus({ preventScroll: true });
+      const focusedState = savedStates.find((state) => state.identity?.formId === formId && state.identity?.controlId === controlId);
+      if (focusedState) {
+        restoreSelection(restored, focusedState.selectionStart, focusedState.selectionEnd);
+      }
+    }
   }
 }
 
