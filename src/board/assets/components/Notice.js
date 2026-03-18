@@ -48,12 +48,12 @@ export function createNotice() {
       }
 
       container.innerHTML = `
-        <section class="${panelClasses("mb-4 flex items-start gap-3 p-4 sm:p-5")}" aria-live="polite">
+        <section class="${panelClasses("mb-4 flex items-start gap-3 p-4 sm:p-5")}" role="${notice.type === "error" ? "alert" : "status"}" aria-live="${notice.type === "error" ? "assertive" : "polite"}" aria-atomic="true">
           <div class="flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl ${notice.type === "error" ? "bg-red-500/10 text-red-300 ring-1 ring-red-500/20" : "bg-emerald-500/10 text-emerald-300 ring-1 ring-emerald-500/20"}">
             ${renderIcon(notice.type === "error" ? "warning" : "check_circle", "text-[20px]")}
           </div>
           <div class="min-w-0">
-            <p class="${sectionLabelClasses()}">${notice.type === "error" ? "Action blocked" : "Saved"}</p>
+            <p class="${sectionLabelClasses()}" id="board-notice-title">${notice.type === "error" ? "Action blocked" : "Saved"}</p>
             <p class="mt-1 text-sm leading-6 text-[var(--board-text-muted)]">${escapeHtml(notice.message)}</p>
           </div>
         </section>
