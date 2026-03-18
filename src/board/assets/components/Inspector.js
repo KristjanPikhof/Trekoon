@@ -187,7 +187,7 @@ export function renderTaskSurface(props) {
   } = options;
 
   return `
-    <div class="${containerClassName} grid h-full min-h-0 grid-rows-[auto_1fr] overflow-hidden overflow-y-auto">
+    <div class="${containerClassName} grid h-full min-h-0 grid-rows-[auto_1fr] overflow-hidden">
       <header class="board-detail-surface__header board-drawer__header border-b border-[var(--board-border)] pb-5">
         <div class="board-detail-surface__hero flex flex-col gap-4">
           <div class="board-detail-surface__title-row flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
@@ -206,7 +206,7 @@ export function renderTaskSurface(props) {
           </div>
         </div>
       </header>
-      <div class="board-detail-surface__body board-drawer__body min-h-0 overscroll-contain pt-5 pr-1" data-scroll-surface="${escapeHtml(scrollSurface)}">
+      <div class="board-detail-surface__body board-drawer__body min-h-0 overflow-y-auto overscroll-contain pt-5 pr-1" data-scroll-surface="${escapeHtml(scrollSurface)}">
         <div class="board-detail-surface__stack space-y-4">
           <section class="${secondaryPanelClasses("board-detail-card p-4")}">
             <div class="board-detail-summary-grid grid gap-3 md:grid-cols-2 xl:grid-cols-3">
