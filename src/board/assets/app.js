@@ -11,6 +11,7 @@ import { createInspector } from "./components/Inspector.js";
 import { createTaskModal } from "./components/TaskModal.js";
 import { createSubtaskModal } from "./components/SubtaskModal.js";
 import { createNotice } from "./components/Notice.js";
+import { createConfirmDialog } from "./components/ConfirmDialog.js";
 import { createEpicsOverview } from "./components/EpicsOverview.js";
 import { isCompactViewport, shouldUseTaskModal, panelClasses, renderIcon, sectionLabelClasses, escapeHtml } from "./components/helpers.js";
 
