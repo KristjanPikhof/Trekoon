@@ -44,7 +44,7 @@ type FormSeed = {
 };
 
 function createForm(identity: string, controls: FormSeed["controls"]): MockForm {
-  const form = {
+  const form: MockForm = {
     id: "",
     identity,
     controls: [],
