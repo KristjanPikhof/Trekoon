@@ -315,6 +315,14 @@ export function createStore(initialSnapshot, options = {}) {
       merged.searchQuery = normalizeSearch(merged.search).trim().toLowerCase();
     }
     const reconciled = reconcileBoardState(merged);
+    const changed =
+      state.screen !== reconciled.screen
+      || state.selectedEpicId !== reconciled.selectedEpicId
+      || state.search !== reconciled.search
+      || state.view !== reconciled.view
+      || state.selectedTaskId !== reconciled.selectedTaskId
+      || state.selectedSubtaskId !== reconciled.selectedSubtaskId;
+
     state.screen = reconciled.screen;
     state.selectedEpicId = reconciled.selectedEpicId;
     state.search = reconciled.search;
@@ -322,6 +330,9 @@ export function createStore(initialSnapshot, options = {}) {
     state.view = reconciled.view;
     state.selectedTaskId = reconciled.selectedTaskId;
     state.selectedSubtaskId = reconciled.selectedSubtaskId;
+    if (changed) {
+      notify();
+    }
     return deriveBoardState(state);
   }
 
