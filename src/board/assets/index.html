@@ -3,72 +3,34 @@
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="color-scheme" content="dark light" />
+    <meta name="theme-color" content="#0b0d12" media="(prefers-color-scheme: dark)" />
+    <meta name="theme-color" content="#f4f6fb" media="(prefers-color-scheme: light)" />
     <meta
       name="description"
       content="Trekoon board — local-first workspace for browsing epics, tasks, and flow states."
     />
     <title>Trekoon Board</title>
-    <link rel="preconnect" href="https://fonts.googleapis.com" />
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-    <link
-      rel="stylesheet"
-      href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Material+Symbols+Rounded:FILL@0&display=swap"
-    />
-    <script>
-      tailwind = window.tailwind || {};
-      tailwind.config = {
-        theme: {
-          extend: {
-            fontFamily: {
-              sans: ["Inter", "ui-sans-serif", "system-ui", "sans-serif"],
-            },
-            boxShadow: {
-              panel: "var(--board-shadow)",
-              lift: "0 18px 52px rgba(0, 0, 0, 0.34)",
-              focus: "0 0 0 1px var(--board-border-strong), 0 16px 40px rgba(88, 28, 135, 0.2)",
-            },
-          },
-        },
-      };
-    </script>
-    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="./styles/fonts.css" />
     <link rel="stylesheet" href="./styles/board.css" />
-    <style>
-      .material-symbols-rounded {
-        font-family: "Material Symbols Rounded";
-        font-weight: 400;
-        font-style: normal;
-        font-size: 20px;
-        line-height: 1;
-        letter-spacing: normal;
-        text-transform: none;
-        display: inline-block;
-        white-space: nowrap;
-        direction: ltr;
-        font-variation-settings:
-          "FILL" 0,
-          "wght" 400,
-          "GRAD" 0,
-          "opsz" 20;
-      }
-    </style>
   </head>
   <body>
-    <main id="app" aria-live="polite" class="min-h-screen">
-      <section class="mx-auto flex min-h-screen max-w-4xl items-center justify-center px-4 py-10 sm:px-6">
-        <div class="w-full rounded-[32px] border border-[var(--board-border)] bg-[var(--board-surface)]/95 p-8 text-center shadow-panel backdrop-blur-xl">
-          <div class="mx-auto mb-5 flex h-14 w-14 items-center justify-center rounded-2xl bg-[var(--board-accent-soft)] text-[var(--board-accent)] ring-1 ring-[var(--board-border-strong)]">
-            <span class="material-symbols-rounded" aria-hidden="true">rocket_launch</span>
+    <a href="#board-runtime-root" class="sr-only focus:not-sr-only focus:fixed focus:top-2 focus:left-2 focus:z-50 focus:rounded-lg focus:bg-[var(--board-accent)] focus:px-4 focus:py-2 focus:text-white">
+      Skip to content
+    </a>
+
+    <main id="app" aria-live="polite">
+      <div class="board-shell-v2">
+        <section class="board-shell-v2__frame">
+          <div class="board-shell-v2__runtime-shell">
+            <div
+              id="board-runtime-root"
+              class="board-shell-v2__runtime"
+              data-board-runtime-root
+            ></div>
           </div>
-          <div class="mb-3 inline-flex items-center gap-2 rounded-full border border-[var(--board-border)] bg-white/5 px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.18em] text-[var(--board-text-soft)]">
-            Trekoon board
-          </div>
-          <h1 class="text-3xl font-semibold tracking-tight text-[var(--board-text)]">Preparing your local workspace…</h1>
-          <p class="mx-auto mt-3 max-w-2xl text-sm leading-6 text-[var(--board-text-muted)] sm:text-base">
-            Loading epics, tasks, and saved board context from your repo-shared storage.
-          </p>
-        </div>
-      </section>
+        </section>
+      </div>
     </main>
 
     <script type="module" src="./main.js"></script>
