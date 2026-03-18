@@ -22,8 +22,23 @@ function render(props) {
   } = props;
 
   const navItems = [
-    { id: "epics", label: "Epics", icon: "layers", action: 'data-nav="epics"' },
-    { id: "board", label: "Board", icon: "view_kanban", action: 'data-nav-board="true"', disabled: !selectedEpic },
+    {
+      id: "epics",
+      label: "Epics",
+      icon: "layers",
+      action: 'data-nav="epics"',
+      tooltip: "Open the epic list and overview.",
+    },
+    {
+      id: "board",
+      label: "Board",
+      icon: "view_kanban",
+      action: 'data-nav-board="true"',
+      disabled: !selectedEpic,
+      tooltip: selectedEpic
+        ? "Open the selected epic board."
+        : "Select an epic to open its board.",
+    },
   ];
 
   const navMarkup = navItems.map((item) => {
@@ -34,7 +49,7 @@ function render(props) {
     ].filter(Boolean).join(" ");
 
     return `
-      <button type="button" class="${classes}" ${item.action} ${item.disabled ? "disabled" : ""} ${isActive ? 'aria-current="page"' : ""} aria-label="${escapeHtml(item.label)} view">
+      <button type="button" class="${classes}" ${item.action} ${item.disabled ? "disabled" : ""} ${isActive ? 'aria-current="page"' : ""} aria-label="${escapeHtml(item.label)} view" title="${escapeHtml(item.tooltip)}">
         ${renderIcon(item.icon, "text-[16px]")} <span>${escapeHtml(item.label)}</span>
       </button>
     `;
