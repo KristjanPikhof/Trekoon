@@ -11,7 +11,7 @@ import { createSubtaskModal } from "./components/SubtaskModal.js";
 import { createNotice } from "./components/Notice.js";
 import { createConfirmDialog } from "./components/ConfirmDialog.js";
 import { createEpicsOverview } from "./components/EpicsOverview.js";
-import { shouldUseTaskModal, panelClasses, renderIcon, sectionLabelClasses, escapeHtml } from "./components/helpers.js";
+import { panelClasses, renderIcon, sectionLabelClasses, escapeHtml } from "./components/helpers.js";
 
 const SESSION_TOKEN_STORAGE_KEY = "trekoon-board-session-token";
 const SEARCH_FOCUS_KEYS = new Set(["/", "s"]);
