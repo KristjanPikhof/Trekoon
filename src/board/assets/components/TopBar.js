@@ -2,7 +2,6 @@ import { preserveInput } from "./Component.js";
 import {
   cx,
   escapeHtml,
-  neutralChipClasses,
   renderIcon,
 } from "./helpers.js";
 
