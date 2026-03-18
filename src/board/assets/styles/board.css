@@ -1486,3 +1486,38 @@ textarea,
     scroll-behavior: auto !important;
   }
 }
+
+/* ───── Skip link ───── */
+
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border-width: 0;
+}
+
+.focus\:not-sr-only:focus {
+  position: fixed;
+  width: auto;
+  height: auto;
+  padding: 0;
+  margin: 0;
+  overflow: visible;
+  clip: auto;
+  white-space: normal;
+}
+
+.focus\:fixed:focus { position: fixed; }
+.focus\:top-2:focus { top: 0.5rem; }
+.focus\:left-2:focus { left: 0.5rem; }
+.focus\:z-50:focus { z-index: 50; }
+.focus\:rounded-lg:focus { border-radius: 0.5rem; }
+.focus\:bg-\[var\(--board-accent\)\]:focus { background-color: var(--board-accent); }
+.focus\:px-4:focus { padding-inline: 1rem; }
+.focus\:py-2:focus { padding-block: 0.5rem; }
+.focus\:text-white:focus { color: #fff; }
