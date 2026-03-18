@@ -199,12 +199,11 @@ export function createBoardActions(options) {
       const nextSearch = typeof value === "string" ? value : "";
       cancelPendingSearch();
       pendingSearchValue = nextSearch;
-      const shouldRestoreFocus = shouldRefocusSearchInput();
       searchTimer = setTimeout(() => {
         if (pendingSearchValue !== nextSearch) {
           return;
         }
-        commitSearch(nextSearch, { focusInput: shouldRestoreFocus });
+        commitSearch(nextSearch, { focusInput: shouldRefocusSearchInput() });
       }, 180);
     },
     clearSearch() {
