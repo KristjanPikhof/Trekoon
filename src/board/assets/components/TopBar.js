@@ -1,4 +1,4 @@
-import { preserveInput } from "./Component.js";
+import { preserveDetailsState, preserveInput } from "./Component.js";
 import {
   escapeHtml,
   renderIcon,
@@ -141,14 +141,18 @@ export function createTopBar() {
       }
 
       if (props.search !== lastProps.search) {
-        container.innerHTML = render(props);
+        preserveDetailsState(container, () => {
+          container.innerHTML = render(props);
+        });
         lastProps = props;
         return;
       }
 
       // Preserve search input value and cursor across re-renders
-      preserveInput(container, "#board-search-input", () => {
-        container.innerHTML = render(props);
+      preserveDetailsState(container, () => {
+        preserveInput(container, "#board-search-input", () => {
+          container.innerHTML = render(props);
+        });
       });
 
       lastProps = props;
