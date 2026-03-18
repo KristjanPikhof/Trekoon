@@ -865,4 +865,141 @@ describe("mutation conformance", (): void => {
       storageCheck.close();
     }
   });
+
+  test("board epic cascade route appends canonical update events for every changed record", async (): Promise<void> => {
+    const cwd = createWorkspace();
+
+    const createdEpic = await runEpic({
+      cwd,
+      mode: "toon",
+      args: ["create", "--title", "Roadmap", "--description", "Scope"],
+    });
+    expect(createdEpic.ok).toBeTrue();
+    const epicId = (createdEpic.data as { epic: { id: string } }).epic.id;
+
+    const createdTask = await runTask({
+      cwd,
+      mode: "toon",
+      args: ["create", "--epic", epicId, "--title", "Implement", "--description", "Ship board"],
+    });
+    expect(createdTask.ok).toBeTrue();
+    const taskId = (createdTask.data as { task: { id: string } }).task.id;
+
+    const createdSubtask = await runSubtask({
+      cwd,
+      mode: "toon",
+      args: ["create", "--task", taskId, "--title", "Write tests", "--description", "Cover board API"],
+    });
+    expect(createdSubtask.ok).toBeTrue();
+    const subtaskId = (createdSubtask.data as { subtask: { id: string } }).subtask.id;
+
+    const storage = openTrekoonDatabase(cwd);
+    try {
+      const handler = createBoardApiHandler({ db: storage.db, cwd, token: "board-token" });
+      const response = await handler(new Request(`http://board.test/api/epics/${epicId}/cascade?token=board-token`, {
+        method: "PATCH",
+        headers: {
+          "content-type": "application/json",
+        },
+        body: JSON.stringify({ status: "done" }),
+      }));
+
+      expect(response.status).toBe(200);
+    } finally {
+      storage.close();
+    }
+
+    expect(eventRowsForEntity(cwd, "epic", epicId).at(-1)).toEqual({
+      operation: ENTITY_OPERATIONS.epic.updated,
+      payload: {
+        fields: {
+          title: "Roadmap",
+          description: "Scope",
+          status: "done",
+        },
+      },
+    });
+    expect(eventRowsForEntity(cwd, "task", taskId).at(-1)).toEqual({
+      operation: ENTITY_OPERATIONS.task.updated,
+      payload: {
+        fields: {
+          epic_id: epicId,
+          title: "Implement",
+          description: "Ship board",
+          status: "done",
+        },
+      },
+    });
+    expect(eventRowsForEntity(cwd, "subtask", subtaskId).at(-1)).toEqual({
+      operation: ENTITY_OPERATIONS.subtask.updated,
+      payload: {
+        fields: {
+          task_id: taskId,
+          title: "Write tests",
+          description: "Cover board API",
+          status: "done",
+        },
+      },
+    });
+  });
+
+  test("board epic cascade route rolls back without partial update events", async (): Promise<void> => {
+    const cwd = createWorkspace();
+
+    const createdEpic = await runEpic({
+      cwd,
+      mode: "toon",
+      args: ["create", "--title", "Roadmap", "--description", "Scope"],
+    });
+    expect(createdEpic.ok).toBeTrue();
+    const epicId = (createdEpic.data as { epic: { id: string } }).epic.id;
+
+    const blockerTask = await runTask({
+      cwd,
+      mode: "toon",
+      args: ["create", "--epic", epicId, "--title", "Blocker", "--description", "Finish first"],
+    });
+    expect(blockerTask.ok).toBeTrue();
+    const blockerTaskId = (blockerTask.data as { task: { id: string } }).task.id;
+
+    const blockedTask = await runTask({
+      cwd,
+      mode: "toon",
+      args: ["create", "--epic", epicId, "--title", "Implement", "--description", "Ship board"],
+    });
+    expect(blockedTask.ok).toBeTrue();
+    const blockedTaskId = (blockedTask.data as { task: { id: string } }).task.id;
+
+    const blockedSubtask = await runSubtask({
+      cwd,
+      mode: "toon",
+      args: ["create", "--task", blockedTaskId, "--title", "Write tests", "--description", "Cover board API"],
+    });
+    expect(blockedSubtask.ok).toBeTrue();
+    const blockedSubtaskId = (blockedSubtask.data as { subtask: { id: string } }).subtask.id;
+
+    const dependency = await runDep({ cwd, mode: "toon", args: ["add", blockedTaskId, blockerTaskId] });
+    expect(dependency.ok).toBeTrue();
+
+    const storage = openTrekoonDatabase(cwd);
+    try {
+      const handler = createBoardApiHandler({ db: storage.db, cwd, token: "board-token" });
+      const response = await handler(new Request(`http://board.test/api/epics/${epicId}/cascade?token=board-token`, {
+        method: "PATCH",
+        headers: {
+          "content-type": "application/json",
+        },
+        body: JSON.stringify({ status: "done" }),
+      }));
+
+      expect(response.status).toBe(409);
+    } finally {
+      storage.close();
+    }
+
+    expect(eventOperationsForEntity(cwd, "epic", epicId)).toEqual([ENTITY_OPERATIONS.epic.created]);
+    expect(eventOperationsForEntity(cwd, "task", blockerTaskId)).toEqual([ENTITY_OPERATIONS.task.created]);
+    expect(eventOperationsForEntity(cwd, "task", blockedTaskId)).toEqual([ENTITY_OPERATIONS.task.created]);
+    expect(eventOperationsForEntity(cwd, "subtask", blockedSubtaskId)).toEqual([ENTITY_OPERATIONS.subtask.created]);
+  });
 });
