@@ -18,6 +18,7 @@ import {
   STATUS_LABELS,
   STATUS_ORDER,
 } from "./helpers.js";
+import { orderEpicsNewestFirst } from "../state/store.js";
 import { VIEW_MODES } from "../state/utils.js";
 
 // ---------------------------------------------------------------------------
@@ -62,6 +63,7 @@ function renderWorkspaceHeader(props) {
   const bulkStatusTooltip = "Set the same status for every task in this epic.";
   const notesTooltip = "Show or hide this epic's description.";
   const notesPanelId = `board-notes-panel-${selectedEpic.id}`;
+  const orderedEpics = orderEpicsNewestFirst(snapshotEpics);
 
   return `
     <header class="board-workspace-header">
@@ -80,7 +82,7 @@ function renderWorkspaceHeader(props) {
           <label class="board-wh__control-label board-wh__inline-label" for="board-epic-select">
             <span class="board-wh__control-text">Epic</span>
             <select class="${inlineSelect}" id="board-epic-select" title="${escapeHtml(epicSelectTooltip)}" aria-label="Choose epic" ${store.isMutating ? "disabled" : ""}>
-              ${snapshotEpics.map((epic) => `
+              ${orderedEpics.map((epic) => `
                 <option value="${escapeHtml(epic.id)}" ${store.selectedEpicId === epic.id ? "selected" : ""}>
                   ${escapeHtml(epic.title)}
                 </option>
