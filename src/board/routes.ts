@@ -53,7 +53,7 @@ function isSqliteBusyMessage(message: string): boolean {
   return normalized.includes("database is locked") || normalized.includes("database schema is locked");
 }
 
-function toBoardRouteError(error: unknown): BoardRouteError {
+function toBoardRouteError(error: unknown, requestLabel: string): BoardRouteError {
   if (error instanceof DomainError) {
     const status =
       error.code === "not_found"
@@ -76,7 +76,7 @@ function toBoardRouteError(error: unknown): BoardRouteError {
     return {
       status: 503,
       code: "database_busy",
-      message: "Trekoon database is busy",
+      message: `${requestLabel} failed because the Trekoon database is busy`,
       details: {
         databaseMessage: message,
       },
@@ -86,15 +86,15 @@ function toBoardRouteError(error: unknown): BoardRouteError {
   return {
     status: 500,
     code: "internal_error",
-    message: "Unexpected board API failure",
+    message: `${requestLabel} failed unexpectedly`,
     details: {
       cause: message,
     },
   };
 }
 
-function describeBoardError(mutations: MutationService, error: unknown): BoardRouteError {
-  const routeError = toBoardRouteError(error);
+function describeBoardError(mutations: MutationService, error: unknown, requestLabel: string): BoardRouteError {
+  const routeError = toBoardRouteError(error, requestLabel);
   const readableMessage = mutations.describeError(error);
   if (readableMessage === undefined) {
     return routeError;
@@ -178,6 +178,7 @@ function readRequiredString(body: Record<string, unknown>, field: string): strin
 export function createBoardApiHandler(context: BoardRouteContext): (request: Request) => Promise<Response> {
   return async (request: Request): Promise<Response> => {
     const url = new URL(request.url);
+    const requestLabel = `${request.method} ${url.pathname}`;
     const requestToken = extractToken(request, url);
     if (requestToken !== context.token) {
       return jsonResponse(401, {
@@ -301,7 +302,7 @@ export function createBoardApiHandler(context: BoardRouteContext): (request: Req
         },
       });
     } catch (error: unknown) {
-      const routeError = describeBoardError(mutations, error);
+      const routeError = describeBoardError(mutations, error, requestLabel);
       return jsonResponse(routeError.status, {
         ok: false,
         error: {
