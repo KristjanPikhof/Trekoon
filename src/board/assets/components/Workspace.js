@@ -114,15 +114,15 @@ function renderWorkspaceHeader(props) {
                 <span>Description</span>
               </button>
             ` : ""}
-            <div class="board-view-switch" role="tablist" aria-label="Board views">
+            <div class="board-view-switch" role="group" aria-label="Board views">
               ${store.viewModes.map((view) => {
                 const icon = renderViewModeIcon(view.id);
                 return `<button class="${cx(
-                  "board-view-switch__tab",
-                  view.active
-                    ? "board-view-switch__tab--active"
-                    : "",
-                  )}" type="button" role="tab" tabindex="${view.active ? "0" : "-1"}" aria-label="${escapeHtml(view.label)} view" aria-selected="${view.active}" data-view="${view.id}" title="${escapeHtml(`Switch to the ${view.label.toLowerCase()} view.`)}" ${store.isMutating ? "disabled" : ""}>${icon}<span class="board-view-switch__label">${escapeHtml(view.label)}</span></button>`;
+                   "board-view-switch__tab",
+                   view.active
+                     ? "board-view-switch__tab--active"
+                     : "",
+                  )}" type="button" aria-label="${escapeHtml(view.label)} view" aria-pressed="${view.active}" data-view="${view.id}" title="${escapeHtml(`Switch to the ${view.label.toLowerCase()} view.`)}" ${store.isMutating ? "disabled" : ""}>${icon}<span class="board-view-switch__label">${escapeHtml(view.label)}</span></button>`;
               }).join("")}
             </div>
           </div>
