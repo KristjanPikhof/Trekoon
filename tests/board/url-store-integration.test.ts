@@ -264,6 +264,42 @@ describe("board URL/store integration", () => {
     cleanup();
   });
 
+  test("showBoard defaults to the newest-created epic when none is selected", () => {
+    globalThis.document = createMockDocument();
+    globalThis.HTMLInputElement = class {} as typeof HTMLInputElement;
+    globalThis.localStorage = createMockStorage() as Storage;
+    const mockWindow = createMockWindow();
+    globalThis.window = mockWindow.window as unknown as Window & typeof globalThis;
+
+    const model = createStore({
+      epics: [
+        { id: "epic-older", title: "Older epic", status: "todo", createdAt: 100 },
+        { id: "epic-newest", title: "Newest epic", status: "todo", createdAt: 300 },
+        { id: "epic-middle", title: "Middle epic", status: "todo", createdAt: 200 },
+      ],
+      tasks: [
+        { id: "task-1", epicId: "epic-newest", title: "Newest task", status: "todo" },
+      ],
+      subtasks: [],
+      dependencies: [],
+    });
+    const actions = createActions(model);
+    const cleanup = syncUrlHash(model);
+
+    actions.showBoard();
+
+    expect(model.getBoardState()).toMatchObject({
+      screen: "tasks",
+      selectedEpicId: "epic-newest",
+    });
+    expect(mockWindow.calls.at(-1)).toEqual({
+      mode: "push",
+      url: "/board#epic=epic-newest",
+    });
+
+    cleanup();
+  });
+
   test("debounced search updates sync into the URL", async () => {
     const searchInput = createMockSearchInput();
     const mockDocument = createMockDocument(searchInput);
