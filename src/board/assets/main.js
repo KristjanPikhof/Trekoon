@@ -8,6 +8,4 @@ if (!(runtimeRoot instanceof HTMLElement)) {
 
 const { bootLegacyBoard } = await import("./app.js");
 
-await bootLegacyBoard({
-  mountElement: runtimeRoot,
-});
+await bootLegacyBoard({ mountElement: runtimeRoot });
