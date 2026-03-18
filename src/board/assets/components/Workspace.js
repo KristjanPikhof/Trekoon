@@ -149,7 +149,7 @@ function renderListRow(task, selected) {
     <button
       type="button"
       class="board-list-row ${cx(
-        "w-full text-left grid gap-3 rounded-[22px] border px-4 py-3 transition duration-200 lg:grid-cols-[minmax(0,2fr)_150px_minmax(0,210px)_110px] lg:items-start",
+        "w-full text-left grid gap-3 rounded-[22px] border px-4 py-3 transition duration-200 lg:grid-cols-[minmax(0,2fr)_150px_minmax(0,210px)_150px] lg:items-start",
         "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--board-border-strong)] focus-visible:ring-offset-2 focus-visible:ring-offset-[var(--board-surface)]",
         selected
           ? "border-[var(--board-border-strong)] bg-[var(--board-accent-soft)] shadow-focus"
@@ -182,7 +182,7 @@ function renderListView(props) {
 
   return `
     <div class="board-list board-list--dense grid min-h-0 gap-4 grid-rows-[auto_1fr]">
-      <div class="board-list__header hidden gap-3 px-1 text-[11px] font-semibold uppercase tracking-[0.16em] text-[var(--board-text-soft)] lg:grid lg:grid-cols-[minmax(0,2fr)_150px_minmax(0,210px)_110px]">
+      <div class="board-list__header hidden gap-3 px-1 text-[11px] font-semibold uppercase tracking-[0.16em] text-[var(--board-text-soft)] lg:grid lg:grid-cols-[minmax(0,2fr)_150px_minmax(0,210px)_150px]">
         <span>Task</span>
         <span>Status</span>
         <span>Workflow</span>
