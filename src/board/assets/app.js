@@ -162,7 +162,11 @@ export async function bootLegacyBoard(options = {}) {
     const taskModal = createTaskModal().mount(slots.taskModal);
     const subtaskModal = createSubtaskModal().mount(slots.subtaskModal);
     const notice = createNotice().mount(slots.notice);
+    const confirmDialog = createConfirmDialog().mount(slots.confirmDialog);
     const epicsOverview = createEpicsOverview().mount(slots.epicsOverview);
+
+    // Pending confirm state for destructive actions
+    let pendingConfirm = null;
 
     // Render cycle
     function rerender() {
