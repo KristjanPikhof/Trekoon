@@ -1011,12 +1011,32 @@ body {
     border-radius: 14px;
   }
 
+  .board-shell-topbar {
+    display: grid;
+    grid-template-columns: 1fr auto;
+    gap: 8px;
+    align-items: center;
+  }
+
   .board-shell-topbar__identity {
-    flex: 1 1 100%;
+    min-width: 0;
+  }
+
+  .board-shell-topbar__nav {
+    grid-column: 1 / -1;
+    order: 3;
+  }
+
+  .board-shell-topbar__tools {
+    grid-column: 1 / -1;
+    order: 4;
+    display: grid;
+    grid-template-columns: 1fr auto;
+    gap: 8px;
+    align-items: center;
   }
 
   .board-shell-topbar__search {
-    flex-basis: 100%;
     max-width: none;
   }
 
