@@ -391,6 +391,19 @@ export async function bootLegacyBoard(options = {}) {
         slots.tasksRoot.className = "board-root board-root--tasks min-h-0 w-full";
       }
 
+      if (!showTasks && pendingConfirm) {
+        pendingConfirm = null;
+        confirmDialog.update(null);
+      }
+
+      if (!showTasks || !selectedTask) {
+        taskModal.update(null);
+      }
+
+      if (!showTasks || !selectedTask || !selectedSubtask) {
+        subtaskModal.update(null);
+      }
+
       slots.shell.className = `board-layout ${screen === "tasks" ? "board-layout--workspace" : "board-layout--overview"} mx-auto flex w-full max-w-[1600px] flex-col gap-4 px-4 py-4 sm:px-6 sm:py-6 xl:px-8 ${screen === "tasks" ? "min-h-0" : "min-h-screen"}`;
 
       // Update components
@@ -433,7 +446,7 @@ export async function bootLegacyBoard(options = {}) {
         });
       }
 
-      subtaskModal.update(selectedSubtask ? {
+      subtaskModal.update(showTasks && selectedTask && selectedSubtask ? {
         subtask: selectedSubtask,
         isMutating: store.isMutating,
       } : null);
