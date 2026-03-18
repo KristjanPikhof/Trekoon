@@ -37,6 +37,7 @@ function createProps(overrides: Partial<{
 
 function createMockContainer() {
   let input: SearchInput | null = null;
+  let disclosure: { open: boolean; hasAttribute: (name: string) => boolean } | null = null;
   let html = "";
 
   const container = {
@@ -44,7 +45,16 @@ function createMockContainer() {
       if (selector === "#board-search-input") {
         return input;
       }
+      if (selector === "details") {
+        return disclosure;
+      }
       return null;
+    },
+    querySelectorAll(selector: string) {
+      if (selector === "details") {
+        return disclosure ? [disclosure] : [];
+      }
+      return [];
     },
   } as unknown as HTMLElement & { innerHTML: string };
 
@@ -56,6 +66,7 @@ function createMockContainer() {
       html = value;
       const match = value.match(/id="board-search-input"[^>]*value="([^"]*)"/);
       const nextValue = match?.[1] ?? "";
+      const detailsMatch = value.match(/<details[^>]*class="board-shell-topbar__meta"([^>]*)>/);
       input = {
         value: nextValue,
         selectionStart: nextValue.length,
@@ -64,6 +75,12 @@ function createMockContainer() {
         setSelectionRange(start: number, end: number) {
           this.selectionStart = start;
           this.selectionEnd = end;
+        },
+      };
+      disclosure = {
+        open: (detailsMatch?.[1] ?? "").includes("open"),
+        hasAttribute(name: string) {
+          return name === "open" ? this.open : false;
         },
       };
     },
@@ -76,6 +93,12 @@ function createMockContainer() {
         throw new Error("Search input not rendered");
       }
       return input;
+    },
+    getDisclosure() {
+      if (!disclosure) {
+        throw new Error("Disclosure not rendered");
+      }
+      return disclosure;
     },
   };
 }
@@ -121,21 +144,17 @@ describe("top bar search input", () => {
   });
 
   test("keeps the info disclosure open across unrelated rerenders", () => {
-    const container = document.createElement("div");
+    const { container, getDisclosure } = createMockContainer();
     const topBar = createTopBar().mount(container);
 
     topBar.update(createProps());
 
-    const disclosure = container.querySelector("details");
-    if (!(disclosure instanceof HTMLDetailsElement)) {
-      throw new Error("Expected topbar disclosure");
-    }
-
+    const disclosure = getDisclosure();
     disclosure.open = true;
     topBar.update(createProps({ theme: "light" }));
 
-    const rerenderedDisclosure = container.querySelector("details");
-    expect(rerenderedDisclosure?.hasAttribute("open")).toBe(true);
-    expect((rerenderedDisclosure as HTMLDetailsElement | null)?.open).toBe(true);
+    const rerenderedDisclosure = getDisclosure();
+    expect(rerenderedDisclosure.hasAttribute("open")).toBe(true);
+    expect(rerenderedDisclosure.open).toBe(true);
   });
 });
