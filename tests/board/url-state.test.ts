@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, test } from "bun:test";
 
+// @ts-expect-error Untyped browser asset module is exercised directly in tests.
 import { hashToState, stateToHash, syncUrlHash } from "../../src/board/assets/state/url.js";
 
 type Listener = () => void;
@@ -91,7 +92,7 @@ const originalWindow = globalThis.window;
 
 afterEach(() => {
   if (originalWindow === undefined) {
-    delete globalThis.window;
+    Reflect.deleteProperty(globalThis, "window");
     return;
   }
 
