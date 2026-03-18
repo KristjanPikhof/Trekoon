@@ -24,7 +24,24 @@ function createMockStore(initialState: {
   selectedTaskId: string | null;
   search: string;
   view: string;
-}) {
+}, options: {
+  syncState?: (patch: Partial<{
+    selectedEpicId: string | null;
+    selectedTaskId: string | null;
+    search: string;
+    view: string;
+  }>, store: {
+    selectedEpicId: string | null;
+    selectedTaskId: string | null;
+    search: string;
+    view: string;
+  }) => Partial<{
+    selectedEpicId: string | null;
+    selectedTaskId: string | null;
+    search: string;
+    view: string;
+  }> | void;
+} = {}) {
   const listeners = new Set<Listener>();
   const store = { ...initialState };
 
@@ -38,7 +55,9 @@ function createMockStore(initialState: {
       return () => listeners.delete(listener);
     },
     syncState(patch: Partial<typeof store>) {
-      Object.assign(store, patch);
+      const reconciled = options.syncState?.(patch, store) ?? patch;
+      Object.assign(store, reconciled);
+      return { ...store };
     },
     emit() {
       for (const listener of listeners) {
@@ -85,7 +104,20 @@ function createMockWindow(pathname = "/board") {
     },
   };
 
-  return { calls, listeners, window: mockWindow };
+  return {
+    calls,
+    emit(type: string) {
+      for (const listener of listeners.get(type) ?? []) {
+        if (typeof listener === "function") {
+          listener(new PopStateEvent(type));
+          continue;
+        }
+        listener.handleEvent(new PopStateEvent(type));
+      }
+    },
+    listeners,
+    window: mockWindow,
+  };
 }
 
 const originalWindow = globalThis.window;
@@ -165,5 +197,79 @@ describe("board URL state sync", () => {
 
     cleanup();
     expect(mockWindow.listeners.get("popstate")?.size ?? 0).toBe(0);
+  });
+
+  test("canonicalizes invalid initial deep links with replaceState", () => {
+    const mockStore = createMockStore({
+      selectedEpicId: null,
+      selectedTaskId: null,
+      search: "",
+      view: "kanban",
+    }, {
+      syncState(patch) {
+        return {
+          selectedEpicId: patch.selectedEpicId === "missing-epic" ? null : patch.selectedEpicId ?? null,
+          selectedTaskId: patch.selectedTaskId === "missing-task" ? null : patch.selectedTaskId ?? null,
+          search: patch.search ?? "",
+          view: patch.view ?? "kanban",
+        };
+      },
+    });
+    const mockWindow = createMockWindow();
+    mockWindow.window.location.hash = "#epic=missing-epic&task=missing-task&search=ship&view=list";
+    globalThis.window = mockWindow.window as unknown as Window & typeof globalThis;
+
+    syncUrlHash(mockStore);
+
+    expect(mockStore.store).toEqual({
+      selectedEpicId: null,
+      selectedTaskId: null,
+      search: "ship",
+      view: "list",
+    });
+    expect(mockWindow.calls).toEqual([
+      { mode: "replace", url: "/board#search=ship&view=list" },
+    ]);
+  });
+
+  test("canonicalizes invalid popstate deep links without push spam", () => {
+    const mockStore = createMockStore({
+      selectedEpicId: "epic-1",
+      selectedTaskId: null,
+      search: "",
+      view: "kanban",
+    }, {
+      syncState(patch) {
+        return {
+          selectedEpicId: patch.selectedEpicId === "missing-epic" ? null : patch.selectedEpicId ?? null,
+          selectedTaskId: patch.selectedTaskId === "missing-task" ? null : patch.selectedTaskId ?? null,
+          search: patch.search ?? "",
+          view: patch.view ?? "kanban",
+        };
+      },
+    });
+    const mockWindow = createMockWindow();
+    globalThis.window = mockWindow.window as unknown as Window & typeof globalThis;
+
+    const cleanup = syncUrlHash(mockStore);
+    expect(mockWindow.calls).toEqual([
+      { mode: "replace", url: "/board#epic=epic-1" },
+    ]);
+
+    mockWindow.window.location.hash = "#epic=missing-epic&task=missing-task&search=ship";
+    mockWindow.emit("popstate");
+
+    expect(mockStore.store).toEqual({
+      selectedEpicId: null,
+      selectedTaskId: null,
+      search: "ship",
+      view: "kanban",
+    });
+    expect(mockWindow.calls).toEqual([
+      { mode: "replace", url: "/board#epic=epic-1" },
+      { mode: "replace", url: "/board#search=ship" },
+    ]);
+
+    cleanup();
   });
 });
