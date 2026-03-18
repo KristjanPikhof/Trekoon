@@ -236,6 +236,9 @@ export function createDelegation(rootElement, actions) {
   // Keyboard shortcuts (window-level)
   // ---------------------------------------------------------------------------
   function handleKeydown(event) {
+    if (event.defaultPrevented) {
+      return;
+    }
     actions.handleKeydown(event);
   }
 
