@@ -132,6 +132,8 @@ export function createBoardActions(options) {
     applyTheme,
     closeTopmostDisclosure,
     dismissSearch,
+    hasOpenOverlay,
+    closeActiveOverlay,
     focusSearch,
     focusTaskDetail,
     searchFocusKeys,
@@ -321,6 +323,14 @@ export function createBoardActions(options) {
       const isTypingTarget = tagName === "input" || tagName === "textarea" || tagName === "select";
       const visibleTasks = boardState.visibleTasks;
       const currentIndex = visibleTasks.findIndex((task) => task.id === boardState.selectedTaskId);
+
+      if (hasOpenOverlay?.()) {
+        if (event.key === "Escape") {
+          event.preventDefault();
+          closeActiveOverlay?.();
+        }
+        return;
+      }
 
       if (searchFocusKeys.has(event.key.toLowerCase()) && activeElement?.id !== "board-search-input" && !isTypingTarget) {
         event.preventDefault();
