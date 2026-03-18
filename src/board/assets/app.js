@@ -329,6 +329,42 @@ export async function bootLegacyBoard(options = {}) {
       (firstFocusable || activeOverlay).focus({ preventScroll: true });
     }
 
+    function closeTopmostDisclosure() {
+      const openDetails = Array.from(document.querySelectorAll("details[open]"))
+        .filter((element) => !element.closest("[data-overlay-root]"));
+      const topmost = openDetails.at(-1);
+      if (!(topmost instanceof HTMLDetailsElement)) {
+        return false;
+      }
+
+      topmost.open = false;
+      const summary = topmost.querySelector("summary");
+      if (summary instanceof HTMLElement) {
+        summary.focus({ preventScroll: true });
+      }
+      return true;
+    }
+
+    function dismissSearch(boardState, activeElement) {
+      const searchInput = document.querySelector("#board-search-input");
+      if (!(searchInput instanceof HTMLInputElement)) {
+        return false;
+      }
+
+      const searchHasValue = boardState.search.trim().length > 0;
+      const searchIsFocused = activeElement === searchInput;
+      if (!searchHasValue && !searchIsFocused) {
+        return false;
+      }
+
+      if (searchHasValue) {
+        actions.updateSearch("");
+      }
+
+      searchInput.blur();
+      return true;
+    }
+
     document.addEventListener("keydown", trapOverlayFocus, true);
     document.addEventListener("focusin", containOverlayFocus, true);
 
@@ -409,8 +445,8 @@ export async function bootLegacyBoard(options = {}) {
       normalizeSnapshot,
       normalizeStatus,
       applyTheme,
-      closeTopmostDisclosure: () => false,
-      dismissSearch: () => false,
+      closeTopmostDisclosure,
+      dismissSearch,
       focusSearch: () => document.querySelector("#board-search-input")?.focus({ preventScroll: true }),
       focusTaskDetail: () => document.querySelector(".board-drawer, .board-task-modal")?.scrollIntoView({ block: "nearest", behavior: getScrollBehavior() }),
       searchFocusKeys: SEARCH_FOCUS_KEYS,
@@ -448,6 +484,7 @@ export async function bootLegacyBoard(options = {}) {
       scrollToDetail: () => document.querySelector(".board-drawer, .board-task-modal")?.scrollIntoView({ block: "nearest", behavior: getScrollBehavior() }),
       setView: (view) => actions.setView(view),
       toggleTheme: () => actions.toggleTheme(),
+      toggleNotesPanel: () => actions.toggleNotesPanel(),
       confirmDelete: () => {
         if (pendingConfirm) {
           restoreFocusPending = true;
