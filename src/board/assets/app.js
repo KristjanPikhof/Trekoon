@@ -97,6 +97,7 @@ function createBoardShell(appElement) {
     inspector: slot("inspector"),
     taskModal: slot("task-modal"),
     subtaskModal: slot("subtask-modal"),
+    confirmDialog: slot("confirm-dialog"),
     shell: appElement.querySelector("#board-shell"),
   };
 }
