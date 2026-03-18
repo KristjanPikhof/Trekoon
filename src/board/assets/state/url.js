@@ -125,9 +125,11 @@ export function syncUrlHash(store, options = {}) {
   function restoreFromLocation() {
     isApplyingLocation = true;
     const urlState = hashToState(window.location.hash);
-    store.syncState(urlState);
+    const restoredState = store.syncState(urlState);
     store.persist();
-    lastSerializedState = serializeCurrentState();
+    const restoredHash = stateToHash(restoredState);
+    applyLocation(restoredHash, "replace");
+    lastSerializedState = restoredHash;
     lastHistoryState = toHistoryState(store.store);
     isApplyingLocation = false;
     onRestore?.();
