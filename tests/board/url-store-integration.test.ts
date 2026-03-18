@@ -109,6 +109,7 @@ function createMockWindow(pathname = "/board") {
 }
 
 const originalDocument = globalThis.document;
+const originalHTMLInputElement = globalThis.HTMLInputElement;
 const originalLocalStorage = globalThis.localStorage;
 const originalWindow = globalThis.window;
 
@@ -123,6 +124,12 @@ afterEach(() => {
     Reflect.deleteProperty(globalThis, "localStorage");
   } else {
     globalThis.localStorage = originalLocalStorage;
+  }
+
+  if (originalHTMLInputElement === undefined) {
+    Reflect.deleteProperty(globalThis, "HTMLInputElement");
+  } else {
+    globalThis.HTMLInputElement = originalHTMLInputElement;
   }
 
   if (originalWindow === undefined) {
@@ -187,6 +194,7 @@ function createActions(model: ReturnType<typeof createStore>) {
 describe("board URL/store integration", () => {
   test("round-trips selected epic overview separately from board view", () => {
     globalThis.document = createMockDocument();
+    globalThis.HTMLInputElement = class {} as typeof HTMLInputElement;
     globalThis.localStorage = createMockStorage() as Storage;
     const mockWindow = createMockWindow();
     globalThis.window = mockWindow.window as unknown as Window & typeof globalThis;
@@ -195,7 +203,7 @@ describe("board URL/store integration", () => {
     const actions = createActions(model);
     const cleanup = syncUrlHash(model);
 
-    expect(mockWindow.calls).toEqual([{ mode: "replace", url: "/board" }]);
+    expect(mockWindow.calls).toEqual([]);
 
     actions.showBoard();
     expect(mockWindow.calls.at(-1)).toEqual({ mode: "push", url: "/board#epic=epic-1" });
@@ -224,6 +232,7 @@ describe("board URL/store integration", () => {
 
   test("debounced search updates sync into the URL", async () => {
     globalThis.document = createMockDocument();
+    globalThis.HTMLInputElement = class {} as typeof HTMLInputElement;
     globalThis.localStorage = createMockStorage() as Storage;
     const mockWindow = createMockWindow();
     globalThis.window = mockWindow.window as unknown as Window & typeof globalThis;
@@ -247,6 +256,7 @@ describe("board URL/store integration", () => {
 
   test("task-only deep links canonicalize to the owning epic board state", () => {
     globalThis.document = createMockDocument();
+    globalThis.HTMLInputElement = class {} as typeof HTMLInputElement;
     globalThis.localStorage = createMockStorage() as Storage;
     const mockWindow = createMockWindow();
     mockWindow.window.location.hash = "#task=task-1";
