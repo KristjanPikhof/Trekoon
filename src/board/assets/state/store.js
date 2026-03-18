@@ -1,30 +1,10 @@
-import { normalizeSnapshot, normalizeStatus, STATUS_ORDER, VIEW_MODES } from "./utils.js";
+import { normalizeSnapshot, VIEW_MODES } from "./utils.js";
 
 export const THEME_STORAGE_KEY = "trekoon-board-theme";
 export const STATE_STORAGE_KEY = "trekoon-board-state";
 
-const ACTIVE_EPIC_STATUSES = new Set(["in_progress", "todo"]);
-
-const SIDEBAR_EPIC_STATUS_PRIORITY = {
-  in_progress: 0,
-  todo: 1,
-  blocked: 2,
-  done: 3,
-};
-
 function normalizeSearch(value) {
   return typeof value === "string" ? value : "";
-}
-
-function compareEpicsForSidebar(left, right) {
-  const leftStatus = normalizeStatus(left.status);
-  const rightStatus = normalizeStatus(right.status);
-  const statusDelta = (SIDEBAR_EPIC_STATUS_PRIORITY[leftStatus] ?? Number.MAX_SAFE_INTEGER)
-    - (SIDEBAR_EPIC_STATUS_PRIORITY[rightStatus] ?? Number.MAX_SAFE_INTEGER);
-  if (statusDelta !== 0) return statusDelta;
-  const updatedDelta = Number(right.updatedAt ?? 0) - Number(left.updatedAt ?? 0);
-  if (updatedDelta !== 0) return updatedDelta;
-  return left.title.localeCompare(right.title);
 }
 
 // --- Persistence helpers ---
@@ -138,17 +118,6 @@ const selectSelectedSubtask = createSelector(
   },
 );
 
-const selectSidebarEpics = createSelector(
-  (s) => [s.snapshot?.epics, s.searchQuery],
-  (epics, searchQuery) => {
-    if (!epics) return [];
-    const filtered = searchQuery.length === 0
-      ? epics.filter((epic) => ACTIVE_EPIC_STATUSES.has(normalizeStatus(epic.status)))
-      : epics.filter((epic) => epic.searchText.includes(searchQuery));
-    return [...filtered].sort(compareEpicsForSidebar);
-  },
-);
-
 function selectSearchScope(state) {
   const selectedEpic = selectSelectedEpic(state);
   const visibleEpics = selectVisibleEpics(state);
@@ -192,7 +161,6 @@ function selectSearchScope(state) {
  * @property {object} searchScope
  * @property {object[]} visibleEpics
  * @property {object[]} visibleTasks
- * @property {object[]} sidebarEpics
  */
 
 /**
@@ -224,7 +192,6 @@ function deriveBoardState(state) {
     searchScope: selectSearchScope(stateWithScreen),
     visibleEpics: selectVisibleEpics(stateWithScreen),
     visibleTasks,
-    sidebarEpics: selectSidebarEpics(stateWithScreen),
   };
 }
 
