@@ -15,6 +15,19 @@ import { isCompactViewport, shouldUseTaskModal, panelClasses, renderIcon, sectio
 
 const SESSION_TOKEN_STORAGE_KEY = "trekoon-board-session-token";
 const SEARCH_FOCUS_KEYS = new Set(["/", "s"]);
+const FOCUSABLE_SELECTOR = [
+  "a[href]",
+  "area[href]",
+  "button:not([disabled])",
+  "input:not([disabled]):not([type='hidden'])",
+  "select:not([disabled])",
+  "textarea:not([disabled])",
+  "iframe",
+  "object",
+  "embed",
+  "[contenteditable]",
+  "[tabindex]:not([tabindex='-1'])",
+].join(", ");
 
 // ---------------------------------------------------------------------------
 // Session token management
@@ -51,6 +64,27 @@ function scrubTokenFromAddressBar() {
   if (!url.searchParams.has("token") || typeof window.history?.replaceState !== "function") return;
   url.searchParams.delete("token");
   window.history.replaceState(window.history.state, document.title, `${url.pathname}${url.search}${url.hash}` || "/");
+}
+
+function prefersReducedMotion() {
+  return typeof window.matchMedia === "function" && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+}
+
+function getScrollBehavior() {
+  return prefersReducedMotion() ? "auto" : "smooth";
+}
+
+function isFocusableElement(element) {
+  if (!(element instanceof HTMLElement)) return false;
+  if (element.hidden) return false;
+  if (element.getAttribute("aria-hidden") === "true") return false;
+  if (element.closest("[hidden], [inert]")) return false;
+  return element.getClientRects().length > 0;
+}
+
+function getFocusableElements(container) {
+  if (!(container instanceof HTMLElement)) return [];
+  return Array.from(container.querySelectorAll(FOCUSABLE_SELECTOR)).filter(isFocusableElement);
 }
 
 function readJsonScript(scriptId) {
@@ -159,6 +193,144 @@ export async function bootLegacyBoard(options = {}) {
 
     // Pending confirm state for destructive actions
     let pendingConfirm = null;
+    let activeOverlay = null;
+    let overlayOpener = null;
+    let restoreFocusPending = false;
+    let previousBodyOverflow = "";
+    let previousBodyPaddingRight = "";
+    let scrollLockDepth = 0;
+
+    const backgroundSlots = [
+      slots.notice,
+      slots.topbar,
+      slots.epicsOverview,
+      slots.tasksRoot,
+    ];
+
+    function setOverlayOpener(candidate) {
+      overlayOpener = candidate instanceof HTMLElement ? candidate : document.activeElement instanceof HTMLElement ? document.activeElement : null;
+    }
+
+    function restoreOverlayFocus() {
+      if (!restoreFocusPending) return;
+      restoreFocusPending = false;
+      if (overlayOpener instanceof HTMLElement && overlayOpener.isConnected && !overlayOpener.closest("[inert]")) {
+        overlayOpener.focus({ preventScroll: true });
+      }
+      overlayOpener = null;
+    }
+
+    function lockBackgroundScroll() {
+      if (scrollLockDepth > 0) {
+        scrollLockDepth += 1;
+        return;
+      }
+      previousBodyOverflow = document.body.style.overflow;
+      previousBodyPaddingRight = document.body.style.paddingRight;
+      const scrollbarWidth = Math.max(0, window.innerWidth - document.documentElement.clientWidth);
+      document.documentElement.classList.add("board-scroll-locked");
+      document.body.classList.add("board-scroll-locked");
+      document.body.style.overflow = "hidden";
+      if (scrollbarWidth > 0) document.body.style.paddingRight = `${scrollbarWidth}px`;
+      scrollLockDepth = 1;
+    }
+
+    function unlockBackgroundScroll() {
+      if (scrollLockDepth === 0) return;
+      scrollLockDepth -= 1;
+      if (scrollLockDepth > 0) return;
+      document.documentElement.classList.remove("board-scroll-locked");
+      document.body.classList.remove("board-scroll-locked");
+      document.body.style.overflow = previousBodyOverflow;
+      document.body.style.paddingRight = previousBodyPaddingRight;
+    }
+
+    function setBackgroundInert(isInert) {
+      for (const slot of backgroundSlots) {
+        if (!(slot instanceof HTMLElement)) continue;
+        if (isInert) {
+          slot.inert = true;
+          slot.setAttribute("aria-hidden", "true");
+        } else {
+          slot.inert = false;
+          slot.removeAttribute("aria-hidden");
+        }
+      }
+    }
+
+    function getActiveOverlayElement() {
+      return slots.confirmDialog.querySelector("[data-overlay-root]")
+        || slots.subtaskModal.querySelector("[data-overlay-root]")
+        || slots.taskModal.querySelector("[data-overlay-root]")
+        || null;
+    }
+
+    function focusOverlay(overlay) {
+      if (!(overlay instanceof HTMLElement)) return;
+      const autofocusTarget = overlay.querySelector("[data-overlay-initial-focus]");
+      if (autofocusTarget instanceof HTMLElement && isFocusableElement(autofocusTarget)) {
+        autofocusTarget.focus({ preventScroll: true });
+        return;
+      }
+      overlay.focus({ preventScroll: true });
+    }
+
+    function syncOverlayEnvironment() {
+      const nextOverlay = getActiveOverlayElement();
+      if (nextOverlay === activeOverlay) {
+        return;
+      }
+
+      if (nextOverlay) {
+        activeOverlay = nextOverlay;
+        lockBackgroundScroll();
+        setBackgroundInert(true);
+        queueMicrotask(() => focusOverlay(nextOverlay));
+        return;
+      }
+
+      activeOverlay = null;
+      unlockBackgroundScroll();
+      setBackgroundInert(false);
+      queueMicrotask(() => restoreOverlayFocus());
+    }
+
+    function trapOverlayFocus(event) {
+      if (event.key !== "Tab" || !(activeOverlay instanceof HTMLElement)) return;
+      const focusableElements = getFocusableElements(activeOverlay);
+      if (focusableElements.length === 0) {
+        event.preventDefault();
+        activeOverlay.focus({ preventScroll: true });
+        return;
+      }
+
+      const first = focusableElements[0];
+      const last = focusableElements[focusableElements.length - 1];
+      const current = document.activeElement;
+
+      if (event.shiftKey) {
+        if (current === first || !activeOverlay.contains(current)) {
+          event.preventDefault();
+          last.focus({ preventScroll: true });
+        }
+        return;
+      }
+
+      if (current === last || !activeOverlay.contains(current)) {
+        event.preventDefault();
+        first.focus({ preventScroll: true });
+      }
+    }
+
+    function containOverlayFocus(event) {
+      if (!(activeOverlay instanceof HTMLElement)) return;
+      if (activeOverlay.contains(event.target)) return;
+      const [firstFocusable] = getFocusableElements(activeOverlay);
+      (firstFocusable || activeOverlay).focus({ preventScroll: true });
+    }
+
+    document.addEventListener("keydown", trapOverlayFocus, true);
+    document.addEventListener("focusin", containOverlayFocus, true);
 
     // Render cycle
     function rerender() {
@@ -225,8 +397,7 @@ export async function bootLegacyBoard(options = {}) {
         isMutating: store.isMutating,
       } : null);
 
-      // Overlay scroll lock
-      document.documentElement.style.overflow = (useModal || selectedSubtask) ? "hidden" : "";
+      syncOverlayEnvironment();
     }
 
     const api = createApi(model, { sessionToken: runtimeSession.token, rerender });
@@ -242,43 +413,63 @@ export async function bootLegacyBoard(options = {}) {
       closeTopmostDisclosure: () => false,
       dismissSearch: () => false,
       focusSearch: () => document.querySelector("#board-search-input")?.focus({ preventScroll: true }),
-      focusTaskDetail: () => document.querySelector(".board-drawer, .board-task-modal")?.scrollIntoView({ block: "nearest", behavior: "smooth" }),
+      focusTaskDetail: () => document.querySelector(".board-drawer, .board-task-modal")?.scrollIntoView({ block: "nearest", behavior: getScrollBehavior() }),
       searchFocusKeys: SEARCH_FOCUS_KEYS,
     });
 
     // Event delegation
     createDelegation(appElement, {
       isMutating: () => model.store.isMutating,
-      deleteSubtask: (id) => {
+      deleteSubtask: (id, opener) => {
+        setOverlayOpener(opener);
         pendingConfirm = { action: () => actions.deleteSubtask(id), title: "Remove subtask", message: "This subtask will be permanently removed. Are you sure?" };
-        confirmDialog.update({ open: true, title: pendingConfirm.title, message: pendingConfirm.message, confirmLabel: "Remove", cancelLabel: "Cancel" });
+        confirmDialog.update({ open: true, title: pendingConfirm.title, message: pendingConfirm.message, confirmLabel: "Remove", cancelLabel: "Cancel", tone: "destructive" });
+        syncOverlayEnvironment();
       },
-      removeDependency: (src, dep) => {
+      removeDependency: (src, dep, opener) => {
+        setOverlayOpener(opener);
         pendingConfirm = { action: () => actions.removeDependency(src, dep), title: "Remove dependency", message: "This dependency link will be removed. Are you sure?" };
-        confirmDialog.update({ open: true, title: pendingConfirm.title, message: pendingConfirm.message, confirmLabel: "Remove", cancelLabel: "Cancel" });
+        confirmDialog.update({ open: true, title: pendingConfirm.title, message: pendingConfirm.message, confirmLabel: "Remove", cancelLabel: "Cancel", tone: "destructive" });
+        syncOverlayEnvironment();
       },
-      openSubtask: (id) => actions.openSubtask(id),
-      closeSubtask: () => actions.closeSubtask(),
-      closeTask: () => actions.closeTask(),
+      openSubtask: (id, opener) => {
+        setOverlayOpener(opener);
+        actions.openSubtask(id);
+      },
+      closeSubtask: () => {
+        restoreFocusPending = true;
+        actions.closeSubtask();
+      },
+      closeTask: () => {
+        restoreFocusPending = true;
+        actions.closeTask();
+      },
       showEpics: () => actions.showEpics(),
       showBoard: () => actions.showBoard(),
-      scrollToDetail: () => document.querySelector(".board-drawer, .board-task-modal")?.scrollIntoView({ block: "nearest", behavior: "smooth" }),
+      scrollToDetail: () => document.querySelector(".board-drawer, .board-task-modal")?.scrollIntoView({ block: "nearest", behavior: getScrollBehavior() }),
       setView: (view) => actions.setView(view),
       toggleTheme: () => actions.toggleTheme(),
       confirmDelete: () => {
         if (pendingConfirm) {
+          restoreFocusPending = true;
           pendingConfirm.action();
           pendingConfirm = null;
           confirmDialog.update(null);
+          syncOverlayEnvironment();
         }
       },
       cancelDelete: () => {
+        restoreFocusPending = true;
         pendingConfirm = null;
         confirmDialog.update(null);
+        syncOverlayEnvironment();
       },
       openEpic: (id) => actions.openEpic(id),
       selectEpic: (id) => actions.selectEpic(id),
-      selectTask: (id) => actions.selectTask(id),
+      selectTask: (id, opener) => {
+        setOverlayOpener(opener);
+        actions.selectTask(id);
+      },
       updateSearch: (value) => actions.updateSearch(value),
       submitTaskForm: (id, data) => actions.submitTaskForm(id, data),
       submitSubtaskForm: (id, data) => actions.submitSubtaskForm(id, data),
