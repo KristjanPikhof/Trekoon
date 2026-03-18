@@ -21,13 +21,13 @@ function render(props) {
 
   return `
     <div class="board-modal-backdrop fixed inset-0 z-40 grid place-items-center bg-slate-950/70 p-4 backdrop-blur-md" data-close-subtask>
-      <section class="board-modal board-modal--sheet ${panelClasses("grid max-h-[calc(100dvh-2rem)] w-full grid-rows-[auto_1fr] overflow-hidden p-5 sm:p-6")}" role="dialog" aria-modal="true" aria-labelledby="board-subtask-modal-title">
+      <section class="board-modal board-modal--sheet ${panelClasses("grid max-h-[calc(100dvh-2rem)] w-full grid-rows-[auto_1fr] overflow-hidden p-5 sm:p-6")}" role="dialog" aria-modal="true" aria-labelledby="board-subtask-modal-title" data-overlay-root tabindex="-1">
         <header class="board-modal__header board-detail-surface__header border-b border-[var(--board-border)] pb-5">
           <div>
             <span class="${sectionLabelClasses()}">Subtask editor</span>
             <h3 id="board-subtask-modal-title" class="mt-2 text-xl font-semibold tracking-tight text-[var(--board-text)]">${escapeHtml(subtask.title)}</h3>
           </div>
-          <button type="button" class="${buttonClasses()} mt-4 sm:mt-0" data-close-subtask aria-label="Close subtask editor">Close</button>
+          <button type="button" class="${buttonClasses()} mt-4 sm:mt-0" data-close-subtask aria-label="Close subtask editor" data-overlay-initial-focus>Close</button>
         </header>
         <div class="board-modal__body board-detail-surface__body min-h-0 pt-5" data-scroll-surface="subtask-modal">
           <form class="grid gap-4" data-subtask-form="${escapeHtml(subtask.id)}">
