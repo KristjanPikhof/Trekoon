@@ -700,6 +700,25 @@ body {
   font-weight: 600;
 }
 
+.board-shell-topbar__icon-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  border: 1px solid var(--board-border);
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.03);
+  color: var(--board-text-muted);
+  cursor: pointer;
+  transition: border-color 0.15s, color 0.15s;
+}
+
+.board-shell-topbar__icon-btn:hover {
+  border-color: var(--board-border-strong);
+  color: var(--board-text);
+}
+
 .board-shell-topbar__meta {
   position: relative;
 }
