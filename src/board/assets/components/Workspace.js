@@ -87,7 +87,7 @@ function renderWorkspaceHeader(props) {
               return `<button class="${cx(
                 "rounded-[10px] px-3 py-1.5 text-xs font-medium transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--board-border-strong)]",
                 view.active
-                  ? "bg-[var(--board-accent-soft)] text-[var(--board-text)] shadow-[inset_0_0_0_1px_var(--board-border-strong)]"
+                  ? "bg-[var(--board-accent-soft)] text-[var(--board-text)]"
                   : "text-[var(--board-text-muted)] hover:text-[var(--board-text)]",
               )}" type="button" role="tab" aria-selected="${view.active}" data-view="${view.id}">${icon} ${view.label}</button>`;
             }).join("")}
