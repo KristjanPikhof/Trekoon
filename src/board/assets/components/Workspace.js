@@ -235,7 +235,7 @@ function render(props) {
   return `
     <section class="board-workspace ${panelClasses("grid min-h-0 min-w-0 grid-rows-[auto_1fr] overflow-hidden p-5 sm:p-6")}" aria-label="Workspace">
       ${headerMarkup}
-      <div class="board-content mt-6 min-h-0 min-w-0 overflow-hidden">
+      <div class="board-content mt-4 min-h-0 min-w-0 overflow-hidden">
         ${contentMarkup}
       </div>
     </section>
