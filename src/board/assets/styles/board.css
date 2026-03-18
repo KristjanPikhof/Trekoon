@@ -1464,7 +1464,7 @@ body {
 
 @media (min-width: 1024px) {
   .lg\:grid { display: grid; }
-  .lg\:grid-cols-\[minmax\(0\,2fr\)_150px_minmax\(0\,210px\)_110px\] { grid-template-columns: minmax(0, 2fr) 150px minmax(0, 210px) 110px; }
+  .lg\:grid-cols-\[minmax\(0\,2fr\)_150px_minmax\(0\,210px\)_150px\] { grid-template-columns: minmax(0, 2fr) 150px minmax(0, 210px) 150px; }
   .lg\:items-start { align-items: flex-start; }
   .lg\:p-4 { padding: 1rem; }
 }
