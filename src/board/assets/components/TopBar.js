@@ -58,6 +58,10 @@ function render(props) {
   const epicContext = selectedEpic
     ? escapeHtml(selectedEpic.title)
     : escapeHtml(searchScope?.summary ?? "No epic selected");
+  const currentScope = selectedEpic?.title ?? searchScope?.summary ?? "Epic overview";
+  const scopeIntro = selectedEpic
+    ? "This workspace is currently focused on the selected epic below."
+    : "This workspace is currently showing the broader board scope below.";
 
   return `
     <header class="board-shell-topbar ${screen === "tasks" ? "board-shell-topbar--workspace" : ""}">
@@ -90,8 +94,20 @@ function render(props) {
           <details class="board-shell-topbar__meta">
             <summary aria-label="Board information">${renderIcon("info", "text-[16px]")}</summary>
             <div>
-              <p>Repo-backed board state and view preferences stay local to this workspace.</p>
-              <p class="mt-2 text-sm text-[var(--board-text-muted)]">Current scope: ${escapeHtml(searchScope?.summary ?? "Epic overview")}</p>
+              <h3 class="board-shell-topbar__meta-title">How this board stores data</h3>
+              <div class="board-shell-topbar__meta-section">
+                <strong>Repository-backed board data</strong>
+                <p>Epics, tasks, and status changes are backed by files in this repository. When you update board content here, you are updating project state that belongs to this repo.</p>
+              </div>
+              <div class="board-shell-topbar__meta-section">
+                <strong>Workspace-local preferences</strong>
+                <p>UI preferences such as theme, selected view, and similar workspace settings are stored only in this local workspace. They are not written into the repository and are not shared automatically with other clones or teammates.</p>
+              </div>
+              <div class="board-shell-topbar__meta-section">
+                <strong>Current scope</strong>
+                <p>${escapeHtml(scopeIntro)}</p>
+                <p class="board-shell-topbar__meta-scope">${escapeHtml(currentScope)}</p>
+              </div>
             </div>
           </details>
         </div>
