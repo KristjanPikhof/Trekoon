@@ -70,9 +70,12 @@ export function hashToState(hash) {
  * - On hashchange (browser back/forward), reads the hash and updates store state.
  *
  * @param {object} store - Observable store from createStore
+ * @param {object} [options]
+ * @param {() => void} [options.onRestore] - Callback after URL-driven state restore
  * @returns {() => void} Cleanup function that removes event listeners and unsubscribes
  */
-export function syncUrlHash(store) {
+export function syncUrlHash(store, options = {}) {
+  const { onRestore } = options;
   let isApplyingLocation = false;
   let lastSerializedState = "";
 
@@ -108,6 +111,7 @@ export function syncUrlHash(store) {
     store.persist();
     lastSerializedState = serializeCurrentState();
     isApplyingLocation = false;
+    onRestore?.();
   }
 
   // Restore state from current URL hash on init
