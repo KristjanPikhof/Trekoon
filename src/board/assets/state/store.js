@@ -49,6 +49,12 @@ export function readThemePreference() {
 export function applyTheme(theme) {
   document.documentElement.dataset.theme = theme;
   localStorage.setItem(THEME_STORAGE_KEY, theme);
+
+  const themeColor = theme === "light" ? "#f4f6fb" : "#0b0d12";
+  const themeColorMeta = document.querySelector('meta[name="theme-color"][data-board-theme-color="active"]');
+  if (themeColorMeta instanceof HTMLMetaElement) {
+    themeColorMeta.setAttribute("content", themeColor);
+  }
 }
 
 // --- Memoization helper ---
@@ -277,6 +283,7 @@ export function createStore(initialSnapshot, options = {}) {
     focusedEpicIndex: 0,
     notice: null,
     isMutating: false,
+    notesPanelOpen: storedState.notesPanelOpen === true,
   };
 
   /** @type {Set<(state: object) => void>} */
@@ -293,9 +300,10 @@ export function createStore(initialSnapshot, options = {}) {
       screen: state.screen,
       selectedEpicId: state.selectedEpicId,
       search: state.search,
-      view: state.view,
-      selectedTaskId: state.selectedTaskId,
-    });
+        view: state.view,
+        selectedTaskId: state.selectedTaskId,
+        notesPanelOpen: state.notesPanelOpen,
+      });
   }
 
   function syncState(patch = {}) {
