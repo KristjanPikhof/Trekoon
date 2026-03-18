@@ -168,9 +168,27 @@ export function normalizeSnapshot(rawSnapshot) {
     ].join(" ").toLowerCase();
   }
 
+  const taskSearchTextByEpicId = new Map();
+  for (const task of tasks) {
+    if (!task.epicId) {
+      continue;
+    }
+
+    const entries = taskSearchTextByEpicId.get(task.epicId) ?? [];
+    entries.push(task.searchText);
+    taskSearchTextByEpicId.set(task.epicId, entries);
+  }
+
   return {
     generatedAt: rawSnapshot?.generatedAt ?? null,
-    epics,
+    epics: epics.map((epic) => ({
+      ...epic,
+      searchText: [
+        epic.title,
+        epic.description,
+        ...(taskSearchTextByEpicId.get(epic.id) ?? []),
+      ].join(" ").toLowerCase(),
+    })),
     tasks,
     subtasks,
     dependencies,
