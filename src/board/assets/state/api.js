@@ -230,17 +230,6 @@ export function createApi(model, options) {
       });
     },
 
-    cascadeTaskStatus(taskId, status, optimistic) {
-      queue.enqueue({
-        optimistic,
-        successMessage: "Task cascade status updated.",
-        request: () => request(`/api/tasks/${encodeURIComponent(taskId)}/cascade`, {
-          method: "PATCH",
-          body: JSON.stringify({ status }),
-        }),
-      });
-    },
-
     createSubtask(input, optimistic) {
       queue.enqueue({
         optimistic,
