@@ -100,7 +100,7 @@ function renderWorkspaceHeader(props) {
             ${description ? `
               <button type="button" class="board-wh__notes-btn" data-toggle-notes aria-label="Toggle epic notes">
                 ${renderIcon("subject", "text-[16px]")}
-                <span>Notes</span>
+                <span>Description</span>
               </button>
             ` : ""}
             <div class="board-view-switch" role="tablist" aria-label="Board views">
