@@ -57,9 +57,11 @@ body {
   margin: 0;
   min-height: 100dvh;
   font-family: "Inter", ui-sans-serif, system-ui, sans-serif;
-  background:
+  background-color: var(--board-bg-alt);
+  background-image:
     radial-gradient(circle at top left, var(--board-glow), transparent 28%),
     linear-gradient(180deg, var(--board-bg), var(--board-bg-alt));
+  background-attachment: fixed;
   color: var(--board-text);
 }
 
@@ -116,13 +118,7 @@ body {
   min-height: 0;
 }
 
-.board-layout--workspace .board-root--detail {
-  grid-template-columns: minmax(0, 1fr);
-}
-
-.board-layout--workspace .board-workspace,
-.board-layout--workspace .board-sidebar,
-.board-layout--workspace .board-drawer {
+.board-layout--workspace .board-workspace {
   min-height: 0;
 }
 
@@ -837,20 +833,12 @@ body {
     grid-template-columns: minmax(0, 1fr);
   }
 
-  .board-layout--workspace .board-root--detail.board-root--detail-open {
-    grid-template-columns: minmax(0, 1.1fr) minmax(300px, 340px);
-  }
-
   .board-task-modal {
     width: min(88vw, 980px);
   }
 
   .board-modal--sheet {
     width: min(88vw, 820px);
-  }
-
-  .board-layout--workspace .board-root--detail.board-root--detail-open .board-sidebar {
-    display: none;
   }
 
   .board-shell-topbar__context {
@@ -905,14 +893,8 @@ body {
     max-height: none;
   }
 
-  .board-layout--workspace .board-root--tasks,
-  .board-layout--workspace .board-root--detail.board-root--detail-open {
+  .board-layout--workspace .board-root--tasks {
     grid-template-columns: minmax(0, 1fr);
-  }
-
-  .board-layout--workspace .board-sidebar,
-  .board-layout--workspace .board-drawer {
-    display: none;
   }
 
   .board-task-modal,
@@ -1103,18 +1085,6 @@ body {
 }
 
 @media (min-width: 1440px) {
-  .board-layout--workspace .board-root--tasks {
-    grid-template-columns: minmax(220px, 260px) minmax(0, 1fr);
-  }
-
-  .board-layout--workspace .board-root--detail.board-root--detail-open {
-    grid-template-columns: minmax(220px, 260px) minmax(0, 1fr) minmax(320px, 380px);
-  }
-
-  .board-layout--workspace .board-root--detail.board-root--detail-open .board-sidebar {
-    display: grid;
-  }
-
   .board-layout--workspace .board-kanban {
     grid-template-columns: repeat(4, minmax(0, 1fr));
   }

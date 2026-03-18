@@ -176,8 +176,7 @@ export async function bootLegacyBoard(options = {}) {
       slots.tasksRoot.style.display = showTasks ? "" : "none";
 
       if (showTasks) {
-        slots.tasksRoot.className = "board-root board-root--tasks min-h-0 w-full grid gap-4 xl:gap-5";
-        slots.inspector.style.display = "none";
+        slots.tasksRoot.className = "board-root board-root--tasks min-h-0 w-full";
       }
 
       slots.shell.className = `board-layout ${screen === "tasks" ? "board-layout--workspace" : "board-layout--overview"} mx-auto flex w-full max-w-[1600px] flex-col gap-4 px-4 py-4 sm:px-6 sm:py-6 xl:px-8 ${screen === "tasks" ? "min-h-0" : "min-h-screen"}`;
@@ -198,7 +197,6 @@ export async function bootLegacyBoard(options = {}) {
       });
 
       if (showTasks) {
-        sidebar.update({ sidebarEpics: boardState.sidebarEpics, selectedEpicId: boardState.selectedEpicId });
         workspace.update({
           selectedEpic: boardState.selectedEpic,
           selectedTask,
@@ -207,8 +205,6 @@ export async function bootLegacyBoard(options = {}) {
           store,
           visibleTasks: boardState.visibleTasks,
         });
-
-        inspector.update(null);
 
         taskModal.update(selectedTask ? {
           task: selectedTask,
