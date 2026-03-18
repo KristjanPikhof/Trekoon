@@ -209,6 +209,7 @@ export function createBoardActions(options) {
     clearSearch() {
       commitSearch("");
     },
+    cancelPendingSearch,
     openEpic(epicId) {
       transition({
         screen: "tasks",
