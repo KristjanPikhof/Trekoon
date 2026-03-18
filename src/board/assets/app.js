@@ -267,8 +267,14 @@ export async function bootLegacyBoard(options = {}) {
     // Event delegation
     createDelegation(appElement, {
       isMutating: () => model.store.isMutating,
-      deleteSubtask: (id) => actions.deleteSubtask(id),
-      removeDependency: (src, dep) => actions.removeDependency(src, dep),
+      deleteSubtask: (id) => {
+        pendingConfirm = { action: () => actions.deleteSubtask(id), title: "Remove subtask", message: "This subtask will be permanently removed. Are you sure?" };
+        confirmDialog.update({ open: true, title: pendingConfirm.title, message: pendingConfirm.message, confirmLabel: "Remove", cancelLabel: "Cancel" });
+      },
+      removeDependency: (src, dep) => {
+        pendingConfirm = { action: () => actions.removeDependency(src, dep), title: "Remove dependency", message: "This dependency link will be removed. Are you sure?" };
+        confirmDialog.update({ open: true, title: pendingConfirm.title, message: pendingConfirm.message, confirmLabel: "Remove", cancelLabel: "Cancel" });
+      },
       openSubtask: (id) => actions.openSubtask(id),
       closeSubtask: () => actions.closeSubtask(),
       closeTask: () => actions.closeTask(),
