@@ -68,6 +68,48 @@ describe("board state store reconciliation", () => {
     expect(searched.visibleEpics.map((epic: { id: string }) => epic.id)).toEqual(["epic-a", "epic-b"]);
   });
 
+  test("overview search matches epic, task, and subtask content", () => {
+    globalThis.localStorage = createMockStorage() as Storage;
+
+    const store = createStore({
+      epics: [
+        { id: "epic-title", title: "Payments roadmap", description: "Quarterly planning" },
+        { id: "epic-task", title: "Operations", description: "Backoffice work" },
+        { id: "epic-subtask", title: "Support", description: "Inbox cleanup" },
+      ],
+      tasks: [
+        {
+          id: "task-1",
+          epicId: "epic-task",
+          title: "Refine runbook",
+          description: "Document the red button rollback flow",
+          status: "todo",
+        },
+        {
+          id: "task-2",
+          epicId: "epic-subtask",
+          title: "Triage requests",
+          description: "Handle routine intake",
+          status: "todo",
+        },
+      ],
+      subtasks: [
+        {
+          id: "subtask-1",
+          taskId: "task-2",
+          title: "Capture screenshot evidence",
+          description: "Attach the customer repro to the ticket",
+          status: "todo",
+        },
+      ],
+      dependencies: [],
+    });
+
+    expect(store.syncState({ search: "payments" }).visibleEpics.map((epic: { id: string }) => epic.id)).toEqual(["epic-title"]);
+    expect(store.syncState({ search: "red button rollback" }).visibleEpics.map((epic: { id: string }) => epic.id)).toEqual(["epic-task"]);
+    expect(store.syncState({ search: "customer repro" }).visibleEpics.map((epic: { id: string }) => epic.id)).toEqual(["epic-subtask"]);
+  });
+
   test("clears stale selectedSubtaskId when selectedTaskId is reconciled away", () => {
     globalThis.localStorage = createMockStorage() as Storage;
 
