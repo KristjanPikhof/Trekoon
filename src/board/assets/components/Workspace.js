@@ -5,7 +5,6 @@ import {
   fieldClasses,
   formatDate,
   hasLongTaskTitle,
-  isCompactViewport,
   neutralChipClasses,
   panelClasses,
   readStatusLabel,
