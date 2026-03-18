@@ -1151,6 +1151,34 @@ body {
 }
 
 @media (max-width: 640px) {
+  .board-wh__row-2 {
+    align-items: flex-start;
+  }
+
+  .board-wh__actions {
+    width: 100%;
+    margin-left: 0;
+    justify-content: flex-start;
+  }
+
+  .board-wh__action-group {
+    width: 100%;
+    justify-content: flex-start;
+  }
+
+  .board-view-switch {
+    max-width: 100%;
+  }
+
+  .board-view-switch__tab {
+    min-width: 38px;
+    padding: 0 9px;
+  }
+
+  .board-view-switch__label {
+    display: none;
+  }
+
   .board-shell-topbar {
     padding: 8px 10px;
     border-radius: 14px;
