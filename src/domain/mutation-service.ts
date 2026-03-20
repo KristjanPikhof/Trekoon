@@ -124,7 +124,7 @@ export class MutationService {
     subtaskSpecs: readonly CompactSubtaskSpec[];
     dependencySpecs: readonly CompactDependencySpec[];
   }): CompactEpicCreateResult {
-    return this.#db.transaction((): CompactEpicCreateResult => {
+    return writeTransaction(this.#db, (): CompactEpicCreateResult => {
       const epic = this.#domain.createEpic(input);
       const created = this.#domain.expandEpic({
         epicId: epic.id,
@@ -173,7 +173,7 @@ export class MutationService {
         dependencies: created.dependencies,
         result: created.result,
       };
-    })();
+    });
   }
 
   updateEpic(
