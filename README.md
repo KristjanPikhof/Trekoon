@@ -99,11 +99,10 @@ The browser flow is local-only by design:
 Current runtime expectations:
 
 - the local runtime is served from `.trekoon/board`
-- the shell currently loads Vue from `unpkg.com`, Tailwind from
-  `cdn.tailwindcss.com`, and Google-hosted fonts/icons when the page renders
-- if your environment blocks those hosts, `trekoon board open` still starts the
-  local server, but the browser UI may render without the enhanced shell until
-  network access is restored
+- all assets are self-hosted: the board ships its own CSS, fonts (Inter,
+  Material Symbols), and vanilla JS with no framework or CDN dependencies
+- the board works fully offline once `trekoon board open` copies the runtime
+  assets into `.trekoon/board`
 
 Current board behavior to expect:
 
