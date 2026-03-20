@@ -2,6 +2,38 @@
 
 All notable changes to Trekoon are documented in this file.
 
+## 0.3.0
+
+### Added
+
+- Epic ID copy-to-clipboard action in the workspace header and epic rows, with
+  a clipboard helper that falls back to `execCommand` when the Clipboard API is
+  unavailable.
+- Copy feedback UX with auto-dismiss toast notifications, copy feedback state in
+  the board store, and BEM-styled toast/copy-button classes.
+- `AGENTS.md` board UI guidance covering the orchestrator pattern, component
+  lifecycle, delegated DOM events, and state management architecture.
+- npm package metadata and keywords for registry publishing.
+- Board regression coverage for the API layer, epics overview, notice toasts,
+  and task modal workflows.
+
+### Changed
+
+- Epic row layout restructured with an extracted meta row and integrated copy
+  button.
+- Board Notice component refactored to use BEM toast classes for consistent
+  styling.
+- Board runtime is now fully self-contained with locally hosted CSS, fonts, and
+  vanilla JS — no CDN dependencies, works offline after initial asset copy.
+- README clarified that Bun is required as runtime even with npm global install.
+- Quickstart and commands documentation updated with board workflow details and
+  transactional bulk planning guidance.
+
+### Fixed
+
+- Copy feedback timer clearing and state reset on dismiss.
+- Mutation queue creation ordering for board API calls.
+
 ## 0.2.9
 
 ### Added
