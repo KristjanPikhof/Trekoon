@@ -31,6 +31,7 @@ export interface SyncPullDiagnostics {
   readonly applyRejectedEvents: number;
   readonly quarantinedEvents: number;
   readonly conflictEvents: number;
+  readonly staleCursor: boolean;
   readonly errorHints: readonly string[];
 }
 

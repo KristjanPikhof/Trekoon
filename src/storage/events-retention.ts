@@ -62,12 +62,30 @@ function oldestCursorTimestamp(db: Database): number | null {
   return row?.oldest ?? null;
 }
 
-function countStaleCursors(db: Database, effectiveCutoff: number): number {
+function countStaleCursors(db: Database): number {
+  // A cursor is stale when its last_event_at references a timestamp
+  // that has no corresponding event remaining in the events table.
+  // We detect this by checking if the oldest event in the table is
+  // newer than the cursor's last_event_at.
+  const oldestEventRow = db
+    .query("SELECT MIN(created_at) AS oldest FROM events;")
+    .get() as { oldest: number | null } | null;
+
+  const oldestEventAt: number | null = oldestEventRow?.oldest ?? null;
+
+  if (oldestEventAt === null) {
+    // No events at all — any cursor with a last_event_at is stale.
+    const row = db
+      .query("SELECT COUNT(*) AS count FROM sync_cursors WHERE last_event_at IS NOT NULL;")
+      .get() as { count: number } | null;
+    return row?.count ?? 0;
+  }
+
   const row = db
     .query(
       "SELECT COUNT(*) AS count FROM sync_cursors WHERE last_event_at IS NOT NULL AND last_event_at < ?;",
     )
-    .get(effectiveCutoff) as { count: number } | null;
+    .get(oldestEventAt) as { count: number } | null;
 
   return row?.count ?? 0;
 }
@@ -77,18 +95,27 @@ export function pruneEvents(db: Database, options: EventPruneOptions = {}): Even
   const dryRun: boolean = options.dryRun ?? false;
   const archive: boolean = options.archive ?? false;
   const now: number = options.now ?? Date.now();
-  const cutoffTimestamp: number = now - retentionDays * DAY_IN_MILLISECONDS;
-  const candidateCount: number = countCandidates(db, cutoffTimestamp);
+  const retentionCutoff: number = now - retentionDays * DAY_IN_MILLISECONDS;
+
+  // Guard: never prune events that a sync cursor still references.
+  // The effective cutoff is the earlier of the retention cutoff and
+  // the oldest cursor timestamp — so cursors always have replayable history.
+  const oldest: number | null = oldestCursorTimestamp(db);
+  const effectiveCutoff: number = oldest !== null ? Math.min(retentionCutoff, oldest) : retentionCutoff;
+
+  const candidateCount: number = countCandidates(db, effectiveCutoff);
+  const staleCursors: number = countStaleCursors(db, effectiveCutoff);
 
   if (dryRun || candidateCount === 0) {
     return {
       retentionDays,
-      cutoffTimestamp,
+      cutoffTimestamp: effectiveCutoff,
       dryRun,
       archive,
       candidateCount,
       archivedCount: 0,
       deletedCount: 0,
+      staleCursorCount: staleCursors,
     };
   }
 
@@ -137,21 +164,22 @@ export function pruneEvents(db: Database, options: EventPruneOptions = {}): Even
             version = excluded.version;
           `,
         )
-        .run(cutoffTimestamp);
+        .run(effectiveCutoff);
 
       archivedCount = archived.changes;
     }
 
-    const deleted = db.query("DELETE FROM events WHERE created_at < ?;").run(cutoffTimestamp);
+    const deleted = db.query("DELETE FROM events WHERE created_at < ?;").run(effectiveCutoff);
 
     return {
       retentionDays,
-      cutoffTimestamp,
+      cutoffTimestamp: effectiveCutoff,
       dryRun,
       archive,
       candidateCount,
       archivedCount,
       deletedCount: deleted.changes,
+      staleCursorCount: staleCursors,
     };
   })();
 }
