@@ -62,6 +62,8 @@ function renderWorkspaceHeader(props) {
   const epicSelectTooltip = "Switch the workspace to a different epic.";
   const bulkStatusTooltip = "Set the same status for every task in this epic.";
   const notesTooltip = "Show or hide this epic's description.";
+  const copyTooltip = "Copy this epic's UUID.";
+  const copyLabel = `Copy epic UUID for ${selectedEpic.title}`;
   const notesPanelId = `board-notes-panel-${selectedEpic.id}`;
   const orderedEpics = orderEpicsNewestFirst(snapshotEpics);
 
@@ -104,12 +106,17 @@ function renderWorkspaceHeader(props) {
 
       <div class="board-wh__row-2">
         <div class="board-wh__meta">
+          <span class="${neutralChipClasses()}">${escapeHtml(selectedEpic.id)}</span>
           ${renderEpicCountSummary(selectedEpic)}
           <span class="${neutralChipClasses()}">${visibleTasks.length} visible</span>
           ${store.isMutating ? `<span class="${neutralChipClasses()}">Saving\u2026</span>` : ""}
         </div>
         <div class="board-wh__actions">
           <div class="board-wh__action-group">
+            <button type="button" class="board-copy-btn" data-copy-epic-id="${escapeHtml(selectedEpic.id)}" aria-label="${escapeHtml(copyLabel)}" title="${escapeHtml(copyTooltip)}">
+              ${renderIcon("content_copy", "text-[16px]")}
+              <span class="board-copy-btn__label">Copy ID</span>
+            </button>
             ${description ? `
               <button type="button" class="board-wh__notes-btn ${store.notesPanelOpen ? "board-wh__notes-btn--active" : ""}" data-toggle-notes aria-label="Toggle epic notes" aria-expanded="${store.notesPanelOpen}" aria-controls="${escapeHtml(notesPanelId)}" title="${escapeHtml(notesTooltip)}">
                 ${renderIcon("subject", "text-[16px]")}
