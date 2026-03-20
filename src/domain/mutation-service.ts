@@ -356,10 +356,10 @@ export class MutationService {
   }
 
   deleteSubtask(id: string): void {
-    this.#db.transaction((): void => {
+    writeTransaction(this.#db, (): void => {
       this.#domain.deleteSubtask(id);
       this.#appendEntityEvent("subtask", id, ENTITY_OPERATIONS.subtask.deleted, {});
-    })();
+    });
   }
 
   addDependency(sourceId: string, dependsOnId: string): DependencyRecord {
