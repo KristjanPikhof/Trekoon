@@ -1567,19 +1567,24 @@ export class TrackerDomain {
     const unresolved: UnresolvedDependencyBlocker[] = [];
 
     for (const dependency of dependencies) {
-      const dependencyStatus =
+      const dependencyNode =
         dependency.dependsOnKind === "task"
-          ? this.getTaskOrThrow(dependency.dependsOnId).status
-          : this.getSubtaskOrThrow(dependency.dependsOnId).status;
+          ? this.getTask(dependency.dependsOnId)
+          : this.getSubtask(dependency.dependsOnId);
 
-      if (dependencyStatus === "done") {
+      // Skip orphaned dependency rows where the referenced node no longer exists.
+      if (!dependencyNode) {
+        continue;
+      }
+
+      if (dependencyNode.status === "done") {
         continue;
       }
 
       unresolved.push({
         id: dependency.dependsOnId,
         kind: dependency.dependsOnKind,
-        status: dependencyStatus,
+        status: dependencyNode.status,
       });
     }
 
