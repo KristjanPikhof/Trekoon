@@ -291,12 +291,12 @@ export class MutationService {
   }
 
   updateTaskStatusCascade(id: string, status: string): StatusCascadePlan {
-    return this.#db.transaction((): StatusCascadePlan => {
+    return writeTransaction(this.#db, (): StatusCascadePlan => {
       const plan = this.#domain.planStatusCascade("task", id, status);
       this.#assertCascadeNotBlocked(plan);
       this.#applyStatusCascadePlan(plan);
       return plan;
-    })();
+    });
   }
 
   deleteTask(id: string): void {
