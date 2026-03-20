@@ -8,6 +8,7 @@ import { afterEach, describe, expect, test } from "bun:test";
 import { runMigrate } from "../../src/commands/migrate";
 import { resolveStoragePaths } from "../../src/storage/path";
 import { openTrekoonDatabase } from "../../src/storage/database";
+import { migrateDatabase, rollbackDatabase } from "../../src/storage/migrations";
 
 const tempDirs: string[] = [];
 
