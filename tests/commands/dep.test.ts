@@ -328,4 +328,38 @@ describe("dep command", (): void => {
     expect(reverse.error?.code).toBe("not_found");
     expect((reverse.data as { id: string }).id).toBe("missing-node-id");
   });
+
+  test("duplicate dependency edge is handled idempotently", async (): Promise<void> => {
+    const cwd = createWorkspace();
+    const nodes = await createTaskGraph(cwd);
+
+    const first = await runDep({ cwd, mode: "human", args: ["add", nodes.taskA, nodes.taskB] });
+    expect(first.ok).toBeTrue();
+
+    const second = await runDep({ cwd, mode: "human", args: ["add", nodes.taskA, nodes.taskB] });
+    expect(second.ok).toBeTrue();
+
+    const listed = await runDep({ cwd, mode: "human", args: ["list", nodes.taskA] });
+    expect(listed.ok).toBeTrue();
+    expect((listed.data as { dependencies: unknown[] }).dependencies.length).toBe(1);
+  });
+
+  test("orphaned dependency rows do not crash traversal after task delete", async (): Promise<void> => {
+    const cwd = createWorkspace();
+    const nodes = await createTaskGraph(cwd);
+
+    const added = await runDep({ cwd, mode: "human", args: ["add", nodes.taskA, nodes.taskB] });
+    expect(added.ok).toBeTrue();
+
+    // Delete the depended-on task; CASCADE deletes the task but the dependency
+    // row may reference an orphaned id depending on schema (our migration cleans
+    // them, but the domain traversal must also handle this gracefully).
+    const deleted = await runTask({ cwd, mode: "human", args: ["delete", nodes.taskB] });
+    expect(deleted.ok).toBeTrue();
+
+    // Listing dependencies on taskA should not throw even if the dependency row
+    // referenced a now-deleted node (the domain should skip missing nodes).
+    const listed = await runDep({ cwd, mode: "human", args: ["list", nodes.taskA] });
+    expect(listed.ok).toBeTrue();
+  });
 });
