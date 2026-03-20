@@ -1,3 +1,4 @@
+import { copyTextToClipboard } from "../runtime/clipboard.js";
 import { orderEpicsNewestFirst } from "./store.js";
 
 function cloneSnapshot(snapshot) {
@@ -265,6 +266,36 @@ export function createBoardActions(options) {
     },
     setView(view) {
       transition({ view });
+    },
+    async copyEpicId(epicId) {
+      const normalizedEpicId = typeof epicId === "string" ? epicId.trim() : "";
+
+      if (!normalizedEpicId) {
+        store.notice = {
+          type: "error",
+          title: "Copy failed",
+          message: "Epic UUID is unavailable.",
+        };
+        rerender();
+        return;
+      }
+
+      try {
+        await copyTextToClipboard(normalizedEpicId);
+        store.notice = {
+          type: "success",
+          title: "Copied",
+          message: "Epic UUID copied to clipboard.",
+        };
+      } catch {
+        store.notice = {
+          type: "error",
+          title: "Copy failed",
+          message: "Could not copy the epic UUID.",
+        };
+      }
+
+      rerender();
     },
     selectTask(taskId) {
       const task = getTaskById(taskId);
