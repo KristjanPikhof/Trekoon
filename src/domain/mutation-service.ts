@@ -300,10 +300,10 @@ export class MutationService {
   }
 
   deleteTask(id: string): void {
-    this.#db.transaction((): void => {
+    writeTransaction(this.#db, (): void => {
       this.#domain.deleteTask(id);
       this.#appendEntityEvent("task", id, ENTITY_OPERATIONS.task.deleted, {});
-    })();
+    });
   }
 
   createSubtask(input: {
