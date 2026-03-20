@@ -425,6 +425,29 @@ body.board-scroll-locked {
   box-shadow: 0 0 0 2px color-mix(in srgb, var(--board-bg) 78%, transparent), 0 0 0 4px var(--board-border-strong);
 }
 
+.board-copy-btn--active {
+  border-color: color-mix(in srgb, var(--board-success) 26%, var(--board-border-strong));
+  background: color-mix(in srgb, var(--board-success) 12%, rgba(255, 255, 255, 0.05));
+  color: var(--board-text);
+}
+
+.board-copy-btn--active:hover {
+  border-color: color-mix(in srgb, var(--board-success) 36%, var(--board-border-strong));
+  background: color-mix(in srgb, var(--board-success) 16%, rgba(255, 255, 255, 0.06));
+}
+
+.board-inline-icon {
+  display: block;
+  width: 16px;
+  height: 16px;
+  flex-shrink: 0;
+}
+
+.board-inline-icon--sm {
+  width: 14px;
+  height: 14px;
+}
+
 .board-copy-btn--icon {
   min-height: 30px;
   width: 30px;
@@ -435,6 +458,78 @@ body.board-scroll-locked {
 
 .board-copy-btn__label {
   line-height: 1;
+}
+
+.board-toast-region {
+  position: fixed;
+  right: 16px;
+  bottom: 16px;
+  z-index: 30;
+  width: min(100vw - 24px, 380px);
+  pointer-events: none;
+}
+
+.board-toast {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  width: 100%;
+  padding: 12px 14px;
+  border: 1px solid var(--board-border);
+  border-radius: 18px;
+  background: color-mix(in srgb, var(--board-shell) 94%, transparent);
+  box-shadow: var(--board-shadow);
+  backdrop-filter: blur(18px);
+  pointer-events: auto;
+}
+
+.board-toast--success {
+  border-color: color-mix(in srgb, var(--board-success) 24%, var(--board-border));
+}
+
+.board-toast--error {
+  border-color: color-mix(in srgb, var(--board-danger) 28%, var(--board-border));
+}
+
+.board-toast__icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 34px;
+  height: 34px;
+  border-radius: 999px;
+  flex-shrink: 0;
+}
+
+.board-toast__icon--success {
+  background: color-mix(in srgb, var(--board-success) 16%, transparent);
+  color: color-mix(in srgb, var(--board-success) 78%, white);
+}
+
+.board-toast__icon--error {
+  background: color-mix(in srgb, var(--board-danger) 14%, transparent);
+  color: color-mix(in srgb, var(--board-danger) 72%, white);
+}
+
+.board-toast__content {
+  min-width: 0;
+}
+
+.board-toast__title {
+  margin: 0;
+  font-size: 0.72rem;
+  font-weight: 700;
+  line-height: 1.2;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--board-text-soft);
+}
+
+.board-toast__message {
+  margin: 4px 0 0;
+  font-size: 0.9rem;
+  line-height: 1.45;
+  color: var(--board-text-muted);
 }
 
 .board-epic-row__title {
