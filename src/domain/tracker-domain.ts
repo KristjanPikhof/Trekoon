@@ -1492,10 +1492,17 @@ export class TrackerDomain {
       }
 
       for (const dependency of this.listDependencies(change.id)) {
-        const dependencyStatus =
+        const dependencyNode =
           dependency.dependsOnKind === "task"
-            ? this.getTaskOrThrow(dependency.dependsOnId).status
-            : this.getSubtaskOrThrow(dependency.dependsOnId).status;
+            ? this.getTask(dependency.dependsOnId)
+            : this.getSubtask(dependency.dependsOnId);
+
+        // Skip orphaned dependency rows where the referenced node no longer exists.
+        if (!dependencyNode) {
+          continue;
+        }
+
+        const dependencyStatus = dependencyNode.status;
         const inScope = scopeIdSet.has(dependency.dependsOnId);
         const willCascade = targetStatus === "done" && changedIdSet.has(dependency.dependsOnId);
         if (dependencyStatus === "done" || willCascade) {
