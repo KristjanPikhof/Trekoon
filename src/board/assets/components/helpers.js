@@ -88,6 +88,23 @@ export function renderIcon(name, className = "") {
   return `<span class="${cx("material-symbols-rounded shrink-0", className)}" aria-hidden="true">${name}</span>`;
 }
 
+export function renderCopyIcon(className = "") {
+  return `
+    <svg class="${cx("board-inline-icon", className)}" aria-hidden="true" viewBox="0 0 16 16" fill="none">
+      <rect x="5" y="2.75" width="7" height="9" rx="1.5" stroke="currentColor" stroke-width="1.35"></rect>
+      <path d="M4 5.75H3.5C2.67157 5.75 2 6.42157 2 7.25V12C2 12.8284 2.67157 13.5 3.5 13.5H8.25C9.07843 13.5 9.75 12.8284 9.75 12V11.5" stroke="currentColor" stroke-width="1.35" stroke-linecap="round" stroke-linejoin="round"></path>
+    </svg>
+  `;
+}
+
+export function renderCheckIcon(className = "") {
+  return `
+    <svg class="${cx("board-inline-icon", className)}" aria-hidden="true" viewBox="0 0 16 16" fill="none">
+      <path d="M3.5 8.4L6.4 11.1L12.5 4.9" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"></path>
+    </svg>
+  `;
+}
+
 export function readStatusLabel(rawStatus) {
   if (typeof rawStatus !== "string" || rawStatus.trim().length === 0) {
     return "Unknown";
