@@ -388,6 +388,55 @@ body.board-scroll-locked {
   gap: 8px;
 }
 
+.board-copy-btn,
+.board-wh__notes-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  min-height: 36px;
+  padding: 0 10px;
+  border: 1px solid var(--board-border);
+  border-radius: 10px;
+  background: rgba(255, 255, 255, 0.03);
+  color: var(--board-text-muted);
+  font-size: 0.75rem;
+  font-weight: 600;
+  white-space: nowrap;
+  cursor: pointer;
+  touch-action: manipulation;
+  transition:
+    border-color 0.15s ease,
+    background-color 0.15s ease,
+    color 0.15s ease,
+    box-shadow 0.15s ease;
+}
+
+.board-copy-btn:hover,
+.board-wh__notes-btn:hover {
+  border-color: var(--board-border-strong);
+  background: rgba(255, 255, 255, 0.045);
+  color: var(--board-text);
+}
+
+.board-copy-btn:focus-visible,
+.board-wh__notes-btn:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--board-bg) 78%, transparent), 0 0 0 4px var(--board-border-strong);
+}
+
+.board-copy-btn--icon {
+  min-height: 30px;
+  width: 30px;
+  padding: 0;
+  border-radius: 999px;
+  flex-shrink: 0;
+}
+
+.board-copy-btn__label {
+  line-height: 1;
+}
+
 .board-epic-row__title {
   display: block;
   min-width: 0;
@@ -1043,40 +1092,6 @@ body.board-scroll-locked {
 
 .board-view-switch__label {
   line-height: 1;
-}
-
-.board-wh__notes-btn {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  gap: 6px;
-  min-height: 36px;
-  padding: 0 10px;
-  border: 1px solid var(--board-border);
-  border-radius: 10px;
-  background: rgba(255, 255, 255, 0.03);
-  color: var(--board-text-muted);
-  font-size: 0.75rem;
-  font-weight: 600;
-  white-space: nowrap;
-  cursor: pointer;
-  touch-action: manipulation;
-  transition:
-    border-color 0.15s ease,
-    background-color 0.15s ease,
-    color 0.15s ease,
-    box-shadow 0.15s ease;
-}
-
-.board-wh__notes-btn:hover {
-  border-color: var(--board-border-strong);
-  background: rgba(255, 255, 255, 0.045);
-  color: var(--board-text);
-}
-
-.board-wh__notes-btn:focus-visible {
-  outline: none;
-  box-shadow: 0 0 0 2px color-mix(in srgb, var(--board-bg) 78%, transparent), 0 0 0 4px var(--board-border-strong);
 }
 
 .board-wh__notes-btn--active {
