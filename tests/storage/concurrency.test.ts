@@ -159,7 +159,7 @@ function runImmediateWriter(
   writeCount: number,
   busyTimeoutMs: number,
 ): WriterResult {
-  const conn = new Database(dbFile, { create: false });
+  const conn = new Database(dbFile);
   conn.exec(`PRAGMA busy_timeout = ${busyTimeoutMs};`);
   conn.exec("PRAGMA journal_mode = WAL;");
 
