@@ -363,7 +363,7 @@ export class MutationService {
   }
 
   addDependency(sourceId: string, dependsOnId: string): DependencyRecord {
-    return this.#db.transaction((): DependencyRecord => {
+    return writeTransaction(this.#db, (): DependencyRecord => {
       const dependency = this.#domain.addDependency(sourceId, dependsOnId);
       this.#appendEntityEvent("dependency", dependency.id, ENTITY_OPERATIONS.dependency.added, {
         source_id: dependency.sourceId,
@@ -372,7 +372,7 @@ export class MutationService {
         depends_on_kind: dependency.dependsOnKind,
       });
       return dependency;
-    })();
+    });
   }
 
   addDependencyBatch(input: { specs: readonly CompactDependencySpec[] }): CompactDependencyBatchAddResult {
