@@ -192,12 +192,12 @@ export class MutationService {
   }
 
   updateEpicStatusCascade(id: string, status: string): StatusCascadePlan {
-    return this.#db.transaction((): StatusCascadePlan => {
+    return writeTransaction(this.#db, (): StatusCascadePlan => {
       const plan = this.#domain.planStatusCascade("epic", id, status);
       this.#assertCascadeNotBlocked(plan);
       this.#applyStatusCascadePlan(plan);
       return plan;
-    })();
+    });
   }
 
   deleteEpic(id: string): void {
