@@ -376,7 +376,7 @@ export class MutationService {
   }
 
   addDependencyBatch(input: { specs: readonly CompactDependencySpec[] }): CompactDependencyBatchAddResult {
-    return this.#db.transaction((): CompactDependencyBatchAddResult => {
+    return writeTransaction(this.#db, (): CompactDependencyBatchAddResult => {
       const created = this.#domain.addDependencyBatch(input);
       for (const dependency of created.dependencies) {
         this.#appendEntityEvent("dependency", dependency.id, ENTITY_OPERATIONS.dependency.added, {
@@ -387,7 +387,7 @@ export class MutationService {
         });
       }
       return created;
-    })();
+    });
   }
 
   removeDependency(sourceId: string, dependsOnId: string): number {
