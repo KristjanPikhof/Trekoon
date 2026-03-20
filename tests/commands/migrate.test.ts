@@ -154,6 +154,38 @@ describe("migrate command", (): void => {
     expect(`${status.error?.message ?? ""}\n${status.human ?? ""}`).toMatch(/infer|manual/i);
   });
 
+  test("rejects rollback below version 4 via migrate command", async (): Promise<void> => {
+    const workspace: string = createWorkspace();
+    const storage = openTrekoonDatabase(workspace);
+    storage.close();
+
+    const result = await runMigrate({
+      args: ["rollback", "--to-version", "3"],
+      cwd: workspace,
+      mode: "toon",
+    });
+
+    expect(result.ok).toBeFalse();
+    expect(result.error?.code).toBe("migrate_failed");
+    expect(result.error?.message).toMatch(/irreversible/i);
+  });
+
+  test("rejects rollback to version 0 via migrate command", async (): Promise<void> => {
+    const workspace: string = createWorkspace();
+    const storage = openTrekoonDatabase(workspace);
+    storage.close();
+
+    const result = await runMigrate({
+      args: ["rollback", "--to-version", "0"],
+      cwd: workspace,
+      mode: "toon",
+    });
+
+    expect(result.ok).toBeFalse();
+    expect(result.error?.code).toBe("migrate_failed");
+    expect(result.error?.message).toMatch(/irreversible/i);
+  });
+
   test("maps known legacy base migration names during status", async (): Promise<void> => {
     const workspace: string = createWorkspace();
     const storage = openTrekoonDatabase(workspace, { autoMigrate: false });
