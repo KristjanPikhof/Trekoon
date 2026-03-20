@@ -183,5 +183,5 @@ export function pruneEvents(db: Database, options: EventPruneOptions = {}): Even
       deletedCount: deleted.changes,
       staleCursorCount: staleCursors,
     };
-  })();
+  });
 }
