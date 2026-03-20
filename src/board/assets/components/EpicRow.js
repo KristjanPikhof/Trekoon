@@ -2,6 +2,8 @@ import {
   escapeHtml,
   formatDate,
   neutralChipClasses,
+  renderCheckIcon,
+  renderCopyIcon,
   renderIcon,
   renderStatusBadge,
 } from "./helpers.js";
@@ -12,10 +14,11 @@ import {
  * @param {object} props
  * @param {object} props.epic
  * @param {boolean} [props.selected]
+ * @param {boolean} [props.copied]
  * @returns {string}
  */
 export function renderEpicRow(props) {
-  const { epic, selected = false } = props;
+  const { epic, selected = false, copied = false } = props;
 
   const totalTasks = Array.isArray(epic.taskIds) ? epic.taskIds.length : 0;
   const counts = epic.counts || { blocked: 0, done: 0, in_progress: 0 };
@@ -44,12 +47,12 @@ export function renderEpicRow(props) {
           <strong class="board-epic-row__title">${escapeHtml(epic.title)}</strong>
           <button
             type="button"
-            class="board-copy-btn board-copy-btn--icon"
+            class="board-copy-btn board-copy-btn--icon ${copied ? "board-copy-btn--active" : ""}"
             data-copy-epic-id="${escapeHtml(epic.id)}"
-            aria-label="${escapeHtml(copyLabel)}"
-            title="${escapeHtml(copyTooltip)}"
+            aria-label="${escapeHtml(copied ? `Copied epic UUID for ${epic.title}` : copyLabel)}"
+            title="${escapeHtml(copied ? "Epic UUID copied." : copyTooltip)}"
           >
-            ${renderIcon("content_copy", "text-[15px]")}
+            ${copied ? renderCheckIcon("board-inline-icon--sm") : renderCopyIcon("board-inline-icon--sm")}
           </button>
         </span>
         ${descriptionMarkup}
