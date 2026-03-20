@@ -99,10 +99,9 @@ Board layout behavior:
 - the topbar is a compact flex-row navbar with workspace identity, Epics and
   Board navigation pills, a debounced search input, theme toggle, and a
   workspace info popover
-- extra-wide layouts show the epic switcher sidebar, task workspace, and task
-  inspector or detail modal together
-- narrower layouts progressively collapse support surfaces into stacked panels
-  or drawer-style views
+- the board toggles between an epics overview and a task workspace view; task
+  detail opens as a modal overlay
+- responsive breakpoints adjust kanban column counts and component spacing
 - task cards show truncated descriptions; clicking anywhere on a card opens the
   task detail modal
 
