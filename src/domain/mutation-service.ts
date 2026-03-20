@@ -241,7 +241,7 @@ export class MutationService {
     subtaskSpecs: readonly CompactSubtaskSpec[];
     dependencySpecs: readonly CompactDependencySpec[];
   }): CompactEpicExpandResult {
-    return this.#db.transaction((): CompactEpicExpandResult => {
+    return writeTransaction(this.#db, (): CompactEpicExpandResult => {
       const created = this.#domain.expandEpic(input);
       for (const task of created.tasks) {
         this.#appendEntityEvent("task", task.id, ENTITY_OPERATIONS.task.created, {
@@ -271,7 +271,7 @@ export class MutationService {
       }
 
       return created;
-    })();
+    });
   }
 
   updateTask(
