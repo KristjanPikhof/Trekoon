@@ -83,7 +83,7 @@ describe("migrate command", (): void => {
     storage.close();
 
     const rollback = await runMigrate({
-      args: ["rollback", "--to-version", "1"],
+      args: ["rollback", "--to-version", "4"],
       cwd: workspace,
       mode: "toon",
     });
@@ -106,8 +106,8 @@ describe("migrate command", (): void => {
       applied: unknown[];
     };
 
-    expect(data.currentVersion).toBe(1);
-    expect(data.latestVersion).toBeGreaterThan(1);
+    expect(data.currentVersion).toBe(4);
+    expect(data.latestVersion).toBeGreaterThan(4);
     expect(data.pending.length).toBeGreaterThan(0);
   });
 
