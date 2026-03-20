@@ -43,6 +43,12 @@ export function createDelegation(rootElement, actions) {
       return;
     }
 
+    const copyEpicIdEl = target.closest("[data-copy-epic-id]");
+    if (copyEpicIdEl) {
+      actions.copyEpicId(copyEpicIdEl.dataset.copyEpicId || null);
+      return;
+    }
+
     // -- Backdrop-style close handlers ----------------------------------------
     // Only close when the click lands directly on the backdrop element itself,
     // not on any child content rendered inside the overlay.
@@ -242,6 +248,31 @@ export function createDelegation(rootElement, actions) {
     actions.handleKeydown(event);
   }
 
+  function handleDelegatedKeydown(event) {
+    if (event.defaultPrevented) {
+      return;
+    }
+
+    const target = event.target instanceof Element ? event.target : null;
+    if (!target) {
+      return;
+    }
+
+    if (target.closest("[data-copy-epic-id]")) {
+      return;
+    }
+
+    const openEpicEl = target.closest("[data-open-epic]");
+    if (!openEpicEl) {
+      return;
+    }
+
+    if (event.key === "Enter" || event.key === " ") {
+      event.preventDefault();
+      actions.openEpic(openEpicEl.dataset.openEpic || null);
+    }
+  }
+
   // ---------------------------------------------------------------------------
   // Drag-and-drop delegation
   // ---------------------------------------------------------------------------
@@ -291,6 +322,7 @@ export function createDelegation(rootElement, actions) {
   rootElement.addEventListener("dragstart", handleDragstart);
   rootElement.addEventListener("dragover", handleDragover);
   rootElement.addEventListener("drop", handleDrop);
+  rootElement.addEventListener("keydown", handleDelegatedKeydown);
   window.addEventListener("keydown", handleKeydown);
 
   // ---------------------------------------------------------------------------
@@ -304,6 +336,7 @@ export function createDelegation(rootElement, actions) {
     rootElement.removeEventListener("dragstart", handleDragstart);
     rootElement.removeEventListener("dragover", handleDragover);
     rootElement.removeEventListener("drop", handleDrop);
+    rootElement.removeEventListener("keydown", handleDelegatedKeydown);
     window.removeEventListener("keydown", handleKeydown);
   };
 }
