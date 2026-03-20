@@ -43,7 +43,11 @@ function render(props) {
           <div class="board-table__rows board-table__rows--epics">
             ${visibleEpics.length === 0
               ? renderEmptyState("No matching epics", "Try a different search or publish more work to the board.", "/")
-              : visibleEpics.map((epic) => renderEpicRow({ epic, selected: selectedEpicId === epic.id })).join("")}
+              : visibleEpics.map((epic) => renderEpicRow({
+                epic,
+                selected: selectedEpicId === epic.id,
+                copied: store.copyFeedback?.epicId === epic.id,
+              })).join("")}
           </div>
         </div>
       </section>
