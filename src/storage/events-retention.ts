@@ -18,6 +18,7 @@ export interface EventPruneSummary {
   readonly candidateCount: number;
   readonly archivedCount: number;
   readonly deletedCount: number;
+  readonly staleCursorCount: number;
 }
 
 function ensureArchiveTable(db: Database): void {

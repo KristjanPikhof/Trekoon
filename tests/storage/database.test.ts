@@ -636,6 +636,76 @@ describe("storage lifecycle", (): void => {
     }
   });
 
+  test("rejects rollback from v4 to v3 with irreversible error", (): void => {
+    const workspace: string = createWorkspace();
+    const storage = openTrekoonDatabase(workspace);
+
+    try {
+      expect((): void => {
+        rollbackDatabase(storage.db, 3);
+      }).toThrow(/irreversible/i);
+    } finally {
+      storage.close();
+    }
+  });
+
+  test("preserves schema_migrations after rejected v4 rollback", (): void => {
+    const workspace: string = createWorkspace();
+    const storage = openTrekoonDatabase(workspace);
+
+    try {
+      try {
+        rollbackDatabase(storage.db, 3);
+      } catch {
+        // Expected to throw
+      }
+
+      const row = storage.db
+        .query("SELECT COALESCE(MAX(version), 0) AS version FROM schema_migrations;")
+        .get() as { version: number };
+
+      expect(row.version).toBe(4);
+    } finally {
+      storage.close();
+    }
+  });
+
+  test("rollback to v4 from v4 is a valid no-op", (): void => {
+    const workspace: string = createWorkspace();
+    const storage = openTrekoonDatabase(workspace);
+
+    try {
+      const summary = rollbackDatabase(storage.db, 4);
+
+      expect(summary.fromVersion).toBe(4);
+      expect(summary.toVersion).toBe(4);
+      expect(summary.rolledBack).toBe(0);
+      expect(summary.rolledBackMigrations).toEqual([]);
+    } finally {
+      storage.close();
+    }
+  });
+
+  test("v4 rollback error mentions worktree_scoped_sync_metadata", (): void => {
+    const workspace: string = createWorkspace();
+    const storage = openTrekoonDatabase(workspace);
+
+    try {
+      let errorMessage = "";
+
+      try {
+        rollbackDatabase(storage.db, 0);
+      } catch (error: unknown) {
+        errorMessage = (error as Error).message;
+      }
+
+      expect(errorMessage).toContain("worktree_scoped_sync_metadata");
+      expect(errorMessage).toContain("ALTER TABLE");
+    } finally {
+      storage.close();
+    }
+  });
+
   test("uses transactional migration path when schema is not current", (): void => {
     const workspace: string = createWorkspace();
     const databasePath: string = resolveStoragePaths(workspace).databaseFile;
