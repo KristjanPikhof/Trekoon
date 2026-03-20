@@ -56,7 +56,8 @@ export const BASE_SCHEMA_STATEMENTS: readonly string[] = [
     depends_on_kind TEXT NOT NULL,
     created_at INTEGER NOT NULL,
     updated_at INTEGER NOT NULL,
-    version INTEGER NOT NULL DEFAULT 1
+    version INTEGER NOT NULL DEFAULT 1,
+    UNIQUE (source_id, depends_on_id)
   );
   `,
   `

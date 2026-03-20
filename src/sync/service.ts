@@ -829,6 +829,16 @@ export function syncPull(cwd: string, sourceBranch: string): PullSummary {
           fieldsToApply[fieldName] = value;
         }
 
+        if (incoming.operation.endsWith(".deleted") && hasLocalEntityEdits(storage.db, incoming.entity_kind, incoming.entity_id, sourceBranch)) {
+          createConflict(storage.db, incoming, "__delete__", null, "Entity deleted on source branch");
+          createdConflicts += 1;
+          conflictEvents += 1;
+          storeEvent(storage.db, incoming);
+          lastToken = cursorTokenFromEvent(incoming);
+          lastEventAt = incoming.created_at;
+          continue;
+        }
+
         if (applyEntityFields(storage.db, incoming, fieldsToApply)) {
           appliedEvents += 1;
         } else if (applyReplayedCreateWithConflicts(storage.db, incoming, fieldsToApply, withheldConflictCount)) {
