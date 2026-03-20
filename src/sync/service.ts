@@ -15,6 +15,49 @@ import {
   type SyncStatusSummary,
 } from "./types";
 
+function isCursorStale(db: Database, cursorToken: string, sourceBranch: string): boolean {
+  if (cursorToken === "0:") {
+    return false;
+  }
+
+  const [createdAtRaw, idRaw] = cursorToken.split(":");
+  const createdAt: number = Number.parseInt(createdAtRaw ?? "0", 10);
+  const id: string = idRaw ?? "";
+
+  if (!Number.isFinite(createdAt) || createdAt === 0) {
+    return false;
+  }
+
+  // Check if the event referenced by the cursor still exists.
+  // If the cursor references a specific event id, check for it.
+  // Otherwise, check if any event at or after the cursor timestamp exists
+  // on the source branch.
+  if (id.length > 0) {
+    const row = db
+      .query("SELECT id FROM events WHERE id = ? LIMIT 1;")
+      .get(id) as { id: string } | null;
+    if (row) {
+      return false;
+    }
+  }
+
+  // The referenced event is gone. Check if there are any events on the
+  // source branch at or after the cursor timestamp — if not, the cursor
+  // may simply be at the end of the stream.
+  const newerRow = db
+    .query(
+      `SELECT id FROM events
+       WHERE git_branch = ? AND created_at >= ?
+       ORDER BY created_at ASC, id ASC
+       LIMIT 1;`,
+    )
+    .get(sourceBranch, createdAt) as { id: string } | null;
+
+  // If there are newer events but our referenced event is gone,
+  // events between the cursor and the oldest remaining event were pruned.
+  return newerRow !== null;
+}
+
 interface StoredEvent {
   readonly id: string;
   readonly entity_kind: string;
@@ -689,6 +732,7 @@ export function syncPull(cwd: string, sourceBranch: string): PullSummary {
     persistGitContext(storage.db, git);
     const cursor = loadCursor(storage.db, git.worktreePath, sourceBranch);
     const cursorToken = cursor?.cursor_token ?? "0:";
+    const staleCursor: boolean = cursor !== null && isCursorStale(storage.db, cursorToken, sourceBranch);
     const incomingEvents: StoredEvent[] = queryBranchEventsSince(storage.db, sourceBranch, cursorToken) as StoredEvent[];
 
     // Same-branch fast path: skip conflict detection when already on sourceBranch.
@@ -721,7 +765,10 @@ export function syncPull(cwd: string, sourceBranch: string): PullSummary {
           applyRejectedEvents: 0,
           quarantinedEvents: 0,
           conflictEvents: 0,
-          errorHints: [],
+          staleCursor,
+          errorHints: staleCursor
+            ? ["Stale cursor detected; some events may have been pruned. Consider a full rebuild."]
+            : [],
         },
       };
     }
@@ -803,6 +850,15 @@ export function syncPull(cwd: string, sourceBranch: string): PullSummary {
       }
     })();
 
+    const errorHints: string[] = buildSyncErrorHints({
+      malformedPayloadEvents,
+      applyRejectedEvents,
+      conflictEvents,
+    });
+    if (staleCursor) {
+      errorHints.push("Stale cursor detected; some events may have been pruned. Consider a full rebuild.");
+    }
+
     return {
       sourceBranch,
       scannedEvents: incomingEvents.length,
@@ -815,11 +871,8 @@ export function syncPull(cwd: string, sourceBranch: string): PullSummary {
         applyRejectedEvents,
         quarantinedEvents,
         conflictEvents,
-        errorHints: buildSyncErrorHints({
-          malformedPayloadEvents,
-          applyRejectedEvents,
-          conflictEvents,
-        }),
+        staleCursor,
+        errorHints,
       },
     };
   } finally {
