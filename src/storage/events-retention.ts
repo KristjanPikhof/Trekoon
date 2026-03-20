@@ -104,7 +104,7 @@ export function pruneEvents(db: Database, options: EventPruneOptions = {}): Even
   const effectiveCutoff: number = oldest !== null ? Math.min(retentionCutoff, oldest) : retentionCutoff;
 
   const candidateCount: number = countCandidates(db, effectiveCutoff);
-  const staleCursors: number = countStaleCursors(db, effectiveCutoff);
+  const staleCursors: number = countStaleCursors(db);
 
   if (dryRun || candidateCount === 0) {
     return {

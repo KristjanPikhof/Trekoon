@@ -649,6 +649,7 @@ describe("sync command", (): void => {
       quarantinedEvents: 0,
       conflictEvents: 0,
       malformedPayloadEvents: 0,
+      staleCursor: false,
       errorHints: [],
     });
 
