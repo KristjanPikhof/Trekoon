@@ -2,6 +2,20 @@
   "name": "trekoon",
   "version": "0.2.9",
   "description": "AI-first local issue tracker CLI.",
+  "keywords": [
+    "ai",
+    "agent",
+    "skill",
+    "cli",
+    "board",
+    "tracker",
+    "agent-tracker",
+    "issue-tracker",
+    "task-tracker",
+    "local-first",
+    "planning",
+    "worktree"
+  ],
   "license": "MIT",
   "repository": {
     "type": "git",
