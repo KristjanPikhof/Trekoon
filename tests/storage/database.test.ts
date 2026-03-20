@@ -686,7 +686,7 @@ describe("storage lifecycle", (): void => {
     }
   });
 
-  test("v4 rollback error mentions worktree_scoped_sync_metadata", (): void => {
+  test("rollback to v3 rejects with irreversible migration error", (): void => {
     const workspace: string = createWorkspace();
     const storage = openTrekoonDatabase(workspace);
 
