@@ -361,5 +361,7 @@ describe("dep command", (): void => {
     // referenced a now-deleted node (the domain should skip missing nodes).
     const listed = await runDep({ cwd, mode: "human", args: ["list", nodes.taskA] });
     expect(listed.ok).toBeTrue();
+    const deps = (listed.data as { dependencies: unknown[] }).dependencies;
+    expect(deps.length).toBe(0);
   });
 });
