@@ -208,7 +208,7 @@ export class MutationService {
   }
 
   createTask(input: { epicId: string; title: string; description: string; status?: string | undefined }): TaskRecord {
-    return this.#db.transaction((): TaskRecord => {
+    return writeTransaction(this.#db, (): TaskRecord => {
       const task = this.#domain.createTask(input);
       this.#appendEntityEvent("task", task.id, ENTITY_OPERATIONS.task.created, {
         epic_id: task.epicId,
@@ -217,7 +217,7 @@ export class MutationService {
         status: task.status,
       });
       return task;
-    })();
+    });
   }
 
   createTaskBatch(input: { epicId: string; specs: readonly CompactTaskSpec[] }): CompactTaskBatchCreateResult {
