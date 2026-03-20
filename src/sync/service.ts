@@ -1083,7 +1083,7 @@ export function syncResolve(cwd: string, conflictId: string, resolution: SyncRes
       throw new Error(`Conflict '${conflictId}' already resolved.`);
     }
 
-    storage.db.transaction((): void => {
+    writeTransaction(storage.db, (): void => {
       if (resolution === "theirs") {
         updateSingleField(
           storage.db,
@@ -1100,7 +1100,7 @@ export function syncResolve(cwd: string, conflictId: string, resolution: SyncRes
         .run(resolution, now, conflict.id);
 
       appendResolutionEvent(storage.db, git.branchName, git.headSha, conflict, resolution);
-    })();
+    });
 
     return {
       conflictId,
