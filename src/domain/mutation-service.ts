@@ -201,10 +201,10 @@ export class MutationService {
   }
 
   deleteEpic(id: string): void {
-    this.#db.transaction((): void => {
+    writeTransaction(this.#db, (): void => {
       this.#domain.deleteEpic(id);
       this.#appendEntityEvent("epic", id, ENTITY_OPERATIONS.epic.deleted, {});
-    })();
+    });
   }
 
   createTask(input: { epicId: string; title: string; description: string; status?: string | undefined }): TaskRecord {
