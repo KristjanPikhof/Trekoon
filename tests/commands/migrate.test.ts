@@ -78,7 +78,7 @@ describe("migrate command", (): void => {
     expect(summary.toVersion).toBe(4);
   });
 
-  test("status does not auto-upgrade partially migrated database", async (): Promise<void> => {
+  test("status reports current version on fully migrated database", async (): Promise<void> => {
     const workspace: string = createWorkspace();
 
     // Build a database at version 4 (the minimum supported version)
