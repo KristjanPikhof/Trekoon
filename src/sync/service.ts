@@ -401,6 +401,15 @@ function createConflict(
   ).run(randomUUID(), event.id, event.entity_kind, event.entity_id, fieldName, oursValue, theirsValue, resolution, now, now);
 }
 
+function hasLocalEntityEdits(db: Database, entityKind: string, entityId: string, sourceBranch: string): boolean {
+  const row = db
+    .query(
+      `SELECT COUNT(*) AS count FROM events WHERE entity_kind = ? AND entity_id = ? AND git_branch != ? LIMIT 1;`,
+    )
+    .get(entityKind, entityId, sourceBranch) as { count: number } | null;
+  return (row?.count ?? 0) > 0;
+}
+
 function rowExists(db: Database, tableName: string, id: string): boolean {
   const row = db.query(`SELECT id FROM ${tableName} WHERE id = ? LIMIT 1;`).get(id) as { id: string } | null;
   return row !== null;
