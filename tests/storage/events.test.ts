@@ -5,7 +5,7 @@ import { join } from "node:path";
 
 import { afterEach, describe, expect, test } from "bun:test";
 
-import { pruneEvents } from "../../src/storage/events-retention";
+import { type EventPruneSummary, pruneEvents } from "../../src/storage/events-retention";
 import { openTrekoonDatabase } from "../../src/storage/database";
 
 const DAY_IN_MILLISECONDS = 24 * 60 * 60 * 1000;
@@ -203,6 +203,100 @@ describe("event retention", (): void => {
       expect(archived?.entity_id).toBe(sourceEntityId);
       expect(archived?.operation).toBe("upsert");
       expect(archived?.version).toBe(1);
+    } finally {
+      storage.close();
+    }
+  });
+
+  test("prune preserves events referenced by sync cursors", (): void => {
+    const workspace: string = createWorkspace();
+    const storage = openTrekoonDatabase(workspace);
+    const now: number = Date.now();
+
+    try {
+      // Insert an old event that a cursor still references.
+      const cursorEventId: string = randomUUID();
+      const cursorEventCreatedAt: number = now - 120 * DAY_IN_MILLISECONDS;
+      insertEvent(storage.db, {
+        id: cursorEventId,
+        entityId: randomUUID(),
+        createdAt: cursorEventCreatedAt,
+      });
+
+      // Insert a newer event that is also old enough to prune.
+      const safeEventId: string = randomUUID();
+      insertEvent(storage.db, {
+        id: safeEventId,
+        entityId: randomUUID(),
+        createdAt: now - 100 * DAY_IN_MILLISECONDS,
+      });
+
+      // Insert a recent event that is never a prune candidate.
+      insertEvent(storage.db, {
+        id: randomUUID(),
+        entityId: randomUUID(),
+        createdAt: now - DAY_IN_MILLISECONDS,
+      });
+
+      // Create a sync cursor pointing at the old event.
+      const cursorToken = `${cursorEventCreatedAt}:${cursorEventId}`;
+      storage.db
+        .query(
+          `INSERT INTO sync_cursors (id, owner_scope, owner_worktree_path, source_branch, cursor_token, last_event_at, created_at, updated_at, version)
+           VALUES (?, 'worktree', '/tmp/wt', 'main', ?, ?, ?, ?, 1);`,
+        )
+        .run(randomUUID(), cursorToken, cursorEventCreatedAt, now, now);
+
+      const summary: EventPruneSummary = pruneEvents(storage.db, {
+        retentionDays: 90,
+        now,
+      });
+
+      // The pruned events must not go below the oldest cursor reference.
+      // The cursor-referenced event and anything after it must survive.
+      const remaining = storage.db.query("SELECT COUNT(*) AS count FROM events;").get() as { count: number };
+      expect(remaining.count).toBeGreaterThanOrEqual(2);
+      expect(summary.staleCursorCount).toBe(0);
+
+      // The cursor-referenced event must still exist.
+      const cursorEvent = storage.db
+        .query("SELECT id FROM events WHERE id = ?;")
+        .get(cursorEventId) as { id: string } | null;
+      expect(cursorEvent?.id).toBe(cursorEventId);
+    } finally {
+      storage.close();
+    }
+  });
+
+  test("prune reports stale cursors when cursor references pruned events", (): void => {
+    const workspace: string = createWorkspace();
+    const storage = openTrekoonDatabase(workspace);
+    const now: number = Date.now();
+
+    try {
+      // Insert only a recent event — the cursor-referenced event is already gone.
+      insertEvent(storage.db, {
+        id: randomUUID(),
+        entityId: randomUUID(),
+        createdAt: now - DAY_IN_MILLISECONDS,
+      });
+
+      // Create a cursor that references an event timestamp far in the past
+      // (event no longer exists).
+      const staleTimestamp: number = now - 200 * DAY_IN_MILLISECONDS;
+      storage.db
+        .query(
+          `INSERT INTO sync_cursors (id, owner_scope, owner_worktree_path, source_branch, cursor_token, last_event_at, created_at, updated_at, version)
+           VALUES (?, 'worktree', '/tmp/stale-wt', 'main', ?, ?, ?, ?, 1);`,
+        )
+        .run(randomUUID(), `${staleTimestamp}:stale-id`, staleTimestamp, now, now);
+
+      const summary: EventPruneSummary = pruneEvents(storage.db, {
+        retentionDays: 90,
+        now,
+      });
+
+      expect(summary.staleCursorCount).toBeGreaterThanOrEqual(1);
     } finally {
       storage.close();
     }

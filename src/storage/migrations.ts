@@ -177,9 +177,13 @@ const MIGRATIONS: readonly Migration[] = [
     up(db: Database): void {
       migrateWorktreeScopedSyncMetadata(db);
     },
-    down(db: Database): void {
-      db.exec("DROP INDEX IF EXISTS idx_sync_cursors_owner;");
-      db.exec("DROP INDEX IF EXISTS idx_git_context_scope_path;");
+    down(_db: Database): void {
+      throw new Error(
+        "Migration 0004 (worktree_scoped_sync_metadata) is irreversible. " +
+        "It adds columns via ALTER TABLE that cannot be removed without " +
+        "reconstructing tables and risking data loss. " +
+        "Rollback below version 4 is not supported.",
+      );
     },
   },
 ];

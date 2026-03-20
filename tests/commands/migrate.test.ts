@@ -54,13 +54,13 @@ describe("migrate command", (): void => {
     expect(data.applied.length).toBeGreaterThan(0);
   });
 
-  test("rolls back to version 0 with explicit flag", async (): Promise<void> => {
+  test("rolls back reversible migrations with explicit flag", async (): Promise<void> => {
     const workspace: string = createWorkspace();
     const storage = openTrekoonDatabase(workspace);
     storage.close();
 
     const rollback = await runMigrate({
-      args: ["rollback", "--to-version", "0"],
+      args: ["rollback", "--to-version", "4"],
       cwd: workspace,
       mode: "toon",
     });
@@ -73,21 +73,8 @@ describe("migrate command", (): void => {
       toVersion: number;
       rolledBack: number;
     };
-    expect(summary.fromVersion).toBeGreaterThan(0);
-    expect(summary.toVersion).toBe(0);
-    expect(summary.rolledBack).toBeGreaterThan(0);
-
-    const databasePath: string = resolveStoragePaths(workspace).databaseFile;
-    const db = new Database(databasePath, { readonly: true });
-
-    try {
-      const epicsTable = db
-        .query("SELECT name FROM sqlite_master WHERE type='table' AND name='epics';")
-        .get() as { name: string } | null;
-      expect(epicsTable).toBeNull();
-    } finally {
-      db.close(false);
-    }
+    expect(summary.fromVersion).toBeGreaterThanOrEqual(4);
+    expect(summary.toVersion).toBe(4);
   });
 
   test("status does not auto-upgrade partially migrated database", async (): Promise<void> => {
