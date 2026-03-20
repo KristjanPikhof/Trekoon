@@ -864,8 +864,12 @@ describe("storage lifecycle", (): void => {
       db.query("INSERT INTO dependencies (id, source_id, source_kind, depends_on_id, depends_on_kind, created_at, updated_at, version) VALUES (?, ?, ?, ?, ?, ?, ?, 1);")
         .run("dep-orphaned", "task-1", "task", "missing-task", "task", now, now);
 
+      // Orphaned: source_id references a non-existent task
+      db.query("INSERT INTO dependencies (id, source_id, source_kind, depends_on_id, depends_on_kind, created_at, updated_at, version) VALUES (?, ?, ?, ?, ?, ?, ?, 1);")
+        .run("dep-orphaned-source", "missing-source", "task", "task-1", "task", now, now);
+
       const beforeCount = (db.query("SELECT COUNT(*) AS count FROM dependencies;").get() as { count: number }).count;
-      expect(beforeCount).toBe(1);
+      expect(beforeCount).toBe(2);
 
       // Run migration 5
       migrateDatabase(db);
