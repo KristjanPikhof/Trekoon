@@ -186,6 +186,37 @@ const MIGRATIONS: readonly Migration[] = [
       );
     },
   },
+  {
+    version: 5,
+    name: "0005_dependency_edge_integrity",
+    up(db: Database): void {
+      // Clean up orphaned dependency rows where source or target no longer exists.
+      db.exec(`
+        DELETE FROM dependencies
+        WHERE source_id NOT IN (SELECT id FROM tasks UNION ALL SELECT id FROM subtasks)
+           OR depends_on_id NOT IN (SELECT id FROM tasks UNION ALL SELECT id FROM subtasks);
+      `);
+
+      // Deduplicate any existing duplicate edges before creating the unique index.
+      // Keep the row with the earliest created_at (and smallest id as tiebreaker).
+      db.exec(`
+        DELETE FROM dependencies
+        WHERE id NOT IN (
+          SELECT MIN(id) FROM dependencies
+          GROUP BY source_id, depends_on_id
+        );
+      `);
+
+      db.exec("CREATE UNIQUE INDEX IF NOT EXISTS idx_dependencies_edge ON dependencies (source_id, depends_on_id);");
+    },
+    down(_db: Database): void {
+      throw new Error(
+        "Migration 0005 (dependency_edge_integrity) is irreversible. " +
+        "It removes orphaned rows and deduplicates dependency edges. " +
+        "Rollback below version 5 is not supported.",
+      );
+    },
+  },
 ];
 
 function migrationTableExists(db: Database): boolean {
