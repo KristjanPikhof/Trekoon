@@ -649,8 +649,9 @@ describe("integration sync workflow", (): void => {
     });
 
     expect(stalePull.ok).toBe(true);
-    const data = stalePull.data as { diagnostics?: { staleCursor?: boolean; errorHints?: string[] } };
+    const data = stalePull.data as { diagnostics?: { staleCursor?: boolean; errorHints?: string[] }; appliedEvents: number };
     expect(data.diagnostics?.staleCursor).toBe(true);
+    expect(data.appliedEvents).toBeGreaterThanOrEqual(1);
   });
 
   test("fresh worktree sees shared tracker state and can pull main", async (): Promise<void> => {
