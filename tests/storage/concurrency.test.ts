@@ -247,7 +247,7 @@ function runScenario(
   }));
 
   for (let i = 0; i < WRITER_COUNT; i++) {
-    const conn = new Database(file, { create: false });
+    const conn = new Database(file);
     conn.exec(`PRAGMA busy_timeout = ${busyTimeoutMs};`);
     conn.exec("PRAGMA journal_mode = WAL;");
     connections.push(conn);
