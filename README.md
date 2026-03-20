@@ -131,8 +131,9 @@ agent to:
 
 - use `--toon` by default
 - prefer the smallest sufficient read
-- use bulk planning commands when possible
-- keep progress in Trekoon with append-based updates
+- use transactional bulk planning commands when possible
+- append progress and blocker notes instead of rewriting full descriptions
+- preview scoped replace before `--apply`
 - treat `.trekoon` as shared repo-scoped operational state
 
 Read [AI agents and the Trekoon skill](docs/ai-agents.md) for installation,
