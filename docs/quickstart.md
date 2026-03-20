@@ -75,20 +75,19 @@ Current runtime expectations for operators:
 
 - the served HTML, styles, and board app files come from the local
   `.trekoon/board` runtime directory
-- the current shell also pulls Vue from `unpkg.com`, Tailwind from
-  `cdn.tailwindcss.com`, and Google-hosted fonts/icons at page load time
-- if those hosts are unavailable, the command still starts the loopback server
-  and prints the fallback URL, but the shell may not fully hydrate in the
-  browser until network access is available again
+- all assets are self-hosted: the board ships its own CSS, fonts (Inter,
+  Material Symbols), and vanilla JS with no framework or CDN dependencies
+- the board works fully offline once the runtime assets are copied into
+  `.trekoon/board`
 
 Current layout behavior:
 
 - the topbar is a compact navbar with workspace identity, Epics and Board
   navigation, debounced search, theme toggle, and workspace info
-- on wide displays, expect a three-surface workspace: epic switcher sidebar,
-  task workspace, and task inspector
-- on medium and small displays, secondary surfaces collapse into stacked panels
-  or drawer-style views so the board remains navigable on narrower widths
+- the board toggles between an epics overview and a task workspace view; task
+  detail opens as a modal overlay
+- responsive breakpoints adjust kanban column counts and component spacing so
+  the board remains navigable on narrower widths
 - the page scrolls naturally as one document; modal overlays lock body scroll
   while open
 - task cards show truncated descriptions; clicking a card opens the task detail
