@@ -1,5 +1,6 @@
 import { type Database } from "bun:sqlite";
 
+import { writeTransaction } from "../storage/database";
 import { appendEventWithGitContext } from "../sync/event-writes";
 import { ENTITY_OPERATIONS } from "./mutation-operations";
 import { TrackerDomain } from "./tracker-domain";
