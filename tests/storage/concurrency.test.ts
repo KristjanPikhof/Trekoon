@@ -203,6 +203,48 @@ function runImmediateWriter(
   return { writerId, successes, busyErrors, otherErrors, elapsedMs };
 }
 
+/**
+ * Writer using the production writeTransaction helper from src/storage/database.ts.
+ * Exercises BEGIN IMMEDIATE with the helper's busy_timeout management.
+ */
+function runWriteTransactionWriter(
+  dbFile: string,
+  writerId: number,
+  writeCount: number,
+  busyTimeoutMs: number,
+): WriterResult {
+  const conn = new Database(dbFile);
+  conn.exec(`PRAGMA busy_timeout = ${busyTimeoutMs};`);
+  conn.exec("PRAGMA journal_mode = WAL;");
+
+  let successes = 0;
+  let busyErrors = 0;
+  let otherErrors = 0;
+  const start = performance.now();
+
+  for (let seq = 0; seq < writeCount; seq++) {
+    try {
+      writeTransaction(conn, (db) => {
+        db
+          .query("INSERT INTO writes (writer_id, sequence, payload) VALUES (?, ?, ?);")
+          .run(writerId, seq, `writetx-writer-${writerId}-seq-${seq}`);
+      });
+      successes++;
+    } catch (error) {
+      if (isSqliteBusyError(error)) {
+        busyErrors++;
+      } else {
+        otherErrors++;
+      }
+    }
+  }
+
+  const elapsedMs = performance.now() - start;
+  conn.close(false);
+
+  return { writerId, successes, busyErrors, otherErrors, elapsedMs };
+}
+
 /* ------------------------------------------------------------------ */
 /*  Scenario runner                                                   */
 /* ------------------------------------------------------------------ */
