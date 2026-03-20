@@ -121,7 +121,7 @@ export function pruneEvents(db: Database, options: EventPruneOptions = {}): Even
     };
   }
 
-  return db.transaction((): EventPruneSummary => {
+  return writeTransaction(db, (): EventPruneSummary => {
     let archivedCount = 0;
 
     if (archive) {
