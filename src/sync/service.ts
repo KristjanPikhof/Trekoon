@@ -2,7 +2,7 @@ import { randomUUID } from "node:crypto";
 
 import { type Database } from "bun:sqlite";
 
-import { openTrekoonDatabase } from "../storage/database";
+import { openTrekoonDatabase, writeTransaction } from "../storage/database";
 import { countBranchEventsSince, queryBranchEventsSince } from "./branch-db";
 import { persistGitContext, resolveGitContext } from "./git-context";
 import {
