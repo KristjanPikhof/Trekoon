@@ -98,6 +98,23 @@ export function resolveStorageResolutionDiagnostics(
   }
 }
 
+/**
+ * Execute a write transaction using BEGIN IMMEDIATE to acquire a reserved lock
+ * up-front, avoiding SQLITE_BUSY errors that occur when a deferred transaction
+ * is promoted to a write lock after readers have already started.
+ */
+export function writeTransaction<T>(db: Database, fn: (db: Database) => T): T {
+  db.exec("BEGIN IMMEDIATE;");
+  try {
+    const result: T = fn(db);
+    db.exec("COMMIT;");
+    return result;
+  } catch (error) {
+    db.exec("ROLLBACK;");
+    throw error;
+  }
+}
+
 export function openTrekoonDatabase(
   workingDirectory: string = process.cwd(),
   options: OpenTrekoonDatabaseOptions = {},
