@@ -44,6 +44,7 @@ describe("workspace epic selector", () => {
         { id: "epic-middle", title: "Middle epic", createdAt: 200 },
       ],
       store: {
+        copyFeedback: null,
         notesPanelOpen: false,
         isMutating: false,
         selectedEpicId: "epic-middle",
@@ -61,5 +62,37 @@ describe("workspace epic selector", () => {
       "epic-middle",
       "epic-older",
     ]);
+  });
+
+  test("shows copied state in the workspace header without ligature text", () => {
+    const { container, getHtml } = createMockContainer();
+    const workspace = createWorkspace().mount(container);
+
+    workspace.update({
+      selectedEpic: {
+        id: "epic-middle",
+        title: "Middle epic",
+        description: "Some notes",
+        status: "todo",
+      },
+      selectedTask: null,
+      snapshotEpics: [
+        { id: "epic-middle", title: "Middle epic", createdAt: 200 },
+      ],
+      store: {
+        copyFeedback: { epicId: "epic-middle" },
+        notesPanelOpen: false,
+        isMutating: false,
+        selectedEpicId: "epic-middle",
+        view: "kanban",
+      },
+      visibleTasks: [],
+    });
+
+    const html = getHtml();
+    expect(html).toContain("board-copy-btn board-copy-btn--active");
+    expect(html).toContain("<span class=\"board-copy-btn__label\">Copied</span>");
+    expect(html).not.toContain("content_copy");
+    expect(html).toContain("<svg class=\"board-inline-icon");
   });
 });
