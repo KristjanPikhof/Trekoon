@@ -312,7 +312,7 @@ export class MutationService {
     description?: string | undefined;
     status?: string | undefined;
   }): SubtaskRecord {
-    return this.#db.transaction((): SubtaskRecord => {
+    return writeTransaction(this.#db, (): SubtaskRecord => {
       const subtask = this.#domain.createSubtask(input);
       this.#appendEntityEvent("subtask", subtask.id, ENTITY_OPERATIONS.subtask.created, {
         task_id: subtask.taskId,
@@ -321,7 +321,7 @@ export class MutationService {
         status: subtask.status,
       });
       return subtask;
-    })();
+    });
   }
 
   createSubtaskBatch(input: { taskId: string; specs: readonly CompactSubtaskSpec[] }): CompactSubtaskBatchCreateResult {
