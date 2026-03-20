@@ -283,6 +283,7 @@ export function createStore(initialSnapshot, options = {}) {
     selectedSubtaskId: null,
     theme: readThemePreference(),
     focusedEpicIndex: 0,
+    copyFeedback: null,
     notice: null,
     isMutating: false,
     notesPanelOpen: storedState.notesPanelOpen === true,

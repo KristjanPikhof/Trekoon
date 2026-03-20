@@ -79,16 +79,15 @@ Current shell/runtime notes:
 
 - the runtime copied into `.trekoon/board` includes the HTML shell, local app
   modules, and shared styles
-- the current shell also requests Vue from `unpkg.com`, Tailwind from
-  `cdn.tailwindcss.com`, and Google-hosted fonts/icons in the browser
-- if those remote dependencies are blocked, the local server still starts and
-  the fallback URL remains valid, but the browser UI may not fully load until
-  network access is restored
+- all assets are self-hosted: the board ships its own CSS, fonts (Inter,
+  Material Symbols), and vanilla JS with no framework or CDN dependencies
+- the board works fully offline once the runtime assets are copied into
+  `.trekoon/board`
 
 Board UI architecture:
 
-- the board is a single-page application served from `.trekoon/board` with Vue 3
-  (shell) and vanilla JS (board app) loaded from CDN dependencies
+- the board is a single-page application served from `.trekoon/board` using a
+  zero-dependency vanilla JS component runtime with locally bundled CSS and fonts
 - the backend is a Bun HTTP server exposing a REST API at `/api/*` with
   token-based authentication; every mutation response includes an updated
   snapshot so the client always has fresh state
