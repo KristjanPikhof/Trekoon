@@ -332,23 +332,21 @@ function entityFieldConflict(
     return null;
   }
 
+  // Search without a row limit so that local edits buried deep in
+  // event history are never missed.  We still filter by entity to
+  // keep the scan narrow — the idx_events_entity index covers this.
   const rows = localDb
     .query(
       `
       SELECT payload, git_branch
       FROM events
-      WHERE entity_kind = ? AND entity_id = ?
-      ORDER BY created_at DESC, id DESC
-      LIMIT 50;
+      WHERE entity_kind = ? AND entity_id = ? AND git_branch != ?
+      ORDER BY created_at DESC, id DESC;
       `,
     )
-    .all(event.entity_kind, event.entity_id) as Array<{ payload: string; git_branch: string | null }>;
+    .all(event.entity_kind, event.entity_id, sourceBranch) as Array<{ payload: string; git_branch: string | null }>;
 
   for (const row of rows) {
-    if (row.git_branch === sourceBranch) {
-      continue;
-    }
-
     const payloadValidation = parsePayload(row.payload);
     if (!payloadValidation.ok) {
       continue;
