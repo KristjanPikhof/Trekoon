@@ -525,6 +525,7 @@ export async function bootLegacyBoard(options = {}) {
       showBoard: () => actions.showBoard(),
       scrollToDetail: () => document.querySelector(".board-drawer, .board-task-modal")?.scrollIntoView({ block: "nearest", behavior: getScrollBehavior() }),
       setView: (view) => actions.setView(view),
+      copyEpicId: (id) => actions.copyEpicId(id),
       toggleTheme: () => actions.toggleTheme(),
       toggleNotesPanel: () => actions.toggleNotesPanel(),
       confirmDelete: () => {
