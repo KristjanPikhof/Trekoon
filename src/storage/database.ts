@@ -127,7 +127,7 @@ export function openTrekoonDatabase(
 
   const db: Database = new Database(paths.databaseFile, { create: true });
 
-  db.exec("PRAGMA busy_timeout = 5000;");
+  db.exec("PRAGMA busy_timeout = 15000;");
   db.exec("PRAGMA journal_mode = WAL;");
   db.exec("PRAGMA foreign_keys = ON;");
 
