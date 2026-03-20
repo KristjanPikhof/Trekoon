@@ -325,7 +325,7 @@ export class MutationService {
   }
 
   createSubtaskBatch(input: { taskId: string; specs: readonly CompactSubtaskSpec[] }): CompactSubtaskBatchCreateResult {
-    return this.#db.transaction((): CompactSubtaskBatchCreateResult => {
+    return writeTransaction(this.#db, (): CompactSubtaskBatchCreateResult => {
       const created = this.#domain.createSubtaskBatch(input);
       for (const subtask of created.subtasks) {
         this.#appendEntityEvent("subtask", subtask.id, ENTITY_OPERATIONS.subtask.created, {
@@ -336,7 +336,7 @@ export class MutationService {
         });
       }
       return created;
-    })();
+    });
   }
 
   updateSubtask(
