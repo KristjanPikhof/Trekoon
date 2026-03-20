@@ -638,15 +638,32 @@ describe("storage lifecycle", (): void => {
 
   test("uses transactional migration path when schema is not current", (): void => {
     const workspace: string = createWorkspace();
-    const storage = openTrekoonDatabase(workspace);
+    const databasePath: string = resolveStoragePaths(workspace).databaseFile;
+
+    // Simulate a partially-migrated database by creating the migration
+    // table with only the base migration recorded, bypassing rollback
+    // restrictions from migration 0004.
+    mkdirSync(join(workspace, ".trekoon"), { recursive: true });
+    const setupDb = new Database(databasePath, { create: true });
 
     try {
-      rollbackDatabase(storage.db, 1);
+      setupDb.exec(`
+        CREATE TABLE IF NOT EXISTS schema_migrations (
+          id INTEGER PRIMARY KEY AUTOINCREMENT,
+          version INTEGER NOT NULL UNIQUE,
+          name TEXT NOT NULL UNIQUE,
+          applied_at INTEGER NOT NULL
+        );
+      `);
+      setupDb.query("INSERT INTO schema_migrations (version, name, applied_at) VALUES (?, ?, ?);").run(
+        1,
+        "0001_base_schema_v1",
+        Date.now(),
+      );
     } finally {
-      storage.close();
+      setupDb.close(false);
     }
 
-    const databasePath: string = resolveStoragePaths(workspace).databaseFile;
     const lockHolder = new Database(databasePath);
     const migrator = new Database(databasePath);
 

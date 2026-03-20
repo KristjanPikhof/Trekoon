@@ -583,6 +583,76 @@ describe("integration sync workflow", (): void => {
     }
   });
 
+  test("pull detects stale cursor after events have been pruned", async (): Promise<void> => {
+    const workspace: string = createWorkspace();
+    seedRepository(workspace);
+
+    const initResult = await runInit({
+      args: [],
+      cwd: workspace,
+      mode: "human",
+    });
+    expect(initResult.ok).toBe(true);
+
+    // Create an epic on main and pull from a feature branch to establish a cursor.
+    const created = await runEpic({
+      cwd: workspace,
+      mode: "toon",
+      args: ["create", "--title", "Prune test epic", "--description", "will be pruned"],
+    });
+    expect(created.ok).toBe(true);
+
+    runGit(workspace, ["checkout", "-b", "feature/stale-cursor-prune"]);
+
+    const firstPull = await runSync({
+      args: ["pull", "--from", "main"],
+      cwd: workspace,
+      mode: "toon",
+    });
+    expect(firstPull.ok).toBe(true);
+    expect((firstPull.data as { scannedEvents: number }).scannedEvents).toBeGreaterThanOrEqual(1);
+
+    // Now prune the events that the cursor references (simulate time passing).
+    const { pruneEvents } = await import("../../src/storage/events-retention");
+    const storage = openTrekoonDatabase(workspace);
+    try {
+      // Force all events to appear old by updating their created_at.
+      const DAY = 24 * 60 * 60 * 1000;
+      const oldTimestamp = Date.now() - 200 * DAY;
+      storage.db.query("UPDATE events SET created_at = ?;").run(oldTimestamp);
+
+      // Prune with a short retention window.
+      pruneEvents(storage.db, { retentionDays: 1 });
+
+      const remaining = storage.db.query("SELECT COUNT(*) AS count FROM events;").get() as { count: number };
+      expect(remaining.count).toBe(0);
+    } finally {
+      storage.close();
+    }
+
+    // Create new events on main after pruning.
+    runGit(workspace, ["checkout", "main"]);
+    const created2 = await runEpic({
+      cwd: workspace,
+      mode: "toon",
+      args: ["create", "--title", "Post-prune epic", "--description", "new"],
+    });
+    expect(created2.ok).toBe(true);
+
+    runGit(workspace, ["checkout", "feature/stale-cursor-prune"]);
+
+    // Pull should detect the stale cursor and surface it.
+    const stalePull = await runSync({
+      args: ["pull", "--from", "main"],
+      cwd: workspace,
+      mode: "toon",
+    });
+
+    expect(stalePull.ok).toBe(true);
+    const data = stalePull.data as { diagnostics?: { staleCursor?: boolean; errorHints?: string[] } };
+    expect(data.diagnostics?.staleCursor).toBe(true);
+  });
+
   test("fresh worktree sees shared tracker state and can pull main", async (): Promise<void> => {
     const workspace: string = createWorkspace();
     seedRepository(workspace);
