@@ -391,7 +391,7 @@ export class MutationService {
   }
 
   removeDependency(sourceId: string, dependsOnId: string): number {
-    return this.#db.transaction((): number => {
+    return writeTransaction(this.#db, (): number => {
       const removed = this.#domain.removeDependency(sourceId, dependsOnId);
       if (removed > 0) {
         this.#appendEntityEvent("dependency", `${sourceId}->${dependsOnId}`, ENTITY_OPERATIONS.dependency.removed, {
@@ -400,7 +400,7 @@ export class MutationService {
         });
       }
       return removed;
-    })();
+    });
   }
 
   describeError(error: unknown): string | undefined {
