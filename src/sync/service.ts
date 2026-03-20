@@ -868,7 +868,7 @@ export function syncPull(cwd: string, sourceBranch: string): PullSummary {
       if (lastToken) {
         saveCursor(storage.db, git.worktreePath, sourceBranch, lastToken, lastEventAt);
       }
-    })();
+    });
 
     const errorHints: string[] = buildSyncErrorHints({
       malformedPayloadEvents,
