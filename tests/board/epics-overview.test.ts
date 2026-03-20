@@ -52,7 +52,9 @@ describe("epics overview copy affordance", () => {
 
     const html = getHtml();
     expect(html).toContain('data-copy-epic-id="epic-1"');
-    expect(html).toContain("board-copy-btn--icon board-copy-btn--active");
+    expect(html).toContain("board-copy-btn--icon");
+    expect(html).toContain("board-copy-btn--epic-row");
+    expect(html).toContain("board-copy-btn--active");
     expect(html).toContain("board-inline-icon board-inline-icon--sm");
     expect(html).not.toContain("content_copy");
   });
