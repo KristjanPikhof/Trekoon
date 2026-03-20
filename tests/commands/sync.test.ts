@@ -1306,4 +1306,225 @@ describe("sync command", (): void => {
       storage.close();
     }
   });
+
+  test("detects conflicts in event histories deeper than 50 events", async (): Promise<void> => {
+    const workspace: string = createWorkspace();
+    initializeRepository(workspace);
+
+    const epicId = randomUUID();
+    const now = Date.now();
+
+    {
+      const storage = openTrekoonDatabase(workspace);
+      try {
+        storage.db
+          .query("INSERT INTO epics (id, title, description, status, created_at, updated_at, version) VALUES (?, ?, ?, ?, ?, ?, 1);")
+          .run(epicId, "Deep epic", "seed", "todo", now, now);
+
+        // Seed the epic.created event on main.
+        storage.db
+          .query(
+            "INSERT INTO events (id, entity_kind, entity_id, operation, payload, git_branch, git_head, created_at, updated_at, version) VALUES (?, 'epic', ?, 'epic.created', ?, 'main', NULL, ?, ?, 1);",
+          )
+          .run(
+            randomUUID(),
+            epicId,
+            JSON.stringify({ fields: { title: "Deep epic", description: "seed", status: "todo" } }),
+            now,
+            now,
+          );
+      } finally {
+        storage.close();
+      }
+    }
+
+    runGit(workspace, ["checkout", "-b", "feature/deep-history"]);
+
+    {
+      const storage = openTrekoonDatabase(workspace);
+      try {
+        // Create 60 local events on the feature branch for this entity,
+        // burying the local edit beyond the old 50-event window.
+        storage.db
+          .query("UPDATE epics SET title = ?, updated_at = ?, version = version + 1 WHERE id = ?;")
+          .run("Local deep epic", now + 1, epicId);
+
+        storage.db
+          .query(
+            "INSERT INTO events (id, entity_kind, entity_id, operation, payload, git_branch, git_head, created_at, updated_at, version) VALUES (?, 'epic', ?, 'upsert', ?, 'feature/deep-history', NULL, ?, ?, 1);",
+          )
+          .run(
+            randomUUID(),
+            epicId,
+            JSON.stringify({ fields: { title: "Local deep epic" } }),
+            now + 1,
+            now + 1,
+          );
+
+        // Pad with 59 more local events for unrelated fields.
+        for (let i = 2; i <= 60; i++) {
+          storage.db
+            .query(
+              "INSERT INTO events (id, entity_kind, entity_id, operation, payload, git_branch, git_head, created_at, updated_at, version) VALUES (?, 'epic', ?, 'upsert', ?, 'feature/deep-history', NULL, ?, ?, 1);",
+            )
+            .run(
+              randomUUID(),
+              epicId,
+              JSON.stringify({ fields: { description: `iteration ${i}` } }),
+              now + 1 + i,
+              now + 1 + i,
+            );
+        }
+      } finally {
+        storage.close();
+      }
+    }
+
+    // Now push a conflicting title change from main.
+    runGit(workspace, ["checkout", "main"]);
+    {
+      const storage = openTrekoonDatabase(workspace);
+      try {
+        storage.db
+          .query(
+            "INSERT INTO events (id, entity_kind, entity_id, operation, payload, git_branch, git_head, created_at, updated_at, version) VALUES (?, 'epic', ?, 'epic.updated', ?, 'main', NULL, ?, ?, 1);",
+          )
+          .run(
+            randomUUID(),
+            epicId,
+            JSON.stringify({ fields: { title: "Remote deep epic" } }),
+            now + 100,
+            now + 100,
+          );
+      } finally {
+        storage.close();
+      }
+    }
+
+    runGit(workspace, ["checkout", "feature/deep-history"]);
+
+    const pullResult = await runSync({
+      args: ["pull", "--from", "main"],
+      cwd: workspace,
+      mode: "toon",
+    });
+
+    expect(pullResult.ok).toBe(true);
+    // Must detect the conflict even though the local edit is buried beyond 50 events.
+    expect((pullResult.data as { createdConflicts: number }).createdConflicts).toBeGreaterThanOrEqual(1);
+    expect((pullResult.data as { diagnostics: { conflictEvents: number } }).diagnostics.conflictEvents).toBeGreaterThanOrEqual(1);
+
+    const storage = openTrekoonDatabase(workspace);
+    try {
+      const conflict = storage.db
+        .query("SELECT field_name FROM sync_conflicts WHERE entity_id = ? AND field_name = 'title' AND resolution = 'pending' LIMIT 1;")
+        .get(epicId) as { field_name: string } | null;
+      expect(conflict).not.toBeNull();
+
+      // Local value must be preserved (not silently overwritten).
+      const epic = storage.db.query("SELECT title FROM epics WHERE id = ?;").get(epicId) as { title: string } | null;
+      expect(epic?.title).toBe("Local deep epic");
+    } finally {
+      storage.close();
+    }
+  });
+
+  test("incoming delete surfaces conflict when local edits exist", async (): Promise<void> => {
+    const workspace: string = createWorkspace();
+    initializeRepository(workspace);
+
+    const epicId = randomUUID();
+    const now = Date.now();
+
+    {
+      const storage = openTrekoonDatabase(workspace);
+      try {
+        storage.db
+          .query("INSERT INTO epics (id, title, description, status, created_at, updated_at, version) VALUES (?, ?, ?, ?, ?, ?, 1);")
+          .run(epicId, "Delete target", "seed", "open", now, now);
+
+        storage.db
+          .query(
+            "INSERT INTO events (id, entity_kind, entity_id, operation, payload, git_branch, git_head, created_at, updated_at, version) VALUES (?, 'epic', ?, 'epic.created', ?, 'main', NULL, ?, ?, 1);",
+          )
+          .run(
+            randomUUID(),
+            epicId,
+            JSON.stringify({ fields: { title: "Delete target", description: "seed", status: "open" } }),
+            now,
+            now,
+          );
+      } finally {
+        storage.close();
+      }
+    }
+
+    runGit(workspace, ["checkout", "-b", "feature/delete-conflict"]);
+
+    {
+      const storage = openTrekoonDatabase(workspace);
+      try {
+        // Make a local edit on the feature branch.
+        storage.db
+          .query("UPDATE epics SET title = ?, updated_at = ?, version = version + 1 WHERE id = ?;")
+          .run("Locally edited", now + 1, epicId);
+
+        appendEventWithGitContext(storage.db, workspace, {
+          entityKind: "epic",
+          entityId: epicId,
+          operation: "upsert",
+          fields: { title: "Locally edited" },
+        });
+      } finally {
+        storage.close();
+      }
+    }
+
+    // Delete the epic on main.
+    runGit(workspace, ["checkout", "main"]);
+    {
+      const storage = openTrekoonDatabase(workspace);
+      try {
+        storage.db
+          .query(
+            "INSERT INTO events (id, entity_kind, entity_id, operation, payload, git_branch, git_head, created_at, updated_at, version) VALUES (?, 'epic', ?, 'epic.deleted', ?, 'main', NULL, ?, ?, 1);",
+          )
+          .run(
+            randomUUID(),
+            epicId,
+            JSON.stringify({ fields: {} }),
+            now + 10,
+            now + 10,
+          );
+      } finally {
+        storage.close();
+      }
+    }
+
+    runGit(workspace, ["checkout", "feature/delete-conflict"]);
+
+    const pullResult = await runSync({
+      args: ["pull", "--from", "main"],
+      cwd: workspace,
+      mode: "toon",
+    });
+
+    expect(pullResult.ok).toBe(true);
+
+    const storage = openTrekoonDatabase(workspace);
+    try {
+      // The epic must NOT be silently deleted — it should still exist.
+      const epic = storage.db.query("SELECT id, title FROM epics WHERE id = ?;").get(epicId) as { id: string; title: string } | null;
+      expect(epic).not.toBeNull();
+      expect(epic?.title).toBe("Locally edited");
+
+      // A conflict must have been created for the delete-vs-edit situation.
+      const conflict = storage.db
+        .query("SELECT field_name FROM sync_conflicts WHERE entity_id = ? AND field_name = '__delete__' LIMIT 1;")
+        .get(epicId) as { field_name: string } | null;
+      expect(conflict).not.toBeNull();
+    } finally {
+      storage.close();
+    }
+  });
 });
