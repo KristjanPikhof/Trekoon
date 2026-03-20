@@ -404,10 +404,10 @@ function createConflict(
 function hasLocalEntityEdits(db: Database, entityKind: string, entityId: string, sourceBranch: string): boolean {
   const row = db
     .query(
-      `SELECT COUNT(*) AS count FROM events WHERE entity_kind = ? AND entity_id = ? AND git_branch != ? LIMIT 1;`,
+      `SELECT 1 FROM events WHERE entity_kind = ? AND entity_id = ? AND git_branch != ? LIMIT 1;`,
     )
-    .get(entityKind, entityId, sourceBranch) as { count: number } | null;
-  return (row?.count ?? 0) > 0;
+    .get(entityKind, entityId, sourceBranch);
+  return row !== null;
 }
 
 function rowExists(db: Database, tableName: string, id: string): boolean {
