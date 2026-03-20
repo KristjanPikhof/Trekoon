@@ -381,11 +381,11 @@ body.board-scroll-locked {
   min-width: 0;
 }
 
-.board-epic-row__title-row {
+.board-epic-row__meta-row {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
-  gap: 8px;
+  gap: 6px;
 }
 
 .board-copy-btn,
@@ -454,6 +454,16 @@ body.board-scroll-locked {
   padding: 0;
   border-radius: 999px;
   flex-shrink: 0;
+}
+
+.board-copy-btn--epic-row {
+  min-height: 24px;
+  width: 24px;
+}
+
+.board-copy-btn--epic-row .board-inline-icon--sm {
+  width: 12px;
+  height: 12px;
 }
 
 .board-copy-btn__label {

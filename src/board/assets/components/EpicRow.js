@@ -42,12 +42,11 @@ export function renderEpicRow(props) {
       data-open-epic="${escapeHtml(epic.id)}"
     >
       <span class="board-epic-row__summary">
-        <span class="board-epic-row__title-row">
+        <span class="board-epic-row__meta-row">
           <span class="${neutralChipClasses()}">${escapeHtml(epic.id)}</span>
-          <strong class="board-epic-row__title">${escapeHtml(epic.title)}</strong>
           <button
             type="button"
-            class="board-copy-btn board-copy-btn--icon ${copied ? "board-copy-btn--active" : ""}"
+            class="board-copy-btn board-copy-btn--icon board-copy-btn--epic-row ${copied ? "board-copy-btn--active" : ""}"
             data-copy-epic-id="${escapeHtml(epic.id)}"
             aria-label="${escapeHtml(copied ? `Copied epic UUID for ${epic.title}` : copyLabel)}"
             title="${escapeHtml(copied ? "Epic UUID copied." : copyTooltip)}"
@@ -55,6 +54,7 @@ export function renderEpicRow(props) {
             ${copied ? renderCheckIcon("board-inline-icon--sm") : renderCopyIcon("board-inline-icon--sm")}
           </button>
         </span>
+        <strong class="board-epic-row__title">${escapeHtml(epic.title)}</strong>
         ${descriptionMarkup}
       </span>
       <span class="board-epic-row__status">${renderStatusBadge(epic.status ?? "todo")}</span>
