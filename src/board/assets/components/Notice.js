@@ -1,8 +1,7 @@
 import {
   escapeHtml,
-  panelClasses,
+  renderCheckIcon,
   renderIcon,
-  sectionLabelClasses,
 } from "./helpers.js";
 
 /**
@@ -54,15 +53,17 @@ export function createNotice() {
           : "Saved";
 
       container.innerHTML = `
-        <section class="${panelClasses("mb-4 flex items-start gap-3 p-4 sm:p-5")}" role="${notice.type === "error" ? "alert" : "status"}" aria-live="${notice.type === "error" ? "assertive" : "polite"}" aria-atomic="true">
-          <div class="flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl ${notice.type === "error" ? "bg-red-500/10 text-red-300 ring-1 ring-red-500/20" : "bg-emerald-500/10 text-emerald-300 ring-1 ring-emerald-500/20"}">
-            ${renderIcon(notice.type === "error" ? "warning" : "check_circle", "text-[20px]")}
-          </div>
-          <div class="min-w-0">
-            <p class="${sectionLabelClasses()}" id="board-notice-title">${escapeHtml(noticeTitle)}</p>
-            <p class="mt-1 text-sm leading-6 text-[var(--board-text-muted)]">${escapeHtml(notice.message)}</p>
-          </div>
-        </section>
+        <div class="board-toast-region" role="presentation">
+          <section class="board-toast board-toast--${notice.type === "error" ? "error" : "success"}" role="${notice.type === "error" ? "alert" : "status"}" aria-live="${notice.type === "error" ? "assertive" : "polite"}" aria-atomic="true">
+            <div class="board-toast__icon ${notice.type === "error" ? "board-toast__icon--error" : "board-toast__icon--success"}">
+              ${notice.type === "error" ? renderIcon("warning") : renderCheckIcon()}
+            </div>
+            <div class="board-toast__content">
+              <p class="board-toast__title" id="board-notice-title">${escapeHtml(noticeTitle)}</p>
+              <p class="board-toast__message">${escapeHtml(notice.message)}</p>
+            </div>
+          </section>
+        </div>
       `;
       lastNotice = { type: notice.type, message: notice.message };
 
