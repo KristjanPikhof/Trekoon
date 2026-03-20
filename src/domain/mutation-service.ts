@@ -583,7 +583,7 @@ export class MutationService {
   ): ScopeReplacementResult {
     const result = this.#buildScopeReplacementResult(nodes, searchText, replacementText, fields, "apply");
 
-    this.#db.transaction((): void => {
+    writeTransaction(this.#db, (): void => {
       for (const node of nodes) {
         const nextTitle = fields.includes("title") ? replaceMatches(node.title, searchText, replacementText) : node.title;
         const nextDescription = fields.includes("description")
