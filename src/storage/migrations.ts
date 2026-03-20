@@ -198,7 +198,7 @@ const MIGRATIONS: readonly Migration[] = [
       `);
 
       // Deduplicate any existing duplicate edges before creating the unique index.
-      // Keep the row with the earliest created_at (and smallest id as tiebreaker).
+      // Keep one arbitrary row per logical edge (MIN(id) is lexicographic, not chronological, but any survivor is equivalent).
       db.exec(`
         DELETE FROM dependencies
         WHERE id NOT IN (
