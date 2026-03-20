@@ -8,6 +8,8 @@ import {
   neutralChipClasses,
   panelClasses,
   readStatusLabel,
+  renderCheckIcon,
+  renderCopyIcon,
   renderEpicCountSummary,
   renderEmptyState,
   renderIcon,
@@ -64,6 +66,7 @@ function renderWorkspaceHeader(props) {
   const notesTooltip = "Show or hide this epic's description.";
   const copyTooltip = "Copy this epic's UUID.";
   const copyLabel = `Copy epic UUID for ${selectedEpic.title}`;
+  const isCopied = store.copyFeedback?.epicId === selectedEpic.id;
   const notesPanelId = `board-notes-panel-${selectedEpic.id}`;
   const orderedEpics = orderEpicsNewestFirst(snapshotEpics);
 
@@ -113,9 +116,9 @@ function renderWorkspaceHeader(props) {
         </div>
         <div class="board-wh__actions">
           <div class="board-wh__action-group">
-            <button type="button" class="board-copy-btn" data-copy-epic-id="${escapeHtml(selectedEpic.id)}" aria-label="${escapeHtml(copyLabel)}" title="${escapeHtml(copyTooltip)}">
-              ${renderIcon("content_copy", "text-[16px]")}
-              <span class="board-copy-btn__label">Copy ID</span>
+            <button type="button" class="board-copy-btn ${isCopied ? "board-copy-btn--active" : ""}" data-copy-epic-id="${escapeHtml(selectedEpic.id)}" aria-label="${escapeHtml(isCopied ? `Copied epic UUID for ${selectedEpic.title}` : copyLabel)}" title="${escapeHtml(isCopied ? "Epic UUID copied." : copyTooltip)}">
+              ${isCopied ? renderCheckIcon() : renderCopyIcon()}
+              <span class="board-copy-btn__label">${isCopied ? "Copied" : "Copy ID"}</span>
             </button>
             ${description ? `
               <button type="button" class="board-wh__notes-btn ${store.notesPanelOpen ? "board-wh__notes-btn--active" : ""}" data-toggle-notes aria-label="Toggle epic notes" aria-expanded="${store.notesPanelOpen}" aria-controls="${escapeHtml(notesPanelId)}" title="${escapeHtml(notesTooltip)}">
@@ -262,11 +265,12 @@ function render(props) {
   const headerMarkup = renderWorkspaceHeader({
     selectedEpic,
     snapshotEpics,
-    store: {
-      notesPanelOpen: store.notesPanelOpen,
-      isMutating: store.isMutating,
-      selectedEpicId: selectedEpic.id,
-      view: store.view,
+      store: {
+        copyFeedback: store.copyFeedback,
+        notesPanelOpen: store.notesPanelOpen,
+        isMutating: store.isMutating,
+        selectedEpicId: selectedEpic.id,
+        view: store.view,
       viewModes,
     },
     visibleTasks,
