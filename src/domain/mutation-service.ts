@@ -343,7 +343,7 @@ export class MutationService {
     id: string,
     input: { title?: string | undefined; description?: string | undefined; status?: string | undefined },
   ): SubtaskRecord {
-    return this.#db.transaction((): SubtaskRecord => {
+    return writeTransaction(this.#db, (): SubtaskRecord => {
       const subtask = this.#domain.updateSubtask(id, input);
       this.#appendEntityEvent("subtask", subtask.id, ENTITY_OPERATIONS.subtask.updated, {
         task_id: subtask.taskId,
@@ -352,7 +352,7 @@ export class MutationService {
         status: subtask.status,
       });
       return subtask;
-    })();
+    });
   }
 
   deleteSubtask(id: string): void {
