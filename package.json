@@ -3,6 +3,14 @@
   "version": "0.2.9",
   "description": "AI-first local issue tracker CLI.",
   "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/KristjanPikhof/Trekoon.git"
+  },
+  "homepage": "https://github.com/KristjanPikhof/Trekoon#readme",
+  "bugs": {
+    "url": "https://github.com/KristjanPikhof/Trekoon/issues"
+  },
   "type": "module",
   "bin": {
     "trekoon": "./bin/trekoon"
