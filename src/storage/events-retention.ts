@@ -54,6 +54,24 @@ function countCandidates(db: Database, cutoffTimestamp: number): number {
   return row?.count ?? 0;
 }
 
+function oldestCursorTimestamp(db: Database): number | null {
+  const row = db
+    .query("SELECT MIN(last_event_at) AS oldest FROM sync_cursors WHERE last_event_at IS NOT NULL;")
+    .get() as { oldest: number | null } | null;
+
+  return row?.oldest ?? null;
+}
+
+function countStaleCursors(db: Database, effectiveCutoff: number): number {
+  const row = db
+    .query(
+      "SELECT COUNT(*) AS count FROM sync_cursors WHERE last_event_at IS NOT NULL AND last_event_at < ?;",
+    )
+    .get(effectiveCutoff) as { count: number } | null;
+
+  return row?.count ?? 0;
+}
+
 export function pruneEvents(db: Database, options: EventPruneOptions = {}): EventPruneSummary {
   const retentionDays: number = assertRetentionDays(options.retentionDays ?? DEFAULT_EVENT_RETENTION_DAYS);
   const dryRun: boolean = options.dryRun ?? false;
