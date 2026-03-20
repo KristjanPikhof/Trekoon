@@ -788,7 +788,7 @@ export function syncPull(cwd: string, sourceBranch: string): PullSummary {
     let lastToken: string | null = null;
     let lastEventAt: number | null = cursor?.last_event_at ?? null;
 
-    storage.db.transaction((): void => {
+    writeTransaction(storage.db, (): void => {
       for (const incoming of incomingEvents) {
         const payloadValidation = parsePayload(incoming.payload);
 
