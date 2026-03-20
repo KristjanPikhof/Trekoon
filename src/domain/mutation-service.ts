@@ -180,7 +180,7 @@ export class MutationService {
     id: string,
     input: { title?: string | undefined; description?: string | undefined; status?: string | undefined },
   ): EpicRecord {
-    return this.#db.transaction((): EpicRecord => {
+    return writeTransaction(this.#db, (): EpicRecord => {
       const epic = this.#domain.updateEpic(id, input);
       this.#appendEntityEvent("epic", epic.id, ENTITY_OPERATIONS.epic.updated, {
         title: epic.title,
@@ -188,7 +188,7 @@ export class MutationService {
         status: epic.status,
       });
       return epic;
-    })();
+    });
   }
 
   updateEpicStatusCascade(id: string, status: string): StatusCascadePlan {
