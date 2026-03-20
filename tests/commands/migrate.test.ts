@@ -55,7 +55,7 @@ describe("migrate command", (): void => {
     expect(data.applied.length).toBeGreaterThan(0);
   });
 
-  test("rolls back reversible migrations with explicit flag", async (): Promise<void> => {
+  test("rollback to v4 fails because migration v5 is irreversible", async (): Promise<void> => {
     const workspace: string = createWorkspace();
     const storage = openTrekoonDatabase(workspace);
     storage.close();
@@ -66,16 +66,10 @@ describe("migrate command", (): void => {
       mode: "toon",
     });
 
-    expect(rollback.ok).toBeTrue();
-    expect(rollback.command).toBe("migrate.rollback");
-
-    const summary = rollback.data as {
-      fromVersion: number;
-      toVersion: number;
-      rolledBack: number;
-    };
-    expect(summary.fromVersion).toBeGreaterThanOrEqual(4);
-    expect(summary.toVersion).toBe(4);
+    expect(rollback.ok).toBeFalse();
+    expect(rollback.error).toBeDefined();
+    const errorMessage = String((rollback as { error?: { message?: string } }).error?.message ?? "");
+    expect(errorMessage).toContain("irreversible");
   });
 
   test("status reports current version on fully migrated database", async (): Promise<void> => {
