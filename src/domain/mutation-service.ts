@@ -278,7 +278,7 @@ export class MutationService {
     id: string,
     input: { title?: string | undefined; description?: string | undefined; status?: string | undefined },
   ): TaskRecord {
-    return this.#db.transaction((): TaskRecord => {
+    return writeTransaction(this.#db, (): TaskRecord => {
       const task = this.#domain.updateTask(id, input);
       this.#appendEntityEvent("task", task.id, ENTITY_OPERATIONS.task.updated, {
         epic_id: task.epicId,
@@ -287,7 +287,7 @@ export class MutationService {
         status: task.status,
       });
       return task;
-    })();
+    });
   }
 
   updateTaskStatusCascade(id: string, status: string): StatusCascadePlan {
