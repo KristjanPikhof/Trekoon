@@ -157,6 +157,7 @@ export function createBoardActions(options) {
 
   let searchTimer = null;
   let pendingSearchValue = null;
+  let copyFeedbackTimer = null;
 
   const syncSearchInputToState = () => {
     const input = document.querySelector("#board-search-input");
@@ -186,6 +187,38 @@ export function createBoardActions(options) {
   };
 
   const shouldRefocusSearchInput = () => document.activeElement?.id === "board-search-input";
+
+  const clearCopyFeedback = ({ rerenderBoard = true } = {}) => {
+    if (copyFeedbackTimer !== null) {
+      clearTimeout(copyFeedbackTimer);
+      copyFeedbackTimer = null;
+    }
+
+    if (!store.copyFeedback) {
+      return;
+    }
+
+    store.copyFeedback = null;
+    if (rerenderBoard) {
+      rerender();
+    }
+  };
+
+  const scheduleCopyFeedbackClear = (epicId) => {
+    if (copyFeedbackTimer !== null) {
+      clearTimeout(copyFeedbackTimer);
+    }
+
+    copyFeedbackTimer = setTimeout(() => {
+      copyFeedbackTimer = null;
+      if (store.copyFeedback?.epicId !== epicId) {
+        return;
+      }
+
+      store.copyFeedback = null;
+      rerender();
+    }, 1800);
+  };
 
   const commitSearch = (nextSearch, options = {}) => {
     const { focusInput = false } = options;
@@ -271,6 +304,7 @@ export function createBoardActions(options) {
       const normalizedEpicId = typeof epicId === "string" ? epicId.trim() : "";
 
       if (!normalizedEpicId) {
+        clearCopyFeedback({ rerenderBoard: false });
         store.notice = {
           type: "error",
           title: "Copy failed",
@@ -282,12 +316,12 @@ export function createBoardActions(options) {
 
       try {
         await copyTextToClipboard(normalizedEpicId);
-        store.notice = {
-          type: "success",
-          title: "Copied",
-          message: "Epic UUID copied to clipboard.",
+        store.copyFeedback = {
+          epicId: normalizedEpicId,
         };
+        scheduleCopyFeedbackClear(normalizedEpicId);
       } catch {
+        clearCopyFeedback({ rerenderBoard: false });
         store.notice = {
           type: "error",
           title: "Copy failed",
@@ -440,6 +474,9 @@ export function createBoardActions(options) {
         } else if (boardState.screen === "tasks") {
           event.preventDefault();
           this.showEpics();
+        } else if (store.copyFeedback) {
+          event.preventDefault();
+          clearCopyFeedback();
         } else if (store.notice) {
           event.preventDefault();
           store.notice = null;
