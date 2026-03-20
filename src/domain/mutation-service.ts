@@ -623,7 +623,7 @@ export class MutationService {
           status: subtask.status,
         });
       }
-    })();
+    });
 
     return result;
   }
