@@ -105,7 +105,7 @@ export class MutationService {
   }
 
   createEpic(input: { title: string; description: string; status?: string | undefined }): EpicRecord {
-    return this.#db.transaction((): EpicRecord => {
+    return writeTransaction(this.#db, (): EpicRecord => {
       const epic = this.#domain.createEpic(input);
       this.#appendEntityEvent("epic", epic.id, ENTITY_OPERATIONS.epic.created, {
         title: epic.title,
@@ -113,7 +113,7 @@ export class MutationService {
         status: epic.status,
       });
       return epic;
-    })();
+    });
   }
 
   createEpicGraph(input: {
