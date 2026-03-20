@@ -105,9 +105,8 @@ Verification checklist for operators:
    the search input while typing.
 4. Click a task card and confirm the task detail modal opens with the full
    description, edit form, and subtask list.
-5. On desktop width, confirm the epic switcher sidebar, workspace, and detail
-   panel can all be visible simultaneously.
-6. Resize to a narrow viewport and confirm the layout stacks cleanly without
+5. On desktop width, confirm the kanban board shows multiple columns.
+6. Resize to a narrow viewport and confirm columns reflow cleanly without
    horizontal overflow.
 7. Close modals and confirm you return to the previous board context.
 
