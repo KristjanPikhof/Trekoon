@@ -810,6 +810,20 @@ export function syncPull(cwd: string, sourceBranch: string): PullSummary {
         }
 
         const payload: EventPayload = { fields: payloadValidation.fields };
+
+        if (incoming.operation.endsWith(".deleted") && hasLocalEntityEdits(storage.db, incoming.entity_kind, incoming.entity_id, sourceBranch)) {
+          // Note: dependency.removed is intentionally excluded — dependencies are
+          // edges (not entities with local edit history), so conflict detection
+          // does not apply to them.
+          createConflict(storage.db, incoming, "__delete__", null, "Entity deleted on source branch");
+          createdConflicts += 1;
+          conflictEvents += 1;
+          storeEvent(storage.db, incoming);
+          lastToken = cursorTokenFromEvent(incoming);
+          lastEventAt = incoming.created_at;
+          continue;
+        }
+
         const fieldsToApply: Record<string, unknown> = {};
         let withheldConflictCount = 0;
 
@@ -825,16 +839,6 @@ export function syncPull(cwd: string, sourceBranch: string): PullSummary {
           }
 
           fieldsToApply[fieldName] = value;
-        }
-
-        if (incoming.operation.endsWith(".deleted") && hasLocalEntityEdits(storage.db, incoming.entity_kind, incoming.entity_id, sourceBranch)) {
-          createConflict(storage.db, incoming, "__delete__", null, "Entity deleted on source branch");
-          createdConflicts += 1;
-          conflictEvents += 1;
-          storeEvent(storage.db, incoming);
-          lastToken = cursorTokenFromEvent(incoming);
-          lastEventAt = incoming.created_at;
-          continue;
         }
 
         if (applyEntityFields(storage.db, incoming, fieldsToApply)) {
