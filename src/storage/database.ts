@@ -99,12 +99,30 @@ export function resolveStorageResolutionDiagnostics(
 }
 
 /**
+ * Maximum time (ms) to wait when acquiring the write lock via BEGIN IMMEDIATE.
+ * Kept below the default bun test timeout so that lock-contention surfaces as
+ * a SQLITE_BUSY error rather than a test-level timeout.
+ */
+const WRITE_LOCK_BUSY_TIMEOUT_MS = 3000;
+
+/**
  * Execute a write transaction using BEGIN IMMEDIATE to acquire a reserved lock
  * up-front, avoiding SQLITE_BUSY errors that occur when a deferred transaction
  * is promoted to a write lock after readers have already started.
+ *
+ * A shorter busy_timeout is applied while acquiring the lock so callers receive
+ * a prompt SQLITE_BUSY error instead of blocking for the full connection-level
+ * timeout.  The connection-level timeout is restored before returning.
  */
 export function writeTransaction<T>(db: Database, fn: (db: Database) => T): T {
-  db.exec("BEGIN IMMEDIATE;");
+  db.exec(`PRAGMA busy_timeout = ${WRITE_LOCK_BUSY_TIMEOUT_MS};`);
+  try {
+    db.exec("BEGIN IMMEDIATE;");
+  } catch (error) {
+    db.exec("PRAGMA busy_timeout = 15000;");
+    throw error;
+  }
+  db.exec("PRAGMA busy_timeout = 15000;");
   try {
     const result: T = fn(db);
     db.exec("COMMIT;");
