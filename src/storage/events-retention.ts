@@ -1,5 +1,7 @@
 import { type Database } from "bun:sqlite";
 
+import { writeTransaction } from "./database";
+
 export const DEFAULT_EVENT_RETENTION_DAYS = 90;
 const DAY_IN_MILLISECONDS = 24 * 60 * 60 * 1000;
 
