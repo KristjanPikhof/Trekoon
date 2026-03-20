@@ -28,7 +28,7 @@ Recommended (global install with Bun):
 bun add -g trekoon
 ```
 
-Alternative (npm global install):
+Alternative (npm global install — Bun must still be installed as the runtime):
 
 ```bash
 npm i -g trekoon
@@ -106,12 +106,12 @@ Current runtime expectations:
 
 Current board behavior to expect:
 
-- the topbar is a compact single-row navbar showing the workspace name, active
-  epic context, Epics and Board navigation, search, theme toggle, and a
-  workspace info popover
-- wide screens show the epic switcher sidebar, task workspace, and task
-  inspector together; narrower screens collapse these into stacked panels or
-  drawer-style views
+- the topbar is a compact single-row navbar showing the Trekoon brand, Epics
+  and Board navigation, search, theme toggle, and a workspace info popover;
+  selecting an epic adds the active epic context to the topbar
+- the board toggles between an epics overview and a task workspace view; task
+  detail opens as a modal overlay; responsive breakpoints adjust kanban column
+  counts and component spacing
 - the page scrolls naturally as a single SPA surface; modal overlays (task
   detail, subtask editor) lock body scroll while open
 - overview cards are the primary entry point into an epic; clicking a card opens
