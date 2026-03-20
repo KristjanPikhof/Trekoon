@@ -5,6 +5,7 @@
  *   1. DEFERRED transactions (default db.transaction())
  *   2. IMMEDIATE transactions (BEGIN IMMEDIATE)
  *   3. Various busy_timeout values (5s, 10s, 15s)
+ *   4. writeTransaction helper (verifies zero SQLITE_BUSY errors)
  *
  * Each scenario uses a fresh WAL-mode temporary database and spawns
  * concurrent writers to expose lock contention characteristics.
@@ -16,6 +17,8 @@ import { join } from "node:path";
 
 import { Database } from "bun:sqlite";
 import { afterEach, describe, expect, test } from "bun:test";
+
+import { writeTransaction } from "../../src/storage/database";
 
 /* ------------------------------------------------------------------ */
 /*  Constants                                                         */
