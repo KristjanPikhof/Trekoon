@@ -829,6 +829,81 @@ describe("sync command", (): void => {
     }
   });
 
+  test("replaying dependency.added for an already-existing edge is idempotent", async (): Promise<void> => {
+    const workspace: string = createWorkspace();
+    initializeRepository(workspace);
+
+    const sourceId = randomUUID();
+    const dependsOnId = randomUUID();
+    const depId = randomUUID();
+    const now = Date.now();
+
+    {
+      const storage = openTrekoonDatabase(workspace);
+      try {
+        storage.db
+          .query("INSERT INTO epics (id, title, description, status, created_at, updated_at, version) VALUES (?, ?, ?, ?, ?, ?, 1);")
+          .run("epic-a", "Epic", "seed", "todo", now, now);
+
+        storage.db
+          .query("INSERT INTO tasks (id, epic_id, title, description, status, created_at, updated_at, version) VALUES (?, 'epic-a', ?, ?, ?, ?, ?, 1);")
+          .run(sourceId, "Task A", "seed", "todo", now, now);
+        storage.db
+          .query("INSERT INTO tasks (id, epic_id, title, description, status, created_at, updated_at, version) VALUES (?, 'epic-a', ?, ?, ?, ?, ?, 1);")
+          .run(dependsOnId, "Task B", "seed", "todo", now, now);
+
+        // Pre-existing dependency edge
+        storage.db
+          .query("INSERT INTO dependencies (id, source_id, source_kind, depends_on_id, depends_on_kind, created_at, updated_at, version) VALUES (?, ?, 'task', ?, 'task', ?, ?, 1);")
+          .run(depId, sourceId, dependsOnId, now, now);
+
+        // Incoming event that replays the same edge
+        storage.db
+          .query(
+            "INSERT INTO events (id, entity_kind, entity_id, operation, payload, git_branch, git_head, created_at, updated_at, version) VALUES (?, 'dependency', ?, 'dependency.added', ?, 'main', NULL, ?, ?, 1);",
+          )
+          .run(
+            randomUUID(),
+            randomUUID(),
+            JSON.stringify({
+              fields: {
+                source_id: sourceId,
+                source_kind: "task",
+                depends_on_id: dependsOnId,
+                depends_on_kind: "task",
+              },
+            }),
+            now + 1,
+            now + 1,
+          );
+      } finally {
+        storage.close();
+      }
+    }
+
+    runGit(workspace, ["checkout", "-b", "feature/dep-replay-idempotent"]);
+
+    const pullResult = await runSync({
+      args: ["pull", "--from", "main"],
+      cwd: workspace,
+      mode: "toon",
+    });
+
+    expect(pullResult.ok).toBe(true);
+    expect((pullResult.data as { appliedEvents: number }).appliedEvents).toBe(1);
+
+    const storage = openTrekoonDatabase(workspace);
+    try {
+      const deps = storage.db
+        .query("SELECT id FROM dependencies WHERE source_id = ? AND depends_on_id = ?;")
+        .all(sourceId, dependsOnId) as Array<{ id: string }>;
+      // Should still be exactly one row (idempotent)
+      expect(deps.length).toBe(1);
+    } finally {
+      storage.close();
+    }
+  });
+
   test("rejects unsupported sync conflict list modes", async (): Promise<void> => {
     const workspace: string = createWorkspace();
     initializeRepository(workspace);
