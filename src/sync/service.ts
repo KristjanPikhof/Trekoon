@@ -332,9 +332,9 @@ function entityFieldConflict(
     return null;
   }
 
-  // Search without a row limit so that local edits buried deep in
-  // event history are never missed.  We still filter by entity to
-  // keep the scan narrow — the idx_events_entity index covers this.
+  // Note: loads all matching events into memory. For entities with very large
+  // event histories, consider a cursor-based scan. The idx_events_entity index
+  // keeps the scan narrow by (entity_kind, entity_id).
   const rows = localDb
     .query(
       `
