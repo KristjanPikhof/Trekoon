@@ -22,14 +22,17 @@ export function renderEpicRow(props) {
   const statusLabel = String(epic.status ?? "todo").replace(/_/g, " ");
   const openLabel = `Open epic ${epic.title}`;
   const tooltip = `${openLabel}. ${totalTasks} task${totalTasks === 1 ? "" : "s"}.`;
+  const copyLabel = `Copy epic UUID for ${epic.title}`;
+  const copyTooltip = `Copy epic UUID ${epic.id}.`;
   const descriptionMarkup = epic.description?.trim()
     ? `<p class="board-epic-row__description text-sm text-[var(--board-text-muted)] board-clamped-text__preview board-clamped-text__preview--2">${escapeHtml(epic.description.trim())}</p>`
     : "";
 
   return `
-    <button
-      type="button"
+    <div
       class="board-epic-row ${selected ? "board-epic-row--selected" : ""}"
+      role="button"
+      tabindex="0"
       aria-current="${selected}"
       aria-label="${escapeHtml(`${openLabel}. ${totalTasks} tasks. Status ${statusLabel}.`)}"
       title="${escapeHtml(tooltip)}"
@@ -39,6 +42,15 @@ export function renderEpicRow(props) {
         <span class="board-epic-row__title-row">
           <span class="${neutralChipClasses()}">${escapeHtml(epic.id)}</span>
           <strong class="board-epic-row__title">${escapeHtml(epic.title)}</strong>
+          <button
+            type="button"
+            class="board-copy-btn board-copy-btn--icon"
+            data-copy-epic-id="${escapeHtml(epic.id)}"
+            aria-label="${escapeHtml(copyLabel)}"
+            title="${escapeHtml(copyTooltip)}"
+          >
+            ${renderIcon("content_copy", "text-[15px]")}
+          </button>
         </span>
         ${descriptionMarkup}
       </span>
@@ -59,6 +71,6 @@ export function renderEpicRow(props) {
           ${renderIcon("chevron_right", "text-[16px]")}
         </span>
       </span>
-    </button>
+    </div>
   `;
 }
