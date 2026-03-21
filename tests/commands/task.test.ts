@@ -1124,7 +1124,7 @@ describe("task command", (): void => {
     const first = await runTask({
       cwd,
       mode: "human",
-      args: ["create", "--epic", epicId, "--title", "First", "--description", "desc", "--status", "in-progress"],
+      args: ["create", "--epic", epicId, "--title", "First", "--description", "desc", "--status", "in_progress"],
     });
     const second = await runTask({
       cwd,
