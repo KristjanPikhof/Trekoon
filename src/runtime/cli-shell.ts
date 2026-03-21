@@ -8,6 +8,7 @@ import { runMigrate } from "../commands/migrate";
 import { runQuickstart } from "../commands/quickstart";
 import { runSession } from "../commands/session";
 import { runSkills } from "../commands/skills";
+import { runSuggest } from "../commands/suggest";
 import { runSubtask } from "../commands/subtask";
 import { runSync } from "../commands/sync";
 import { runTask } from "../commands/task";
