@@ -351,7 +351,7 @@ describe("epic command", (): void => {
     const updated = await runEpic({
       cwd,
       mode: "human",
-      args: ["update", "--all", "--append", "follow policy", "--status", "in-progress"],
+      args: ["update", "--all", "--append", "follow policy", "--status", "in_progress"],
     });
 
     expect(updated.ok).toBeTrue();
@@ -359,8 +359,8 @@ describe("epic command", (): void => {
     expect(epics.length).toBe(2);
     expect(epics[0]?.description).toContain("follow policy");
     expect(epics[1]?.description).toContain("follow policy");
-    expect(epics[0]?.status).toBe("in-progress");
-    expect(epics[1]?.status).toBe("in-progress");
+    expect(epics[0]?.status).toBe("in_progress");
+    expect(epics[1]?.status).toBe("in_progress");
   });
 
   test("bulk update rejects title field", async (): Promise<void> => {
