@@ -167,7 +167,7 @@ describe("board routes", (): void => {
         headers: {
           "content-type": "application/json",
         },
-        body: JSON.stringify({ status: "done" }),
+        body: JSON.stringify({ status: "in_progress" }),
       }));
       const body = await response.json() as { error: { code: string; message: string; details: { unresolvedDependencyCount: number } } };
 
