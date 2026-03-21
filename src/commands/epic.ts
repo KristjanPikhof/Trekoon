@@ -115,7 +115,7 @@ function formatSearchHuman(matches: readonly SearchEntityMatch[], emptyMessage: 
 }
 
 function getStatusPriority(status: string): number {
-  if (status === "in_progress" || status === "in-progress") {
+  if (status === "in_progress") {
     return 0;
   }
 
