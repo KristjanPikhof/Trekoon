@@ -32,7 +32,7 @@ export interface ToonEnvelope {
   readonly ok: boolean;
   readonly command: string;
   readonly data: unknown;
-  readonly metadata: ContractMetadata;
+  readonly metadata?: ContractMetadata;
   readonly error?: ToonError;
   readonly meta?: Record<string, unknown>;
 }
