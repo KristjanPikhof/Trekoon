@@ -352,6 +352,10 @@ export class MutationService {
     input: { title?: string | undefined; description?: string | undefined; status?: string | undefined },
   ): SubtaskRecord {
     return writeTransaction(this.#db, (): SubtaskRecord => {
+      if (input.status !== undefined) {
+        const existing = this.#domain.getSubtaskOrThrow(id);
+        validateStatusTransition(existing.status, input.status, "subtask", id);
+      }
       const subtask = this.#domain.updateSubtask(id, input);
       this.#appendEntityEvent("subtask", subtask.id, ENTITY_OPERATIONS.subtask.updated, {
         task_id: subtask.taskId,
