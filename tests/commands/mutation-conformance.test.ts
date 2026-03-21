@@ -639,6 +639,7 @@ describe("mutation conformance", (): void => {
           title: "Task beta",
           description: "Task beta desc",
           status: "todo",
+          owner: null,
         },
       },
     });
@@ -650,6 +651,7 @@ describe("mutation conformance", (): void => {
           title: "Subtask beta",
           description: "Subtask beta desc",
           status: "todo",
+          owner: null,
         },
       },
     });
