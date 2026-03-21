@@ -813,7 +813,10 @@ export function syncPull(cwd: string, sourceBranch: string): PullSummary {
 
         const payload: EventPayload = { fields: payloadValidation.fields };
 
-        if (incoming.operation.endsWith(".deleted") && hasLocalEntityEdits(storage.db, incoming.entity_kind, incoming.entity_id, sourceBranch)) {
+        const isDeleteWithLocalEdits =
+          incoming.operation.endsWith(".deleted") &&
+          hasLocalEntityEdits(storage.db, incoming.entity_kind, incoming.entity_id, sourceBranch);
+        if (isDeleteWithLocalEdits) {
           // Note: dependency.removed is intentionally excluded — dependencies are
           // edges (not entities with local edit history), so conflict detection
           // does not apply to them.
