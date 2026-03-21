@@ -153,7 +153,7 @@ function isValidStatus(status: string): status is ValidStatus {
   return (VALID_STATUSES as readonly string[]).includes(status);
 }
 
-function validateStatusTransition(fromStatus: string, toStatus: string, entityKind: string, entityId: string): void {
+export function validateStatusTransition(fromStatus: string, toStatus: string, entityKind: string, entityId: string): void {
   if (fromStatus === toStatus) {
     return;
   }
