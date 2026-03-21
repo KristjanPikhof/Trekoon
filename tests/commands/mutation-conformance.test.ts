@@ -783,7 +783,7 @@ describe("mutation conformance", (): void => {
         headers: {
           "content-type": "application/json",
         },
-        body: JSON.stringify({ status: "done" }),
+        body: JSON.stringify({ status: "in_progress" }),
       }));
 
       expect(response.status).toBe(200);
