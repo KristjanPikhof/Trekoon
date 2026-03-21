@@ -1392,6 +1392,70 @@ export async function runEpic(context: CliContext): Promise<CliResult> {
           data: { epic },
         });
       }
+      case "progress": {
+        const epicId: string = parsed.positional[1] ?? "";
+        if (epicId.length === 0) {
+          return failResult({
+            command: "epic.progress",
+            human: "Provide an epic id. Usage: trekoon epic progress <epic-id>",
+            data: { code: "invalid_input" },
+            error: {
+              code: "invalid_input",
+              message: "Missing epic id",
+            },
+          });
+        }
+
+        const epic = domain.getEpic(epicId);
+        if (!epic) {
+          return failResult({
+            command: "epic.progress",
+            human: `Epic not found: ${epicId}`,
+            data: { code: "not_found", id: epicId },
+            error: {
+              code: "not_found",
+              message: `Epic not found: ${epicId}`,
+            },
+          });
+        }
+
+        const allTasks = domain.listTasks(epicId);
+        const doneCount = allTasks.filter((t) => t.status === "done").length;
+        const inProgressCount = allTasks.filter((t) => t.status === "in_progress").length;
+        const blockedCount = allTasks.filter((t) => t.status === "blocked").length;
+        const todoCount = allTasks.filter((t) => t.status === "todo").length;
+
+        const readiness = buildTaskReadiness(domain, epicId);
+        const readyCount = readiness.summary.readyCount;
+        const nextCandidate = readiness.candidates[0] ?? null;
+
+        const nextTask = nextCandidate !== null
+          ? { id: nextCandidate.task.id, title: nextCandidate.task.title }
+          : null;
+
+        const total = allTasks.length;
+        let human = `Epic: ${epic.title}\n`;
+        human += `Total: ${total}, Done: ${doneCount}, In Progress: ${inProgressCount}, Blocked: ${blockedCount}, Todo: ${todoCount}, Ready: ${readyCount}`;
+        if (nextTask !== null) {
+          human += `\nNext candidate: ${nextTask.id} | ${nextTask.title}`;
+        }
+
+        return okResult({
+          command: "epic.progress",
+          human,
+          data: {
+            epicId: epic.id,
+            title: epic.title,
+            total,
+            doneCount,
+            inProgressCount,
+            blockedCount,
+            todoCount,
+            readyCount,
+            nextCandidate: nextTask,
+          },
+        });
+      }
       case "delete": {
         const epicId: string = parsed.positional[1] ?? "";
         mutations.deleteEpic(epicId);
@@ -1405,7 +1469,7 @@ export async function runEpic(context: CliContext): Promise<CliResult> {
       default:
         return failResult({
           command: "epic",
-          human: "Usage: trekoon epic <create|expand|list|show|search|replace|update|delete>",
+          human: "Usage: trekoon epic <create|expand|list|show|search|replace|update|delete|progress>",
           data: {
             args: context.args,
           },
