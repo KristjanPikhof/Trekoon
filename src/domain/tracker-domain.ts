@@ -623,19 +623,20 @@ export class TrackerDomain {
 
   updateSubtask(
     id: string,
-    input: { title?: string | undefined; description?: string | undefined; status?: string | undefined },
+    input: { title?: string | undefined; description?: string | undefined; status?: string | undefined; owner?: string | null | undefined },
   ): SubtaskRecord {
     const existing: SubtaskRecord = this.getSubtaskOrThrow(id);
     const nextTitle: string = input.title !== undefined ? assertNonEmpty("title", input.title) : existing.title;
     const nextDescription: string =
       input.description !== undefined ? normalizeSubtaskDescription(input.description) : existing.description;
     const nextStatus: string = input.status !== undefined ? assertNonEmpty("status", input.status) : existing.status;
+    const nextOwner: string | null = input.owner !== undefined ? input.owner : existing.owner;
     this.assertNoUnresolvedDependenciesForStatusTransition(id, "subtask", existing.status, nextStatus);
     const now: number = Date.now();
 
     this.#db
-      .query("UPDATE subtasks SET title = ?, description = ?, status = ?, updated_at = ?, version = version + 1 WHERE id = ?;")
-      .run(nextTitle, nextDescription, nextStatus, now, id);
+      .query("UPDATE subtasks SET title = ?, description = ?, status = ?, owner = ?, updated_at = ?, version = version + 1 WHERE id = ?;")
+      .run(nextTitle, nextDescription, nextStatus, nextOwner, now, id);
 
     return this.getSubtaskOrThrow(id);
   }
