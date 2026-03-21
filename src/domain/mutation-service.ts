@@ -181,6 +181,10 @@ export class MutationService {
     input: { title?: string | undefined; description?: string | undefined; status?: string | undefined },
   ): EpicRecord {
     return writeTransaction(this.#db, (): EpicRecord => {
+      if (input.status !== undefined) {
+        const existing = this.#domain.getEpicOrThrow(id);
+        validateStatusTransition(existing.status, input.status, "epic", id);
+      }
       const epic = this.#domain.updateEpic(id, input);
       this.#appendEntityEvent("epic", epic.id, ENTITY_OPERATIONS.epic.updated, {
         title: epic.title,
