@@ -1084,6 +1084,7 @@ export async function runTask(context: CliContext): Promise<CliResult> {
         const description: string | undefined = readOption(parsed.options, "description", "d");
         const append: string | undefined = readOption(parsed.options, "append");
         const status: string | undefined = readOption(parsed.options, "status", "s");
+        const owner: string | undefined = readOption(parsed.options, "owner");
 
         if (updateAll && ids.length > 0) {
           return failResult({
