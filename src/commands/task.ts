@@ -1259,6 +1259,11 @@ export async function runTask(context: CliContext): Promise<CliResult> {
           });
         }
 
+        // Check for open subtasks (lenient: warn but allow completion)
+        const openSubtasks = domain.getOpenSubtasks(taskId);
+        const openSubtaskCount = openSubtasks.length;
+        const openSubtaskIds = openSubtasks.map((s) => s.id);
+
         // Snapshot blocked tasks before marking done (scoped to direct reverse deps)
         const reverseDeps = domain.listReverseDependencies(taskId);
         const directRevDepIds = new Set(
