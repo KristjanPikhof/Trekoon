@@ -788,7 +788,8 @@ export async function runSubtask(context: CliContext): Promise<CliResult> {
           readMissingOptionValue(parsed.missingOptionValues, "ids") ??
           readMissingOptionValue(parsed.missingOptionValues, "append") ??
           readMissingOptionValue(parsed.missingOptionValues, "description", "d") ??
-          readMissingOptionValue(parsed.missingOptionValues, "status", "s");
+          readMissingOptionValue(parsed.missingOptionValues, "status", "s") ??
+          readMissingOptionValue(parsed.missingOptionValues, "owner");
         if (missingUpdateOption !== undefined) {
           return failMissingOptionValue("subtask.update", missingUpdateOption);
         }
@@ -801,6 +802,7 @@ export async function runSubtask(context: CliContext): Promise<CliResult> {
         const description: string | undefined = readOption(parsed.options, "description", "d");
         const append: string | undefined = readOption(parsed.options, "append");
         const status: string | undefined = readOption(parsed.options, "status", "s");
+        const owner: string | undefined = readOption(parsed.options, "owner");
 
         if (updateAll && ids.length > 0) {
           return failResult({
