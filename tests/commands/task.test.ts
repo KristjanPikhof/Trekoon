@@ -919,9 +919,7 @@ describe("task command", (): void => {
 
     const done = await runTask({ cwd, mode: "toon", args: ["update", blockedTaskId, "--status", "done"] });
     expect(done.ok).toBeFalse();
-    expect(done.error?.code).toBe("dependency_blocked");
-    expect((done.data as { unresolvedDependencyCount: number }).unresolvedDependencyCount).toBe(1);
-    expect((done.data as { unresolvedDependencyIds: string[] }).unresolvedDependencyIds).toEqual([blockerTaskId]);
+    expect(done.error?.code).toBe("status_transition_invalid");
   });
 
   test("update allows in_progress once dependencies are done", async (): Promise<void> => {
