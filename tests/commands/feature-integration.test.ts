@@ -615,6 +615,9 @@ describe("suggest command", (): void => {
     const epicId = await seedEpic(cwd, "Done Epic", "desc");
     const taskId = await seedTask(cwd, epicId, "Task", "desc");
 
+    // Move epic to in_progress so todo->done invalid transition is not suggested
+    await runEpic({ cwd, mode: "toon", args: ["update", epicId, "--status", "in_progress"] });
+
     // Complete the task: todo -> in_progress -> done
     await runTask({ cwd, mode: "toon", args: ["update", taskId, "--status", "in_progress"] });
     await runTask({ cwd, mode: "toon", args: ["update", taskId, "--status", "done"] });
@@ -632,6 +635,38 @@ describe("suggest command", (): void => {
     const markDoneSuggestion = data.suggestions.find((s) => s.action.includes("mark epic"));
     expect(markDoneSuggestion).toBeDefined();
     expect(markDoneSuggestion?.category).toBe("planning");
+  });
+
+  test("todo epic with all tasks done suggests advancing to in_progress first", async (): Promise<void> => {
+    const cwd = createWorkspace();
+    initializeRepository(cwd);
+
+    const epicId = await seedEpic(cwd, "Todo Epic", "desc");
+    const taskId = await seedTask(cwd, epicId, "Task", "desc");
+
+    // Complete the task without moving epic from todo
+    await runTask({ cwd, mode: "toon", args: ["update", taskId, "--status", "in_progress"] });
+    await runTask({ cwd, mode: "toon", args: ["update", taskId, "--status", "done"] });
+
+    const result = await runSuggest({
+      cwd,
+      mode: "toon",
+      args: [],
+    });
+    expect(result.ok).toBeTrue();
+
+    const data = result.data as {
+      suggestions: Array<{ action: string; command: string; category: string }>;
+    };
+    // Should NOT suggest marking epic done directly (invalid todo->done transition)
+    const markDoneSuggestion = data.suggestions.find((s) => s.action.includes("mark epic"));
+    expect(markDoneSuggestion).toBeUndefined();
+
+    // Should suggest advancing to in_progress first
+    const advanceSuggestion = data.suggestions.find((s) => s.action.includes("advance epic"));
+    expect(advanceSuggestion).toBeDefined();
+    expect(advanceSuggestion?.command).toContain("--status in_progress");
+    expect(advanceSuggestion?.category).toBe("planning");
   });
 
   test("ready tasks path suggests claiming a task", async (): Promise<void> => {
