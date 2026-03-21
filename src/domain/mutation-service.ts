@@ -280,7 +280,7 @@ export class MutationService {
 
   updateTask(
     id: string,
-    input: { title?: string | undefined; description?: string | undefined; status?: string | undefined },
+    input: { title?: string | undefined; description?: string | undefined; status?: string | undefined; owner?: string | null | undefined },
   ): TaskRecord {
     return writeTransaction(this.#db, (): TaskRecord => {
       if (input.status !== undefined) {
@@ -293,6 +293,7 @@ export class MutationService {
         title: task.title,
         description: task.description,
         status: task.status,
+        owner: task.owner,
       });
       return task;
     });
