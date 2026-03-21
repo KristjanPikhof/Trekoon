@@ -138,7 +138,7 @@ export function renderShellResult(
 
   const renderOptions: RenderOptions = {
     compatibilityMode: effectiveCompatibilityMode,
-    compact: options.compact,
+    compact: options.compact ?? false,
   };
 
   return renderResult(result, mode, renderOptions);
