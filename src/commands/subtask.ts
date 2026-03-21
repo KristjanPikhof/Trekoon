@@ -32,7 +32,7 @@ function formatSubtask(subtask: SubtaskRecord): string {
 
 const VIEW_MODES = ["table", "compact"] as const;
 const DEFAULT_SUBTASK_LIST_LIMIT = 10;
-const DEFAULT_OPEN_SUBTASK_STATUSES = ["in_progress", "in-progress", "todo"] as const;
+const DEFAULT_OPEN_SUBTASK_STATUSES = ["in_progress", "todo"] as const;
 const CREATE_OPTIONS = ["task", "t", "title", "description", "d", "status", "s"] as const;
 const LIST_OPTIONS = ["task", "t", "status", "s", "limit", "l", "cursor", "all", "view"] as const;
 const SEARCH_OPTIONS = ["fields", "preview"] as const;
