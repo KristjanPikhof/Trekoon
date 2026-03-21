@@ -649,13 +649,13 @@ describe("storage lifecycle", (): void => {
     }
   });
 
-  test("preserves schema_migrations after rejected v5 rollback", (): void => {
+  test("preserves schema_migrations after rejected v6 rollback", (): void => {
     const workspace: string = createWorkspace();
     const storage = openTrekoonDatabase(workspace);
 
     try {
       try {
-        rollbackDatabase(storage.db, 4);
+        rollbackDatabase(storage.db, 5);
       } catch {
         // Expected to throw
       }
@@ -664,21 +664,21 @@ describe("storage lifecycle", (): void => {
         .query("SELECT COALESCE(MAX(version), 0) AS version FROM schema_migrations;")
         .get() as { version: number };
 
-      expect(row.version).toBe(5);
+      expect(row.version).toBe(6);
     } finally {
       storage.close();
     }
   });
 
-  test("rollback to v5 from v5 is a valid no-op", (): void => {
+  test("rollback to v6 from v6 is a valid no-op", (): void => {
     const workspace: string = createWorkspace();
     const storage = openTrekoonDatabase(workspace);
 
     try {
-      const summary = rollbackDatabase(storage.db, 5);
+      const summary = rollbackDatabase(storage.db, 6);
 
-      expect(summary.fromVersion).toBe(5);
-      expect(summary.toVersion).toBe(5);
+      expect(summary.fromVersion).toBe(6);
+      expect(summary.toVersion).toBe(6);
       expect(summary.rolledBack).toBe(0);
       expect(summary.rolledBackMigrations).toEqual([]);
     } finally {
