@@ -46,7 +46,7 @@ const SHOW_OPTIONS = ["view", "all"] as const;
 const SEARCH_OPTIONS = ["fields", "preview"] as const;
 const REPLACE_OPTIONS = ["search", "replace", "fields", "preview", "apply"] as const;
 const CREATE_MANY_OPTIONS = ["epic", "e", "task"] as const;
-const UPDATE_OPTIONS = ["all", "ids", "append", "description", "d", "status", "s", "title", "t"] as const;
+const UPDATE_OPTIONS = ["all", "ids", "append", "description", "d", "status", "s", "title", "t", "owner"] as const;
 const STATUS_CASCADE_UPDATE_STATUSES = ["done", "todo"] as const;
 
 function parseIdsOption(rawIds: string | undefined): string[] {
