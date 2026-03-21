@@ -341,8 +341,9 @@ function entityFieldConflict(
       SELECT payload, git_branch
       FROM events
       WHERE entity_kind = ? AND entity_id = ? AND git_branch != ?
-      ORDER BY created_at DESC, id DESC;
-      `,
+      ORDER BY created_at DESC, id DESC
+      LIMIT 500;
+`,
     )
     .all(event.entity_kind, event.entity_id, sourceBranch) as Array<{ payload: string; git_branch: string | null }>;
 
