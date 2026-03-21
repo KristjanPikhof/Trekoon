@@ -1071,7 +1071,8 @@ export async function runTask(context: CliContext): Promise<CliResult> {
           readMissingOptionValue(parsed.missingOptionValues, "ids") ??
           readMissingOptionValue(parsed.missingOptionValues, "append") ??
           readMissingOptionValue(parsed.missingOptionValues, "description", "d") ??
-          readMissingOptionValue(parsed.missingOptionValues, "status", "s");
+          readMissingOptionValue(parsed.missingOptionValues, "status", "s") ??
+          readMissingOptionValue(parsed.missingOptionValues, "owner");
         if (missingUpdateOption !== undefined) {
           return failMissingOptionValue("task.update", missingUpdateOption);
         }
