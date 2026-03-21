@@ -449,7 +449,7 @@ describe("board routes", (): void => {
           authorization: "Bearer secret-token",
           "content-type": "application/json",
         },
-        body: JSON.stringify({ status: "done" }),
+        body: JSON.stringify({ status: "in_progress" }),
       }));
       const body = await response.json() as {
         ok: boolean;
@@ -461,8 +461,8 @@ describe("board routes", (): void => {
 
       expect(response.status).toBe(200);
       expect(body.ok).toBeTrue();
-      expect(body.data.task).toEqual(expect.objectContaining({ id: task.id, status: "done" }));
-      expect(body.data.snapshot.tasks).toContainEqual(expect.objectContaining({ id: task.id, status: "done" }));
+      expect(body.data.task).toEqual(expect.objectContaining({ id: task.id, status: "in_progress" }));
+      expect(body.data.snapshot.tasks).toContainEqual(expect.objectContaining({ id: task.id, status: "in_progress" }));
     } finally {
       storage.close();
     }
