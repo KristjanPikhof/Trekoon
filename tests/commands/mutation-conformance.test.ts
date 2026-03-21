@@ -954,6 +954,7 @@ describe("mutation conformance", (): void => {
           title: "Implement",
           description: "Ship board",
           status: "done",
+          owner: null,
         },
       },
     });
@@ -965,6 +966,7 @@ describe("mutation conformance", (): void => {
           title: "Write tests",
           description: "Cover board API",
           status: "done",
+          owner: null,
         },
       },
     });
