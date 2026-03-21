@@ -96,6 +96,13 @@ describe("mutation conformance", (): void => {
     expect(createdSubtask.ok).toBeTrue();
     const subtaskId = (createdSubtask.data as { subtask: { id: string } }).subtask.id;
 
+    const updatedSubtaskInProgress = await runSubtask({
+      cwd,
+      mode: "toon",
+      args: ["update", subtaskId, "--status", "in_progress"],
+    });
+    expect(updatedSubtaskInProgress.ok).toBeTrue();
+
     const updatedSubtask = await runSubtask({
       cwd,
       mode: "toon",
