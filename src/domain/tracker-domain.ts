@@ -51,10 +51,12 @@ interface EpicRow {
 
 interface TaskRow extends EpicRow {
   epic_id: string;
+  owner: string | null;
 }
 
 interface SubtaskRow extends EpicRow {
   task_id: string;
+  owner: string | null;
 }
 
 interface DependencyRow {
@@ -205,6 +207,7 @@ function mapTask(row: TaskRow): TaskRecord {
     title: row.title,
     description: row.description,
     status: row.status,
+    owner: row.owner ?? null,
     createdAt: row.created_at,
     updatedAt: row.updated_at,
   };
@@ -217,6 +220,7 @@ function mapSubtask(row: SubtaskRow): SubtaskRecord {
     title: row.title,
     description: row.description,
     status: row.status,
+    owner: row.owner ?? null,
     createdAt: row.created_at,
     updatedAt: row.updated_at,
   };
