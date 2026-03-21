@@ -13,8 +13,9 @@ const CONTRACT_VERSION = "1.0.0";
 const COMPATIBILITY_DEPRECATED_SINCE = "0.1.8";
 const COMPATIBILITY_REMOVAL_AFTER = "2026-09-30";
 
-interface RenderOptions {
+export interface RenderOptions {
   readonly compatibilityMode?: CompatibilityMode | null;
+  readonly compact?: boolean;
 }
 
 function toLegacySyncCommandId(command: string): string {
