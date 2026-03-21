@@ -493,7 +493,7 @@ describe("board routes", (): void => {
         body: JSON.stringify({
           title: "Triage regression",
           description: "",
-          status: "done",
+          status: "in_progress",
         }),
       }));
       const emptyBody = await emptyResponse.json() as {
@@ -510,13 +510,13 @@ describe("board routes", (): void => {
         id: emptySubtask.id,
         title: "Triage regression",
         description: "",
-        status: "done",
+        status: "in_progress",
       }));
       expect(emptyBody.data.snapshot.subtasks).toContainEqual(expect.objectContaining({
         id: emptySubtask.id,
         title: "Triage regression",
         description: "",
-        status: "done",
+        status: "in_progress",
       }));
 
       const clearResponse = await handler(new Request(`http://board.test/api/subtasks/${describedSubtask.id}?token=secret-token`, {
