@@ -32,6 +32,9 @@ import {
   type SubtaskRecord,
   type TaskTreeDetailed,
   type TaskRecord,
+  VALID_STATUSES,
+  VALID_TRANSITIONS,
+  type ValidStatus,
 } from "./types";
 
 const DEFAULT_STATUS = "todo";
@@ -144,6 +147,44 @@ function normalizeSubtaskDescription(value: string | undefined): string {
   }
 
   return value.trim();
+}
+
+function isValidStatus(status: string): status is ValidStatus {
+  return (VALID_STATUSES as readonly string[]).includes(status);
+}
+
+function validateStatusTransition(fromStatus: string, toStatus: string, entityKind: string, entityId: string): void {
+  if (fromStatus === toStatus) {
+    return;
+  }
+
+  if (!isValidStatus(toStatus)) {
+    throw new DomainError({
+      code: "status_transition_invalid",
+      message: `invalid status '${toStatus}' for ${entityKind} ${entityId}; allowed statuses: ${VALID_STATUSES.join(", ")}`,
+      details: { entity: entityKind, id: entityId, fromStatus, toStatus, allowedStatuses: [...VALID_STATUSES] },
+    });
+  }
+
+  if (!isValidStatus(fromStatus)) {
+    // Legacy status being migrated; allow transition to any valid status.
+    return;
+  }
+
+  const allowed = VALID_TRANSITIONS.get(fromStatus);
+  if (!allowed || !allowed.has(toStatus)) {
+    throw new DomainError({
+      code: "status_transition_invalid",
+      message: `cannot transition ${entityKind} ${entityId} from '${fromStatus}' to '${toStatus}'`,
+      details: {
+        entity: entityKind,
+        id: entityId,
+        fromStatus,
+        toStatus,
+        allowedTransitions: allowed ? [...allowed] : [],
+      },
+    });
+  }
 }
 
 function mapEpic(row: EpicRow): EpicRecord {
@@ -301,6 +342,7 @@ export class TrackerDomain {
     const nextDescription: string =
       input.description !== undefined ? assertNonEmpty("description", input.description) : existing.description;
     const nextStatus: string = input.status !== undefined ? assertNonEmpty("status", input.status) : existing.status;
+    validateStatusTransition(existing.status, nextStatus, "epic", id);
     const now: number = Date.now();
 
     this.#db
@@ -417,6 +459,7 @@ export class TrackerDomain {
     const nextDescription: string =
       input.description !== undefined ? assertNonEmpty("description", input.description) : existing.description;
     const nextStatus: string = input.status !== undefined ? assertNonEmpty("status", input.status) : existing.status;
+    validateStatusTransition(existing.status, nextStatus, "task", id);
     this.assertNoUnresolvedDependenciesForStatusTransition(id, "task", existing.status, nextStatus);
     const now: number = Date.now();
 
