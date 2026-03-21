@@ -777,11 +777,12 @@ describe("subtask command", (): void => {
     const blockerSubtaskId = (blockerSubtask.data as { subtask: { id: string } }).subtask.id;
 
     await runDep({ cwd, mode: "human", args: ["add", blockedSubtaskId, blockerSubtaskId] });
+    await runSubtask({ cwd, mode: "human", args: ["update", blockerSubtaskId, "--status", "in_progress"] });
     await runSubtask({ cwd, mode: "human", args: ["update", blockerSubtaskId, "--status", "done"] });
 
-    const updated = await runSubtask({ cwd, mode: "toon", args: ["update", blockedSubtaskId, "--status", "done"] });
+    const updated = await runSubtask({ cwd, mode: "toon", args: ["update", blockedSubtaskId, "--status", "in_progress"] });
     expect(updated.ok).toBeTrue();
-    expect((updated.data as { subtask: { status: string } }).subtask.status).toBe("done");
+    expect((updated.data as { subtask: { status: string } }).subtask.status).toBe("in_progress");
   });
 
   test("search and replace keep subtask literals and no-match stable", async (): Promise<void> => {
