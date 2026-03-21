@@ -293,7 +293,7 @@ describe("subtask command", (): void => {
     await runSubtask({
       cwd,
       mode: "human",
-      args: ["create", "--task", taskId, "--title", "In-progress", "--status", "in-progress"],
+      args: ["create", "--task", taskId, "--title", "In-progress-2", "--status", "in_progress"],
     });
 
     for (let index = 0; index < 5; index += 1) {
@@ -309,7 +309,7 @@ describe("subtask command", (): void => {
 
     const subtasks = (listed.data as { subtasks: Array<{ status: string }> }).subtasks;
     expect(subtasks.length).toBe(10);
-    expect(subtasks.every((subtask) => subtask.status === "in_progress" || subtask.status === "in-progress" || subtask.status === "todo")).toBeTrue();
+    expect(subtasks.every((subtask) => subtask.status === "in_progress" || subtask.status === "todo")).toBeTrue();
   });
 
   test("list --status done returns done items", async (): Promise<void> => {
