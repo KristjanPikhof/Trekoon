@@ -774,3 +774,54 @@ describe("suggest command", (): void => {
     expect(reviewSuggestion?.category).toBe("planning");
   });
 });
+
+// ---------------------------------------------------------------------------
+// 10. Subtask owner field
+// ---------------------------------------------------------------------------
+describe("subtask owner field", (): void => {
+  test("owner is null by default", async (): Promise<void> => {
+    const cwd = createWorkspace();
+    const epicId = await seedEpic(cwd, "Subtask Owner Epic", "desc");
+    const taskId = await seedTask(cwd, epicId, "Parent task", "desc");
+    const subtaskId = await seedSubtask(cwd, taskId, "Owned subtask");
+
+    // Verify owner is null by default via DB
+    const storage = openTrekoonDatabase(cwd);
+    try {
+      const domain = new TrackerDomain(storage.db);
+      const subtask = domain.getSubtask(subtaskId);
+      expect(subtask).not.toBeNull();
+      expect(subtask!.owner).toBeNull();
+    } finally {
+      storage.close();
+    }
+  });
+
+  test("update --owner sets owner field correctly", async (): Promise<void> => {
+    const cwd = createWorkspace();
+    const epicId = await seedEpic(cwd, "Subtask Owner Epic", "desc");
+    const taskId = await seedTask(cwd, epicId, "Parent task", "desc");
+    const subtaskId = await seedSubtask(cwd, taskId, "Owned subtask");
+
+    // Set owner via update
+    const updated = await runSubtask({
+      cwd,
+      mode: "toon",
+      args: ["update", subtaskId, "--owner", "bob"],
+    });
+    expect(updated.ok).toBeTrue();
+    const updatedData = updated.data as { subtask: { owner: string | null } };
+    expect(updatedData.subtask.owner).toBe("bob");
+
+    // Verify persistence via DB roundtrip
+    const storage = openTrekoonDatabase(cwd);
+    try {
+      const domain = new TrackerDomain(storage.db);
+      const subtask = domain.getSubtask(subtaskId);
+      expect(subtask).not.toBeNull();
+      expect(subtask!.owner).toBe("bob");
+    } finally {
+      storage.close();
+    }
+  });
+});
