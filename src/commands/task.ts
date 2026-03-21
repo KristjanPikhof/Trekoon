@@ -1259,9 +1259,32 @@ export async function runTask(context: CliContext): Promise<CliResult> {
           });
         }
 
+        // Snapshot blocked tasks before marking done (scoped to direct reverse deps)
+        const reverseDeps = domain.listReverseDependencies(taskId);
+        const directRevDepIds = new Set(
+          reverseDeps.filter((rd) => rd.isDirect && rd.kind === "task").map((rd) => rd.id),
+        );
+        const preReadiness = buildTaskReadiness(domain, existingTask.epicId);
+        const preBlockedIds = new Set(
+          preReadiness.blocked
+            .filter((item) => directRevDepIds.has(item.task.id))
+            .map((item) => item.task.id),
+        );
+
         const completed = mutations.updateTask(taskId, { status: "done" });
         const readiness = buildTaskReadiness(domain, completed.epicId);
         const nextCandidate = readiness.candidates[0] ?? null;
+
+        // Diff: tasks that were blocked before but are now ready
+        const unblockedTasks = readiness.candidates
+          .filter((item) => preBlockedIds.has(item.task.id))
+          .map((item) => ({
+            id: item.task.id,
+            kind: "task" as const,
+            title: item.task.title,
+            status: item.task.status,
+            wasBlockedBy: [taskId],
+          }));
 
         const nextTree = nextCandidate !== null ? domain.buildTaskTreeDetailed(nextCandidate.task.id) : null;
         const nextDeps = nextCandidate?.blockerSummary.blockedBy ?? [];
@@ -1272,6 +1295,9 @@ export async function runTask(context: CliContext): Promise<CliResult> {
         };
 
         let human = `Task ${completed.title} marked done.`;
+        if (unblockedTasks.length > 0) {
+          human += `\nUnblocked: ${unblockedTasks.map((t) => t.title).join(", ")}`;
+        }
         if (nextTree !== null && nextCandidate !== null) {
           human += `\nNext: ${formatTask(nextCandidate.task)}`;
         }
@@ -1282,6 +1308,7 @@ export async function runTask(context: CliContext): Promise<CliResult> {
           human,
           data: {
             completed,
+            unblocked: unblockedTasks,
             next: nextTree,
             nextDeps,
             readiness: readinessStats,
