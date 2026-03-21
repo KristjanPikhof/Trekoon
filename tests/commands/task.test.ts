@@ -58,18 +58,18 @@ describe("task command", (): void => {
     const created = await runTask({
       cwd,
       mode: "human",
-      args: ["create", "--epic", epicId, "--title", "Implement", "--description", "build it", "--status", "custom"],
+      args: ["create", "--epic", epicId, "--title", "Implement", "--description", "build it", "--status", "todo"],
     });
     expect(created.ok).toBeTrue();
     const taskId = (created.data as { task: { id: string; status: string } }).task.id;
-    expect((created.data as { task: { status: string } }).task.status).toBe("custom");
+    expect((created.data as { task: { status: string } }).task.status).toBe("todo");
 
     const shown = await runTask({ cwd, mode: "human", args: ["show", taskId] });
     expect(shown.ok).toBeTrue();
 
-    const updated = await runTask({ cwd, mode: "human", args: ["update", taskId, "--status", "in-progress"] });
+    const updated = await runTask({ cwd, mode: "human", args: ["update", taskId, "--status", "in_progress"] });
     expect(updated.ok).toBeTrue();
-    expect((updated.data as { task: { status: string } }).task.status).toBe("in-progress");
+    expect((updated.data as { task: { status: string } }).task.status).toBe("in_progress");
 
     const removed = await runTask({ cwd, mode: "human", args: ["delete", taskId] });
     expect(removed.ok).toBeTrue();
