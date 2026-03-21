@@ -72,9 +72,9 @@ describe("subtask command", (): void => {
     expect(listed.ok).toBeTrue();
     expect((listed.data as { subtasks: unknown[] }).subtasks.length).toBe(1);
 
-    const updated = await runSubtask({ cwd, mode: "human", args: ["update", subtaskId, "--status", "doing"] });
+    const updated = await runSubtask({ cwd, mode: "human", args: ["update", subtaskId, "--status", "in_progress"] });
     expect(updated.ok).toBeTrue();
-    expect((updated.data as { subtask: { status: string } }).subtask.status).toBe("doing");
+    expect((updated.data as { subtask: { status: string } }).subtask.status).toBe("in_progress");
 
     const removed = await runSubtask({ cwd, mode: "human", args: ["delete", subtaskId] });
     expect(removed.ok).toBeTrue();
