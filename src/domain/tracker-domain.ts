@@ -962,6 +962,62 @@ export class TrackerDomain {
     return rows.map(mapDependency);
   }
 
+  batchResolveDependencyStatuses(
+    taskIds: readonly string[],
+  ): Map<string, { totalDependencies: number; blockers: Array<{ id: string; kind: "task" | "subtask"; status: string }> }> {
+    const result = new Map<string, { totalDependencies: number; blockers: Array<{ id: string; kind: "task" | "subtask"; status: string }> }>();
+
+    if (taskIds.length === 0) {
+      return result;
+    }
+
+    const placeholders = taskIds.map(() => "?").join(", ");
+    const rows = this.#db
+      .query(
+        `SELECT d.source_id, d.depends_on_id, d.depends_on_kind, COALESCE(t.status, s.status) AS dep_status
+         FROM dependencies d
+         LEFT JOIN tasks t ON d.depends_on_kind = 'task' AND d.depends_on_id = t.id
+         LEFT JOIN subtasks s ON d.depends_on_kind = 'subtask' AND d.depends_on_id = s.id
+         WHERE d.source_id IN (${placeholders})
+         ORDER BY d.source_id, d.created_at ASC, d.id ASC;`,
+      )
+      .all(...taskIds) as Array<{
+        source_id: string;
+        depends_on_id: string;
+        depends_on_kind: "task" | "subtask";
+        dep_status: string | null;
+      }>;
+
+    // Initialize all requested task IDs so tasks with zero deps are present.
+    for (const taskId of taskIds) {
+      result.set(taskId, { totalDependencies: 0, blockers: [] });
+    }
+
+    for (const row of rows) {
+      const entry = result.get(row.source_id);
+      if (!entry) {
+        continue;
+      }
+
+      entry.totalDependencies += 1;
+
+      // Skip orphaned dependency rows (target deleted).
+      if (row.dep_status === null) {
+        continue;
+      }
+
+      if (row.dep_status !== "done") {
+        entry.blockers.push({
+          id: row.depends_on_id,
+          kind: row.depends_on_kind,
+          status: row.dep_status,
+        });
+      }
+    }
+
+    return result;
+  }
+
   listReverseDependencies(nodeId: string): readonly ReverseDependencyNode[] {
     const normalizedNodeId: string = assertNonEmpty("nodeId", nodeId);
     this.resolveNodeKind(normalizedNodeId);
