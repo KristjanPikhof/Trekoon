@@ -4,7 +4,7 @@ import { resolveSyncStatus } from "./sync-helpers";
 import { buildTaskReadiness, type TaskReadinessResult } from "./task-readiness";
 
 import { TrackerDomain } from "../domain/tracker-domain";
-import type { EpicRecord } from "../domain/types";
+import { VALID_TRANSITIONS, type EpicRecord, type ValidStatus } from "../domain/types";
 import { okResult } from "../io/output";
 import { type CliContext, type CliResult } from "../runtime/command-types";
 import { openTrekoonDatabase, type TrekoonDatabase } from "../storage/database";
