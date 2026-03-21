@@ -12,7 +12,7 @@ import { runSubtask } from "../commands/subtask";
 import { runSync } from "../commands/sync";
 import { runTask } from "../commands/task";
 import { runWipe } from "../commands/wipe";
-import { failResult, okResult, renderResult } from "../io/output";
+import { failResult, okResult, renderResult, type RenderOptions } from "../io/output";
 import { resolveStorageResolutionDiagnostics } from "../storage/database";
 import { type CliContext, type CliResult, type CompatibilityMode, type OutputMode } from "./command-types";
 import { CLI_VERSION } from "./version";
@@ -37,6 +37,7 @@ const SUPPORTED_ROOT_COMMANDS: readonly string[] = [
 
 export interface ParsedInvocation {
   readonly mode: OutputMode;
+  readonly compact: boolean;
   readonly compatibilityMode: CompatibilityMode | null;
   readonly compatibilityModeRaw: string | null;
   readonly compatibilityModeMissingValue: boolean;
