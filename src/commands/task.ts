@@ -1264,16 +1264,17 @@ export async function runTask(context: CliContext): Promise<CliResult> {
         const openSubtaskCount = openSubtasks.length;
         const openSubtaskIds = openSubtasks.map((s) => s.id);
 
-        // Snapshot blocked tasks before marking done (scoped to direct reverse deps)
+        // Snapshot blocked reverse deps before marking done (lightweight: no full readiness rebuild)
         const reverseDeps = domain.listReverseDependencies(taskId);
-        const directRevDepIds = new Set(
-          reverseDeps.filter((rd) => rd.isDirect && rd.kind === "task").map((rd) => rd.id),
-        );
-        const preReadiness = buildTaskReadiness(domain, existingTask.epicId);
+        const directRevDepTaskIds = reverseDeps
+          .filter((rd) => rd.isDirect && rd.kind === "task")
+          .map((rd) => rd.id);
+        const preDepStatuses = domain.batchResolveDependencyStatuses(directRevDepTaskIds);
         const preBlockedIds = new Set(
-          preReadiness.blocked
-            .filter((item) => directRevDepIds.has(item.task.id))
-            .map((item) => item.task.id),
+          directRevDepTaskIds.filter((id) => {
+            const resolved = preDepStatuses.get(id);
+            return resolved !== undefined && resolved.blockers.length > 0;
+          }),
         );
 
         // Auto-transition through in_progress when current status is todo or blocked
