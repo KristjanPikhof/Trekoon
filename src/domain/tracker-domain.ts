@@ -625,7 +625,6 @@ export class TrackerDomain {
     const nextDescription: string =
       input.description !== undefined ? normalizeSubtaskDescription(input.description) : existing.description;
     const nextStatus: string = input.status !== undefined ? assertNonEmpty("status", input.status) : existing.status;
-    validateStatusTransition(existing.status, nextStatus, "subtask", id);
     this.assertNoUnresolvedDependenciesForStatusTransition(id, "subtask", existing.status, nextStatus);
     const now: number = Date.now();
 
