@@ -665,11 +665,11 @@ describe("subtask command", (): void => {
     });
     const subtaskId = (created.data as { subtask: { id: string } }).subtask.id;
 
-    const updated = await runSubtask({ cwd, mode: "toon", args: ["update", subtaskId, "--all", "--status", "done"] });
+    const updated = await runSubtask({ cwd, mode: "toon", args: ["update", subtaskId, "--all", "--status", "todo"] });
     expect(updated.ok).toBeTrue();
     expect((updated.data as { subtask: { id: string; status: string } }).subtask).toMatchObject({
       id: subtaskId,
-      status: "done",
+      status: "todo",
     });
   });
 
