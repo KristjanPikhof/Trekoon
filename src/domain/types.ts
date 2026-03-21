@@ -116,6 +116,7 @@ export interface SubtaskRecord {
   readonly title: string;
   readonly description: string;
   readonly status: string;
+  readonly owner: string | null;
   readonly createdAt: number;
   readonly updatedAt: number;
 }
