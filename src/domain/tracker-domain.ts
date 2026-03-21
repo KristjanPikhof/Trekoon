@@ -987,47 +987,44 @@ export class TrackerDomain {
       return result;
     }
 
-    const placeholders = taskIds.map(() => "?").join(", ");
-    const rows = this.#db
-      .query(
-        `SELECT d.source_id, d.depends_on_id, d.depends_on_kind, COALESCE(t.status, s.status) AS dep_status
-         FROM dependencies d
-         LEFT JOIN tasks t ON d.depends_on_kind = 'task' AND d.depends_on_id = t.id
-         LEFT JOIN subtasks s ON d.depends_on_kind = 'subtask' AND d.depends_on_id = s.id
-         WHERE d.source_id IN (${placeholders})
-         ORDER BY d.source_id, d.created_at ASC, d.id ASC;`,
-      )
-      .all(...taskIds) as Array<{
+    // Use a static parameterised query per task ID rather than interpolating
+    // a dynamic IN-list into the SQL string.  This is consistent with every
+    // other query in TrackerDomain and avoids any placeholder-count confusion.
+    const stmt = this.#db.query(
+      `SELECT d.source_id, d.depends_on_id, d.depends_on_kind, COALESCE(t.status, s.status) AS dep_status
+       FROM dependencies d
+       LEFT JOIN tasks t ON d.depends_on_kind = 'task' AND d.depends_on_id = t.id
+       LEFT JOIN subtasks s ON d.depends_on_kind = 'subtask' AND d.depends_on_id = s.id
+       WHERE d.source_id = ?
+       ORDER BY d.created_at ASC, d.id ASC;`,
+    );
+
+    for (const taskId of taskIds) {
+      const entry = { totalDependencies: 0, blockers: [] as Array<{ id: string; kind: "task" | "subtask"; status: string }> };
+      result.set(taskId, entry);
+
+      const rows = stmt.all(taskId) as Array<{
         source_id: string;
         depends_on_id: string;
         depends_on_kind: "task" | "subtask";
         dep_status: string | null;
       }>;
 
-    // Initialize all requested task IDs so tasks with zero deps are present.
-    for (const taskId of taskIds) {
-      result.set(taskId, { totalDependencies: 0, blockers: [] });
-    }
+      for (const row of rows) {
+        entry.totalDependencies += 1;
 
-    for (const row of rows) {
-      const entry = result.get(row.source_id);
-      if (!entry) {
-        continue;
-      }
+        // Skip orphaned dependency rows (target deleted).
+        if (row.dep_status === null) {
+          continue;
+        }
 
-      entry.totalDependencies += 1;
-
-      // Skip orphaned dependency rows (target deleted).
-      if (row.dep_status === null) {
-        continue;
-      }
-
-      if (row.dep_status !== "done") {
-        entry.blockers.push({
-          id: row.depends_on_id,
-          kind: row.depends_on_kind,
-          status: row.dep_status,
-        });
+        if (row.dep_status !== "done") {
+          entry.blockers.push({
+            id: row.depends_on_id,
+            kind: row.depends_on_kind,
+            status: row.dep_status,
+          });
+        }
       }
     }
 
