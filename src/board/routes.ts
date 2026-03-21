@@ -229,6 +229,7 @@ export function createBoardApiHandler(context: BoardRouteContext): (request: Req
           title: readOptionalString(body, "title"),
           description: readOptionalString(body, "description"),
           status: readOptionalString(body, "status"),
+          owner: readOptionalString(body, "owner"),
         });
         return buildMutationResponse(domain, { task });
       }
