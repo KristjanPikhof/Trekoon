@@ -314,7 +314,7 @@ describe("task command", (): void => {
     await runTask({
       cwd,
       mode: "human",
-      args: ["create", "--epic", epicId, "--title", "In-progress", "--description", "active", "--status", "in-progress"],
+      args: ["create", "--epic", epicId, "--title", "In-progress-2", "--description", "active", "--status", "in_progress"],
     });
 
     for (let index = 0; index < 5; index += 1) {
@@ -330,10 +330,10 @@ describe("task command", (): void => {
 
     const tasks = (listed.data as { tasks: Array<{ status: string }> }).tasks;
     expect(tasks.length).toBe(10);
-    expect(tasks.every((task) => task.status === "in_progress" || task.status === "in-progress" || task.status === "todo")).toBeTrue();
+    expect(tasks.every((task) => task.status === "in_progress" || task.status === "todo")).toBeTrue();
   });
 
-  test("default ordering puts in_progress and in-progress before todo", async (): Promise<void> => {
+  test("default ordering puts in_progress before todo", async (): Promise<void> => {
     const cwd = createWorkspace();
     const epicCreated = await runEpic({
       cwd,
@@ -350,19 +350,19 @@ describe("task command", (): void => {
     await runTask({
       cwd,
       mode: "human",
-      args: ["create", "--epic", epicId, "--title", "In-progress", "--description", "active", "--status", "in-progress"],
+      args: ["create", "--epic", epicId, "--title", "In progress 1", "--description", "active", "--status", "in_progress"],
     });
     await runTask({
       cwd,
       mode: "human",
-      args: ["create", "--epic", epicId, "--title", "In progress", "--description", "active", "--status", "in_progress"],
+      args: ["create", "--epic", epicId, "--title", "In progress 2", "--description", "active", "--status", "in_progress"],
     });
 
     const listed = await runTask({ cwd, mode: "human", args: ["list"] });
     expect(listed.ok).toBeTrue();
 
     const statuses = (listed.data as { tasks: Array<{ status: string }> }).tasks.map((task) => task.status);
-    expect(statuses).toEqual(["in-progress", "in_progress", "todo"]);
+    expect(statuses).toEqual(["in_progress", "in_progress", "todo"]);
   });
 
   test("list uses id tie-break when timestamps match", async (): Promise<void> => {
