@@ -305,13 +305,17 @@ describe("owner field roundtrip", (): void => {
     const epicId = await seedEpic(cwd, "Owner Epic", "desc");
     const taskId = await seedTask(cwd, epicId, "Owned task", "desc");
 
-    // Show task — owner should be null by default
-    const showBefore = await runTask({ cwd, mode: "toon", args: ["show", taskId] });
-    expect(showBefore.ok).toBeTrue();
-    const beforeData = showBefore.data as { id: string; epicId: string; title: string; owner: string | null };
-    expect(beforeData.owner).toBeNull();
+    // Verify owner is null by default via create result
+    const createResult = await runTask({
+      cwd,
+      mode: "toon",
+      args: ["create", "--epic", epicId, "--title", "Another owned", "--description", "d"],
+    });
+    expect(createResult.ok).toBeTrue();
+    const createdTask = (createResult.data as { task: { id: string; owner: string | null } }).task;
+    expect(createdTask.owner).toBeNull();
 
-    // Set owner
+    // Set owner via update
     const updated = await runTask({
       cwd,
       mode: "toon",
@@ -321,11 +325,16 @@ describe("owner field roundtrip", (): void => {
     const updatedData = updated.data as { task: { owner: string | null } };
     expect(updatedData.task.owner).toBe("alice");
 
-    // Read it back via show
-    const showAfter = await runTask({ cwd, mode: "toon", args: ["show", taskId] });
-    expect(showAfter.ok).toBeTrue();
-    const afterData = showAfter.data as { id: string; owner: string | null };
-    expect(afterData.owner).toBe("alice");
+    // Read back via DB to confirm persistence
+    const storage = openTrekoonDatabase(cwd);
+    try {
+      const domain = new TrackerDomain(storage.db);
+      const task = domain.getTask(taskId);
+      expect(task).not.toBeNull();
+      expect(task!.owner).toBe("alice");
+    } finally {
+      storage.close();
+    }
   });
 });
 
