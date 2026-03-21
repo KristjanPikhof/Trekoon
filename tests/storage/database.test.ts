@@ -694,17 +694,15 @@ describe("storage lifecycle", (): void => {
       let errorMessage = "";
 
       try {
-        // Roll back to v3 to trigger v4's irreversible error (v5 rollback
-        // is attempted first and succeeds in throwing, so we target v3
-        // after first rolling to v4).
+        // Roll back to v3 to trigger irreversible errors. v6 rollback
+        // is attempted first (descending order) and throws.
         rollbackDatabase(storage.db, 3);
       } catch (error: unknown) {
         errorMessage = (error as Error).message;
       }
 
-      // The first rollback error will be from v5 (irreversible), not v4.
-      // Verify that rolling back v5 specifically yields its own message.
-      expect(errorMessage).toContain("dependency_edge_integrity");
+      // The first rollback error will be from v6 (irreversible).
+      expect(errorMessage).toContain("add_owner_column");
     } finally {
       storage.close();
     }
