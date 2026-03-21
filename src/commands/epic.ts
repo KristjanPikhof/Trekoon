@@ -44,7 +44,7 @@ function formatEpic(epic: EpicRecord): string {
 const VIEW_MODES = ["table", "compact", "tree", "detail"] as const;
 const LIST_VIEW_MODES = ["table", "compact"] as const;
 const DEFAULT_LIST_LIMIT = 10;
-const DEFAULT_OPEN_STATUSES = ["in_progress", "in-progress", "todo"] as const;
+const DEFAULT_OPEN_STATUSES = ["in_progress", "todo"] as const;
 const CREATE_OPTIONS = ["title", "t", "description", "d", "status", "s", "task", "subtask", "dep"] as const;
 const LIST_OPTIONS = ["status", "s", "limit", "l", "cursor", "all", "view"] as const;
 const SHOW_OPTIONS = ["view", "all"] as const;
