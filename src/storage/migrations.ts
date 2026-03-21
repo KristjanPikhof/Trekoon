@@ -217,6 +217,26 @@ const MIGRATIONS: readonly Migration[] = [
       );
     },
   },
+  {
+    version: 6,
+    name: "0006_add_owner_column",
+    up(db: Database): void {
+      if (!tableHasColumn(db, "tasks", "owner")) {
+        db.exec("ALTER TABLE tasks ADD COLUMN owner TEXT;");
+      }
+      if (!tableHasColumn(db, "subtasks", "owner")) {
+        db.exec("ALTER TABLE subtasks ADD COLUMN owner TEXT;");
+      }
+    },
+    down(_db: Database): void {
+      throw new Error(
+        "Migration 0006 (add_owner_column) is irreversible. " +
+        "It adds columns via ALTER TABLE that cannot be removed without " +
+        "reconstructing tables and risking data loss. " +
+        "Rollback below version 6 is not supported.",
+      );
+    },
+  },
 ];
 
 function migrationTableExists(db: Database): boolean {
