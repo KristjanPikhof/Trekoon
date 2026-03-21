@@ -63,25 +63,13 @@ export function taskStatusPriority(status: string): number {
 export function buildTaskReadiness(domain: TrackerDomain, epicId: string | undefined): TaskReadinessResult {
   const openStatuses = new Set<string>(DEFAULT_OPEN_TASK_STATUSES);
   const openTasks = domain.listTasks(epicId).filter((task) => openStatuses.has(task.status));
+  const taskIds = openTasks.map((task) => task.id);
+  const depMap = domain.batchResolveDependencyStatuses(taskIds);
+
   const assessed = openTasks
     .map((task) => {
-      const blockers: DependencyBlocker[] = [];
-      const dependencies = domain.listDependencies(task.id);
-      for (const dependency of dependencies) {
-        const dependencyStatus =
-          dependency.dependsOnKind === "task"
-            ? domain.getTaskOrThrow(dependency.dependsOnId).status
-            : domain.getSubtaskOrThrow(dependency.dependsOnId).status;
-
-        if (dependencyStatus !== "done") {
-          blockers.push({
-            id: dependency.dependsOnId,
-            kind: dependency.dependsOnKind,
-            status: dependencyStatus,
-          });
-        }
-      }
-
+      const resolved = depMap.get(task.id) ?? { totalDependencies: 0, blockers: [] };
+      const blockers: DependencyBlocker[] = resolved.blockers;
       const blockerCount = blockers.length;
       const readinessReason: ReadyReason = blockerCount === 0 ? READY_REASON_READY : READY_REASON_BLOCKED;
       return {
@@ -91,7 +79,7 @@ export function buildTaskReadiness(domain: TrackerDomain, epicId: string | undef
           reason: readinessReason,
         },
         blockerSummary: {
-          totalDependencies: dependencies.length,
+          totalDependencies: resolved.totalDependencies,
           blockedByCount: blockerCount,
           blockedBy: blockers,
         },
