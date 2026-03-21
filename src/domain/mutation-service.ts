@@ -350,7 +350,7 @@ export class MutationService {
 
   updateSubtask(
     id: string,
-    input: { title?: string | undefined; description?: string | undefined; status?: string | undefined },
+    input: { title?: string | undefined; description?: string | undefined; status?: string | undefined; owner?: string | null | undefined },
   ): SubtaskRecord {
     return writeTransaction(this.#db, (): SubtaskRecord => {
       if (input.status !== undefined) {
@@ -363,6 +363,7 @@ export class MutationService {
         title: subtask.title,
         description: subtask.description,
         status: subtask.status,
+        owner: subtask.owner,
       });
       return subtask;
     });
