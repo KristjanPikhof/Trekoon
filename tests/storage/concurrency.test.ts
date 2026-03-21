@@ -498,6 +498,35 @@ describe("SQLite concurrent write stress tests", () => {
     }
   });
 
+  describe("Scenario 4 - writeTransaction helper (zero SQLITE_BUSY)", () => {
+    test("interleaved writers using writeTransaction helper show zero SQLITE_BUSY errors", () => {
+      const result = runScenario("writetx-interleaved", 10000, runWriteTransactionWriter);
+      printResult(result);
+
+      expect(result.totalSuccesses + result.totalBusyErrors + result.totalOtherErrors).toBe(
+        TOTAL_EXPECTED_ROWS,
+      );
+      // The writeTransaction helper must produce zero SQLITE_BUSY errors under
+      // interleaved load because BEGIN IMMEDIATE acquires the write lock up-front
+      // and busy_timeout causes waiters to retry rather than fail immediately.
+      expect(result.totalBusyErrors).toBe(0);
+      expect(result.totalSuccesses).toBe(TOTAL_EXPECTED_ROWS);
+    });
+
+    test("parallel writers using writeTransaction helper show zero SQLITE_BUSY errors", async () => {
+      const result = await runParallelScenario("writetx-parallel", 10000, runWriteTransactionWriter);
+      printResult(result);
+
+      expect(result.totalSuccesses + result.totalBusyErrors + result.totalOtherErrors).toBe(
+        TOTAL_EXPECTED_ROWS,
+      );
+      // Parallel Promise.all writers with sufficient busy_timeout must also
+      // produce zero SQLITE_BUSY errors via the writeTransaction helper.
+      expect(result.totalBusyErrors).toBe(0);
+      expect(result.totalSuccesses).toBe(TOTAL_EXPECTED_ROWS);
+    });
+  });
+
   describe("Scenario comparison summary", () => {
     test("compare DEFERRED vs IMMEDIATE error rates side by side", async () => {
       const deferredResult = await runParallelScenario("summary-deferred", 5000, runDeferredWriter);
