@@ -1276,6 +1276,11 @@ export async function runTask(context: CliContext): Promise<CliResult> {
             .map((item) => item.task.id),
         );
 
+        // Auto-transition through in_progress when current status is todo or blocked
+        if (existingTask.status === "todo" || existingTask.status === "blocked") {
+          mutations.updateTask(taskId, { status: "in_progress" });
+        }
+
         const completed = mutations.updateTask(taskId, { status: "done" });
         const readiness = buildTaskReadiness(domain, completed.epicId);
         const nextCandidate = readiness.candidates[0] ?? null;
