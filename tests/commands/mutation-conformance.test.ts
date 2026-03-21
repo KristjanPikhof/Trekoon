@@ -144,6 +144,7 @@ describe("mutation conformance", (): void => {
     expect(eventOperationsForEntity(cwd, "subtask", subtaskId)).toEqual([
       ENTITY_OPERATIONS.subtask.created,
       ENTITY_OPERATIONS.subtask.updated,
+      ENTITY_OPERATIONS.subtask.updated,
       ENTITY_OPERATIONS.subtask.deleted,
     ]);
   });
@@ -208,6 +209,10 @@ describe("mutation conformance", (): void => {
         description: "Regression coverage",
       });
 
+      mutations.updateSubtask(subtask.id, {
+        status: "in_progress",
+      });
+
       const updatedSubtask = mutations.updateSubtask(subtask.id, {
         description: "",
         status: "done",
@@ -223,6 +228,17 @@ describe("mutation conformance", (): void => {
               title: "Write tests",
               description: "Regression coverage",
               status: "todo",
+            },
+          },
+        },
+        {
+          operation: ENTITY_OPERATIONS.subtask.updated,
+          payload: {
+            fields: {
+              task_id: task.id,
+              title: "Write tests",
+              description: "Regression coverage",
+              status: "in_progress",
             },
           },
         },
