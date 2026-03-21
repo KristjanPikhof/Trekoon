@@ -601,6 +601,16 @@ export class TrackerDomain {
     return rows.map(mapSubtask);
   }
 
+  getOpenSubtasks(taskId: string): readonly SubtaskRecord[] {
+    this.getTaskOrThrow(taskId);
+    const rows = this.#db
+      .query(
+        "SELECT id, task_id, title, description, status, owner, created_at, updated_at FROM subtasks WHERE task_id = ? AND status != 'done' ORDER BY created_at ASC, id ASC;",
+      )
+      .all(taskId) as SubtaskRow[];
+    return rows.map(mapSubtask);
+  }
+
   getSubtask(id: string): SubtaskRecord | null {
     const row = this.#db
       .query("SELECT id, task_id, title, description, status, owner, created_at, updated_at FROM subtasks WHERE id = ?;")
