@@ -1,7 +1,7 @@
 import { TrackerDomain } from "../domain/tracker-domain";
 import { type TaskRecord } from "../domain/types";
 
-export const DEFAULT_OPEN_TASK_STATUSES = ["in_progress", "in-progress", "todo"] as const;
+export const DEFAULT_OPEN_TASK_STATUSES = ["in_progress", "todo"] as const;
 export const READY_REASON_READY = "all_dependencies_done";
 export const READY_REASON_BLOCKED = "blocked_by_dependencies";
 
@@ -49,7 +49,7 @@ export interface TaskReadinessResult {
 }
 
 export function taskStatusPriority(status: string): number {
-  if (status === "in_progress" || status === "in-progress") {
+  if (status === "in_progress") {
     return 0;
   }
 
