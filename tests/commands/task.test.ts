@@ -1153,6 +1153,7 @@ describe("task command", (): void => {
     await runDep({ cwd, mode: "human", args: ["add", blockerTaskId, blockerSubtaskId] });
 
     await runTask({ cwd, mode: "human", args: ["update", firstId, "--status", "done"] });
+    await runTask({ cwd, mode: "human", args: ["update", secondId, "--status", "in_progress"] });
     await runTask({ cwd, mode: "human", args: ["update", secondId, "--status", "done"] });
 
     const noneReady = await runTask({ cwd, mode: "toon", args: ["next"] });
