@@ -137,13 +137,14 @@ export function failResult(input: ResultInput & { readonly error: ToonError }): 
 
 export function toToonEnvelope(result: CliResult, options: RenderOptions = {}): ToonEnvelope {
   const compatibilityMode: CompatibilityMode | null = options.compatibilityMode ?? null;
+  const compact: boolean = options.compact ?? false;
   const command: string = resolveCompatibilityCommand(result.command, compatibilityMode);
 
   return {
     ok: result.ok,
     command,
     data: result.data,
-    metadata: createContractMetadata(result, compatibilityMode),
+    ...(compact ? {} : { metadata: createContractMetadata(result, compatibilityMode) }),
     ...(result.error ? { error: result.error } : {}),
     ...(result.meta ? { meta: result.meta } : {}),
   };

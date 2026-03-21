@@ -113,7 +113,7 @@ function parseStatusCsv(rawStatuses: string | undefined): string[] | undefined {
 }
 
 function subtaskStatusPriority(status: string): number {
-  if (status === "in_progress" || status === "in-progress") {
+  if (status === "in_progress") {
     return 0;
   }
 

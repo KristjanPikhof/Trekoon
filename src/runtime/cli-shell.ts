@@ -54,6 +54,7 @@ export interface ParseInvocationOptions {
 export function parseInvocation(argv: readonly string[], options: ParseInvocationOptions = {}): ParsedInvocation {
   const stdoutIsTTY: boolean = options.stdoutIsTTY ?? Boolean(process.stdout.isTTY);
   let explicitMode: OutputMode | null = null;
+  let compact = false;
   let compatibilityModeRaw: string | null = null;
   let compatibilityModeMissingValue = false;
   let wantsHelp = false;
@@ -73,6 +74,11 @@ export function parseInvocation(argv: readonly string[], options: ParseInvocatio
 
     if (token === "--toon") {
       explicitMode = "toon";
+      continue;
+    }
+
+    if (token === "--compact") {
+      compact = true;
       continue;
     }
 
@@ -106,6 +112,7 @@ export function parseInvocation(argv: readonly string[], options: ParseInvocatio
 
   return {
     mode: explicitMode ?? (stdoutIsTTY ? "human" : "json"),
+    compact,
     compatibilityMode,
     compatibilityModeRaw,
     compatibilityModeMissingValue,
@@ -116,13 +123,23 @@ export function parseInvocation(argv: readonly string[], options: ParseInvocatio
   };
 }
 
-export function renderShellResult(result: CliResult, mode: OutputMode, compatibilityMode: CompatibilityMode | null = null): string {
+export function renderShellResult(
+  result: CliResult,
+  mode: OutputMode,
+  compatibilityMode: CompatibilityMode | null = null,
+  options: { compact?: boolean } = {},
+): string {
   const effectiveCompatibilityMode: CompatibilityMode | null =
     compatibilityMode === "legacy-sync-command-ids" && result.command.startsWith("sync.")
       ? compatibilityMode
       : null;
 
-  return renderResult(result, mode, { compatibilityMode: effectiveCompatibilityMode });
+  const renderOptions: RenderOptions = {
+    compatibilityMode: effectiveCompatibilityMode,
+    compact: options.compact,
+  };
+
+  return renderResult(result, mode, renderOptions);
 }
 
 function isStringArray(value: unknown): value is string[] {

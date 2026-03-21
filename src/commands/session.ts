@@ -1,5 +1,6 @@
 import type { Database } from "bun:sqlite";
 
+import { parseArgs, readOption } from "./arg-parser";
 import { unexpectedFailureResult } from "./error-utils";
 import { buildTaskReadiness, type DependencyBlocker } from "./task-readiness";
 
@@ -173,12 +174,15 @@ export async function runSession(context: CliContext): Promise<CliResult> {
   let database: TrekoonDatabase | undefined;
 
   try {
+    const parsed = parseArgs(context.args);
+    const epicId: string | undefined = readOption(parsed.options, "epic");
+
     database = openTrekoonDatabase(context.cwd);
     const diagnostics = database.diagnostics;
 
     const syncSummary = resolveSyncStatus(database, context.cwd, DEFAULT_SOURCE_BRANCH);
     const domain = new TrackerDomain(database.db);
-    const readiness = buildTaskReadiness(domain, undefined);
+    const readiness = buildTaskReadiness(domain, epicId);
     const topCandidate = readiness.candidates[0] ?? null;
 
     let nextTask: NextCandidate | null = null;

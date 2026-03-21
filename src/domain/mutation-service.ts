@@ -404,7 +404,15 @@ export class MutationService {
   }
 
   describeError(error: unknown): string | undefined {
-    if (!(error instanceof DomainError) || error.code !== "dependency_blocked") {
+    if (!(error instanceof DomainError)) {
+      return undefined;
+    }
+
+    if (error.code === "status_transition_invalid") {
+      return error.message;
+    }
+
+    if (error.code !== "dependency_blocked") {
       return undefined;
     }
 
