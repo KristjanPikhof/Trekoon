@@ -98,6 +98,9 @@ export function resolveStorageResolutionDiagnostics(
   }
 }
 
+/** Default connection-level busy_timeout applied at open time. */
+const DEFAULT_BUSY_TIMEOUT_MS = 15000;
+
 /**
  * Maximum time (ms) to wait when acquiring the write lock via BEGIN IMMEDIATE.
  * Kept below the default bun test timeout so that lock-contention surfaces as
@@ -119,16 +122,20 @@ export function writeTransaction<T>(db: Database, fn: (db: Database) => T): T {
   try {
     db.exec("BEGIN IMMEDIATE;");
   } catch (error) {
-    db.exec("PRAGMA busy_timeout = 15000;");
+    db.exec(`PRAGMA busy_timeout = ${DEFAULT_BUSY_TIMEOUT_MS};`);
     throw error;
   }
-  db.exec("PRAGMA busy_timeout = 15000;");
+  db.exec(`PRAGMA busy_timeout = ${DEFAULT_BUSY_TIMEOUT_MS};`);
   try {
     const result: T = fn(db);
     db.exec("COMMIT;");
     return result;
   } catch (error) {
-    db.exec("ROLLBACK;");
+    try {
+      db.exec("ROLLBACK;");
+    } catch {
+      /* best-effort rollback — propagate the original error */
+    }
     throw error;
   }
 }
