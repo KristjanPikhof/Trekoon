@@ -33,6 +33,7 @@ const SUPPORTED_ROOT_COMMANDS: readonly string[] = [
   "migrate",
   "sync",
   "skills",
+  "suggest",
   "wipe",
 ];
 
@@ -393,6 +394,9 @@ export async function executeShell(parsed: ParsedInvocation, cwd: string = proce
       break;
     case "skills":
       result = await runSkills(context);
+      break;
+    case "suggest":
+      result = await runSuggest(context);
       break;
     default:
       result = failResult({
