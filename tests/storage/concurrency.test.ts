@@ -305,7 +305,14 @@ function runScenario(
       const s = state[w];
 
       try {
-        if (writerFactory === runImmediateWriter) {
+        if (writerFactory === runWriteTransactionWriter) {
+          writeTransaction(conn, (db) => {
+            db
+              .query("INSERT INTO writes (writer_id, sequence, payload) VALUES (?, ?, ?);")
+              .run(w, seq, `${scenario}-writer-${w}-seq-${seq}`);
+          });
+          s.successes++;
+        } else if (writerFactory === runImmediateWriter) {
           conn.exec("BEGIN IMMEDIATE;");
           try {
             conn
