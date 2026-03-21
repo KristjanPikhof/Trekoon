@@ -714,6 +714,37 @@ describe("suggest command", (): void => {
     expect(continueSuggestion?.category).toBe("execution");
   });
 
+  test("--epic scopes suggestions to that specific epic", async (): Promise<void> => {
+    const cwd = createWorkspace();
+    initializeRepository(cwd);
+
+    const epicA = await seedEpic(cwd, "Scoped Epic A", "First epic");
+    const epicB = await seedEpic(cwd, "Scoped Epic B", "Second epic");
+
+    await seedTask(cwd, epicA, "Task A1", "desc");
+    await seedTask(cwd, epicA, "Task A2", "desc");
+    await seedTask(cwd, epicB, "Task B1", "desc");
+
+    const scopedResult = await runSuggest({
+      cwd,
+      mode: "toon",
+      args: ["--epic", epicA],
+    });
+    expect(scopedResult.ok).toBeTrue();
+
+    const scopedData = scopedResult.data as {
+      suggestions: Array<{ action: string; command: string }>;
+      context: {
+        activeEpic: string | null;
+        readyTasks: number;
+      };
+    };
+    // Active epic should be the one we specified
+    expect(scopedData.context.activeEpic).toBe(epicA);
+    // Ready tasks should reflect only Epic A's tasks (2), not Epic B's
+    expect(scopedData.context.readyTasks).toBe(2);
+  });
+
   test("all blocked path suggests reviewing blocked tasks", async (): Promise<void> => {
     const cwd = createWorkspace();
     initializeRepository(cwd);
