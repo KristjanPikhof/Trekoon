@@ -583,6 +583,7 @@ export class MutationService {
           title: task.title,
           description: task.description,
           status: task.status,
+          owner: task.owner,
         });
         continue;
       }
@@ -593,6 +594,7 @@ export class MutationService {
         title: subtask.title,
         description: subtask.description,
         status: subtask.status,
+        owner: subtask.owner,
       });
     }
   }
