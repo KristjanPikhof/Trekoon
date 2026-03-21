@@ -421,21 +421,21 @@ export class TrackerDomain {
       this.getEpicOrThrow(epicId);
       const rows = this.#db
         .query(
-          "SELECT id, epic_id, title, description, status, created_at, updated_at FROM tasks WHERE epic_id = ? ORDER BY created_at ASC, id ASC;",
+          "SELECT id, epic_id, title, description, status, owner, created_at, updated_at FROM tasks WHERE epic_id = ? ORDER BY created_at ASC, id ASC;",
         )
         .all(epicId) as TaskRow[];
       return rows.map(mapTask);
     }
 
     const rows = this.#db
-      .query("SELECT id, epic_id, title, description, status, created_at, updated_at FROM tasks ORDER BY created_at ASC, id ASC;")
+      .query("SELECT id, epic_id, title, description, status, owner, created_at, updated_at FROM tasks ORDER BY created_at ASC, id ASC;")
       .all() as TaskRow[];
     return rows.map(mapTask);
   }
 
   getTask(id: string): TaskRecord | null {
     const row = this.#db
-      .query("SELECT id, epic_id, title, description, status, created_at, updated_at FROM tasks WHERE id = ?;")
+      .query("SELECT id, epic_id, title, description, status, owner, created_at, updated_at FROM tasks WHERE id = ?;")
       .get(id) as TaskRow | null;
     return row ? mapTask(row) : null;
   }
@@ -455,19 +455,20 @@ export class TrackerDomain {
 
   updateTask(
     id: string,
-    input: { title?: string | undefined; description?: string | undefined; status?: string | undefined },
+    input: { title?: string | undefined; description?: string | undefined; status?: string | undefined; owner?: string | null | undefined },
   ): TaskRecord {
     const existing: TaskRecord = this.getTaskOrThrow(id);
     const nextTitle: string = input.title !== undefined ? assertNonEmpty("title", input.title) : existing.title;
     const nextDescription: string =
       input.description !== undefined ? assertNonEmpty("description", input.description) : existing.description;
     const nextStatus: string = input.status !== undefined ? assertNonEmpty("status", input.status) : existing.status;
+    const nextOwner: string | null = input.owner !== undefined ? input.owner : existing.owner;
     this.assertNoUnresolvedDependenciesForStatusTransition(id, "task", existing.status, nextStatus);
     const now: number = Date.now();
 
     this.#db
-      .query("UPDATE tasks SET title = ?, description = ?, status = ?, updated_at = ?, version = version + 1 WHERE id = ?;")
-      .run(nextTitle, nextDescription, nextStatus, now, id);
+      .query("UPDATE tasks SET title = ?, description = ?, status = ?, owner = ?, updated_at = ?, version = version + 1 WHERE id = ?;")
+      .run(nextTitle, nextDescription, nextStatus, nextOwner, now, id);
 
     return this.getTaskOrThrow(id);
   }
@@ -586,7 +587,7 @@ export class TrackerDomain {
       this.getTaskOrThrow(taskId);
       const rows = this.#db
         .query(
-          "SELECT id, task_id, title, description, status, created_at, updated_at FROM subtasks WHERE task_id = ? ORDER BY created_at ASC, id ASC;",
+          "SELECT id, task_id, title, description, status, owner, created_at, updated_at FROM subtasks WHERE task_id = ? ORDER BY created_at ASC, id ASC;",
         )
         .all(taskId) as SubtaskRow[];
       return rows.map(mapSubtask);
@@ -594,7 +595,7 @@ export class TrackerDomain {
 
     const rows = this.#db
       .query(
-        "SELECT id, task_id, title, description, status, created_at, updated_at FROM subtasks ORDER BY created_at ASC, id ASC;",
+        "SELECT id, task_id, title, description, status, owner, created_at, updated_at FROM subtasks ORDER BY created_at ASC, id ASC;",
       )
       .all() as SubtaskRow[];
     return rows.map(mapSubtask);
@@ -602,7 +603,7 @@ export class TrackerDomain {
 
   getSubtask(id: string): SubtaskRecord | null {
     const row = this.#db
-      .query("SELECT id, task_id, title, description, status, created_at, updated_at FROM subtasks WHERE id = ?;")
+      .query("SELECT id, task_id, title, description, status, owner, created_at, updated_at FROM subtasks WHERE id = ?;")
       .get(id) as SubtaskRow | null;
     return row ? mapSubtask(row) : null;
   }
@@ -650,7 +651,7 @@ export class TrackerDomain {
     const taskIds = new Set(tasks.map((task) => task.id));
     const subtasks = this.#db
       .query(
-        "SELECT id, task_id, title, description, status, created_at, updated_at FROM subtasks WHERE task_id IN (SELECT id FROM tasks WHERE epic_id = ?) ORDER BY created_at ASC, id ASC;",
+        "SELECT id, task_id, title, description, status, owner, created_at, updated_at FROM subtasks WHERE task_id IN (SELECT id FROM tasks WHERE epic_id = ?) ORDER BY created_at ASC, id ASC;",
       )
       .all(epicId) as SubtaskRow[];
 
