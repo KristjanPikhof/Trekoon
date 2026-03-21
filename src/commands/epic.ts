@@ -18,6 +18,7 @@ import {
   suggestOptions,
 } from "./arg-parser";
 import { unexpectedFailureResult } from "./error-utils";
+import { buildTaskReadiness } from "./task-readiness";
 
 import { MutationService } from "../domain/mutation-service";
 import { TrackerDomain } from "../domain/tracker-domain";
