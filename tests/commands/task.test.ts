@@ -945,6 +945,7 @@ describe("task command", (): void => {
     const blockerTaskId = (blockerTask.data as { task: { id: string } }).task.id;
 
     await runDep({ cwd, mode: "human", args: ["add", blockedTaskId, blockerTaskId] });
+    await runTask({ cwd, mode: "human", args: ["update", blockerTaskId, "--status", "in_progress"] });
     await runTask({ cwd, mode: "human", args: ["update", blockerTaskId, "--status", "done"] });
 
     const updated = await runTask({ cwd, mode: "toon", args: ["update", blockedTaskId, "--status", "in_progress"] });
