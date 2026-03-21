@@ -1,5 +1,15 @@
 export type NodeKind = "epic" | "task" | "subtask";
 
+export const VALID_STATUSES = ["todo", "in_progress", "done", "blocked"] as const;
+export type ValidStatus = (typeof VALID_STATUSES)[number];
+
+export const VALID_TRANSITIONS: ReadonlyMap<ValidStatus, ReadonlySet<ValidStatus>> = new Map<ValidStatus, ReadonlySet<ValidStatus>>([
+  ["todo", new Set<ValidStatus>(["in_progress", "blocked"])],
+  ["in_progress", new Set<ValidStatus>(["done", "blocked"])],
+  ["blocked", new Set<ValidStatus>(["in_progress", "todo"])],
+  ["done", new Set<ValidStatus>(["in_progress"])],
+]);
+
 export const COMPACT_TEMP_KEY_PREFIX = "@";
 
 export type CompactTempKey = string;
