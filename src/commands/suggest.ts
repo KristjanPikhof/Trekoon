@@ -168,13 +168,27 @@ function buildSuggestions(
     && readiness.summary.totalOpenTasks === 0
     && activeEpic.status !== "done"
   ) {
-    suggestions.push({
-      priority: suggestions.length + 1,
-      action: `mark epic ${activeEpic.id} done`,
-      command: `trekoon --toon epic update ${activeEpic.id} --status done`,
-      reason: `All tasks complete — mark epic "${activeEpic.title}" as done`,
-      category: "planning",
-    });
+    const epicStatus = activeEpic.status as ValidStatus;
+    const validTargets = VALID_TRANSITIONS.get(epicStatus);
+    const canTransitionToDone = validTargets?.has("done") === true;
+
+    if (canTransitionToDone) {
+      suggestions.push({
+        priority: suggestions.length + 1,
+        action: `mark epic ${activeEpic.id} done`,
+        command: `trekoon --toon epic update ${activeEpic.id} --status done`,
+        reason: `All tasks complete — mark epic "${activeEpic.title}" as done`,
+        category: "planning",
+      });
+    } else if (validTargets?.has("in_progress") === true) {
+      suggestions.push({
+        priority: suggestions.length + 1,
+        action: `advance epic ${activeEpic.id} to in_progress`,
+        command: `trekoon --toon epic update ${activeEpic.id} --status in_progress`,
+        reason: `All tasks complete — advance epic "${activeEpic.title}" to in_progress first (then mark done)`,
+        category: "planning",
+      });
+    }
   }
 
   // Priority 8: No epics exist
