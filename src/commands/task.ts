@@ -1299,7 +1299,14 @@ export async function runTask(context: CliContext): Promise<CliResult> {
           blockedCount: readiness.summary.blockedCount,
         };
 
+        const subtaskWarning = openSubtaskCount > 0
+          ? `Warning: ${openSubtaskCount} subtask(s) still open.`
+          : null;
+
         let human = `Task ${completed.title} marked done.`;
+        if (subtaskWarning !== null) {
+          human += `\n${subtaskWarning}`;
+        }
         if (unblockedTasks.length > 0) {
           human += `\nUnblocked: ${unblockedTasks.map((t) => t.title).join(", ")}`;
         }
@@ -1313,6 +1320,9 @@ export async function runTask(context: CliContext): Promise<CliResult> {
           human,
           data: {
             completed,
+            openSubtaskCount,
+            openSubtaskIds,
+            warning: subtaskWarning,
             unblocked: unblockedTasks,
             next: nextTree,
             nextDeps,
