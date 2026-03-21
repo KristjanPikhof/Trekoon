@@ -283,6 +283,10 @@ export class MutationService {
     input: { title?: string | undefined; description?: string | undefined; status?: string | undefined },
   ): TaskRecord {
     return writeTransaction(this.#db, (): TaskRecord => {
+      if (input.status !== undefined) {
+        const existing = this.#domain.getTaskOrThrow(id);
+        validateStatusTransition(existing.status, input.status, "task", id);
+      }
       const task = this.#domain.updateTask(id, input);
       this.#appendEntityEvent("task", task.id, ENTITY_OPERATIONS.task.updated, {
         epic_id: task.epicId,
