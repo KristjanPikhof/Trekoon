@@ -1277,7 +1277,11 @@ export async function runTask(context: CliContext): Promise<CliResult> {
           }),
         );
 
-        // Auto-transition through in_progress when current status is todo or blocked
+        // Auto-transition through in_progress when current status is todo or blocked.
+        // Note: this emits two sync events (→in_progress, →done) because each
+        // updateTask call appends its own event.  This is intentional — the status
+        // machine requires the intermediate step, and event consumers should treat
+        // a rapid in_progress→done pair from `task done` as a single logical completion.
         if (existingTask.status === "todo" || existingTask.status === "blocked") {
           mutations.updateTask(taskId, { status: "in_progress" });
         }
