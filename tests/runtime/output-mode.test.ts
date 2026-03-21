@@ -45,8 +45,8 @@ describe("output rendering", (): void => {
       }),
     );
 
-    expect(envelope.metadata.contractVersion).toBe("1.0.0");
-    expect(envelope.metadata.requestId).toMatch(/^req-[0-9a-f]{8}$/);
+    expect(envelope.metadata!.contractVersion).toBe("1.0.0");
+    expect(envelope.metadata!.requestId).toMatch(/^req-[0-9a-f]{8}$/);
   });
 
   test("renders JSON envelope with --json mode", (): void => {
