@@ -1,5 +1,5 @@
 import { copyTextToClipboard } from "../runtime/clipboard.js";
-import { orderEpicsNewestFirst } from "./store.js";
+import { DEFAULT_STATUS_FILTER, orderEpicsNewestFirst } from "./store.js";
 
 function cloneSnapshot(snapshot) {
   if (typeof structuredClone === "function") {
@@ -431,24 +431,24 @@ export function createBoardActions(options) {
       );
     },
     toggleEpicStatusFilter(status) {
-      const current = store.epicStatusFilter || { todo: true, blocked: true, in_progress: true, done: false };
+      const current = store.epicStatusFilter || { ...DEFAULT_STATUS_FILTER };
       store.epicStatusFilter = { ...current, [status]: !current[status] };
       persist();
       rerender();
     },
     toggleTaskStatusFilter(status) {
-      const current = store.taskStatusFilter || { todo: true, blocked: true, in_progress: true, done: false };
+      const current = store.taskStatusFilter || { ...DEFAULT_STATUS_FILTER };
       store.taskStatusFilter = { ...current, [status]: !current[status] };
       persist();
       rerender();
     },
     resetEpicFilter() {
-      store.epicStatusFilter = { todo: true, blocked: true, in_progress: true, done: false };
+      store.epicStatusFilter = { ...DEFAULT_STATUS_FILTER };
       persist();
       rerender();
     },
     resetTaskFilter() {
-      store.taskStatusFilter = { todo: true, blocked: true, in_progress: true, done: false };
+      store.taskStatusFilter = { ...DEFAULT_STATUS_FILTER };
       persist();
       rerender();
     },
