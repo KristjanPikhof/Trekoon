@@ -1420,10 +1420,16 @@ export async function runEpic(context: CliContext): Promise<CliResult> {
         }
 
         const allTasks = domain.listTasks(epicId);
-        const doneCount = allTasks.filter((t) => t.status === "done").length;
-        const inProgressCount = allTasks.filter((t) => t.status === "in_progress").length;
-        const blockedCount = allTasks.filter((t) => t.status === "blocked").length;
-        const todoCount = allTasks.filter((t) => t.status === "todo").length;
+        let doneCount = 0;
+        let inProgressCount = 0;
+        let blockedCount = 0;
+        let todoCount = 0;
+        for (const t of allTasks) {
+          if (t.status === "done") doneCount += 1;
+          else if (t.status === "in_progress") inProgressCount += 1;
+          else if (t.status === "blocked") blockedCount += 1;
+          else if (t.status === "todo") todoCount += 1;
+        }
 
         const readiness = buildTaskReadiness(domain, epicId);
         const readyCount = readiness.summary.readyCount;
