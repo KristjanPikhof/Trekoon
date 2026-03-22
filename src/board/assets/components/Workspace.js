@@ -21,7 +21,7 @@ import {
   STATUS_ORDER,
 } from "./helpers.js";
 import { orderEpicsNewestFirst } from "../state/store.js";
-import { VIEW_MODES } from "../state/utils.js";
+import { getSelectableStatuses, VIEW_MODES } from "../state/utils.js";
 
 // ---------------------------------------------------------------------------
 // Workspace header
@@ -79,7 +79,7 @@ function renderWorkspaceHeader(props) {
             <label class="board-wh__control-label">
               <span class="board-wh__control-text">Epic status</span>
               <select class="${inlineSelect}" name="status" aria-label="Epic status" title="${escapeHtml(epicStatusTooltip)}" ${store.isMutating ? "disabled" : ""}>
-                ${STATUS_ORDER.map(s => `<option value="${escapeHtml(s)}" ${selectedEpic.status === s ? 'selected' : ''}>${escapeHtml(STATUS_LABELS[s] ?? s)}</option>`).join('')}
+                ${getSelectableStatuses(selectedEpic.status).map(s => `<option value="${escapeHtml(s)}" ${selectedEpic.status === s ? 'selected' : ''}>${escapeHtml(STATUS_LABELS[s] ?? s)}</option>`).join('')}
               </select>
             </label>
           </form>
