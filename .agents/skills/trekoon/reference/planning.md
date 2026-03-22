@@ -170,13 +170,48 @@ second-wave tasks appear as blocked with the right dependencies.
 
 ## Plan output and handoff
 
-Return a compact execution brief to the user with:
+After creating the epic and validating, present a summary to the user. This
+summary is the primary handoff artifact — it must be self-contained and
+actionable.
 
-1. Epic ID + title
-2. Tasks grouped by subsystem/lane with owners
-3. Dependency list (`A depends on B`)
-4. Explicit parallel batches and sequential gates
-5. Verification commands per task
+### ID rules
+
+- **Always use full UUIDs** for epic and task IDs. Never use temp-keys
+  (`task-truthy`, `@task-api`, etc.) in the summary — those are ephemeral
+  creation-time references that do not exist in the database.
+- IDs must be copy-friendly: render them in monospace/code formatting so the
+  user can select and copy a UUID directly.
+
+### Summary structure
+
+1. **Epic ID + title** — displayed prominently at the top, e.g.:
+   ```
+   Epic: <full-uuid>
+   Title: <epic title>
+   ```
+2. Tasks grouped by wave/batch with columns: full UUID, title, owner/lane
+3. Dependencies shown per task (using full UUIDs or task titles, not temp-keys)
+4. Verification gate (commands to run after all tasks complete)
+
+### Example format
+
+```
+Epic: 904b3129-be2d-4b20-8030-537dc327491a
+Title: Checkout: add idempotent payment capture
+
+Wave 1 (parallel)
+| ID                                   | Task                          | Owner        |
+|--------------------------------------|-------------------------------|--------------|
+| c12c9746-dbae-4660-bcbb-ebe660cb7054 | [API] Payment capture endpoint| api-lane     |
+| 4f0848f3-538a-44d3-8415-5bb16cf3f39e | [UI] Checkout button states   | ui-lane      |
+
+Wave 2 (depends on wave 1)
+| ID                                   | Task                          | Depends on                           |
+|--------------------------------------|-------------------------------|--------------------------------------|
+| 8a76afac-155d-45b3-b205-df2e4ef8988b | [API] Retry logic             | c12c9746-dbae-4660-bcbb-ebe660cb7054 |
+
+Verification: bun run build && bun run test
+```
 
 ### Execution handoff contract
 
