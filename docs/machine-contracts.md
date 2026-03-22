@@ -246,6 +246,126 @@ Behavior:
 - machine output includes `metadata.compatibility` with migration guidance and
   removal timing
 
+## Compact envelope mode
+
+```bash
+trekoon --toon --compact task list
+```
+
+When `--compact` is passed, the `metadata` key is omitted from the TOON/JSON
+envelope. The `ok`, `command`, `data`, `error`, and `meta` keys are unaffected.
+
+## Status transition error contract
+
+Invalid status transitions return:
+
+```text
+ok: false
+error:
+  code: status_transition_invalid
+  message: "cannot transition <kind> <id> from '<from>' to '<to>'"
+  details:
+    entity: epic|task|subtask
+    id: <entity-id>
+    fromStatus: <current-status>
+    toStatus: <attempted-status>
+    allowedTransitions[]: <valid targets from current status>
+```
+
+## Epic progress contract
+
+```bash
+trekoon --toon epic progress <epic-id>
+```
+
+Payload fields:
+
+```text
+ok: true
+command: epic.progress
+data:
+  epicId: <epic-id>
+  title: <epic-title>
+  total
+  doneCount
+  inProgressCount
+  blockedCount
+  todoCount
+  readyCount
+  nextCandidate: { id, title } | null
+```
+
+## Task done enhanced contract
+
+```bash
+trekoon --toon task done <task-id>
+```
+
+Payload fields:
+
+```text
+ok: true
+command: task.done
+data:
+  completed: { ...task record... }
+  openSubtaskCount
+  openSubtaskIds[]
+  warning: "Warning: N subtask(s) still open." | null
+  unblocked[]:
+    id
+    kind: task
+    title
+    status
+    wasBlockedBy[]
+  next: { ...task tree... } | null
+  nextDeps[]
+  readiness:
+    readyCount
+    blockedCount
+```
+
+## Suggest command contract
+
+```bash
+trekoon --toon suggest [--epic <epic-id>]
+```
+
+Payload fields:
+
+```text
+ok: true
+command: suggest
+data:
+  suggestions[]:
+    priority
+    action
+    command
+    reason
+    category: recovery|sync|execution|planning
+  context:
+    totalEpics
+    activeEpic: <epic-id> | null
+    readyTasks
+    blockedTasks
+    inProgressTasks
+    syncBehind
+    pendingConflicts
+```
+
+## Owner field in update payloads
+
+Task and subtask update payloads now include `owner` in their event data:
+
+```text
+data:
+  task | subtask:
+    ...existing fields...
+    owner: <string> | null
+```
+
+The board API accepts `owner` on `PATCH /api/tasks/{id}` and
+`PATCH /api/subtasks/{id}`.
+
 ## Related docs
 
 - [Quickstart](quickstart.md)
