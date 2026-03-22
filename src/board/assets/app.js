@@ -555,8 +555,13 @@ export async function bootLegacyBoard(options = {}) {
       submitCreateSubtask: (id, data) => actions.submitCreateSubtask(id, data),
       addDependency: (src, data) => actions.addDependency(src, data),
       dropTaskStatus: (id, status) => actions.dropTaskStatus(id, status),
+      getTaskStatus: (id) => actions.getTaskStatus(id),
       changeEpicStatus: (epicId, status) => actions.changeEpicStatus(epicId, status),
       bulkSetStatus: (epicId, status) => actions.bulkSetStatus(epicId, status),
+      toggleEpicStatusFilter: (status) => actions.toggleEpicStatusFilter(status),
+      toggleTaskStatusFilter: (status) => actions.toggleTaskStatusFilter(status),
+      resetEpicFilter: () => actions.resetEpicFilter(),
+      resetTaskFilter: () => actions.resetTaskFilter(),
       handleKeydown: (event) => actions.handleKeydown(event),
     });
 
