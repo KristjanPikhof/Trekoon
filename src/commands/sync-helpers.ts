@@ -5,6 +5,8 @@ import { persistGitContext, resolveGitContext } from "../sync/git-context";
 import type { GitContextSnapshot, SyncStatusSummary } from "../sync/types";
 import type { TrekoonDatabase } from "../storage/database";
 
+export const DEFAULT_SOURCE_BRANCH = "main";
+
 export function countAheadLocal(db: Database, currentBranch: string | null, sourceBranch: string): number {
   if (!currentBranch || currentBranch === sourceBranch) {
     return 0;
