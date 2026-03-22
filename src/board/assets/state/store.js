@@ -9,6 +9,18 @@ function normalizeSearch(value) {
 
 // --- Persistence helpers ---
 
+const DEFAULT_STATUS_FILTER = { todo: true, blocked: true, in_progress: true, done: false };
+
+function readStatusFilter(raw) {
+  if (typeof raw !== "object" || raw === null) return { ...DEFAULT_STATUS_FILTER };
+  return {
+    todo: typeof raw.todo === "boolean" ? raw.todo : DEFAULT_STATUS_FILTER.todo,
+    blocked: typeof raw.blocked === "boolean" ? raw.blocked : DEFAULT_STATUS_FILTER.blocked,
+    in_progress: typeof raw.in_progress === "boolean" ? raw.in_progress : DEFAULT_STATUS_FILTER.in_progress,
+    done: typeof raw.done === "boolean" ? raw.done : DEFAULT_STATUS_FILTER.done,
+  };
+}
+
 export function readStoredState() {
   try {
     return JSON.parse(localStorage.getItem(STATE_STORAGE_KEY) || "{}");
@@ -77,13 +89,24 @@ export function orderEpicsNewestFirst(epics) {
 
 // --- Derived state selectors ---
 
+const DONE_GRACE_PERIOD_MS = 86400000; // 24 hours
+
 const selectVisibleEpics = createSelector(
-  (s) => [s.snapshot?.epics, s.searchQuery],
-  (epics, searchQuery) => {
+  (s) => [s.snapshot?.epics, s.searchQuery, s.epicStatusFilter],
+  (epics, searchQuery, epicStatusFilter) => {
     if (!epics) return [];
+    const now = Date.now();
+    const filtered = epics.filter((epic) => {
+      if (epic.status === "done") {
+        if (!epicStatusFilter.done && (now - epic.updatedAt) > DONE_GRACE_PERIOD_MS) return false;
+      } else if (!epicStatusFilter[epic.status]) {
+        return false;
+      }
+      return true;
+    });
     const matchingEpics = searchQuery.length === 0
-      ? epics
-      : epics.filter((epic) => epic.searchText.includes(searchQuery));
+      ? filtered
+      : filtered.filter((epic) => epic.searchText.includes(searchQuery));
 
     return orderEpicsNewestFirst(matchingEpics);
   },
@@ -100,11 +123,12 @@ const selectTasksInScope = createSelector(
 );
 
 const selectVisibleTasks = createSelector(
-  (s) => [selectTasksInScope(s), s.searchQuery],
-  (tasksInScope, searchQuery) => {
+  (s) => [selectTasksInScope(s), s.searchQuery, s.taskStatusFilter],
+  (tasksInScope, searchQuery, taskStatusFilter) => {
+    const filtered = tasksInScope.filter((task) => taskStatusFilter[task.status]);
     return searchQuery.length === 0
-      ? tasksInScope
-      : tasksInScope.filter((task) => task.searchText.includes(searchQuery));
+      ? filtered
+      : filtered.filter((task) => task.searchText.includes(searchQuery));
   },
 );
 
@@ -287,6 +311,8 @@ export function createStore(initialSnapshot, options = {}) {
     notice: null,
     isMutating: false,
     notesPanelOpen: storedState.notesPanelOpen === true,
+    epicStatusFilter: readStatusFilter(storedState.epicStatusFilter),
+    taskStatusFilter: readStatusFilter(storedState.taskStatusFilter),
   };
 
   /** @type {Set<(state: object) => void>} */
@@ -306,6 +332,8 @@ export function createStore(initialSnapshot, options = {}) {
         view: state.view,
         selectedTaskId: state.selectedTaskId,
         notesPanelOpen: state.notesPanelOpen,
+        epicStatusFilter: state.epicStatusFilter,
+        taskStatusFilter: state.taskStatusFilter,
       });
   }
 
