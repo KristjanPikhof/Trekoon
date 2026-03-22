@@ -6,6 +6,7 @@ import {
   STATUS_LABELS,
   STATUS_ORDER,
 } from "./helpers.js";
+import { DEFAULT_STATUS_FILTER } from "../state/store.js";
 
 /**
  * Render the epics overview HTML.
@@ -19,9 +20,8 @@ import {
 function render(props) {
   const { visibleEpics, selectedEpicId, store } = props;
 
-  const epicStatusFilter = store.epicStatusFilter || { todo: true, blocked: true, in_progress: true, done: false };
-  const defaultFilter = { todo: true, blocked: true, in_progress: true, done: false };
-  const isNonDefault = STATUS_ORDER.some(s => epicStatusFilter[s] !== defaultFilter[s]);
+  const epicStatusFilter = store.epicStatusFilter || { ...DEFAULT_STATUS_FILTER };
+  const isNonDefault = STATUS_ORDER.some(s => epicStatusFilter[s] !== DEFAULT_STATUS_FILTER[s]);
 
   return `
     <div class="board-root board-root--epics">
