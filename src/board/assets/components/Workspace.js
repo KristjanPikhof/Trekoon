@@ -58,6 +58,10 @@ function renderWorkspaceHeader(props) {
     visibleTasks,
   } = props;
 
+  const taskStatusFilter = store.taskStatusFilter || { todo: true, blocked: true, in_progress: true, done: false };
+  const defaultTaskFilter = { todo: true, blocked: true, in_progress: true, done: false };
+  const isTaskFilterNonDefault = STATUS_ORDER.some(s => taskStatusFilter[s] !== defaultTaskFilter[s]);
+
   const description = selectedEpic.description?.trim() || "";
   const inlineSelect = `${fieldClasses()} !py-1 !px-2 !text-xs !min-h-0 !rounded-xl`;
   const epicStatusTooltip = "Change this epic's overall status.";
@@ -114,6 +118,14 @@ function renderWorkspaceHeader(props) {
           <span class="${neutralChipClasses()}">${visibleTasks.length} visible</span>
           ${store.isMutating ? `<span class="${neutralChipClasses()}">Saving\u2026</span>` : ""}
         </div>
+        <div class="board-filter-bar">
+          ${STATUS_ORDER.map(status => {
+            const active = taskStatusFilter[status] !== false;
+            const count = selectedEpic.counts?.[status] ?? 0;
+            return `<button type="button" class="board-filter-pill ${active ? 'board-filter-pill--active' : 'board-filter-pill--inactive'} board-filter-pill--${status}" data-toggle-task-status-filter="${status}" aria-pressed="${active}" title="${active ? 'Hide' : 'Show'} ${STATUS_LABELS[status]} tasks">${STATUS_LABELS[status]} (${count})</button>`;
+          }).join('')}
+          ${isTaskFilterNonDefault ? `<button type="button" class="board-filter-pill board-filter-pill--reset" data-reset-task-filter title="Reset filters to defaults">Reset</button>` : ''}
+        </div>
         <div class="board-wh__actions">
           <div class="board-wh__action-group">
             <button type="button" class="board-copy-btn ${isCopied ? "board-copy-btn--active" : ""}" data-copy-epic-id="${escapeHtml(selectedEpic.id)}" aria-label="${escapeHtml(isCopied ? `Copied epic UUID for ${selectedEpic.title}` : copyLabel)}" title="${escapeHtml(isCopied ? "Epic UUID copied." : copyTooltip)}">
@@ -155,9 +167,12 @@ function renderWorkspaceHeader(props) {
 // ---------------------------------------------------------------------------
 
 function renderKanbanColumns(props) {
-  const { visibleTasks, selectedTaskId, isMutating } = props;
+  const { visibleTasks, selectedTaskId, isMutating, taskStatusFilter } = props;
+  const filter = taskStatusFilter || { todo: true, blocked: true, in_progress: true, done: false };
 
-  const columnsMarkup = STATUS_ORDER.map((status) => {
+  const columnsMarkup = STATUS_ORDER
+    .filter((status) => filter[status] !== false)
+    .map((status) => {
     const columnTasks = visibleTasks.filter((t) => t.status === status);
     const columnTitle = readStatusLabel(status);
     const content = columnTasks.length === 0
@@ -265,19 +280,20 @@ function render(props) {
   const headerMarkup = renderWorkspaceHeader({
     selectedEpic,
     snapshotEpics,
-      store: {
-        copyFeedback: store.copyFeedback,
-        notesPanelOpen: store.notesPanelOpen,
-        isMutating: store.isMutating,
-        selectedEpicId: selectedEpic.id,
-        view: store.view,
+    store: {
+      copyFeedback: store.copyFeedback,
+      notesPanelOpen: store.notesPanelOpen,
+      isMutating: store.isMutating,
+      selectedEpicId: selectedEpic.id,
+      view: store.view,
       viewModes,
+      taskStatusFilter: store.taskStatusFilter,
     },
     visibleTasks,
   });
 
   const contentMarkup = store.view === "kanban"
-    ? renderKanbanColumns({ visibleTasks, selectedTaskId, isMutating: store.isMutating })
+    ? renderKanbanColumns({ visibleTasks, selectedTaskId, isMutating: store.isMutating, taskStatusFilter: store.taskStatusFilter })
     : renderListView({ visibleTasks, selectedTaskId });
 
   return `
