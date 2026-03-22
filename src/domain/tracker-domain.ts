@@ -169,7 +169,8 @@ export function validateStatusTransition(fromStatus: string, toStatus: string, e
   }
 
   if (!isValidStatus(fromStatus)) {
-    // Legacy status being migrated; allow transition to any valid status.
+    // Legacy/custom status from pre-0.3.1 data; allow transition to any valid
+    // status so existing databases can migrate forward without manual fixups.
     return;
   }
 
@@ -978,6 +979,12 @@ export class TrackerDomain {
     return rows.map(mapDependency);
   }
 
+  /**
+   * Resolves dependency statuses for multiple tasks using a single prepared
+   * statement executed once per task ID.  This avoids the previous N+1 pattern
+   * where each task required separate getTaskOrThrow/getSubtaskOrThrow calls
+   * per dependency.
+   */
   batchResolveDependencyStatuses(
     taskIds: readonly string[],
   ): Map<string, { totalDependencies: number; blockers: Array<{ id: string; kind: "task" | "subtask"; status: string }> }> {
