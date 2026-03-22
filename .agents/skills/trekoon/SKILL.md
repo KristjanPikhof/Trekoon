@@ -10,6 +10,51 @@ Trekoon is a local-first issue tracker for epics, tasks, and subtasks.
 This skill is the agent operating guide, not the full CLI reference. Use it to
 pick the right command with the fewest reads and mutations.
 
+## Skill arguments
+
+When invoked with arguments (e.g., `/trekoon <id> [user text]`), resolve the
+argument as a Trekoon entity ID and choose the action based on user intent:
+
+### 1. Resolve the entity
+
+```bash
+trekoon --toon epic show <id> 2>/dev/null || \
+trekoon --toon task show <id> 2>/dev/null || \
+trekoon --toon subtask show <id> 2>/dev/null
+```
+
+If none match, tell the user the ID was not found.
+
+### 2. Choose the action
+
+Interpret the user's accompanying text (or lack thereof) to decide what to do:
+
+| User intent signal | Action |
+|---|---|
+| No text, just an ID | Orient: run `session --epic <epic-id>` (or show the task/subtask) and summarize status, readiness, and next steps |
+| "analyze", "review", "check", "status", "progress" | **Analyze:** run `epic progress <id>` or `task show <id> --all`, then `suggest --epic <id>`, and report findings |
+| "execute", "implement", "do", "complete", "start", "run" | **Execute:** read `reference/execution.md`, scope session to the entity's epic, and begin the execution loop |
+| "plan", "break down", "design", "architect" | **Plan:** read `reference/planning.md` and create or expand the epic graph |
+
+### Examples
+
+```
+/trekoon abc-123
+  → shows epic/task/subtask abc-123, summarizes status and next candidate
+
+/trekoon abc-123 analyze this epic
+  → runs epic progress, suggest, reports readiness and blockers
+
+/trekoon abc-123 execute
+  → reads execution reference, starts session --epic, begins work loop
+
+/trekoon abc-123 plan the implementation
+  → reads planning reference, decomposes into tasks/subtasks/deps
+```
+
+When the entity is a **task or subtask**, resolve its parent epic ID from the
+entity record and scope session/suggest/progress calls to that epic.
+
 ## Reference guides
 
 This skill ships with bundled reference guides for planning and execution. Read
