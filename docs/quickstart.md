@@ -198,6 +198,37 @@ Rules:
 - If any epic/task descendant is blocked by an unresolved external dependency,
   the whole cascade fails with no partial writes
 
+## Check progress and get suggestions
+
+After creating work, use `epic progress` to see status counts and the next ready
+candidate:
+
+```bash
+trekoon epic progress <epic-id>
+```
+
+Use `suggest` for priority-ranked next-action recommendations:
+
+```bash
+trekoon suggest
+trekoon suggest --epic <epic-id>
+```
+
+## Status machine
+
+Trekoon enforces valid status transitions. The canonical statuses are `todo`,
+`in_progress`, `done`, and `blocked`. Direct jumps like `todo → done` are
+rejected — use `task done` which auto-transitions through `in_progress`.
+
+Valid transitions:
+
+| From | Allowed targets |
+| --- | --- |
+| `todo` | `in_progress`, `blocked` |
+| `in_progress` | `done`, `blocked` |
+| `blocked` | `in_progress`, `todo` |
+| `done` | `in_progress` |
+
 ## What to read next
 
 - [Command reference](commands.md)
