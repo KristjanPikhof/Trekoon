@@ -52,6 +52,17 @@ With:    Tasks 1-2 (auth/*)   -> Agent 1 [explores once, executes both]
 **Parallel:** Groups touch different subsystems.
 **Sequential:** Groups have dependency edges between them.
 
+## Mark epic in-progress
+
+Before dispatching any work, transition the epic so it reflects actual state:
+
+```bash
+trekoon --toon epic update <epic-id> --status in_progress
+```
+
+This must happen once, immediately after building the execution graph. If
+execution is interrupted, the epic is at least `in_progress` rather than `todo`.
+
 ## Dispatch sub-agents
 
 For each parallel lane group, spawn a sub-agent with a prompt like:
@@ -176,9 +187,8 @@ After committing and verifying:
    ```
    All tasks must be `done` or clearly `blocked` with reason.
 
-2. **Mark epic done** (must transition through `in_progress` first if in `todo`):
+2. **Mark epic done** (already `in_progress` from the start step):
    ```bash
-   trekoon --toon epic update <epic-id> --status in_progress
    trekoon --toon epic update <epic-id> --status done
    ```
 
