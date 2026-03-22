@@ -309,39 +309,28 @@ function replaceOrCreateSymlink(
 
   const existing = lstatSync(linkPath);
   if (!existing.isSymbolicLink()) {
-    return failResult({
-      command: "skills.install",
-      human: `Cannot create symlink: path exists and is not a link (${linkPath}).`,
-      data: {
-        code: "path_conflict",
-        linkPath,
-        targetPath,
-      },
-      error: {
-        code: "path_conflict",
-        message: "Symlink destination exists as a non-link path",
-      },
-    });
+    // Replace stale directory or file with symlink to the canonical location.
+    rmSync(linkPath, { recursive: true, force: true });
+    const boundaryFailure = revalidateLinkParentBoundary(repoRoot, linkPath, allowOutsideRepo);
+    if (boundaryFailure) {
+      return boundaryFailure;
+    }
+    symlinkSync(symlinkTarget, linkPath, "dir");
+    return null;
   }
 
   const existingRawTarget: string = readlinkSync(linkPath);
   const existingAbsoluteTarget: string = toAbsolutePath(dirname(linkPath), existingRawTarget);
   const expectedTarget: string = resolve(targetPath);
   if (existingAbsoluteTarget !== expectedTarget) {
-    return failResult({
-      command: "skills.install",
-      human: `Cannot replace existing link at ${linkPath}; it points to ${existingAbsoluteTarget}.`,
-      data: {
-        code: "path_conflict",
-        linkPath,
-        existingTarget: existingAbsoluteTarget,
-        expectedTarget,
-      },
-      error: {
-        code: "path_conflict",
-        message: "Symlink destination points to a different target",
-      },
-    });
+    // Replace symlink pointing to a different target.
+    rmSync(linkPath, { force: true });
+    const boundaryFailure = revalidateLinkParentBoundary(repoRoot, linkPath, allowOutsideRepo);
+    if (boundaryFailure) {
+      return boundaryFailure;
+    }
+    symlinkSync(symlinkTarget, linkPath, "dir");
+    return null;
   }
 
   rmSync(linkPath, { force: true });
@@ -536,12 +525,16 @@ function updateEditorLink(
 
   const entry = lstatSync(linkPath);
   if (!entry.isSymbolicLink()) {
+    // Replace stale directory or file with symlink to the canonical location.
+    rmSync(linkPath, { recursive: true, force: true });
+    mkdirSync(dirname(linkPath), { recursive: true });
+    symlinkSync(symlinkTarget, linkPath, "dir");
     return {
       editor,
       linkPath,
       expectedTarget,
-      action: "skipped_conflict",
-      conflictCode: "non_link",
+      action: "refreshed",
+      conflictCode: null,
       existingTarget: null,
     };
   }
@@ -550,12 +543,15 @@ function updateEditorLink(
   const existingTarget: string = toAbsolutePath(dirname(linkPath), existingRawTarget);
 
   if (existingTarget !== expectedTarget) {
+    // Replace symlink pointing to a different target.
+    rmSync(linkPath, { force: true });
+    symlinkSync(symlinkTarget, linkPath, "dir");
     return {
       editor,
       linkPath,
       expectedTarget,
-      action: "skipped_conflict",
-      conflictCode: "wrong_target",
+      action: "refreshed",
+      conflictCode: null,
       existingTarget,
     };
   }
