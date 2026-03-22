@@ -163,21 +163,24 @@ describe("skills command", (): void => {
     expect(linkedData.linkTarget).toBe(linkedData.installedDir);
     expect(readlinkSync(linkedData.linkPath)).toBe(relative(dirname(linkedData.linkPath), linkedData.installedDir));
 
-    const conflictCwd = createWorkspace();
-    const conflictPath = join(conflictCwd, ".claude", "skills", "trekoon");
-    mkdirSync(conflictPath, { recursive: true });
+    // Non-link directory at link path should be replaced with symlink
+    const replaceCwd = createWorkspace();
+    const replacePath = join(replaceCwd, ".claude", "skills", "trekoon");
+    mkdirSync(replacePath, { recursive: true });
+    writeFileSync(join(replacePath, "SKILL.md"), "stale copy", "utf8");
 
-    const conflict = await runSkills({
-      cwd: conflictCwd,
+    const replaced = await runSkills({
+      cwd: replaceCwd,
       mode: "json",
       args: ["install", "--link", "--editor", "claude"],
     });
 
-    expect(conflict.ok).toBeFalse();
-    expect(conflict.error?.code).toBe("path_conflict");
-    const conflictData = conflict.data as { code: string; linkPath: string };
-    expect(conflictData.code).toBe("path_conflict");
-    expect(conflictData.linkPath).toBe(conflictPath);
+    expect(replaced.ok).toBeTrue();
+    const replacedData = replaced.data as { linked: boolean; linkPath: string; installedDir: string };
+    expect(replacedData.linked).toBeTrue();
+    expect(replacedData.linkPath).toBe(replacePath);
+    expect(lstatSync(replacePath).isSymbolicLink()).toBeTrue();
+    expect(resolve(dirname(replacePath), readlinkSync(replacePath))).toBe(replacedData.installedDir);
   });
 
   test("install --link rejects outside-repo link targets by default", async (): Promise<void> => {
@@ -337,11 +340,12 @@ describe("skills command", (): void => {
     expect(readlinkSync(claudeState!.linkPath)).toBe(relative(dirname(claudeState!.linkPath), updatedData.installedDir));
     expect(resolve(dirname(claudeState!.linkPath), readlinkSync(claudeState!.linkPath))).toBe(updatedData.installedDir);
 
-    // pi had non-link conflict, should be skipped
+    // pi had non-link directory, should be replaced with symlink
     expect(piState).toBeDefined();
-    expect(piState?.action).toBe("skipped_conflict");
-    expect(piState?.conflictCode).toBe("non_link");
-    expect(piState?.existingTarget).toBeNull();
+    expect(piState?.action).toBe("refreshed");
+    expect(piState?.conflictCode).toBeNull();
+    expect(lstatSync(piState!.linkPath).isSymbolicLink()).toBeTrue();
+    expect(resolve(dirname(piState!.linkPath), readlinkSync(piState!.linkPath))).toBe(updatedData.installedDir);
 
     const secondUpdate = await runSkills({
       cwd,
