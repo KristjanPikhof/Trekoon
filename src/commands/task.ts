@@ -1264,7 +1264,9 @@ export async function runTask(context: CliContext): Promise<CliResult> {
         const openSubtaskCount = openSubtasks.length;
         const openSubtaskIds = openSubtasks.map((s) => s.id);
 
-        // Snapshot blocked reverse deps before marking done (lightweight: no full readiness rebuild)
+        // Snapshot blocked reverse deps before marking done (lightweight: no full readiness rebuild).
+        // Only direct task-level reverse deps are tracked here; subtask reverse deps are excluded
+        // because subtasks are children within a task, not independent workflow items.
         const reverseDeps = domain.listReverseDependencies(taskId);
         const directRevDepTaskIds = reverseDeps
           .filter((rd) => rd.isDirect && rd.kind === "task")
