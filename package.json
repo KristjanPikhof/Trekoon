@@ -34,7 +34,7 @@
     "docs",
     "src",
     "src/board/assets",
-    ".agents/skills/trekoon/SKILL.md",
+    ".agents/skills/trekoon",
     "README.md",
     "LICENSE"
   ],
