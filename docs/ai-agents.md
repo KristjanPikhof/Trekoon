@@ -15,9 +15,21 @@ agent to:
 - preview scoped replace before `--apply`
 - treat `.trekoon` as shared repo-scoped operational state
 
-The canonical installed file lives at:
+The skill ships with bundled reference guides for planning and execution so the
+agent can handle the full plan-to-completion workflow from a single skill:
 
-- `.agents/skills/trekoon/SKILL.md`
+```
+.agents/skills/trekoon/
+  SKILL.md                      ← command reference, status machine, agent loop
+  reference/
+    planning.md                 ← decomposition, writing standard, validation
+    execution.md                ← graph building, lane dispatch, verification
+    execution-teams.md          ← Agent Teams pattern (Claude Code only)
+```
+
+The agent reads the relevant reference file on demand — `planning.md` when asked
+to plan, `execution.md` when asked to execute, `execution-teams.md` when Agent
+Teams are available.
 
 ## Install the skill
 
@@ -46,25 +58,41 @@ Path behavior:
 - `--to <path>` changes only the editor link root
 - `--allow-outside-repo` is for intentional external links
 
-## Recommended skill stack
+## Using the skill with arguments
 
-If your agent environment supports skills, this is the cleanest split of
-responsibilities:
+The skill accepts an optional entity ID and action text:
 
-| Job | Skill | Why |
+```
+/trekoon                              → loads the skill normally
+/trekoon <id>                         → resolves the entity, shows status and next steps
+/trekoon <id> analyze                 → runs epic progress + suggest, reports findings
+/trekoon <id> execute                 → starts the execution loop for the entity's epic
+/trekoon <id> plan the implementation → decomposes into tasks/subtasks/deps
+```
+
+The skill resolves the ID as an epic, task, or subtask. For tasks and subtasks,
+it scopes session/suggest/progress calls to the parent epic automatically.
+
+## Skill stack
+
+The `trekoon` skill is self-contained for the full plan-to-completion workflow.
+It bundles planning methodology, execution orchestration, and the command
+reference in one install.
+
+For specialized needs, these optional companion skills add value:
+
+| Job | Skill | When to use |
 | --- | --- | --- |
-| Turn a request into a concrete backlog | `writing-plans` | Breaks work into epics, tasks, subtasks, and dependencies |
-| Create and update tracker state | `trekoon` | Uses Trekoon safely and efficiently |
-| Execute the plan in dependency order | `executing-plans` | Helps the agent work through the backlog without losing the sequence |
-| Clarify architecture before planning | `architecting-systems` | Useful when boundaries or ownership are still fuzzy |
+| Clarify architecture before planning | `architecting-systems` | Boundaries or ownership are still fuzzy |
+| Specialized code review | `code-review-expert` | Want structured review before closing an epic |
 
-In practice, the flow is usually:
+In practice, the flow is:
 
-1. plan the work
-2. load `trekoon`
-3. create or update the Trekoon graph
-4. execute the next ready task
-5. update progress, blockers, and completion state as work moves forward
+1. `/trekoon` — load the skill
+2. Plan the work (skill reads `reference/planning.md` internally)
+3. Create or update the Trekoon graph
+4. Execute the plan (skill reads `reference/execution.md` internally)
+5. Update progress, blockers, and completion state as work moves forward
 
 ## Default execution loop for agents
 
@@ -161,29 +189,34 @@ Notes:
 
 ## Tell the agent exactly what to do
 
-These prompts work well because they are explicit about the skill order and the
-expected loop.
+These prompts work well because they are explicit about the expected workflow.
 
 ### Plan first, then create the backlog
 
 ```text
-Load writing-plans, break this feature into one epic with tasks and subtasks,
-then load trekoon and create that graph in Trekoon.
+/trekoon — plan this feature as one epic with tasks, subtasks, and dependencies,
+then create the graph in Trekoon.
 ```
 
 ### Execute an existing backlog
 
 ```text
-Load trekoon, run `trekoon --toon session`, take the next ready task, do the
-work, append progress notes, mark it done, and repeat until there are no ready
-tasks or you hit a blocker.
+/trekoon <epic-id> execute
 ```
 
-### Use planning, tracking, and execution together
+Or more explicitly:
 
 ```text
-Load writing-plans to shape the backlog, load trekoon to create and update the
-tasks, then load executing-plans and complete the work in dependency order.
+/trekoon — run session, take the next ready task, do the work, append progress
+notes, mark it done, and repeat until there are no ready tasks or you hit a
+blocker.
+```
+
+### Plan and execute end to end
+
+```text
+/trekoon — plan this feature, create the backlog, then execute the tasks in
+dependency order until the epic is complete.
 ```
 
 ## Keep reads small and mutations safe
