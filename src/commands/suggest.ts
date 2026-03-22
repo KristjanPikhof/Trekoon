@@ -10,7 +10,8 @@ import { type CliContext, type CliResult } from "../runtime/command-types";
 import { openTrekoonDatabase, type TrekoonDatabase } from "../storage/database";
 import type { SyncStatusSummary } from "../sync/types";
 
-const DEFAULT_SOURCE_BRANCH = "main";
+import { DEFAULT_SOURCE_BRANCH } from "./sync-helpers";
+
 const MAX_SUGGESTIONS = 3;
 
 type SuggestionCategory = "recovery" | "sync" | "execution" | "planning";
@@ -53,29 +54,22 @@ function resolveActiveEpic(domain: TrackerDomain, epicId: string | undefined): E
   return todo ?? epics[0] ?? null;
 }
 
-function countInProgressTasks(readiness: TaskReadinessResult): number {
-  const allCandidates = [
-    ...readiness.candidates,
-    ...readiness.blocked,
-  ];
+function findInProgressTasks(readiness: TaskReadinessResult): { count: number; first: { id: string; title: string } | null } {
+  let count = 0;
+  let first: { id: string; title: string } | null = null;
 
-  return allCandidates
-    .filter((candidate) => candidate.task.status === "in_progress")
-    .length;
-}
-
-function getFirstInProgressTask(readiness: TaskReadinessResult): { id: string; title: string } | null {
-  const allCandidates = [
-    ...readiness.candidates,
-    ...readiness.blocked,
-  ];
-
-  const inProgress = allCandidates.find((candidate) => candidate.task.status === "in_progress");
-  if (!inProgress) {
-    return null;
+  for (const list of [readiness.candidates, readiness.blocked]) {
+    for (const candidate of list) {
+      if (candidate.task.status === "in_progress") {
+        count += 1;
+        if (first === null) {
+          first = { id: candidate.task.id, title: candidate.task.title };
+        }
+      }
+    }
   }
 
-  return { id: inProgress.task.id, title: inProgress.task.title };
+  return { count, first };
 }
 
 function buildSuggestions(
@@ -121,7 +115,7 @@ function buildSuggestions(
   }
 
   // Priority 4: In-progress tasks exist
-  const inProgressTask = getFirstInProgressTask(readiness);
+  const { first: inProgressTask } = findInProgressTasks(readiness);
   if (suggestions.length < MAX_SUGGESTIONS && inProgressTask !== null) {
     suggestions.push({
       priority: suggestions.length + 1,
@@ -267,7 +261,7 @@ export async function runSuggest(context: CliContext): Promise<CliResult> {
         activeEpic: activeEpic?.id ?? null,
         readyTasks: readiness.summary.readyCount,
         blockedTasks: readiness.summary.blockedCount,
-        inProgressTasks: countInProgressTasks(readiness),
+        inProgressTasks: findInProgressTasks(readiness).count,
         syncBehind: syncSummary.behind,
         pendingConflicts: syncSummary.pendingConflicts,
       },
