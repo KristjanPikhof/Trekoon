@@ -121,8 +121,8 @@ Board API endpoints (all require token authentication):
 - `GET /api/snapshot` — full board state (epics, tasks, subtasks, dependencies,
   counts)
 - `PATCH /api/epics/{id}` — update epic title, description, or status
-- `PATCH /api/tasks/{id}` — update task title, description, or status
-- `PATCH /api/subtasks/{id}` — update subtask title, description, or status
+- `PATCH /api/tasks/{id}` — update task title, description, status, or owner
+- `PATCH /api/subtasks/{id}` — update subtask title, description, status, or owner
 - `POST /api/subtasks` — create subtask (requires taskId, title)
 - `DELETE /api/subtasks/{id}` — delete subtask
 - `POST /api/dependencies` — add dependency edge (sourceId, dependsOnId)
