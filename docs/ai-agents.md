@@ -70,10 +70,18 @@ In practice, the flow is usually:
 
 The main loop is: **session → work → task done → repeat**.
 
-Start with a single orientation call:
+Start with a single orientation call, optionally scoped to an epic:
 
 ```bash
 trekoon --toon session
+trekoon --toon session --epic <epic-id>
+```
+
+Or use `suggest` for priority-ranked next-action recommendations:
+
+```bash
+trekoon --toon suggest
+trekoon --toon suggest --epic <epic-id>
 ```
 
 If the session output shows you are behind, pull tracker events before claiming
@@ -83,16 +91,50 @@ work:
 trekoon --toon sync pull --from main
 ```
 
-Claim work, then finish or report a block:
+Claim work, assign ownership, then finish or report a block:
 
 ```bash
-trekoon --toon task update <task-id> --status in_progress
+trekoon --toon task update <task-id> --status in_progress --owner "agent-1"
 trekoon --toon task done <task-id>
 trekoon --toon task update <task-id> --append "Blocked by <reason>" --status blocked
 ```
 
 Use `task done` when the task is actually finished. It marks the task complete
-and returns the next ready candidate with blockers inline.
+and returns the next ready candidate with blockers inline. `task done`
+auto-transitions through `in_progress` when the current status is `todo` or
+`blocked`. The response also reports newly unblocked downstream tasks and warns
+about incomplete subtasks.
+
+Use `--compact` to strip contract metadata from envelopes when you do not need
+it:
+
+```bash
+trekoon --toon --compact task done <task-id>
+```
+
+## Status machine rules
+
+Trekoon enforces valid status transitions. Do not attempt direct jumps like
+`todo → done` — they will fail with `status_transition_invalid`. Use `task done`
+for completing tasks (it handles the intermediate step automatically).
+
+Valid transitions:
+
+| From | Allowed targets |
+| --- | --- |
+| `todo` | `in_progress`, `blocked` |
+| `in_progress` | `done`, `blocked` |
+| `blocked` | `in_progress`, `todo` |
+| `done` | `in_progress` |
+
+## Track epic progress
+
+Use `epic progress` to get a summary of task status counts and the next ready
+candidate for an epic:
+
+```bash
+trekoon --toon epic progress <epic-id>
+```
 
 ## Use descendant cascade mode when closing a whole tree
 
@@ -151,6 +193,9 @@ Use the narrowest command that answers the question:
 | Need | Preferred command |
 | --- | --- |
 | Session startup | `trekoon --toon session` |
+| Session scoped to epic | `trekoon --toon session --epic <epic-id>` |
+| Next-action suggestions | `trekoon --toon suggest` |
+| Epic progress summary | `trekoon --toon epic progress <epic-id>` |
 | Next task only | `trekoon --toon task next` |
 | A few ready options | `trekoon --toon task ready --limit 5` |
 | One task with subtasks | `trekoon --toon task show <task-id> --all` |
