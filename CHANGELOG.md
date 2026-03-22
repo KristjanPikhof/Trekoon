@@ -2,6 +2,55 @@
 
 All notable changes to Trekoon are documented in this file.
 
+## 0.3.1
+
+### Added
+
+- `trekoon suggest` command for priority-ranked next-action recommendations
+  based on recovery state, sync status, readiness, and epic progress.
+- `trekoon epic progress <id>` subcommand returning status counts, readiness
+  summary, and next candidate for an epic.
+- `trekoon session --epic <id>` flag to scope session readiness to a specific
+  epic.
+- `--compact` output flag that strips contract metadata from TOON envelopes.
+- `--owner` field on tasks and subtasks via `update --owner <name>`, with
+  migration 0006 adding the `owner` column to both tables.
+- Status machine with `VALID_TRANSITIONS` enforcing `todo → in_progress →
+  done`, `in_progress → blocked`, `blocked → in_progress|todo`, and
+  `done → in_progress`.
+- `task done` auto-transitions through `in_progress` when current status is
+  `todo` or `blocked`, emitting two sync events for the intermediate step.
+- `task done` reports newly unblocked downstream tasks in the response.
+- Open subtask warning on `task done` when subtasks remain incomplete.
+- `batchResolveDependencyStatuses` domain method for single-query batch
+  dependency resolution, replacing per-task N+1 lookups.
+- Feature integration test suite with 827 lines covering session scoping, epic
+  progress, status transitions, owner roundtrip, subtask warnings, compact
+  envelopes, batch dep resolution, unblocked diffs, and suggest paths.
+
+### Changed
+
+- Removed `in-progress` (hyphenated) status variant; canonical status is now
+  `in_progress` only.
+- Sync helpers (`resolveSyncStatus`, `countAheadLocal`, `countPendingConflictsLocal`,
+  `loadCursorLocal`) extracted from `session.ts` into shared `sync-helpers.ts`
+  module, used by both `session` and `suggest`.
+- `task done` handler optimized from two `buildTaskReadiness` calls to one,
+  using lightweight reverse-dependency lookup for the pre-completion snapshot.
+
+### Fixed
+
+- `task done` from `todo` or `blocked` status no longer rejected by status
+  machine (auto-transitions through `in_progress`).
+- `suggest` command no longer recommends invalid status transitions (e.g.
+  `todo → done`); suggests valid intermediate steps instead.
+- TypeScript compilation error in `cli-shell.ts` where `compact` property was
+  `boolean | undefined` but `RenderOptions` expected `boolean`.
+- TypeScript compilation error in `output-mode.test.ts` where
+  `envelope.metadata` became optional after `ToonEnvelope` change.
+- Unsafe `as unknown as` type cast in `suggest.ts` replaced with spread
+  operator pattern.
+
 ## 0.3.0
 
 ### Added
