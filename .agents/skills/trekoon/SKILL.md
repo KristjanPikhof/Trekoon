@@ -111,6 +111,35 @@ non-done status.
 Recommended statuses for consistent workflows: `todo`, `in_progress`, `done`.
 Use `blocked` with an appended reason when work is stuck.
 
+## Epic lifecycle
+
+The orchestrator is responsible for managing the epic's status throughout
+execution. Epics follow the same status machine as tasks — they must transition
+through `in_progress` to reach `done`.
+
+### Start: mark epic `in_progress`
+
+Immediately after session bootstrap and before dispatching any work, transition
+the epic:
+
+```bash
+trekoon --toon epic update <epic-id> --status in_progress
+```
+
+This ensures the epic reflects actual state even if execution is interrupted.
+
+### Finish: mark epic `done`
+
+After all tasks are verified done (see cleanup in execution references), mark
+the epic complete:
+
+```bash
+trekoon --toon epic update <epic-id> --status done
+```
+
+Since the epic is already `in_progress` from the start step, this is a single
+valid transition.
+
 ## Default agent loop
 
 The primary loop is: **session → claim → work → task done → repeat**.
