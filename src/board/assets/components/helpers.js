@@ -1,4 +1,4 @@
-import { escapeHtml, formatDate, normalizeStatus, STATUS_ORDER } from "../state/utils.js";
+import { escapeHtml, formatDate, getSelectableStatuses, normalizeStatus, STATUS_ORDER } from "../state/utils.js";
 
 export { escapeHtml, formatDate, normalizeStatus, STATUS_ORDER };
 
@@ -123,9 +123,10 @@ export function renderStatusBadge(rawStatus, label = readStatusLabel(rawStatus))
 }
 
 export function renderStatusSelect(name, selectedStatus, disabled = false) {
+  const statuses = getSelectableStatuses(selectedStatus);
   return `
     <select class="${fieldClasses()}" name="${escapeHtml(name)}" ${disabled ? "disabled" : ""}>
-      ${STATUS_ORDER.map((status) => `
+      ${statuses.map((status) => `
         <option value="${escapeHtml(status)}" ${selectedStatus === status ? "selected" : ""}>${escapeHtml(STATUS_LABELS[status] ?? status)}</option>
       `).join("")}
     </select>
