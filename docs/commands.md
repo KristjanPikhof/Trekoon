@@ -9,8 +9,9 @@ surface, defaults, and flag rules.
 - `trekoon board <open|update>`
 - `trekoon help [command]`
 - `trekoon quickstart`
-- `trekoon epic <create|expand|list|show|search|replace|update|delete>`
-- `trekoon session`
+- `trekoon epic <create|expand|list|show|search|replace|update|delete|progress>`
+- `trekoon session [--epic <epic-id>]`
+- `trekoon suggest [--epic <epic-id>]`
 - `trekoon task <create|create-many|list|show|ready|next|done|search|replace|update|delete>`
 - `trekoon subtask <create|create-many|list|search|replace|update|delete>`
 - `trekoon dep <add|add-many|remove|list|reverse>`
@@ -25,6 +26,7 @@ surface, defaults, and flag rules.
 
 - `--json` for structured JSON output
 - `--toon` for true TOON-encoded output
+- `--compact` strips contract metadata from TOON/JSON envelopes
 - `--compat <mode>` for explicit machine compatibility behavior
 - `--help` for root and command help
 - `--version` for CLI version
@@ -149,7 +151,7 @@ trekoon board update
 
 These defaults apply to `epic list`, `task list`, and `subtask list`:
 
-- Default scope: open work only (`in_progress`, `in-progress`, `todo`)
+- Default scope: open work only (`in_progress`, `todo`)
 - Default limit: `10`
 - Status filter: `--status in_progress,todo`
 - Custom limit: `--limit <n>`
@@ -216,6 +218,76 @@ trekoon task update <task-id> --all --status done
 trekoon task update <task-id> --all --status todo
 trekoon subtask update <subtask-id> --all --status done
 ```
+
+## Status machine
+
+Trekoon enforces a status machine for all entities. The canonical statuses are
+`todo`, `in_progress`, `done`, and `blocked`. The hyphenated `in-progress`
+variant is no longer accepted.
+
+Valid transitions:
+
+| From | Allowed targets |
+| --- | --- |
+| `todo` | `in_progress`, `blocked` |
+| `in_progress` | `done`, `blocked` |
+| `blocked` | `in_progress`, `todo` |
+| `done` | `in_progress` |
+
+Invalid transitions return a `status_transition_invalid` error with the current
+status, target status, and allowed transitions.
+
+## Owner field
+
+Tasks and subtasks have an optional `owner` field. Set or clear it with the
+`--owner` flag on update commands:
+
+```bash
+trekoon task update <task-id> --owner "agent-1"
+trekoon subtask update <subtask-id> --owner "agent-2"
+```
+
+The board API also accepts `owner` on `PATCH /api/tasks/{id}` and
+`PATCH /api/subtasks/{id}`.
+
+## Task done behavior
+
+`trekoon task done <task-id>` marks a task complete and returns the next ready
+candidate. Additional behavior:
+
+- Auto-transitions through `in_progress` when the current status is `todo` or
+  `blocked`, emitting two sync events for the intermediate step.
+- Reports newly unblocked downstream tasks in the response (`data.unblocked`).
+- Warns when subtasks remain incomplete (`data.warning`,
+  `data.openSubtaskCount`, `data.openSubtaskIds`).
+
+## Epic progress
+
+```bash
+trekoon epic progress <epic-id>
+```
+
+Returns status counts (`total`, `doneCount`, `inProgressCount`, `blockedCount`,
+`todoCount`), `readyCount`, and `nextCandidate` for the given epic.
+
+## Session scoping
+
+```bash
+trekoon session --epic <epic-id>
+```
+
+Scopes session readiness to a specific epic instead of the full tracker.
+
+## Suggest command
+
+```bash
+trekoon suggest [--epic <epic-id>]
+```
+
+Returns up to 3 priority-ranked next-action suggestions based on recovery state,
+sync status, task readiness, and epic progress. Categories: `recovery`, `sync`,
+`execution`, `planning`. Each suggestion includes an `action`, `command`, and
+`reason`.
 
 ## Related docs
 
