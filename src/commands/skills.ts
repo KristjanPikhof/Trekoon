@@ -1,4 +1,4 @@
-import { copyFileSync, existsSync, lstatSync, mkdirSync, readlinkSync, realpathSync, rmSync, symlinkSync } from "node:fs";
+import { copyFileSync, cpSync, existsSync, lstatSync, mkdirSync, readlinkSync, realpathSync, rmSync, symlinkSync } from "node:fs";
 import { dirname, isAbsolute, join, relative, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -77,6 +77,10 @@ function invalidInput(command: string, message: string, data: Record<string, unk
 
 function resolveBundledSkillFilePath(): string {
   return fileURLToPath(new URL("../../.agents/skills/trekoon/SKILL.md", import.meta.url));
+}
+
+function resolveBundledSkillDirPath(): string {
+  return fileURLToPath(new URL("../../.agents/skills/trekoon", import.meta.url));
 }
 
 function toAbsolutePath(cwd: string, pathValue: string): string {
@@ -234,6 +238,7 @@ function resolveEditorConfigDir(cwd: string, editor: EditorName): string {
 
 function installCanonicalSkill(cwd: string): CliResult | { sourcePath: string; installedPath: string; installedDir: string } {
   const sourcePath: string = resolveBundledSkillFilePath();
+  const sourceDir: string = resolveBundledSkillDirPath();
   if (!existsSync(sourcePath)) {
     return failResult({
       command: "skills.install",
@@ -255,6 +260,12 @@ function installCanonicalSkill(cwd: string): CliResult | { sourcePath: string; i
   try {
     mkdirSync(installedDir, { recursive: true });
     copyFileSync(sourcePath, installedPath);
+    // Copy reference guides if they exist in the bundled source.
+    const sourceRefDir: string = join(sourceDir, "reference");
+    if (existsSync(sourceRefDir)) {
+      const installedRefDir: string = join(installedDir, "reference");
+      cpSync(sourceRefDir, installedRefDir, { recursive: true });
+    }
   } catch (error: unknown) {
     const message = error instanceof Error ? error.message : "Unknown skills install failure";
     return failResult({
