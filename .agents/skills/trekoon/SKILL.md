@@ -10,24 +10,26 @@ Trekoon is a local-first issue tracker for epics, tasks, and subtasks.
 This skill is the agent operating guide, not the full CLI reference. Use it to
 pick the right command with the fewest reads and mutations.
 
-## Companion skills
+## Reference guides
 
-Trekoon is the data layer. Two companion skills handle the plan→execute workflow:
+This skill ships with bundled reference guides for planning and execution. Read
+them when the task calls for it — they extend this command reference with
+methodology and orchestration patterns.
 
-- **writing-plans** — creates implementation plans as Trekoon epics with
-  task/subtask DAGs, dependency edges, file scopes, and owner assignments.
-  Use when: the user asks to plan, design, or architect a feature.
-- **executing-plans** — orchestrates plan execution by spawning sub-agents per
-  subsystem lane, tracking progress via Trekoon, and using `task done` /
-  `suggest` / `epic progress` for flow control.
-  Use when: the user asks to execute, implement, or complete an existing epic.
+| When | Read | What it covers |
+|---|---|---|
+| User asks to plan, design, or architect a feature | `reference/planning.md` | Decomposition into epic/task/subtask DAGs, writing standard, file scopes, owner assignment, dependency modeling, validation |
+| User asks to execute, implement, or complete an epic | `reference/execution.md` | Execution graph building, lane grouping, sub-agent dispatch, task done orchestration, verification, cleanup |
+| Agent Teams are available (`CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS=true`) | `reference/execution-teams.md` | TeamCreate/SendMessage pattern, teammate spawning, team coordination, shutdown |
 
 **Typical flow:**
-1. `writing-plans` creates the epic with tasks, subtasks, deps, owners.
-2. `executing-plans` runs `session --epic`, builds lane groups, dispatches
-   agents, uses `task done` responses to orchestrate waves.
-3. This skill (trekoon) is loaded by both — it provides the command reference
-   and status machine rules that both skills rely on.
+1. Read `reference/planning.md` and create the epic with tasks, subtasks, deps,
+   owners.
+2. Read `reference/execution.md` (or `reference/execution-teams.md` for Agent
+   Teams), run `session --epic`, build lane groups, dispatch agents, use
+   `task done` responses to orchestrate waves.
+3. This file (SKILL.md) provides the command reference and status machine rules
+   that both planning and execution rely on.
 
 ## Non-negotiable defaults
 
@@ -466,3 +468,39 @@ Cross-branch sync matters before merging a feature branch back:
 Trekoon stores local state in `.trekoon/trekoon.db`. In git repos and
 worktrees, storage resolves from the shared repository root rather than each
 worktree independently.
+
+## Tool selection
+
+Check your available tool list to determine which harness you are running in.
+
+### Core tools (both harnesses)
+
+| Purpose | Claude Code | OpenCode |
+|---------|------------|----------|
+| File search | `Glob` | `glob` |
+| Content search | `Grep` | `grep` |
+| Read files | `Read` | `read` |
+| Edit files | `Edit` | `edit` |
+| Write files | `Write` | `write` |
+| Shell commands | `Bash` | `bash` |
+| Ask user | `AskUserQuestion` | `question` |
+| Web fetch | `WebFetch` | `webfetch` |
+| Web search | `WebSearch` | `websearch` |
+| Directory listing | `Bash(ls)` | `list` |
+
+### LSP tools (OpenCode only — use if available)
+
+- `lsp goToDefinition`/`lsp findReferences`: navigate symbols safely.
+- `lsp hover`: inspect type signatures.
+- `lsp documentSymbol`/`lsp workspaceSymbol`: search symbols.
+- `lsp goToImplementation`: find interface implementations.
+
+**Fallbacks:** use `Grep`/`grep` for symbols, `Bash`/`bash` for compiler
+diagnostics.
+
+### General guidance
+
+- Do not overuse bash for searching/reading; prefer dedicated tools.
+- Use LSP over grep for symbol navigation when available.
+- Run Trekoon, git, build/lint/test, and verification commands via `Bash`/`bash`.
+- Use `--compact` on Trekoon commands in sub-agent prompts to reduce token usage.
