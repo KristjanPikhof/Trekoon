@@ -20,6 +20,17 @@ Same as the standard execution reference — use `task ready`, `dep reverse`, an
 lane grouping to construct a runnable graph. See `reference/execution.md` for
 the full scheduler loop and lane grouping rules.
 
+## Mark epic in-progress
+
+Before dispatching any work, transition the epic so it reflects actual state:
+
+```bash
+trekoon --toon epic update <epic-id> --status in_progress
+```
+
+This must happen once, immediately after building the execution graph. If
+execution is interrupted, the epic is at least `in_progress` rather than `todo`.
+
 ## Create the team
 
 Use **TeamCreate** to set up the team, then **TaskCreate** to populate the
@@ -179,9 +190,8 @@ After all work is verified:
    ```
    Should return no actionable suggestions.
 
-3. **Mark epic done** (transition through `in_progress` if needed):
+3. **Mark epic done** (already `in_progress` from the start step):
    ```bash
-   trekoon --toon epic update <epic-id> --status in_progress
    trekoon --toon epic update <epic-id> --status done
    ```
 
