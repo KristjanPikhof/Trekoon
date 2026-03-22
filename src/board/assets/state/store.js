@@ -9,7 +9,7 @@ function normalizeSearch(value) {
 
 // --- Persistence helpers ---
 
-const DEFAULT_STATUS_FILTER = { todo: true, blocked: true, in_progress: true, done: false };
+export const DEFAULT_STATUS_FILTER = { todo: true, blocked: true, in_progress: true, done: false };
 
 function readStatusFilter(raw) {
   if (typeof raw !== "object" || raw === null) return { ...DEFAULT_STATUS_FILTER };
@@ -89,7 +89,8 @@ export function orderEpicsNewestFirst(epics) {
 
 // --- Derived state selectors ---
 
-const DONE_GRACE_PERIOD_MS = 86400000; // 24 hours
+/** Recently-done epics stay visible for 24h even when the "done" filter is off. */
+const DONE_GRACE_PERIOD_MS = 86400000;
 
 const selectVisibleEpics = createSelector(
   (s) => [s.snapshot?.epics, s.searchQuery, s.epicStatusFilter],
