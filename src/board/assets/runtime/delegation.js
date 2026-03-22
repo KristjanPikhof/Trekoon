@@ -1,3 +1,5 @@
+import { isValidTransition } from "../state/utils.js";
+
 /**
  * Event delegation system for the board runtime.
  *
@@ -86,6 +88,31 @@ export function createDelegation(rootElement, actions) {
         return;
       }
       actions.cancelDelete();
+      return;
+    }
+
+    // -- Status filter pills ---------------------------------------------------
+    const epicFilterEl = target.closest("[data-toggle-epic-status-filter]");
+    if (epicFilterEl) {
+      actions.toggleEpicStatusFilter(epicFilterEl.dataset.toggleEpicStatusFilter);
+      return;
+    }
+
+    const taskFilterEl = target.closest("[data-toggle-task-status-filter]");
+    if (taskFilterEl) {
+      actions.toggleTaskStatusFilter(taskFilterEl.dataset.toggleTaskStatusFilter);
+      return;
+    }
+
+    const resetEpicFilterEl = target.closest("[data-reset-epic-filter]");
+    if (resetEpicFilterEl) {
+      actions.resetEpicFilter();
+      return;
+    }
+
+    const resetTaskFilterEl = target.closest("[data-reset-task-filter]");
+    if (resetTaskFilterEl) {
+      actions.resetTaskFilter();
       return;
     }
 
@@ -276,6 +303,15 @@ export function createDelegation(rootElement, actions) {
   // ---------------------------------------------------------------------------
   // Drag-and-drop delegation
   // ---------------------------------------------------------------------------
+  let draggedTaskStatus = null;
+
+  function cleanupDragFeedback() {
+    draggedTaskStatus = null;
+    for (const el of rootElement.querySelectorAll(".board-drop-valid, .board-drop-invalid")) {
+      el.classList.remove("board-drop-valid", "board-drop-invalid");
+    }
+  }
+
   function handleDragstart(event) {
     const draggable = event.target.closest("[data-draggable-task]");
     if (!draggable) return;
@@ -290,11 +326,28 @@ export function createDelegation(rootElement, actions) {
 
     event.dataTransfer?.setData("text/task-id", taskId);
     event.dataTransfer?.setData("text/plain", taskId);
+    draggedTaskStatus = actions.getTaskStatus(taskId);
   }
 
   function handleDragover(event) {
-    if (event.target.closest("[data-drop-status]")) {
+    const column = event.target.closest("[data-drop-status]");
+    if (!column) return;
+
+    const targetStatus = column.dataset.dropStatus;
+    if (draggedTaskStatus && isValidTransition(draggedTaskStatus, targetStatus)) {
       event.preventDefault();
+      column.classList.add("board-drop-valid");
+      column.classList.remove("board-drop-invalid");
+    } else if (draggedTaskStatus && targetStatus !== draggedTaskStatus) {
+      column.classList.add("board-drop-invalid");
+      column.classList.remove("board-drop-valid");
+    }
+  }
+
+  function handleDragleave(event) {
+    const column = event.target.closest("[data-drop-status]");
+    if (column && !column.contains(event.relatedTarget)) {
+      column.classList.remove("board-drop-valid", "board-drop-invalid");
     }
   }
 
@@ -309,7 +362,18 @@ export function createDelegation(rootElement, actions) {
       event.dataTransfer?.getData("text/task-id") ||
       event.dataTransfer?.getData("text/plain");
     const nextStatus = column.dataset.dropStatus;
+
+    if (draggedTaskStatus && !isValidTransition(draggedTaskStatus, nextStatus)) {
+      cleanupDragFeedback();
+      return;
+    }
+
     actions.dropTaskStatus(taskId, nextStatus);
+    cleanupDragFeedback();
+  }
+
+  function handleDragend() {
+    cleanupDragFeedback();
   }
 
   // ---------------------------------------------------------------------------
@@ -321,7 +385,9 @@ export function createDelegation(rootElement, actions) {
   rootElement.addEventListener("submit", handleSubmit);
   rootElement.addEventListener("dragstart", handleDragstart);
   rootElement.addEventListener("dragover", handleDragover);
+  rootElement.addEventListener("dragleave", handleDragleave);
   rootElement.addEventListener("drop", handleDrop);
+  rootElement.addEventListener("dragend", handleDragend);
   rootElement.addEventListener("keydown", handleDelegatedKeydown);
   window.addEventListener("keydown", handleKeydown);
 
@@ -335,7 +401,9 @@ export function createDelegation(rootElement, actions) {
     rootElement.removeEventListener("submit", handleSubmit);
     rootElement.removeEventListener("dragstart", handleDragstart);
     rootElement.removeEventListener("dragover", handleDragover);
+    rootElement.removeEventListener("dragleave", handleDragleave);
     rootElement.removeEventListener("drop", handleDrop);
+    rootElement.removeEventListener("dragend", handleDragend);
     rootElement.removeEventListener("keydown", handleDelegatedKeydown);
     window.removeEventListener("keydown", handleKeydown);
   };
