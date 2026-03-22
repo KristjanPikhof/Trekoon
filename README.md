@@ -51,7 +51,9 @@ These are the commands most people need to recognize quickly:
 | Install/open/update the local board | `trekoon board open`, `trekoon board update` |
 | Learn the CLI | `trekoon help [command]`, `trekoon quickstart` |
 | Plan work | `trekoon epic ...`, `trekoon task ...`, `trekoon subtask ...`, `trekoon dep ...` |
-| Start an execution session | `trekoon session` |
+| Track epic progress | `trekoon epic progress <id>` |
+| Start an execution session | `trekoon session`, `trekoon session --epic <id>` |
+| Get next-action suggestions | `trekoon suggest`, `trekoon suggest --epic <id>` |
 | Keep worktrees in sync | `trekoon sync ...` |
 | Install or refresh the AI skill | `trekoon skills install`, `trekoon skills update` |
 | Maintenance | `trekoon events prune ...`, `trekoon migrate ...`, `trekoon wipe --yes` |
@@ -60,6 +62,7 @@ Machine output modes:
 
 - `--toon` for true TOON-encoded payloads
 - `--json` for JSON output
+- `--compact` to strip metadata from TOON envelopes
 - `--compat <mode>` for explicit compatibility behavior
 - `--help` and `--version` at the root or command level
 
