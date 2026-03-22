@@ -129,18 +129,29 @@ For the full lifecycle and examples, read [Quickstart](docs/quickstart.md) and
 
 ## AI skill
 
-Trekoon ships with a bundled `trekoon` skill for AI agents. It teaches the
-agent to:
+Trekoon ships with a self-contained `trekoon` skill for AI agents. One skill
+covers the full plan-to-completion workflow:
 
-- use `--toon` by default
-- prefer the smallest sufficient read
-- use transactional bulk planning commands when possible
-- append progress and blocker notes instead of rewriting full descriptions
-- preview scoped replace before `--apply`
-- treat `.trekoon` as shared repo-scoped operational state
+- **Command reference** — `--toon` defaults, status machine, bulk planning,
+  append-based progress logging
+- **Planning** — decomposition into epic/task/subtask DAGs, writing standard,
+  file scopes, owner assignment, dependency modeling
+- **Execution** — graph building, lane grouping, sub-agent dispatch, task done
+  orchestration, verification
+- **Agent Teams** — TeamCreate/SendMessage pattern for parallel Claude Code
+  instances (requires `CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS=true`)
+
+The skill accepts arguments for quick entity-scoped actions:
+
+```
+/trekoon                     → load the skill
+/trekoon <id>                → show status and next steps for an entity
+/trekoon <id> execute        → start executing the entity's epic
+/trekoon <id> plan           → decompose into tasks/subtasks/deps
+```
 
 Read [AI agents and the Trekoon skill](docs/ai-agents.md) for installation,
-editor linking, recommended skill combinations, and example prompts.
+editor linking, and example prompts.
 
 ## Read next
 
