@@ -20,7 +20,7 @@ import {
   STATUS_LABELS,
   STATUS_ORDER,
 } from "./helpers.js";
-import { orderEpicsNewestFirst } from "../state/store.js";
+import { DEFAULT_STATUS_FILTER, orderEpicsNewestFirst } from "../state/store.js";
 import { getSelectableStatuses, VIEW_MODES } from "../state/utils.js";
 
 // ---------------------------------------------------------------------------
@@ -58,9 +58,8 @@ function renderWorkspaceHeader(props) {
     visibleTasks,
   } = props;
 
-  const taskStatusFilter = store.taskStatusFilter || { todo: true, blocked: true, in_progress: true, done: false };
-  const defaultTaskFilter = { todo: true, blocked: true, in_progress: true, done: false };
-  const isTaskFilterNonDefault = STATUS_ORDER.some(s => taskStatusFilter[s] !== defaultTaskFilter[s]);
+  const taskStatusFilter = store.taskStatusFilter || { ...DEFAULT_STATUS_FILTER };
+  const isTaskFilterNonDefault = STATUS_ORDER.some(s => taskStatusFilter[s] !== DEFAULT_STATUS_FILTER[s]);
 
   const description = selectedEpic.description?.trim() || "";
   const inlineSelect = `${fieldClasses()} !py-1 !px-2 !text-xs !min-h-0 !rounded-xl`;
@@ -168,7 +167,7 @@ function renderWorkspaceHeader(props) {
 
 function renderKanbanColumns(props) {
   const { visibleTasks, selectedTaskId, isMutating, taskStatusFilter } = props;
-  const filter = taskStatusFilter || { todo: true, blocked: true, in_progress: true, done: false };
+  const filter = taskStatusFilter || { ...DEFAULT_STATUS_FILTER };
 
   const columnsMarkup = STATUS_ORDER
     .filter((status) => filter[status] !== false)
