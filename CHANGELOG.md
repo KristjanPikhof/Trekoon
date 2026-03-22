@@ -2,6 +2,57 @@
 
 All notable changes to Trekoon are documented in this file.
 
+## 0.3.2
+
+### Added
+
+- Board UI status filtering: toggle visibility of todo, blocked, in_progress,
+  and done tasks/epics with filter pill buttons showing per-status counts.
+- `getSelectableStatuses` utility that filters status select options by valid
+  transitions from the current status.
+- Drag-and-drop validation styles and filter pill CSS for board workspace.
+- Trekoon planning reference guide (`reference/planning.md`) with decomposition
+  methodology, information-dense writing standard, file scope declarations,
+  owner assignment, dependency modeling, and validation workflow.
+- Trekoon execution reference guide (`reference/execution.md`) with execution
+  graph building, lane grouping, sub-agent dispatch, task done orchestration,
+  verification gates, and cleanup flow.
+- Trekoon Agent Teams execution reference guide
+  (`reference/execution-with-team.md`) with TeamCreate/SendMessage coordination,
+  teammate spawning, team lead orchestration, and shutdown workflow.
+- Machine contract specification document (`docs/machine-contracts.md`).
+- Epic lifecycle management in SKILL.md: orchestrators must mark epic
+  `in_progress` at execution start and `done` at cleanup.
+
+### Changed
+
+- SKILL.md refactored to reference external planning/execution guides instead of
+  inlining methodology, reducing duplication and centralizing orchestration
+  patterns.
+- Execution reference guides now transition epic to `in_progress` at the start
+  of execution (before dispatching work), not only during cleanup. This prevents
+  epics from staying in `todo` when execution is interrupted.
+- Plan output format now mandates full UUIDs for epic and task IDs in summary
+  tables. Temp-keys are prohibited in user-facing output since they are
+  ephemeral creation-time references not stored in the database.
+- `suggest` command refactored to use extracted sync helpers from
+  `sync-helpers.ts`.
+- `DEFAULT_SOURCE_BRANCH` constant extracted to `sync-helpers.ts` shared module.
+- Board task status counting optimized from four separate filter passes to a
+  single loop.
+- In-progress task lookup functions consolidated to reduce duplication.
+- Skills install/update now auto-resolves symlink conflicts and replaces
+  non-link directories with symlinks instead of failing.
+- README, quickstart, ai-agents, and commands documentation expanded with board
+  workflow details, skill invocation syntax, and status machine guidance.
+
+### Fixed
+
+- Completed epics no longer remain stuck in `todo` status when execution is
+  interrupted before reaching the cleanup phase.
+- Skills install no longer fails when a non-symlink directory exists at the
+  target path; it is replaced with the correct symlink automatically.
+
 ## 0.3.1
 
 ### Added
