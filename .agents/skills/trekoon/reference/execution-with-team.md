@@ -9,6 +9,8 @@ tmux pane.
 `CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS` set to `"true"`. This feature is Claude
 Code only — it is not available in OpenCode or other harnesses.
 
+- [Claude Agent Teams documentation](https://code.claude.com/docs/en/agent-teams.md)
+
 **Clarify ambiguity upfront.** If the plan has unclear requirements or meaningful
 tradeoffs, ask the user before starting.
 

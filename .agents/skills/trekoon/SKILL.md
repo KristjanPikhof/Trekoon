@@ -65,12 +65,12 @@ methodology and orchestration patterns.
 |---|---|---|
 | User asks to plan, design, or architect a feature | `reference/planning.md` | Decomposition into epic/task/subtask DAGs, writing standard, file scopes, owner assignment, dependency modeling, validation |
 | User asks to execute, implement, or complete an epic | `reference/execution.md` | Execution graph building, lane grouping, sub-agent dispatch, task done orchestration, verification, cleanup |
-| Agent Teams are available (`CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS=true`) | `reference/execution-teams.md` | TeamCreate/SendMessage pattern, teammate spawning, team coordination, shutdown |
+| Uer asks to execute task with Agent Team (or just team) AND Agent Teams are available (`CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS=true`) | `reference/execution-with-team.md` | TeamCreate/SendMessage pattern, teammate spawning, team coordination, shutdown |
 
 **Typical flow:**
 1. Read `reference/planning.md` and create the epic with tasks, subtasks, deps,
    owners.
-2. Read `reference/execution.md` (or `reference/execution-teams.md` for Agent
+2. Read `reference/execution.md` (or `reference/execution-with-team.md` for Agent
    Teams), run `session --epic`, build lane groups, dispatch agents, use
    `task done` responses to orchestrate waves.
 3. This file (SKILL.md) provides the command reference and status machine rules
