@@ -220,3 +220,45 @@ export function escapeHtml(value) {
     .replaceAll(">", "&gt;")
     .replaceAll('"', "&quot;");
 }
+
+/**
+ * Valid status transitions mirroring the backend state machine (src/domain/types.ts).
+ * @type {Map<string, Set<string>>}
+ */
+export const VALID_TRANSITIONS = new Map([
+  ["todo", new Set(["in_progress", "blocked"])],
+  ["in_progress", new Set(["done", "blocked"])],
+  ["blocked", new Set(["in_progress", "todo"])],
+  ["done", new Set(["in_progress"])],
+]);
+
+/**
+ * Get the list of statuses a node can transition to from its current status.
+ * @param {string} currentStatus
+ * @returns {string[]}
+ */
+export function getValidTargets(currentStatus) {
+  const targets = VALID_TRANSITIONS.get(currentStatus);
+  return targets ? Array.from(targets) : [];
+}
+
+/**
+ * Check whether transitioning from one status to another is valid.
+ * @param {string} from
+ * @param {string} to
+ * @returns {boolean}
+ */
+export function isValidTransition(from, to) {
+  const targets = VALID_TRANSITIONS.get(from);
+  return targets ? targets.has(to) : false;
+}
+
+/**
+ * Return the current status plus all valid targets, useful for populating
+ * status select dropdowns.
+ * @param {string} currentStatus
+ * @returns {string[]}
+ */
+export function getSelectableStatuses(currentStatus) {
+  return [currentStatus, ...getValidTargets(currentStatus)];
+}
