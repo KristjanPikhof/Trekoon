@@ -404,6 +404,10 @@ export function createBoardActions(options) {
     removeDependency(sourceId, dependsOnId) {
       api.removeDependency(sourceId, dependsOnId, (snapshot) => removeDependencyInSnapshot(snapshot, sourceId, dependsOnId, normalizeSnapshot));
     },
+    getTaskStatus(taskId) {
+      const task = getTaskById(taskId);
+      return task?.status ?? null;
+    },
     dropTaskStatus(taskId, nextStatus) {
       const task = getTaskById(taskId);
       if (!task || !nextStatus || task.status === nextStatus) {
@@ -425,6 +429,28 @@ export function createBoardActions(options) {
       api.cascadeEpicStatus(epicId, normalizedStatus, (snapshot) =>
         cascadeEpicStatusInSnapshot(snapshot, epicId, normalizedStatus, normalizeSnapshot),
       );
+    },
+    toggleEpicStatusFilter(status) {
+      const current = store.epicStatusFilter || { todo: true, blocked: true, in_progress: true, done: false };
+      store.epicStatusFilter = { ...current, [status]: !current[status] };
+      persist();
+      rerender();
+    },
+    toggleTaskStatusFilter(status) {
+      const current = store.taskStatusFilter || { todo: true, blocked: true, in_progress: true, done: false };
+      store.taskStatusFilter = { ...current, [status]: !current[status] };
+      persist();
+      rerender();
+    },
+    resetEpicFilter() {
+      store.epicStatusFilter = { todo: true, blocked: true, in_progress: true, done: false };
+      persist();
+      rerender();
+    },
+    resetTaskFilter() {
+      store.taskStatusFilter = { todo: true, blocked: true, in_progress: true, done: false };
+      persist();
+      rerender();
     },
     handleKeydown(event) {
       const boardState = getBoardState();
