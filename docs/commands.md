@@ -225,6 +225,10 @@ Trekoon enforces a status machine for all entities. The canonical statuses are
 `todo`, `in_progress`, `done`, and `blocked`. The hyphenated `in-progress`
 variant is no longer accepted.
 
+**Upgrading from 0.3.0:** Existing entities with `in-progress` or other custom
+statuses are handled gracefully — transitions from non-canonical statuses to any
+valid status are allowed, so you can update them to `in_progress` without error.
+
 Valid transitions:
 
 | From | Allowed targets |
