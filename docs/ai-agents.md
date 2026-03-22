@@ -24,11 +24,11 @@ agent can handle the full plan-to-completion workflow from a single skill:
   reference/
     planning.md                 ← decomposition, writing standard, validation
     execution.md                ← graph building, lane dispatch, verification
-    execution-teams.md          ← Agent Teams pattern (Claude Code only)
+    execution-with-team.md      ← Agent Teams pattern (Claude Code only)
 ```
 
 The agent reads the relevant reference file on demand — `planning.md` when asked
-to plan, `execution.md` when asked to execute, `execution-teams.md` when Agent
+to plan, `execution.md` when asked to execute, `execution-with-team.md` when Agent
 Teams are available.
 
 ## Install the skill
