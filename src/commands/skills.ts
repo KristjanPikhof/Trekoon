@@ -264,6 +264,9 @@ function installCanonicalSkill(cwd: string): CliResult | { sourcePath: string; i
     const sourceRefDir: string = join(sourceDir, "reference");
     if (existsSync(sourceRefDir)) {
       const installedRefDir: string = join(installedDir, "reference");
+      if (existsSync(installedRefDir)) {
+        rmSync(installedRefDir, { recursive: true, force: true });
+      }
       cpSync(sourceRefDir, installedRefDir, { recursive: true });
     }
   } catch (error: unknown) {
