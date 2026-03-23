@@ -1,4 +1,5 @@
 import { existsSync, lstatSync, mkdirSync, readlinkSync, realpathSync, rmSync, symlinkSync } from "node:fs";
+import { homedir } from "node:os";
 import { dirname, isAbsolute, join, relative, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -10,6 +11,7 @@ import { type CliContext, type CliResult } from "../runtime/command-types";
 const SKILLS_USAGE = [
   "Usage:",
   "  trekoon skills install [--link --editor opencode|claude|pi] [--to <path>] [--allow-outside-repo]",
+  "  trekoon skills install -g|--global [--editor opencode|claude|pi]",
   "  trekoon skills update",
 ].join("\n");
 const EDITOR_NAMES = ["opencode", "claude", "pi"] as const;
@@ -234,6 +236,19 @@ function resolveEditorConfigDir(cwd: string, editor: EditorName): string {
   }
 
   return join(cwd, ".pi");
+}
+
+function resolveGlobalEditorSkillsDir(editor: EditorName): string {
+  const home: string = homedir();
+  if (editor === "opencode") {
+    return join(home, ".config", "opencode", "skills");
+  }
+
+  if (editor === "claude") {
+    return join(home, ".claude", "skills");
+  }
+
+  return join(home, ".pi", "skills");
 }
 
 function installCanonicalSkill(cwd: string): CliResult | { sourcePath: string; installedPath: string; installedDir: string } {
