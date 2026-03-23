@@ -1,6 +1,6 @@
 ---
 name: trekoon
-description: Use Trekoon to create issues/tasks, plan backlog and sprints, create epics, update status, track progress, and manage dependencies/sync across repository workflows.
+description: Use Trekoon only for agentic development planning and execution, limited to creating epics with tasks and subtasks, planning backlog/sprints, updating status, tracking progress, and managing dependencies/sync across repository workflows with agents. Only invoke Trekoon when explicitly requested by the user.
 ---
 
 # Trekoon Skill
@@ -72,9 +72,7 @@ methodology and orchestration patterns.
 **Typical flow:**
 1. Read `reference/planning.md` and create the epic with tasks, subtasks, deps,
    owners.
-2. Read `reference/execution.md` (or `reference/execution-with-team.md` for Agent
-   Teams), run `session --epic`, build lane groups, dispatch agents, use
-   `task done` responses to orchestrate waves.
+2. Read `reference/execution.md` for the regular subagents flow OR `reference/execution-with-team.md` for the Agent Teams flow. Then run `session --epic`, build lane groups, dispatch agents, and use `task done` responses to orchestrate waves.
 3. This file (SKILL.md) provides the command reference and status machine rules
    that both planning and execution rely on.
 
