@@ -229,6 +229,25 @@ Valid transitions:
 | `blocked` | `in_progress`, `todo` |
 | `done` | `in_progress` |
 
+## Install the AI skill
+
+Install the Trekoon skill so AI agents can plan and execute against your tracker:
+
+```bash
+trekoon skills install                # repo-local (default)
+trekoon skills install -g             # global (~/.agents/skills/trekoon)
+trekoon skills install --link --editor claude  # repo-local + editor symlink
+```
+
+After upgrading Trekoon, refresh all installed symlinks:
+
+```bash
+trekoon update                        # alias for: trekoon skills update
+```
+
+For detailed installation, editor linking, and example prompts, read
+[AI agents and the Trekoon skill](ai-agents.md).
+
 ## What to read next
 
 - [Command reference](commands.md)
