@@ -2,6 +2,54 @@
 
 All notable changes to Trekoon are documented in this file.
 
+## 0.3.3
+
+### Added
+
+- Global skill installation via `trekoon skills install -g|--global`, placing a
+  global anchor symlink at `~/.agents/skills/trekoon` and per-editor links under
+  each editor's global skills directory (`~/.claude/skills/`, `~/.config/opencode/skills/`,
+  `~/.pi/skills/`).
+- Short flag parsing in the arg parser (`-g`, `-h`, etc.) alongside existing
+  long-flag (`--global`) support.
+- `trekoon update` top-level alias that routes to `trekoon skills update`
+  internally.
+- Symlink probe/repair infrastructure for both install and update flows,
+  replacing file-copy-based canonical installs with directory symlinks to the
+  bundled package source.
+
+### Changed
+
+- Canonical skill install now creates a directory symlink to the bundled source
+  instead of copying files, so local and global installs always reflect the
+  currently installed package version without manual refresh.
+- `skills update` now probes and repairs both global and local anchor/editor
+  symlinks, reporting per-entry status (`ok`, `repointed`, `created`,
+  `migrated`, `skipped`) instead of the previous action-per-editor format.
+- Symlink target computation uses `realpathSync` on the nearest existing
+  ancestor so relative targets are correct when OS-level symlinks remap path
+  segments (e.g. macOS `/var` → `/private/var`).
+- Board `DEFAULT_STATUS_FILTER` constant exported from `store.js` and used
+  across `EpicsOverview`, `Workspace`, and `actions` instead of repeated inline
+  object literals.
+- Epic status normalized through `normalizeStatus` during board snapshot
+  ingestion.
+- Reference guide filename corrected from `execution-teams.md` to
+  `execution-with-team.md` in docs and SKILL.md.
+- SKILL.md adds a path-resolution note clarifying that reference script paths
+  are relative to the skill folder, not the project root.
+
+### Fixed
+
+- Symlink comparison no longer produces false mismatches when OS-level path
+  symlinks cause `readlinkSync` and `realpathSync` to return different path
+  prefixes.
+- Broken symlinks are now detected and replaced during both install and update
+  (previously `existsSync` followed symlinks, missing dangling links).
+- Self-reference guard prevents circular symlinks when running `skills install`
+  from within the Trekoon package directory itself.
+- Typo fix in SKILL.md execution reference table ("Uer" → "User").
+
 ## 0.3.2
 
 ### Added
