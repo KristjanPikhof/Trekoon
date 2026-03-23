@@ -1,4 +1,4 @@
-import { copyFileSync, cpSync, existsSync, lstatSync, mkdirSync, readlinkSync, realpathSync, rmSync, symlinkSync } from "node:fs";
+import { existsSync, lstatSync, mkdirSync, readlinkSync, realpathSync, rmSync, symlinkSync } from "node:fs";
 import { dirname, isAbsolute, join, relative, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -254,21 +254,49 @@ function installCanonicalSkill(cwd: string): CliResult | { sourcePath: string; i
     });
   }
 
-  const installedPath: string = join(cwd, ".agents", "skills", "trekoon", "SKILL.md");
-  const installedDir: string = dirname(installedPath);
+  const installedDir: string = join(cwd, ".agents", "skills", "trekoon");
+  const installedPath: string = join(installedDir, "SKILL.md");
+  const parentDir: string = dirname(installedDir);
+  const resolvedSourceDir: string = resolve(sourceDir);
 
   try {
-    mkdirSync(installedDir, { recursive: true });
-    copyFileSync(sourcePath, installedPath);
-    // Copy reference guides if they exist in the bundled source.
-    const sourceRefDir: string = join(sourceDir, "reference");
-    if (existsSync(sourceRefDir)) {
-      const installedRefDir: string = join(installedDir, "reference");
-      if (existsSync(installedRefDir)) {
-        rmSync(installedRefDir, { recursive: true, force: true });
-      }
-      cpSync(sourceRefDir, installedRefDir, { recursive: true });
+    mkdirSync(parentDir, { recursive: true });
+
+    // Check what currently occupies the install path (lstat does not follow symlinks).
+    let existingIsSymlink = false;
+    let existingIsDir = false;
+    let pathOccupied = false;
+
+    try {
+      const stat = lstatSync(installedDir);
+      pathOccupied = true;
+      existingIsSymlink = stat.isSymbolicLink();
+      existingIsDir = stat.isDirectory();
+    } catch {
+      // Nothing at the path — proceed to create.
     }
+
+    if (pathOccupied) {
+      if (existingIsSymlink) {
+        // Already a symlink — check whether it points to the correct target.
+        const currentTarget: string = resolve(dirname(installedDir), readlinkSync(installedDir));
+        if (currentTarget === resolvedSourceDir) {
+          // Symlink is already correct; idempotent success.
+          return { sourcePath, installedPath, installedDir };
+        }
+        // Stale symlink pointing elsewhere — remove and recreate.
+        rmSync(installedDir, { force: true });
+      } else if (existingIsDir) {
+        // Legacy directory install (file-copy era) — migrate by removing.
+        rmSync(installedDir, { recursive: true, force: true });
+      } else {
+        // Unexpected file — remove.
+        rmSync(installedDir, { force: true });
+      }
+    }
+
+    const symlinkTarget: string = toRelativeSymlinkTarget(installedDir, resolvedSourceDir);
+    symlinkSync(symlinkTarget, installedDir, "dir");
   } catch (error: unknown) {
     const message = error instanceof Error ? error.message : "Unknown skills install failure";
     return failResult({
