@@ -49,7 +49,7 @@ These are the commands most people need to recognize quickly:
 | --- | --- |
 | Initialize a repo | `trekoon init` |
 | Install/open/update the local board | `trekoon board open`, `trekoon board update` |
-| Learn the CLI | `trekoon help [command]`, `trekoon quickstart` |
+| Learn the CLI | `trekoon [command] -h`, `trekoon [command] [subcommand] -h`, `trekoon quickstart` |
 | Plan work | `trekoon epic ...`, `trekoon task ...`, `trekoon subtask ...`, `trekoon dep ...` |
 | Track epic progress | `trekoon epic progress <id>` |
 | Start an execution session | `trekoon session`, `trekoon session --epic <id>` |
