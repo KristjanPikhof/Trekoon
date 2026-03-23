@@ -55,7 +55,7 @@ These are the commands most people need to recognize quickly:
 | Start an execution session | `trekoon session`, `trekoon session --epic <id>` |
 | Get next-action suggestions | `trekoon suggest`, `trekoon suggest --epic <id>` |
 | Keep worktrees in sync | `trekoon sync ...` |
-| Install or refresh the AI skill | `trekoon skills install`, `trekoon skills update` |
+| Install or refresh the AI skill | `trekoon skills install`, `trekoon skills install -g`, `trekoon skills update` |
 | Maintenance | `trekoon events prune ...`, `trekoon migrate ...`, `trekoon wipe --yes` |
 
 Machine output modes:
@@ -140,6 +140,14 @@ covers the full plan-to-completion workflow:
   orchestration, verification
 - **Agent Teams** — TeamCreate/SendMessage pattern for parallel Claude Code
   instances (requires `CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS=true`)
+
+Install it per-repo or globally:
+
+```bash
+trekoon skills install          # repo-local (default)
+trekoon skills install -g       # global (~/.agents/skills/trekoon)
+trekoon update                  # refresh all installed links
+```
 
 The skill accepts arguments for quick entity-scoped actions:
 
