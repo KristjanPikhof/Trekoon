@@ -61,6 +61,8 @@ This skill ships with bundled reference guides for planning and execution. Read
 them when the task calls for it — they extend this command reference with
 methodology and orchestration patterns.
 
+> **Path note:** Script paths below are relative to this skill's folder (where this SKILL.md lives), not the current project root. Resolve them from this skill folder when invoking Bash.
+
 | When | Read | What it covers |
 |---|---|---|
 | User asks to plan, design, or architect a feature | `reference/planning.md` | Decomposition into epic/task/subtask DAGs, writing standard, file scopes, owner assignment, dependency modeling, validation |
