@@ -336,26 +336,26 @@ function replaceOrCreateSymlink(
   repoRoot: string,
   allowOutsideRepo: boolean,
 ): CliResult | null {
+  // Ensure parent dirs exist before computing the relative target so that
+  // realpathNearestExistingAncestor resolves correctly (avoids macOS
+  // /var → /private/var mismatch when parent chain is missing).
+  mkdirSync(dirname(linkPath), { recursive: true });
+
+  const boundaryFailure = revalidateLinkParentBoundary(repoRoot, linkPath, allowOutsideRepo);
+  if (boundaryFailure) {
+    return boundaryFailure;
+  }
+
   const symlinkTarget: string = toRelativeSymlinkTarget(linkPath, targetPath);
 
   if (!existsSync(linkPath)) {
-    mkdirSync(dirname(linkPath), { recursive: true });
-    const boundaryFailure = revalidateLinkParentBoundary(repoRoot, linkPath, allowOutsideRepo);
-    if (boundaryFailure) {
-      return boundaryFailure;
-    }
     symlinkSync(symlinkTarget, linkPath, "dir");
     return null;
   }
 
   const existing = lstatSync(linkPath);
   if (!existing.isSymbolicLink()) {
-    // Replace stale directory or file with symlink to the canonical location.
     rmSync(linkPath, { recursive: true, force: true });
-    const boundaryFailure = revalidateLinkParentBoundary(repoRoot, linkPath, allowOutsideRepo);
-    if (boundaryFailure) {
-      return boundaryFailure;
-    }
     symlinkSync(symlinkTarget, linkPath, "dir");
     return null;
   }
@@ -364,21 +364,12 @@ function replaceOrCreateSymlink(
   const existingAbsoluteTarget: string = toAbsolutePath(dirname(linkPath), existingRawTarget);
   const expectedTarget: string = resolve(targetPath);
   if (existingAbsoluteTarget !== expectedTarget) {
-    // Replace symlink pointing to a different target.
     rmSync(linkPath, { force: true });
-    const boundaryFailure = revalidateLinkParentBoundary(repoRoot, linkPath, allowOutsideRepo);
-    if (boundaryFailure) {
-      return boundaryFailure;
-    }
     symlinkSync(symlinkTarget, linkPath, "dir");
     return null;
   }
 
   rmSync(linkPath, { force: true });
-  const boundaryFailure = revalidateLinkParentBoundary(repoRoot, linkPath, allowOutsideRepo);
-  if (boundaryFailure) {
-    return boundaryFailure;
-  }
   symlinkSync(symlinkTarget, linkPath, "dir");
   return null;
 }
@@ -409,6 +400,9 @@ function ensureSymlink(
     return "already_ok";
   }
 
+  // Ensure parent dirs exist before computing the relative target so that
+  // realpathNearestExistingAncestor resolves correctly.
+  mkdirSync(dirname(linkPath), { recursive: true });
   const symlinkTarget: string = toRelativeSymlinkTarget(linkPath, resolvedTarget);
 
   let existingIsSymlink = false;
@@ -432,12 +426,10 @@ function ensureSymlink(
     } else {
       rmSync(linkPath, { recursive: true, force: true });
     }
-    mkdirSync(dirname(linkPath), { recursive: true });
     symlinkSync(symlinkTarget, linkPath, "dir");
     return "refreshed";
   }
 
-  mkdirSync(dirname(linkPath), { recursive: true });
   symlinkSync(symlinkTarget, linkPath, "dir");
   return "created";
 }
@@ -740,16 +732,16 @@ function repairSymlink(probe: ProbeResult): RepairResult {
     case "stale":
     case "broken": {
       rmSync(probe.path, { force: true });
-      const target: string = toRelativeSymlinkTarget(probe.path, probe.expectedTarget);
       mkdirSync(dirname(probe.path), { recursive: true });
+      const target: string = toRelativeSymlinkTarget(probe.path, probe.expectedTarget);
       symlinkSync(target, probe.path, "dir");
       return { probe, action: "repointed" };
     }
 
     case "legacy": {
       rmSync(probe.path, { recursive: true, force: true });
-      const target: string = toRelativeSymlinkTarget(probe.path, probe.expectedTarget);
       mkdirSync(dirname(probe.path), { recursive: true });
+      const target: string = toRelativeSymlinkTarget(probe.path, probe.expectedTarget);
       symlinkSync(target, probe.path, "dir");
       return { probe, action: "migrated" };
     }
