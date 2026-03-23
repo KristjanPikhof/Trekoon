@@ -855,8 +855,14 @@ function runSkillsUpdate(context: CliContext): CliResult {
       }
 
       const probe = probeSymlink(linkPath, localAnchorPath);
-      const repair = repairSymlink(probe);
-      entries.push({ scope: "local", label: editor, repair });
+      if (probe.status === "not_installed") {
+        // Editor config dir exists but no link yet — create it.
+        const action = ensureSymlink(linkPath, localAnchorPath);
+        entries.push({ scope: "local", label: editor, repair: { probe, action: action === "already_ok" ? "ok" : "created" } });
+      } else {
+        const repair = repairSymlink(probe);
+        entries.push({ scope: "local", label: editor, repair });
+      }
     }
   } catch (error: unknown) {
     const message = error instanceof Error ? error.message : "Unknown update failure";
