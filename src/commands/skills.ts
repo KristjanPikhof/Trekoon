@@ -360,12 +360,12 @@ function replaceOrCreateSymlink(
     return null;
   }
 
-  const existingRawTarget: string = readlinkSync(linkPath);
-  const existingAbsoluteTarget: string = toAbsolutePath(dirname(linkPath), existingRawTarget);
-  const expectedTarget: string = resolve(targetPath);
-  if (existingAbsoluteTarget !== expectedTarget) {
-    rmSync(linkPath, { force: true });
-    symlinkSync(symlinkTarget, linkPath, "dir");
+  // Use realpathSync to resolve OS-level symlinks (macOS /var → /private/var)
+  // for a consistent comparison with the target.
+  const resolvedExisting: string = realpathSync(linkPath);
+  const resolvedExpected: string = realpathSync(resolve(targetPath));
+  if (resolvedExisting === resolvedExpected) {
+    // Already correct — avoid needless tear-down and recreation.
     return null;
   }
 
