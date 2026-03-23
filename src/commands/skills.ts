@@ -32,7 +32,6 @@ interface LinkTargetValidation {
   readonly outsideRepoLink: boolean;
 }
 
-
 function invalidArgs(message: string): CliResult {
   return failResult({
     command: "skills",
@@ -289,12 +288,18 @@ function installCanonicalSkill(cwd: string): CliResult | { sourcePath: string; i
     if (pathOccupied) {
       if (existingIsSymlink) {
         // Already a symlink — check whether it points to the correct target.
-        const currentTarget: string = resolve(dirname(installedDir), readlinkSync(installedDir));
-        if (currentTarget === resolvedSourceDir) {
-          // Symlink is already correct; idempotent success.
-          return { sourcePath, installedPath, installedDir };
+        // Use realpathSync so OS-level symlinks (macOS /var → /private/var)
+        // do not cause false mismatches.
+        try {
+          const resolvedExisting: string = realpathSync(installedDir);
+          if (resolvedExisting === realpathSync(resolvedSourceDir)) {
+            // Symlink is already correct; idempotent success.
+            return { sourcePath, installedPath, installedDir };
+          }
+        } catch {
+          // Broken symlink — fall through to remove and recreate.
         }
-        // Stale symlink pointing elsewhere — remove and recreate.
+        // Stale or broken symlink — remove and recreate.
         rmSync(installedDir, { force: true });
       } else if (existingIsDir) {
         // Legacy directory install (file-copy era) — migrate by removing.
@@ -348,13 +353,25 @@ function replaceOrCreateSymlink(
 
   const symlinkTarget: string = toRelativeSymlinkTarget(linkPath, targetPath);
 
-  if (!existsSync(linkPath)) {
+  // Use lstatSync to detect broken symlinks that existsSync would miss
+  // (existsSync follows symlinks, so a broken symlink returns false).
+  let occupied = false;
+  let isSymlink = false;
+
+  try {
+    const stat = lstatSync(linkPath);
+    occupied = true;
+    isSymlink = stat.isSymbolicLink();
+  } catch {
+    // Nothing at the path — proceed to create.
+  }
+
+  if (!occupied) {
     symlinkSync(symlinkTarget, linkPath, "dir");
     return null;
   }
 
-  const existing = lstatSync(linkPath);
-  if (!existing.isSymbolicLink()) {
+  if (!isSymlink) {
     rmSync(linkPath, { recursive: true, force: true });
     symlinkSync(symlinkTarget, linkPath, "dir");
     return null;
@@ -418,9 +435,16 @@ function ensureSymlink(
 
   if (pathOccupied) {
     if (existingIsSymlink) {
-      const currentTarget: string = resolve(dirname(linkPath), readlinkSync(linkPath));
-      if (currentTarget === resolvedTarget) {
-        return "already_ok";
+      // Use realpathSync so OS-level symlinks (macOS /var → /private/var) do
+      // not cause false mismatches.
+      try {
+        const resolvedExisting: string = realpathSync(linkPath);
+        const resolvedExpectedReal: string = realpathSync(resolvedTarget);
+        if (resolvedExisting === resolvedExpectedReal) {
+          return "already_ok";
+        }
+      } catch {
+        // Broken symlink — fall through to remove and recreate.
       }
       rmSync(linkPath, { force: true });
     } else {
@@ -751,6 +775,15 @@ function repairSymlink(probe: ProbeResult): RepairResult {
   }
 }
 
+/** Probe and repair, but skip (don't create) when not already installed. */
+function probeAndRepairIfInstalled(linkPath: string, expectedTarget: string): RepairResult {
+  const probe = probeSymlink(linkPath, expectedTarget);
+  if (probe.status === "not_installed") {
+    return { probe, action: "skipped" };
+  }
+  return repairSymlink(probe);
+}
+
 type UpdateScope = "global" | "local";
 
 interface UpdateEntry {
@@ -805,30 +838,18 @@ function runSkillsUpdate(context: CliContext): CliResult {
   try {
     // Global anchor: ~/.agents/skills/trekoon → bundled package dir.
     const globalAnchorPath: string = join(home, ".agents", "skills", "trekoon");
-    const globalAnchorProbe = probeSymlink(globalAnchorPath, sourceDir);
-    const globalAnchorRepair = globalAnchorProbe.status === "not_installed"
-      ? { probe: globalAnchorProbe, action: "skipped" as RepairAction }
-      : repairSymlink(globalAnchorProbe);
-    entries.push({ scope: "global", label: "anchor", repair: globalAnchorRepair });
+    entries.push({ scope: "global", label: "anchor", repair: probeAndRepairIfInstalled(globalAnchorPath, sourceDir) });
 
     // Global editor links: <editor-global-skills>/trekoon → global anchor.
     for (const editor of EDITOR_NAMES) {
       const editorSkillsDir: string = resolveGlobalEditorSkillsDir(editor);
       const linkPath: string = join(editorSkillsDir, "trekoon");
-      const probe = probeSymlink(linkPath, globalAnchorPath);
-      const repair = probe.status === "not_installed"
-        ? { probe, action: "skipped" as RepairAction }
-        : repairSymlink(probe);
-      entries.push({ scope: "global", label: editor, repair });
+      entries.push({ scope: "global", label: editor, repair: probeAndRepairIfInstalled(linkPath, globalAnchorPath) });
     }
 
     // Local anchor: <cwd>/.agents/skills/trekoon → bundled package dir.
     const localAnchorPath: string = join(context.cwd, ".agents", "skills", "trekoon");
-    const localAnchorProbe = probeSymlink(localAnchorPath, sourceDir);
-    const localAnchorRepair = localAnchorProbe.status === "not_installed"
-      ? { probe: localAnchorProbe, action: "skipped" as RepairAction }
-      : repairSymlink(localAnchorProbe);
-    entries.push({ scope: "local", label: "anchor", repair: localAnchorRepair });
+    entries.push({ scope: "local", label: "anchor", repair: probeAndRepairIfInstalled(localAnchorPath, sourceDir) });
 
     // Local editor links: <cwd>/.<editor>/skills/trekoon → local anchor.
     for (const editor of EDITOR_NAMES) {
