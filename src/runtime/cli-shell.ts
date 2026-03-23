@@ -34,6 +34,7 @@ const SUPPORTED_ROOT_COMMANDS: readonly string[] = [
   "sync",
   "skills",
   "suggest",
+  "update",
   "wipe",
 ];
 
@@ -397,6 +398,10 @@ export async function executeShell(parsed: ParsedInvocation, cwd: string = proce
       break;
     case "suggest":
       result = await runSuggest(context);
+      break;
+    case "update":
+      // Route `trekoon update` to `trekoon skills update` internally.
+      result = await runSkills({ ...context, args: ["update", ...context.args] });
       break;
     default:
       result = failResult({
