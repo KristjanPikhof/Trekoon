@@ -39,6 +39,7 @@ All notable changes to Trekoon are documented in this file.
 - SKILL.md adds a path-resolution note clarifying that reference script paths
   are relative to the skill folder, not the project root.
 - Updated SKILL.md with stricter description
+- Update package dependacny version
 
 ### Fixed
 
