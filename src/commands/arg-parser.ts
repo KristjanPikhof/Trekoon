@@ -42,6 +42,8 @@ export interface ParsedCompactFields {
 }
 
 const LONG_PREFIX = "--";
+const SHORT_PREFIX = "-";
+const SHORT_FLAG_PATTERN = /^-([A-Za-z])$/u;
 
 export function parseArgs(args: readonly string[]): ParsedArgs {
   const positional: string[] = [];
@@ -54,6 +56,15 @@ export function parseArgs(args: readonly string[]): ParsedArgs {
   for (let index = 0; index < args.length; index += 1) {
     const token: string | undefined = args[index];
     if (!token) {
+      continue;
+    }
+
+    // Short flag: single dash + single letter (e.g. -g).
+    const shortMatch = SHORT_FLAG_PATTERN.exec(token);
+    if (shortMatch) {
+      const key: string = shortMatch[1]!;
+      flags.add(key);
+      providedOptions.push(key);
       continue;
     }
 
