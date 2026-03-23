@@ -205,7 +205,12 @@ function resolveDefaultLinkPath(cwd: string, editor: EditorName): string {
 }
 
 function toRelativeSymlinkTarget(linkPath: string, targetPath: string): string {
-  const relativeTarget: string = relative(dirname(linkPath), resolve(targetPath));
+  // Use realpathNearestExistingAncestor for the link parent so the relative
+  // path is correct even when parts of the path are OS-level symlinks (e.g.
+  // macOS /var → /private/var).
+  const linkParent: string = realpathNearestExistingAncestor(dirname(linkPath));
+  const resolvedTarget: string = resolve(targetPath);
+  const relativeTarget: string = relative(linkParent, resolvedTarget);
   return relativeTarget === "" ? "." : relativeTarget;
 }
 
