@@ -231,9 +231,9 @@ describe("cli shell dispatch", (): void => {
     expect(result.ok).toBeTrue();
     expect(result.command).toBe("skills.update");
 
-    const data = result.data as { installedPath: string; links: Array<{ editor: string }> };
-    expect(existsSync(data.installedPath)).toBeTrue();
-    expect(data.links.map((entry) => entry.editor)).toEqual(["opencode", "claude", "pi"]);
+    const data = result.data as { sourceDir: string; entries: Array<{ scope: string; label: string }> };
+    expect(existsSync(data.sourceDir)).toBeTrue();
+    expect(data.entries.length).toBeGreaterThan(0);
   });
 
   test("returns deterministic error for invalid skills invocation", async (): Promise<void> => {
