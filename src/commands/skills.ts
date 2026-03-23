@@ -257,6 +257,13 @@ function installCanonicalSkill(cwd: string): CliResult | { sourcePath: string; i
   const parentDir: string = dirname(installedDir);
   const resolvedSourceDir: string = resolve(sourceDir);
 
+  // Self-reference guard: when cwd IS the package dir (e.g. developing Trekoon
+  // itself), the source dir and installed dir are the same path. Do not create
+  // a circular symlink — the directory already contains the bundled files.
+  if (resolve(installedDir) === resolvedSourceDir) {
+    return { sourcePath, installedPath, installedDir };
+  }
+
   try {
     mkdirSync(parentDir, { recursive: true });
 
@@ -391,6 +398,12 @@ function ensureSymlink(
   targetPath: string,
 ): "created" | "refreshed" | "already_ok" {
   const resolvedTarget: string = resolve(targetPath);
+
+  // Self-reference guard: source and target are the same path (dev mode).
+  if (resolve(linkPath) === resolvedTarget) {
+    return "already_ok";
+  }
+
   const symlinkTarget: string = toRelativeSymlinkTarget(linkPath, resolvedTarget);
 
   let existingIsSymlink = false;
@@ -670,6 +683,11 @@ interface ProbeResult {
 
 function probeSymlink(linkPath: string, expectedTarget: string): ProbeResult {
   const resolvedExpected: string = resolve(expectedTarget);
+
+  // Self-reference guard: source and install are the same path (dev mode).
+  if (resolve(linkPath) === resolvedExpected) {
+    return { path: linkPath, expectedTarget: resolvedExpected, status: "ok", currentTarget: resolvedExpected };
+  }
 
   try {
     const stat = lstatSync(linkPath);
