@@ -388,6 +388,124 @@ function replaceOrCreateSymlink(
   return null;
 }
 
+interface GlobalEditorLinkEntry {
+  readonly editor: EditorName;
+  readonly linkPath: string;
+  readonly linkTarget: string;
+  readonly action: "created" | "refreshed" | "already_ok";
+}
+
+interface GlobalInstallOutcome {
+  readonly sourcePath: string;
+  readonly sourceDir: string;
+  readonly globalAnchorPath: string;
+  readonly globalAnchorAction: "created" | "refreshed" | "already_ok";
+  readonly editorLinks: readonly GlobalEditorLinkEntry[];
+}
+
+function ensureSymlink(
+  linkPath: string,
+  targetPath: string,
+): "created" | "refreshed" | "already_ok" {
+  const resolvedTarget: string = resolve(targetPath);
+  const symlinkTarget: string = toRelativeSymlinkTarget(linkPath, resolvedTarget);
+
+  let existingIsSymlink = false;
+  let pathOccupied = false;
+
+  try {
+    const stat = lstatSync(linkPath);
+    pathOccupied = true;
+    existingIsSymlink = stat.isSymbolicLink();
+  } catch {
+    // Nothing at the path.
+  }
+
+  if (pathOccupied) {
+    if (existingIsSymlink) {
+      const currentTarget: string = resolve(dirname(linkPath), readlinkSync(linkPath));
+      if (currentTarget === resolvedTarget) {
+        return "already_ok";
+      }
+      rmSync(linkPath, { force: true });
+    } else {
+      rmSync(linkPath, { recursive: true, force: true });
+    }
+    mkdirSync(dirname(linkPath), { recursive: true });
+    symlinkSync(symlinkTarget, linkPath, "dir");
+    return "refreshed";
+  }
+
+  mkdirSync(dirname(linkPath), { recursive: true });
+  symlinkSync(symlinkTarget, linkPath, "dir");
+  return "created";
+}
+
+function runGlobalInstall(editors: readonly EditorName[]): CliResult {
+  const sourcePath: string = resolveBundledSkillFilePath();
+  const sourceDir: string = resolveBundledSkillDirPath();
+  if (!existsSync(sourcePath)) {
+    return failResult({
+      command: "skills.install",
+      human: `Bundled skill asset not found at ${sourcePath}`,
+      data: { code: "missing_asset", sourcePath },
+      error: { code: "missing_asset", message: "Bundled skill asset not found" },
+    });
+  }
+
+  try {
+    // Step 1: Global anchor  ~/.agents/skills/trekoon → bundled package dir.
+    const globalAnchorPath: string = join(homedir(), ".agents", "skills", "trekoon");
+    const globalAnchorAction = ensureSymlink(globalAnchorPath, sourceDir);
+
+    // Step 2: Editor links  <editor-global-skills>/trekoon → global anchor.
+    const editorLinks: GlobalEditorLinkEntry[] = editors.map((editor) => {
+      const editorSkillsDir: string = resolveGlobalEditorSkillsDir(editor);
+      const linkPath: string = join(editorSkillsDir, "trekoon");
+      const action = ensureSymlink(linkPath, globalAnchorPath);
+      return { editor, linkPath, linkTarget: globalAnchorPath, action };
+    });
+
+    const outcome: GlobalInstallOutcome = {
+      sourcePath,
+      sourceDir,
+      globalAnchorPath,
+      globalAnchorAction,
+      editorLinks,
+    };
+
+    const editorSummary: string = editorLinks
+      .map((entry) => `- ${entry.editor}: ${entry.action} (${entry.linkPath})`)
+      .join("\n");
+
+    return okResult({
+      command: "skills.install",
+      human: [
+        "Installed Trekoon skill globally.",
+        `Global anchor: ${globalAnchorPath} (${globalAnchorAction})`,
+        "Editor links:",
+        editorSummary,
+      ].join("\n"),
+      data: {
+        global: true,
+        sourcePath: outcome.sourcePath,
+        sourceDir: outcome.sourceDir,
+        globalAnchorPath: outcome.globalAnchorPath,
+        globalAnchorAction: outcome.globalAnchorAction,
+        editorLinks: outcome.editorLinks,
+      },
+    });
+  } catch (error: unknown) {
+    const message = error instanceof Error ? error.message : "Unknown global install failure";
+    return failResult({
+      command: "skills.install",
+      human: `Failed to install skill globally: ${message}`,
+      data: { code: "install_failed", message },
+      error: { code: "install_failed", message },
+    });
+  }
+}
+
 function runSkillsInstall(context: CliContext): CliResult {
   const parsed = parseArgs(context.args);
   const missingValue = readMissingOptionValue(parsed.missingOptionValues, "editor", "to");
@@ -401,11 +519,41 @@ function runSkillsInstall(context: CliContext): CliResult {
     return invalidArgs("Unexpected positional arguments for skills install.");
   }
 
+  const wantsGlobal: boolean = hasFlag(parsed.flags, "global", "g");
   const wantsLink: boolean = hasFlag(parsed.flags, "link");
   const allowOutsideRepo: boolean = hasFlag(parsed.flags, ALLOW_OUTSIDE_REPO_FLAG);
   const rawEditor: string | undefined = readOption(parsed.options, "editor");
   const rawTo: string | undefined = readOption(parsed.options, "to");
 
+  // Validate editor early (shared by both modes).
+  if (rawEditor !== undefined && !EDITOR_NAMES.includes(rawEditor as EditorName)) {
+    return invalidInput("skills.install", "Invalid --editor value. Use: opencode, claude, pi", {
+      editor: rawEditor,
+      allowedEditors: EDITOR_NAMES,
+    });
+  }
+
+  // Global mode validation.
+  if (wantsGlobal) {
+    if (rawTo !== undefined) {
+      return invalidInput("skills.install", "--to is not supported with --global.", { to: rawTo });
+    }
+
+    if (wantsLink) {
+      return invalidInput("skills.install", "--link is not supported with --global.", {});
+    }
+
+    if (allowOutsideRepo) {
+      return invalidInput("skills.install", `--${ALLOW_OUTSIDE_REPO_FLAG} is not supported with --global.`, {});
+    }
+
+    const editors: readonly EditorName[] = rawEditor
+      ? [rawEditor as EditorName]
+      : EDITOR_NAMES;
+    return runGlobalInstall(editors);
+  }
+
+  // Local mode validation.
   if (allowOutsideRepo && !wantsLink) {
     return invalidInput("skills.install", `--${ALLOW_OUTSIDE_REPO_FLAG} requires --link.`, {
       allowOutsideRepo,
@@ -426,13 +574,6 @@ function runSkillsInstall(context: CliContext): CliResult {
 
   if (wantsLink && rawEditor === undefined) {
     return invalidArgs("skills install --link requires --editor opencode|claude|pi.");
-  }
-
-  if (rawEditor !== undefined && !EDITOR_NAMES.includes(rawEditor as EditorName)) {
-    return invalidInput("skills.install", "Invalid --editor value. Use: opencode, claude, pi", {
-      editor: rawEditor,
-      allowedEditors: EDITOR_NAMES,
-    });
   }
 
   const editor: EditorName | undefined = rawEditor as EditorName | undefined;
