@@ -42,7 +42,6 @@ export interface ParsedCompactFields {
 }
 
 const LONG_PREFIX = "--";
-const SHORT_PREFIX = "-";
 const SHORT_FLAG_PATTERN = /^-([A-Za-z])$/u;
 
 export function parseArgs(args: readonly string[]): ParsedArgs {
