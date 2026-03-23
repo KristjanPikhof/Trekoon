@@ -133,8 +133,7 @@ describe("skills command", (): void => {
     expect(opencodeData.linkPath).toBe(join(cwd, ".opencode", "skills", "trekoon"));
     expect(opencodeData.linkTarget).toBe(opencodeData.installedDir);
     expect(lstatSync(opencodeData.linkPath).isSymbolicLink()).toBeTrue();
-    expect(readlinkSync(opencodeData.linkPath)).toBe(relative(dirname(opencodeData.linkPath), opencodeData.installedDir));
-    expect(resolve(dirname(opencodeData.linkPath), readlinkSync(opencodeData.linkPath))).toBe(opencodeData.installedDir);
+    expect(realpathSync(opencodeData.linkPath)).toBe(realpathSync(opencodeData.installedDir));
 
     const claudeResult = await runSkills({
       cwd,
@@ -153,8 +152,7 @@ describe("skills command", (): void => {
     expect(claudeData.linkPath).toBe(join(cwd, ".claude", "skills", "trekoon"));
     expect(claudeData.linkTarget).toBe(claudeData.installedDir);
     expect(lstatSync(claudeData.linkPath).isSymbolicLink()).toBeTrue();
-    expect(readlinkSync(claudeData.linkPath)).toBe(relative(dirname(claudeData.linkPath), claudeData.installedDir));
-    expect(resolve(dirname(claudeData.linkPath), readlinkSync(claudeData.linkPath))).toBe(claudeData.installedDir);
+    expect(realpathSync(claudeData.linkPath)).toBe(realpathSync(claudeData.installedDir));
 
     const piResult = await runSkills({
       cwd,
@@ -173,8 +171,7 @@ describe("skills command", (): void => {
     expect(piData.linkPath).toBe(join(cwd, ".pi", "skills", "trekoon"));
     expect(piData.linkTarget).toBe(piData.installedDir);
     expect(lstatSync(piData.linkPath).isSymbolicLink()).toBeTrue();
-    expect(readlinkSync(piData.linkPath)).toBe(relative(dirname(piData.linkPath), piData.installedDir));
-    expect(resolve(dirname(piData.linkPath), readlinkSync(piData.linkPath))).toBe(piData.installedDir);
+    expect(realpathSync(piData.linkPath)).toBe(realpathSync(piData.installedDir));
   });
 
   test("install --link supports in-repo --to override and detects non-link conflicts", async (): Promise<void> => {
@@ -197,7 +194,7 @@ describe("skills command", (): void => {
     expect(linkedData.linked).toBeTrue();
     expect(linkedData.linkPath).toBe(join(customRoot, "trekoon"));
     expect(linkedData.linkTarget).toBe(linkedData.installedDir);
-    expect(readlinkSync(linkedData.linkPath)).toBe(relative(dirname(linkedData.linkPath), linkedData.installedDir));
+    expect(realpathSync(linkedData.linkPath)).toBe(realpathSync(linkedData.installedDir));
 
     // Non-link directory at link path should be replaced with symlink
     const replaceCwd = createWorkspace();
