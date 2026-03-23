@@ -32,23 +32,6 @@ interface LinkTargetValidation {
   readonly outsideRepoLink: boolean;
 }
 
-type UpdateLinkAction = "created" | "refreshed" | "skipped_conflict" | "skipped_no_editor_dir";
-
-interface UpdateLinkEntry {
-  readonly editor: EditorName;
-  readonly linkPath: string;
-  readonly expectedTarget: string;
-  readonly action: UpdateLinkAction;
-  readonly conflictCode: "non_link" | "wrong_target" | null;
-  readonly existingTarget: string | null;
-}
-
-interface UpdateOutcome {
-  readonly sourcePath: string;
-  readonly installedPath: string;
-  readonly installedDir: string;
-  readonly links: readonly UpdateLinkEntry[];
-}
 
 function invalidArgs(message: string): CliResult {
   return failResult({
@@ -676,83 +659,107 @@ function runSkillsInstall(context: CliContext): CliResult {
   });
 }
 
-function updateEditorLink(
-  cwd: string,
-  editor: EditorName,
-  installedDir: string,
-): UpdateLinkEntry {
-  const linkPath: string = resolveDefaultLinkPath(cwd, editor);
-  const expectedTarget: string = resolve(installedDir);
-  const symlinkTarget: string = toRelativeSymlinkTarget(linkPath, expectedTarget);
-  const editorConfigDir: string = resolveEditorConfigDir(cwd, editor);
+type ProbeStatus = "ok" | "stale" | "broken" | "legacy" | "not_installed";
 
-  if (!existsSync(editorConfigDir)) {
-    return {
-      editor,
-      linkPath,
-      expectedTarget,
-      action: "skipped_no_editor_dir",
-      conflictCode: null,
-      existingTarget: null,
-    };
+interface ProbeResult {
+  readonly path: string;
+  readonly expectedTarget: string;
+  readonly status: ProbeStatus;
+  readonly currentTarget: string | null;
+}
+
+function probeSymlink(linkPath: string, expectedTarget: string): ProbeResult {
+  const resolvedExpected: string = resolve(expectedTarget);
+
+  try {
+    const stat = lstatSync(linkPath);
+
+    if (stat.isSymbolicLink()) {
+      const rawTarget: string = readlinkSync(linkPath);
+      const resolvedCurrent: string = resolve(dirname(linkPath), rawTarget);
+
+      // Check if symlink target actually exists on disk.
+      const targetExists: boolean = existsSync(linkPath);
+      if (!targetExists) {
+        return { path: linkPath, expectedTarget: resolvedExpected, status: "broken", currentTarget: resolvedCurrent };
+      }
+
+      if (resolvedCurrent === resolvedExpected) {
+        return { path: linkPath, expectedTarget: resolvedExpected, status: "ok", currentTarget: resolvedCurrent };
+      }
+
+      return { path: linkPath, expectedTarget: resolvedExpected, status: "stale", currentTarget: resolvedCurrent };
+    }
+
+    if (stat.isDirectory()) {
+      return { path: linkPath, expectedTarget: resolvedExpected, status: "legacy", currentTarget: null };
+    }
+
+    // Unexpected file type — treat as legacy.
+    return { path: linkPath, expectedTarget: resolvedExpected, status: "legacy", currentTarget: null };
+  } catch {
+    return { path: linkPath, expectedTarget: resolvedExpected, status: "not_installed", currentTarget: null };
   }
+}
 
-  if (!existsSync(linkPath)) {
-    mkdirSync(dirname(linkPath), { recursive: true });
-    symlinkSync(symlinkTarget, linkPath, "dir");
-    return {
-      editor,
-      linkPath,
-      expectedTarget,
-      action: "created",
-      conflictCode: null,
-      existingTarget: null,
-    };
+type RepairAction = "ok" | "repointed" | "created" | "migrated" | "skipped";
+
+interface RepairResult {
+  readonly probe: ProbeResult;
+  readonly action: RepairAction;
+}
+
+function repairSymlink(probe: ProbeResult): RepairResult {
+  switch (probe.status) {
+    case "ok":
+      return { probe, action: "ok" };
+
+    case "stale":
+    case "broken": {
+      rmSync(probe.path, { force: true });
+      const target: string = toRelativeSymlinkTarget(probe.path, probe.expectedTarget);
+      mkdirSync(dirname(probe.path), { recursive: true });
+      symlinkSync(target, probe.path, "dir");
+      return { probe, action: "repointed" };
+    }
+
+    case "legacy": {
+      rmSync(probe.path, { recursive: true, force: true });
+      const target: string = toRelativeSymlinkTarget(probe.path, probe.expectedTarget);
+      mkdirSync(dirname(probe.path), { recursive: true });
+      symlinkSync(target, probe.path, "dir");
+      return { probe, action: "migrated" };
+    }
+
+    case "not_installed":
+      return { probe, action: "skipped" };
   }
+}
 
-  const entry = lstatSync(linkPath);
-  if (!entry.isSymbolicLink()) {
-    // Replace stale directory or file with symlink to the canonical location.
-    rmSync(linkPath, { recursive: true, force: true });
-    mkdirSync(dirname(linkPath), { recursive: true });
-    symlinkSync(symlinkTarget, linkPath, "dir");
-    return {
-      editor,
-      linkPath,
-      expectedTarget,
-      action: "refreshed",
-      conflictCode: null,
-      existingTarget: null,
-    };
+type UpdateScope = "global" | "local";
+
+interface UpdateEntry {
+  readonly scope: UpdateScope;
+  readonly label: string;
+  readonly repair: RepairResult;
+}
+
+function formatUpdateEntry(entry: UpdateEntry): string {
+  const { scope, label, repair } = entry;
+  const prefix = `${scope} ${label}`;
+
+  switch (repair.action) {
+    case "ok":
+      return `  ok  ${prefix}`;
+    case "repointed":
+      return `  fix ${prefix} repointed`;
+    case "created":
+      return `  new ${prefix} created`;
+    case "migrated":
+      return `  fix ${prefix} migrated from legacy dir`;
+    case "skipped":
+      return `  --  ${prefix} not installed`;
   }
-
-  const existingRawTarget: string = readlinkSync(linkPath);
-  const existingTarget: string = toAbsolutePath(dirname(linkPath), existingRawTarget);
-
-  if (existingTarget !== expectedTarget) {
-    // Replace symlink pointing to a different target.
-    rmSync(linkPath, { force: true });
-    symlinkSync(symlinkTarget, linkPath, "dir");
-    return {
-      editor,
-      linkPath,
-      expectedTarget,
-      action: "refreshed",
-      conflictCode: null,
-      existingTarget,
-    };
-  }
-
-  rmSync(linkPath, { force: true });
-  symlinkSync(symlinkTarget, linkPath, "dir");
-  return {
-    editor,
-    linkPath,
-    expectedTarget,
-    action: "refreshed",
-    conflictCode: null,
-    existingTarget,
-  };
 }
 
 function runSkillsUpdate(context: CliContext): CliResult {
@@ -765,67 +772,95 @@ function runSkillsUpdate(context: CliContext): CliResult {
     return invalidArgs("skills update takes no options.");
   }
 
-  const installResult = installCanonicalSkill(context.cwd);
-  if ("ok" in installResult) {
+  const sourceDir: string = resolveBundledSkillDirPath();
+  const sourcePath: string = resolveBundledSkillFilePath();
+
+  if (!existsSync(sourcePath)) {
     return failResult({
       command: "skills.update",
-      human: installResult.human,
-      data: installResult.data,
-      error:
-        installResult.error ?? {
-          code: "install_failed",
-          message: "Failed to refresh canonical skill",
-        },
+      human: `Bundled skill asset not found at ${sourcePath}`,
+      data: { code: "missing_asset", sourcePath },
+      error: { code: "missing_asset", message: "Bundled skill asset not found" },
     });
   }
 
-  const links: readonly UpdateLinkEntry[] = EDITOR_NAMES.map((editor) =>
-    updateEditorLink(context.cwd, editor, installResult.installedDir),
-  );
+  const entries: UpdateEntry[] = [];
+  const home: string = homedir();
 
-  const outcome: UpdateOutcome = {
-    sourcePath: installResult.sourcePath,
-    installedPath: installResult.installedPath,
-    installedDir: installResult.installedDir,
-    links,
-  };
+  try {
+    // Global anchor: ~/.agents/skills/trekoon → bundled package dir.
+    const globalAnchorPath: string = join(home, ".agents", "skills", "trekoon");
+    const globalAnchorProbe = probeSymlink(globalAnchorPath, sourceDir);
+    const globalAnchorRepair = globalAnchorProbe.status === "not_installed"
+      ? { probe: globalAnchorProbe, action: "skipped" as RepairAction }
+      : repairSymlink(globalAnchorProbe);
+    entries.push({ scope: "global", label: "anchor", repair: globalAnchorRepair });
 
-  const linkSummary: string = outcome.links
-    .map((entry) => {
-      if (entry.action === "created") {
-        return `- ${entry.editor}: created (${entry.linkPath} -> ${entry.expectedTarget})`;
+    // Global editor links: <editor-global-skills>/trekoon → global anchor.
+    for (const editor of EDITOR_NAMES) {
+      const editorSkillsDir: string = resolveGlobalEditorSkillsDir(editor);
+      const linkPath: string = join(editorSkillsDir, "trekoon");
+      const probe = probeSymlink(linkPath, globalAnchorPath);
+      const repair = probe.status === "not_installed"
+        ? { probe, action: "skipped" as RepairAction }
+        : repairSymlink(probe);
+      entries.push({ scope: "global", label: editor, repair });
+    }
+
+    // Local anchor: <cwd>/.agents/skills/trekoon → bundled package dir.
+    const localAnchorPath: string = join(context.cwd, ".agents", "skills", "trekoon");
+    const localAnchorProbe = probeSymlink(localAnchorPath, sourceDir);
+    const localAnchorRepair = localAnchorProbe.status === "not_installed"
+      ? { probe: localAnchorProbe, action: "skipped" as RepairAction }
+      : repairSymlink(localAnchorProbe);
+    entries.push({ scope: "local", label: "anchor", repair: localAnchorRepair });
+
+    // Local editor links: <cwd>/.<editor>/skills/trekoon → local anchor.
+    for (const editor of EDITOR_NAMES) {
+      const editorConfigDir: string = resolveEditorConfigDir(context.cwd, editor);
+      const linkPath: string = resolveDefaultLinkPath(context.cwd, editor);
+
+      if (!existsSync(editorConfigDir)) {
+        const probe: ProbeResult = {
+          path: linkPath,
+          expectedTarget: resolve(localAnchorPath),
+          status: "not_installed",
+          currentTarget: null,
+        };
+        entries.push({ scope: "local", label: editor, repair: { probe, action: "skipped" } });
+        continue;
       }
 
-      if (entry.action === "refreshed") {
-        return `- ${entry.editor}: refreshed (${entry.linkPath} -> ${entry.expectedTarget})`;
-      }
+      const probe = probeSymlink(linkPath, localAnchorPath);
+      const repair = repairSymlink(probe);
+      entries.push({ scope: "local", label: editor, repair });
+    }
+  } catch (error: unknown) {
+    const message = error instanceof Error ? error.message : "Unknown update failure";
+    return failResult({
+      command: "skills.update",
+      human: `Failed to update skill: ${message}`,
+      data: { code: "update_failed", message },
+      error: { code: "update_failed", message },
+    });
+  }
 
-      if (entry.action === "skipped_no_editor_dir") {
-        return `- ${entry.editor}: skipped (no editor config dir)`;
-      }
-
-      if (entry.conflictCode === "non_link") {
-        return `- ${entry.editor}: conflict (non-link path at ${entry.linkPath})`;
-      }
-
-      return `- ${entry.editor}: conflict (points to ${entry.existingTarget})`;
-    })
-    .join("\n");
+  const summary: string = entries.map(formatUpdateEntry).join("\n");
 
   return okResult({
     command: "skills.update",
-    human: [
-      "Updated Trekoon skill in canonical path.",
-      `Source: ${outcome.sourcePath}`,
-      `Installed file: ${outcome.installedPath}`,
-      "Editor links:",
-      linkSummary,
-    ].join("\n"),
+    human: ["Trekoon skill update:", summary].join("\n"),
     data: {
-      sourcePath: outcome.sourcePath,
-      installedPath: outcome.installedPath,
-      installedDir: outcome.installedDir,
-      links: outcome.links,
+      sourceDir,
+      entries: entries.map((e) => ({
+        scope: e.scope,
+        label: e.label,
+        path: e.repair.probe.path,
+        expectedTarget: e.repair.probe.expectedTarget,
+        status: e.repair.probe.status,
+        action: e.repair.action,
+        currentTarget: e.repair.probe.currentTarget,
+      })),
     },
   });
 }
