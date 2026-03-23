@@ -154,7 +154,8 @@ describe("cli shell dispatch", (): void => {
     expect(syncData.text).toContain("resolve <conflict-id> --use ours|theirs");
 
     expect(skillsData.topic).toBe("skills");
-    expect(skillsData.text).toContain("Install behavior:");
+    expect(skillsData.text).toContain("Local install behavior");
+    expect(skillsData.text).toContain("Global install behavior");
     expect(skillsData.text).toContain("--allow-outside-repo");
   });
 
