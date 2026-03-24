@@ -8,12 +8,12 @@ import { failResult, okResult } from "../io/output";
 import { type CliContext, type CliResult } from "../runtime/command-types";
 import { resolveStorageResolutionDiagnostics } from "../storage/database";
 import { assertValidSourceRef } from "../sync/branch-db";
-import { getSyncConflict, listSyncConflicts, syncPull, syncResolve, syncResolvePreview, syncStatus } from "../sync/service";
+import { getSyncConflict, listSyncConflicts, syncPull, syncResolve, syncResolveAll, syncResolveAllPreview, syncResolvePreview, syncStatus } from "../sync/service";
 import { type ResolvePreviewSummary, type SyncResolution } from "../sync/types";
 
 const STATUS_OPTIONS = ["from"] as const;
 const PULL_OPTIONS = ["from"] as const;
-const RESOLVE_OPTIONS = ["use", "dry-run"] as const;
+const RESOLVE_OPTIONS = ["use", "dry-run", "all", "entity", "field"] as const;
 const CONFLICTS_LIST_OPTIONS = ["mode"] as const;
 const CONFLICTS_SHOW_OPTIONS: readonly string[] = [];
 
@@ -238,15 +238,30 @@ export async function runSync(context: CliContext): Promise<CliResult> {
       }
 
       const conflictId: string | undefined = parsed.positional[1];
+      const batchAll: boolean = hasFlag(parsed.flags, "all");
       const missingResolutionOption = readMissingOptionValue(parsed.missingOptionValues, "use");
       if (missingResolutionOption !== undefined) {
-        return usage("sync resolve requires <conflict-id> --use ours|theirs.", "sync.resolve");
+        const usageMsg = batchAll
+          ? "sync resolve --all requires --use ours|theirs."
+          : "sync resolve requires <conflict-id> --use ours|theirs.";
+        return usage(usageMsg, "sync.resolve");
       }
 
       const rawResolution: string | undefined = readOption(parsed.options, "use");
 
-      if (!conflictId || !rawResolution) {
-        return usage("sync resolve requires <conflict-id> --use ours|theirs.", "sync.resolve");
+      if (batchAll && conflictId) {
+        return usage("sync resolve --all cannot be combined with a positional conflict ID.", "sync.resolve");
+      }
+
+      if (!batchAll && !conflictId) {
+        return usage("sync resolve requires <conflict-id> or --all.", "sync.resolve");
+      }
+
+      if (!rawResolution) {
+        const usageMsg = batchAll
+          ? "sync resolve --all requires --use ours|theirs."
+          : "sync resolve requires <conflict-id> --use ours|theirs.";
+        return usage(usageMsg, "sync.resolve");
       }
 
       if (rawResolution !== "ours" && rawResolution !== "theirs") {
@@ -256,8 +271,50 @@ export async function runSync(context: CliContext): Promise<CliResult> {
       const resolution: SyncResolution = rawResolution;
       const dryRun: boolean = hasFlag(parsed.flags, "dry-run");
 
+      // --- Batch resolve (--all) ---
+      if (batchAll) {
+        const entityFilter: string | undefined = readOption(parsed.options, "entity");
+        const fieldFilter: string | undefined = readOption(parsed.options, "field");
+        const filters = { entityId: entityFilter, fieldName: fieldFilter };
+
+        if (dryRun) {
+          const preview = syncResolveAllPreview(context.cwd, resolution, filters);
+
+          return okResult({
+            command: "sync.resolve",
+            human: `[dry-run] Would resolve ${preview.matchedCount} conflict(s) using ${preview.resolution}.`,
+            data: preview,
+          });
+        }
+
+        if (context.mode !== "toon") {
+          const preview = syncResolveAllPreview(context.cwd, resolution, filters);
+          const confirmed = await promptConfirmation(
+            `Resolve ${preview.matchedCount} conflict(s) using ${resolution}? [y/N] `,
+          );
+
+          if (!confirmed) {
+            return failResult({
+              command: "sync.resolve",
+              human: "Batch resolution cancelled by user.",
+              data: { resolution, cancelled: true, filters: preview.filters },
+              error: { code: "cancelled", message: "Batch resolution cancelled by user." },
+            });
+          }
+        }
+
+        const summary = syncResolveAll(context.cwd, resolution, filters);
+
+        return okResult({
+          command: "sync.resolve",
+          human: `Resolved ${summary.resolvedCount} conflict(s) using ${summary.resolution}.`,
+          data: summary,
+        });
+      }
+
+      // --- Single resolve (positional conflict ID) ---
       if (dryRun) {
-        const preview = syncResolvePreview(context.cwd, conflictId, resolution);
+        const preview = syncResolvePreview(context.cwd, conflictId!, resolution);
 
         return okResult({
           command: "sync.resolve",
@@ -276,7 +333,7 @@ export async function runSync(context: CliContext): Promise<CliResult> {
       }
 
       if (resolution === "theirs" && context.mode !== "toon") {
-        const preview = syncResolvePreview(context.cwd, conflictId, resolution);
+        const preview = syncResolvePreview(context.cwd, conflictId!, resolution);
         const confirmed = await promptConfirmation(formatTheirsConfirmation(preview));
 
         if (!confirmed) {
@@ -298,7 +355,7 @@ export async function runSync(context: CliContext): Promise<CliResult> {
 
       let summary;
       try {
-        summary = syncResolve(context.cwd, conflictId, resolution);
+        summary = syncResolve(context.cwd, conflictId!, resolution);
       } catch (resolveError: unknown) {
         if (resolveError instanceof Error && resolveError.message.includes("already resolved")) {
           return failResult({
