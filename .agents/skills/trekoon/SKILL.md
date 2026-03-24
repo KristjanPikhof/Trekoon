@@ -171,7 +171,10 @@ trekoon --toon --compact session
 2. **`behind > 0`?** → Sync first: `trekoon --toon sync pull --from main`.
    This pulls tracker events (not git commits) so task states are current.
 3. **`pendingConflicts > 0`?** → Resolve before claiming work:
-   `trekoon --toon sync conflicts list`.
+   `trekoon --toon sync conflicts list`. For uniform conflicts, batch resolve:
+   `trekoon --toon sync resolve --all --use ours` (or `--use theirs`). For
+   mixed conflicts, inspect individually with `sync conflicts show <id>` and
+   resolve per-conflict.
 4. **Session returned a next task?** → Proceed to step 2 (claim work).
 5. **No next task and unsure what to do?** → Run `trekoon --toon suggest` for
    priority-ranked recommendations (see step 1b below).
@@ -555,6 +558,44 @@ field `status`:
 
 Always inspect conflicts with `sync conflicts show` before resolving. Choosing
 `theirs` without inspection can overwrite in-progress work in the shared DB.
+
+### Understanding why conflicts happen
+
+| Scenario | Typical resolution | Why |
+|---|---|---|
+| Completed work vs stale main state | ours | Your branch has the latest progress |
+| Enriched descriptions vs original | ours | Your descriptions are more detailed |
+| Upstream updates from another agent | theirs | Accept the newer upstream state |
+| User-intentional reset | theirs | Respect the user's explicit action |
+
+### Agent decision framework
+
+1. List conflicts: `trekoon --toon sync conflicts list`
+2. Group by pattern — are conflicts on the same field or direction?
+3. If uniform pattern, batch resolve: `trekoon --toon sync resolve --all --use ours`
+4. If mixed, narrow by entity or field, or inspect individually
+5. When unsure, ask the user
+
+### Batch resolve patterns
+
+Common scenarios:
+
+```bash
+# Resolve all conflicts at once (most common after completing work)
+trekoon --toon sync resolve --all --use ours
+
+# Preview before resolving
+trekoon --toon sync resolve --all --use ours --dry-run
+
+# Narrow to status field conflicts only
+trekoon --toon sync resolve --all --use ours --field status
+
+# Narrow to a specific entity
+trekoon --toon sync resolve --all --use theirs --entity <id>
+
+# Combine filters
+trekoon --toon sync resolve --all --use ours --entity <id> --field description
+```
 
 ## Shared-database model
 
