@@ -380,7 +380,7 @@ export async function runSync(context: CliContext): Promise<CliResult> {
     if (subcommand === "conflicts") {
       const conflictsCommand: string | undefined = parsed.positional[1];
       if (!conflictsCommand) {
-          return usage("sync conflicts requires list|show.", "sync.conflicts");
+        return usage("sync conflicts requires list|show.", "sync.conflicts");
       }
 
       if (conflictsCommand === "list") {
@@ -391,12 +391,12 @@ export async function runSync(context: CliContext): Promise<CliResult> {
 
         const missingModeOption = readMissingOptionValue(parsed.missingOptionValues, "mode");
         if (missingModeOption !== undefined) {
-            return usage("sync conflicts list --mode only accepts pending|all.", "sync.conflicts.list");
+          return usage("sync conflicts list --mode only accepts pending|all.", "sync.conflicts.list");
         }
 
         const mode = readOption(parsed.options, "mode") ?? "pending";
         if (mode !== "pending" && mode !== "all") {
-            return usage("sync conflicts list --mode only accepts pending|all.", "sync.conflicts.list");
+          return usage("sync conflicts list --mode only accepts pending|all.", "sync.conflicts.list");
         }
 
         const conflicts = listSyncConflicts(context.cwd, mode);
@@ -418,9 +418,9 @@ export async function runSync(context: CliContext): Promise<CliResult> {
         }
 
         const conflictId: string | undefined = parsed.positional[2];
-          if (!conflictId) {
-            return usage("sync conflicts show requires <conflict-id>.", "sync.conflicts.show");
-          }
+        if (!conflictId) {
+          return usage("sync conflicts show requires <conflict-id>.", "sync.conflicts.show");
+        }
 
         const conflict = getSyncConflict(context.cwd, conflictId);
 
@@ -440,7 +440,7 @@ export async function runSync(context: CliContext): Promise<CliResult> {
         });
       }
 
-        return usage(`Unknown sync conflicts subcommand '${conflictsCommand}'.`, "sync.conflicts");
+      return usage(`Unknown sync conflicts subcommand '${conflictsCommand}'.`, "sync.conflicts");
     }
 
     return usage(`Unknown sync subcommand '${subcommand}'.`);
