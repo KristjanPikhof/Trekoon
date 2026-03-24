@@ -8,6 +8,7 @@ import { afterEach, describe, expect, test } from "bun:test";
 
 import { runSync } from "../../src/commands/sync";
 import { appendEventWithGitContext } from "../../src/sync/event-writes";
+import { syncResolve } from "../../src/sync/service";
 import { openTrekoonDatabase } from "../../src/storage/database";
 import { resolveStoragePaths } from "../../src/storage/path";
 
@@ -1905,6 +1906,74 @@ describe("sync command", (): void => {
       expect(epic?.title).toBe("Local epic");
     } finally {
       storage.close();
+    }
+  });
+
+  test("concurrent syncResolve on same conflict: exactly one succeeds", async (): Promise<void> => {
+    const { workspace, conflictId } = await setupConflictWorkspace("feature/concurrent-resolve");
+
+    const results = await Promise.allSettled([
+      Promise.resolve(syncResolve(workspace, conflictId, "ours")),
+      Promise.resolve(syncResolve(workspace, conflictId, "theirs")),
+    ]);
+
+    const fulfilled = results.filter((r) => r.status === "fulfilled");
+    const rejected = results.filter((r) => r.status === "rejected");
+
+    expect(fulfilled).toHaveLength(1);
+    expect(rejected).toHaveLength(1);
+
+    const error = (rejected[0] as PromiseRejectedResult).reason as Error;
+    expect(error.message).toContain("already resolved");
+
+    const storage = openTrekoonDatabase(workspace);
+    try {
+      const conflict = storage.db
+        .query("SELECT resolution FROM sync_conflicts WHERE id = ?;")
+        .get(conflictId) as { resolution: string } | null;
+      expect(conflict?.resolution).not.toBe("pending");
+
+      const resolutionEvents = storage.db
+        .query("SELECT COUNT(*) AS count FROM events WHERE entity_kind = 'sync_conflict' AND entity_id = ?;")
+        .get(conflictId) as { count: number };
+      expect(resolutionEvents.count).toBe(1);
+    } finally {
+      storage.close();
+    }
+  });
+
+  test("resolution event created_at is strictly after prior events", async (): Promise<void> => {
+    const { workspace, conflictId } = await setupConflictWorkspace("feature/monotonic-resolve-ts");
+
+    const storage = openTrekoonDatabase(workspace);
+    let maxEventTimestamp: number;
+    try {
+      const row = storage.db
+        .query("SELECT MAX(created_at) AS max_ts FROM events;")
+        .get() as { max_ts: number };
+      maxEventTimestamp = row.max_ts;
+    } finally {
+      storage.close();
+    }
+
+    await runSync({
+      args: ["resolve", conflictId, "--use", "ours"],
+      cwd: workspace,
+      mode: "toon",
+    });
+
+    const verifyStorage = openTrekoonDatabase(workspace);
+    try {
+      const resolutionEvent = verifyStorage.db
+        .query(
+          "SELECT created_at FROM events WHERE entity_kind = 'sync_conflict' AND entity_id = ? LIMIT 1;",
+        )
+        .get(conflictId) as { created_at: number } | null;
+
+      expect(resolutionEvent).not.toBeNull();
+      expect(resolutionEvent!.created_at).toBeGreaterThan(maxEventTimestamp);
+    } finally {
+      verifyStorage.close();
     }
   });
 });
