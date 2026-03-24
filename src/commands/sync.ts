@@ -275,7 +275,9 @@ export async function runSync(context: CliContext): Promise<CliResult> {
       if (batchAll) {
         const entityFilter: string | undefined = readOption(parsed.options, "entity");
         const fieldFilter: string | undefined = readOption(parsed.options, "field");
-        const filters = { entityId: entityFilter, fieldName: fieldFilter };
+        const filters: { entityId?: string; fieldName?: string } = {};
+        if (entityFilter !== undefined) filters.entityId = entityFilter;
+        if (fieldFilter !== undefined) filters.fieldName = fieldFilter;
 
         if (dryRun) {
           const preview = syncResolveAllPreview(context.cwd, resolution, filters);
