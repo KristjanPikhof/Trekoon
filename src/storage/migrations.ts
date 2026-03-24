@@ -237,6 +237,22 @@ const MIGRATIONS: readonly Migration[] = [
       );
     },
   },
+  {
+    version: 7,
+    name: "0007_add_lookup_indexes",
+    up(db: Database): void {
+      db.exec("CREATE INDEX IF NOT EXISTS idx_dependencies_depends_on_kind ON dependencies(depends_on_id, depends_on_kind);");
+      db.exec("CREATE INDEX IF NOT EXISTS idx_tasks_owner ON tasks(owner);");
+      db.exec("CREATE INDEX IF NOT EXISTS idx_subtasks_owner ON subtasks(owner);");
+      db.exec("CREATE INDEX IF NOT EXISTS idx_conflicts_entity ON sync_conflicts(entity_kind, entity_id);");
+    },
+    down(_db: Database): void {
+      throw new Error(
+        "Migration 0007 (add_lookup_indexes) is irreversible. " +
+        "Rollback below version 7 is not supported.",
+      );
+    },
+  },
 ];
 
 function migrationTableExists(db: Database): boolean {
