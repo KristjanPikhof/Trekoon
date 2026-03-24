@@ -1,7 +1,7 @@
 # Command reference
 
-Use this page when you already know what Trekoon does and just need the command
-surface, defaults, and flag rules.
+Flags, defaults, and behavior for every Trekoon command. If you're looking for
+the quickest way to get started, read [Quickstart](quickstart.md) first.
 
 ## Command surface
 
@@ -26,116 +26,62 @@ surface, defaults, and flag rules.
 - `trekoon skills update`
 - `trekoon wipe --yes`
 
-## Global output modes
+## Global options
 
-- `--json` for structured JSON output
-- `--toon` for true TOON-encoded output
-- `--compact` strips contract metadata from TOON/JSON envelopes
-- `--compat <mode>` for explicit machine compatibility behavior
-- `--help` for root and command help
-- `--version` for CLI version
+- `--json` — structured JSON output
+- `--toon` — TOON-encoded output (preferred for agent loops)
+- `--compact` — strips contract metadata from TOON/JSON envelopes
+- `--compat <mode>` — explicit machine compatibility behavior
+- `--help` — root and command help
+- `--version` — CLI version
 
-Global options can be used before or after the command:
+Global options work before or after the command:
 
 ```bash
 trekoon --toon quickstart
 trekoon quickstart --toon
-trekoon --json quickstart
-trekoon quickstart --json
 ```
 
-Trekoon uses long-form options for command and subcommand flags. Root help and
-version aliases `-h` and `-v` are also supported.
+Trekoon uses long-form flags for commands and subcommands. Root help and version
+also accept `-h` and `-v`.
 
-## Board lifecycle commands
+## Board commands
 
-Board terminology in docs matches `trekoon help board`:
+`trekoon board open` installs board assets (if needed), starts a loopback-only
+server on `127.0.0.1` with a random port, opens the browser, and returns the
+board URL plus a manual fallback URL.
 
-- `trekoon board open`
-  - ensures board assets are installed in the repo-shared runtime directory
-  - starts a local board server on `127.0.0.1`
-  - launches the browser and returns the board URL, fallback URL, and launch
-    metadata in machine output
-- `trekoon board update`
-  - refreshes board runtime assets only
-  - does not start the server or open a browser
+`trekoon board update` refreshes board runtime assets without starting the
+server or opening a browser. Use this when you need to update copied assets
+before the next launch.
 
-Operator guidance:
+Security model:
 
-- use `trekoon board open` as the normal one-command startup path
-- use `trekoon board update` when you specifically need to refresh copied assets
-  before the next launch
+- Every `board open` session gets a unique token
+- Requests must include it as `Authorization: Bearer {token}`,
+  `x-trekoon-token` header, or `?token={token}` query parameter
+- Invalid tokens return `401`
+- Static responses use `cache-control: no-store`
 
-Board commands do not accept command-specific options yet. For tests and local
-development only, `TREKOON_BOARD_ASSET_ROOT` can override the bundled asset
-source used by `init`, `board open`, and `board update`.
-
-Runtime layout and security model:
-
-- `trekoon init` installs or refreshes the board runtime under `.trekoon/board`
-- `board open` serves those bundled files over a loopback-only server instead of
-  opening a raw file directly
-- the server binds to `127.0.0.1` on a random port
-- every session gets a per-session token; browser/API requests must present that
-  token
-- static responses use `cache-control: no-store`, and CLI output always includes
-  a manual fallback URL
-
-Current shell/runtime notes:
-
-- the runtime copied into `.trekoon/board` includes the HTML shell, local app
-  modules, and shared styles
-- all assets are self-hosted: the board ships its own CSS, fonts (Inter,
-  Material Symbols), and vanilla JS with no framework or CDN dependencies
-- the board works fully offline once the runtime assets are copied into
-  `.trekoon/board`
-
-Board UI architecture:
-
-- the board is a single-page application served from `.trekoon/board` using a
-  zero-dependency vanilla JS component runtime with locally bundled CSS and fonts
-- the backend is a Bun HTTP server exposing a REST API at `/api/*` with
-  token-based authentication; every mutation response includes an updated
-  snapshot so the client always has fresh state
-- the frontend uses optimistic updates: the UI changes immediately on user
-  action, then rolls back if the server rejects the mutation
-
-Board layout behavior:
-
-- the topbar is a compact flex-row navbar with workspace identity, Epics and
-  Board navigation pills, a debounced search input, theme toggle, and a
-  workspace info popover
-- the board toggles between an epics overview and a task workspace view; task
-  detail opens as a modal overlay
-- responsive breakpoints adjust kanban column counts and component spacing
-- task cards show truncated descriptions; clicking anywhere on a card opens the
-  task detail modal
-
-Scroll and overlay behavior:
-
-- the page scrolls naturally as a single document; there are no internal scroll
-  containers trapping wheel events in the main content area
-- when a modal overlay opens (task detail, subtask editor), body scroll is
-  locked and the modal surface becomes the scroll container
-- close overlays from the top down: subtask modal → task detail → broader board
-  context; each close unlocks body scroll and returns to the previous context
+The board is a self-hosted single-page app (vanilla JS, bundled CSS and fonts,
+no framework or CDN dependencies) served from `.trekoon/board`. Works fully
+offline once initialized.
 
 Board API endpoints (all require token authentication):
 
-- `GET /api/snapshot` — full board state (epics, tasks, subtasks, dependencies,
-  counts)
-- `PATCH /api/epics/{id}` — update epic title, description, or status
-- `PATCH /api/tasks/{id}` — update task title, description, status, or owner
-- `PATCH /api/subtasks/{id}` — update subtask title, description, status, or owner
-- `POST /api/subtasks` — create subtask (requires taskId, title)
-- `DELETE /api/subtasks/{id}` — delete subtask
-- `POST /api/dependencies` — add dependency edge (sourceId, dependsOnId)
-- `DELETE /api/dependencies?sourceId=...&dependsOnId=...` — remove dependency
+| Method | Endpoint | Purpose |
+| --- | --- | --- |
+| `GET` | `/api/snapshot` | Full board state (epics, tasks, subtasks, deps, counts) |
+| `PATCH` | `/api/epics/{id}` | Update epic title, description, or status |
+| `PATCH` | `/api/tasks/{id}` | Update task title, description, status, or owner |
+| `PATCH` | `/api/subtasks/{id}` | Update subtask title, description, status, or owner |
+| `POST` | `/api/subtasks` | Create subtask (requires taskId, title) |
+| `DELETE` | `/api/subtasks/{id}` | Delete subtask |
+| `POST` | `/api/dependencies` | Add dependency edge (sourceId, dependsOnId) |
+| `DELETE` | `/api/dependencies?sourceId=...&dependsOnId=...` | Remove dependency |
 
-Token is sent as `Authorization: Bearer {token}` header or `x-trekoon-token`
-header or `?token={token}` query parameter. Invalid tokens return `401`.
-
-Examples:
+Board commands don't accept command-specific options yet. For tests and local
+development, `TREKOON_BOARD_ASSET_ROOT` overrides the bundled asset source.
 
 ```bash
 trekoon init
@@ -146,14 +92,15 @@ trekoon board update
 
 ## Human views
 
-- List and show commands default to table output in human mode.
-- Use `--view compact` to restore compact pipe output.
-- `epic list`, `task list`, and `subtask list` support `--view table|compact`.
-- `epic show` and `task show` support `--view table|compact|tree|detail`.
+List and show commands default to table output in human mode. Use
+`--view compact` for pipe-friendly output.
+
+- `epic list`, `task list`, `subtask list` support `--view table|compact`
+- `epic show`, `task show` support `--view table|compact|tree|detail`
 
 ## List defaults and filters
 
-These defaults apply to `epic list`, `task list`, and `subtask list`:
+These apply to `epic list`, `task list`, and `subtask list`:
 
 - Default scope: open work only (`in_progress`, `todo`)
 - Default limit: `10`
@@ -165,75 +112,51 @@ These defaults apply to `epic list`, `task list`, and `subtask list`:
 
 ## Update modes
 
-`epic update`, `task update`, and `subtask update` now have two meanings for
-`--all`, depending on whether you also pass a positional ID.
+`epic update`, `task update`, and `subtask update` support two modes depending
+on whether you pass a positional ID.
 
-### Repo-wide bulk mode
+### Bulk mode (no positional ID)
 
-Use `update --all` or `update --ids <csv>` when you want to target multiple
-top-level rows directly.
-
-This mode preserves the existing per-row update behavior. It is **not** the same
-as descendant cascade mode and is not one atomic multi-row transaction.
-
-- Target all rows: `--all`
-- Target specific rows: `--ids <id1,id2,...>`
-- Bulk mode supports only `--append <text>`, `--status <status>`, or both
-- In bulk mode, do not pass a positional ID
-- `--all` and `--ids` are mutually exclusive
-- `--append` and `--description` are mutually exclusive
-
-Examples:
+Target multiple rows directly with `--all` or `--ids`:
 
 ```bash
 trekoon task update --all --status in_progress
 trekoon task update --ids <task-1>,<task-2> --append "\nFollow-up note"
 trekoon subtask update --all --status done
-trekoon subtask update --ids <subtask-1>,<subtask-2> --append "\nFollow-up note"
 trekoon epic update --ids <epic-1>,<epic-2> --status done
 ```
 
-### Descendant cascade mode
+Rules:
 
-Use positional-ID `update <id> --all --status done|todo` when you want to close
-or reopen a whole tree from one root.
+- `--all` and `--ids` are mutually exclusive
+- Only `--append`, `--status`, or both are supported
+- `--append` and `--description` are mutually exclusive
+- Not one atomic transaction
 
-- `trekoon epic update <epic-id> --all --status done|todo`
-  - updates the epic and all descendant tasks/subtasks in one atomic operation
-- `trekoon task update <task-id> --all --status done|todo`
-  - updates the task and all descendant subtasks in one atomic operation
-- `trekoon subtask update <subtask-id> --all --status done|todo`
-  - accepts the same syntax for consistency, but behaves like a normal
-    single-subtask status update because there are no descendants
-- Positional-ID cascade mode supports only `--status done|todo`
-- Do not combine positional ID + `--all` with `--ids`, `--append`,
-  `--description`, or `--title`
-- For epic/task cascades, unresolved external dependencies abort the whole
-  update with `dependency_blocked`; no partial writes are committed
-- Successful machine output includes `data.cascade` with the root, target
-  status, atomic flag, changed IDs, unchanged IDs, and per-kind counts
+### Cascade mode (with positional ID)
 
-Examples:
+Close or reopen a whole tree from one root:
 
 ```bash
 trekoon epic update <epic-id> --all --status done
 trekoon epic update <epic-id> --all --status todo
 trekoon task update <task-id> --all --status done
 trekoon task update <task-id> --all --status todo
-trekoon subtask update <subtask-id> --all --status done
 ```
+
+Rules:
+
+- Updates the entity and all descendants atomically
+- Only `--status done|todo` is supported
+- Don't combine with `--ids`, `--append`, `--description`, or `--title`
+- Unresolved external dependencies abort the whole update (`dependency_blocked`)
+- Subtask cascade is accepted for consistency but just updates one subtask
+- Success response includes `data.cascade` with changed/unchanged IDs and counts
 
 ## Status machine
 
-Trekoon enforces a status machine for all entities. The canonical statuses are
-`todo`, `in_progress`, `done`, and `blocked`. The hyphenated `in-progress`
-variant is no longer accepted.
-
-**Upgrading from 0.3.0:** Existing entities with `in-progress` or other custom
-statuses are handled gracefully — transitions from non-canonical statuses to any
-valid status are allowed, so you can update them to `in_progress` without error.
-
-Valid transitions:
+Statuses: `todo`, `in_progress`, `done`, `blocked`. The hyphenated `in-progress`
+is no longer accepted.
 
 | From | Allowed targets |
 | --- | --- |
@@ -242,32 +165,32 @@ Valid transitions:
 | `blocked` | `in_progress`, `todo` |
 | `done` | `in_progress` |
 
-Invalid transitions return a `status_transition_invalid` error with the current
-status, target status, and allowed transitions.
+Invalid transitions return `status_transition_invalid` with the current status,
+target status, and allowed transitions.
+
+**Upgrading from 0.3.0:** Entities with legacy statuses like `in-progress` can
+transition to any valid status without error.
 
 ## Owner field
 
-Tasks and subtasks have an optional `owner` field. Set or clear it with the
-`--owner` flag on update commands:
+Tasks and subtasks have an optional `owner` field:
 
 ```bash
 trekoon task update <task-id> --owner "agent-1"
 trekoon subtask update <subtask-id> --owner "agent-2"
 ```
 
-The board API also accepts `owner` on `PATCH /api/tasks/{id}` and
-`PATCH /api/subtasks/{id}`.
+Also accepted on `PATCH /api/tasks/{id}` and `PATCH /api/subtasks/{id}`.
 
-## Task done behavior
+## Task done
 
 `trekoon task done <task-id>` marks a task complete and returns the next ready
-candidate. Additional behavior:
+candidate.
 
-- Auto-transitions through `in_progress` when the current status is `todo` or
-  `blocked`, emitting two sync events for the intermediate step.
-- Reports newly unblocked downstream tasks in the response (`data.unblocked`).
-- Warns when subtasks remain incomplete (`data.warning`,
-  `data.openSubtaskCount`, `data.openSubtaskIds`).
+- Auto-transitions through `in_progress` when current status is `todo` or
+  `blocked`, emitting two sync events for the intermediate step
+- Reports newly unblocked downstream tasks (`data.unblocked`)
+- Warns about incomplete subtasks (`data.warning`, `data.openSubtaskCount`)
 
 ## Epic progress
 
@@ -276,7 +199,7 @@ trekoon epic progress <epic-id>
 ```
 
 Returns status counts (`total`, `doneCount`, `inProgressCount`, `blockedCount`,
-`todoCount`), `readyCount`, and `nextCandidate` for the given epic.
+`todoCount`), `readyCount`, and `nextCandidate`.
 
 ## Session scoping
 
@@ -286,7 +209,7 @@ trekoon session --epic <epic-id>
 
 Scopes session readiness to a specific epic instead of the full tracker.
 
-## Suggest command
+## Suggest
 
 ```bash
 trekoon suggest [--epic <epic-id>]
@@ -294,7 +217,7 @@ trekoon suggest [--epic <epic-id>]
 
 Returns up to 3 priority-ranked next-action suggestions based on recovery state,
 sync status, task readiness, and epic progress. Categories: `recovery`, `sync`,
-`execution`, `planning`. Each suggestion includes an `action`, `command`, and
+`execution`, `planning`. Each suggestion includes `action`, `command`, and
 `reason`.
 
 ## Sync commands
@@ -306,7 +229,7 @@ trekoon --toon sync status [--from <branch>]
 ```
 
 Reports ahead/behind counts and pending conflicts against a source branch.
-Defaults to `--from main` when omitted.
+Defaults to `--from main`.
 
 ### `sync pull`
 
@@ -323,18 +246,12 @@ conflicts when the same field was modified on both sides. `--from` is required.
 trekoon --toon sync resolve <conflict-id> --use ours|theirs [--dry-run]
 ```
 
-Resolves a pending conflict. `--use ours` keeps the current DB value (no entity
-write). `--use theirs` overwrites the shared DB field with the source-branch
-value.
+Resolves a pending conflict. `--use ours` keeps the current DB value.
+`--use theirs` overwrites with the source-branch value.
 
-Flags:
-
-- `--dry-run` — preview the resolution without mutating the database. Returns a
-  `ResolvePreviewSummary` with `oursValue`, `theirsValue`, `wouldWrite`, and
-  `dryRun: true`.
-- In human mode (no `--toon`), `--use theirs` shows an interactive confirmation
-  prompt with a 30-second timeout that defaults to rejection. Toon mode skips
-  the prompt.
+- `--dry-run` previews the resolution without mutating the database
+- In human mode, `--use theirs` shows a 30-second confirmation prompt (defaults
+  to rejection). Toon mode skips the prompt.
 
 ### `sync conflicts`
 
