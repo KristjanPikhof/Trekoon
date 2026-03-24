@@ -31,6 +31,12 @@ All notable changes to Trekoon are documented in this file.
 
 ### Changed
 
+- Local skill install (`trekoon skills install`) now copies the bundled skill
+  directory into `<cwd>/.agents/skills/trekoon/` as real files instead of
+  creating a symlink to the package directory, so the skill files can be
+  committed to git and shared with the team. Global installs remain
+  symlink-based. `skills update` migrates legacy local symlinks to directory
+  copies automatically.
 - Batch task and subtask creation (`createTaskBatch`, `createSubtaskBatch`) now
   uses chunked multi-row `INSERT` statements respecting the SQLite 999-variable
   limit, followed by a batched `SELECT ... WHERE id IN (...)` fetch, replacing
