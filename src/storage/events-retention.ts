@@ -3,6 +3,7 @@ import { type Database } from "bun:sqlite";
 import { writeTransaction } from "./database";
 
 export const DEFAULT_EVENT_RETENTION_DAYS = 90;
+export const DEFAULT_CONFLICT_RETENTION_DAYS = 30;
 const DAY_IN_MILLISECONDS = 24 * 60 * 60 * 1000;
 
 export interface EventPruneOptions {
@@ -90,6 +91,20 @@ function countStaleCursors(db: Database): number {
     .get(oldestEventAt) as { count: number } | null;
 
   return row?.count ?? 0;
+}
+
+export interface ConflictPruneOptions {
+  readonly retentionDays?: number;
+  readonly dryRun?: boolean;
+  readonly now?: number;
+}
+
+export interface ConflictPruneSummary {
+  readonly retentionDays: number;
+  readonly cutoffTimestamp: number;
+  readonly dryRun: boolean;
+  readonly candidateCount: number;
+  readonly deletedCount: number;
 }
 
 export function pruneEvents(db: Database, options: EventPruneOptions = {}): EventPruneSummary {
@@ -182,6 +197,47 @@ export function pruneEvents(db: Database, options: EventPruneOptions = {}): Even
       archivedCount,
       deletedCount: deleted.changes,
       staleCursorCount: staleCursors,
+    };
+  });
+}
+
+export function pruneResolvedConflicts(db: Database, options: ConflictPruneOptions = {}): ConflictPruneSummary {
+  const retentionDays: number = assertRetentionDays(options.retentionDays ?? DEFAULT_CONFLICT_RETENTION_DAYS);
+  const dryRun: boolean = options.dryRun ?? false;
+  const now: number = options.now ?? Date.now();
+  const cutoffTimestamp: number = now - retentionDays * DAY_IN_MILLISECONDS;
+
+  const candidateRow = db
+    .query(
+      "SELECT COUNT(*) AS count FROM sync_conflicts WHERE resolution != 'pending' AND updated_at < ?;",
+    )
+    .get(cutoffTimestamp) as { count: number } | null;
+
+  const candidateCount: number = candidateRow?.count ?? 0;
+
+  if (dryRun || candidateCount === 0) {
+    return {
+      retentionDays,
+      cutoffTimestamp,
+      dryRun,
+      candidateCount,
+      deletedCount: 0,
+    };
+  }
+
+  return writeTransaction(db, (): ConflictPruneSummary => {
+    const deleted = db
+      .query(
+        "DELETE FROM sync_conflicts WHERE resolution != 'pending' AND updated_at < ?;",
+      )
+      .run(cutoffTimestamp);
+
+    return {
+      retentionDays,
+      cutoffTimestamp,
+      dryRun,
+      candidateCount,
+      deletedCount: deleted.changes,
     };
   });
 }
