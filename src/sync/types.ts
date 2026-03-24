@@ -55,6 +55,26 @@ export interface ResolvePreviewSummary {
   readonly dryRun: true;
 }
 
+export interface ResolveAllFilters {
+  readonly entity: string | null;
+  readonly field: string | null;
+}
+
+export interface ResolveAllSummary {
+  readonly resolution: SyncResolution;
+  readonly resolvedCount: number;
+  readonly resolvedIds: readonly string[];
+  readonly filters: ResolveAllFilters;
+}
+
+export interface ResolveAllPreviewSummary {
+  readonly resolution: SyncResolution;
+  readonly matchedCount: number;
+  readonly matchedIds: readonly string[];
+  readonly filters: ResolveAllFilters;
+  readonly dryRun: true;
+}
+
 export interface SyncConflictListItem {
   readonly id: string;
   readonly event_id: string;
