@@ -527,6 +527,44 @@ Cross-branch sync matters before merging a feature branch back:
   trekoon --toon sync resolve <conflict-id> --use ours
   ```
 
+### Conflict resolution: ours vs theirs
+
+Conflicts are **field-level**, not whole-record. Each conflict targets one field
+(e.g., `status`, `title`, `description`) on one entity.
+
+- `--use ours` — keep the current value in the shared DB. No write occurs.
+- `--use theirs` — overwrite the shared DB field with the source-branch value.
+
+**Example:** after `sync pull --from main`, a conflict appears on epic `abc123`,
+field `status`:
+- ours (current DB): `in_progress`
+- theirs (source branch): `done`
+- `--use ours` keeps status as `in_progress`
+- `--use theirs` changes status to `done` in the live shared DB
+
+Always inspect conflicts with `sync conflicts show` before resolving. Choosing
+`theirs` without inspection can overwrite in-progress work in the shared DB.
+
+## Shared-database model
+
+Trekoon uses **one live SQLite database per repository**. The file lives at
+`<sharedStorageRoot>/.trekoon/trekoon.db`, where `sharedStorageRoot` is the
+parent of `git rev-parse --git-common-dir` (i.e., the main worktree root).
+
+Key consequences:
+
+- **All linked worktrees share the same database.** A status change in one
+  worktree is immediately visible in every other worktree.
+- **`git checkout` / `git switch` does not change tracker state.** The database
+  is outside the git object store, so switching branches does not roll back or
+  swap task data.
+- **Sync operates on tracker events, not on the database file itself.** Use
+  `sync pull` / `sync push` to exchange events between branches — never copy or
+  commit the `.db` file.
+
+Treat every write as a mutation of shared repo-wide state, not branch-scoped
+state.
+
 ## Worktree diagnostics and destructive scope
 
 - Inspect machine-readable storage fields when debugging worktrees:
