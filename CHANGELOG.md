@@ -31,6 +31,13 @@ All notable changes to Trekoon are documented in this file.
 
 ### Changed
 
+- Documentation rewritten across all four docs files (quickstart.md,
+  commands.md, ai-agents.md, machine-contracts.md), all CLI help strings
+  (help.ts), and the `trekoon quickstart` output for clarity and consistency.
+  Removed board UI architecture details from command reference, trimmed
+  quickstart from 286 to 155 lines, replaced duplicated status machine and
+  cascade sections with cross-references, and cut corporate language
+  throughout.
 - Local skill install (`trekoon skills install`) now copies the bundled skill
   directory into `<cwd>/.agents/skills/trekoon/` as real files instead of
   creating a symlink to the package directory, so the skill files can be
