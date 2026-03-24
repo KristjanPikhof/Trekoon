@@ -609,6 +609,8 @@ describe("storage lifecycle", (): void => {
       expect(indexes).toContain("idx_events_created_at_id");
       expect(indexes).toContain("idx_dependencies_source");
       expect(indexes).toContain("idx_dependencies_depends_on");
+      expect(indexes).toContain("idx_conflicts_resolution_updated_at");
+      expect(indexes).not.toContain("idx_conflicts_entity");
     } finally {
       storage.close();
     }
@@ -649,7 +651,7 @@ describe("storage lifecycle", (): void => {
     }
   });
 
-  test("preserves schema_migrations after rejected v7 rollback", (): void => {
+  test("preserves schema_migrations after rejected v6 rollback", (): void => {
     const workspace: string = createWorkspace();
     const storage = openTrekoonDatabase(workspace);
 
@@ -694,15 +696,35 @@ describe("storage lifecycle", (): void => {
       let errorMessage = "";
 
       try {
-        // Roll back to v3 to trigger irreversible errors. v7 rollback
-        // is attempted first (descending order) and throws.
+        // Roll back to v3 to trigger irreversible errors. v7 can roll
+        // back cleanly, then v6 throws.
         rollbackDatabase(storage.db, 3);
       } catch (error: unknown) {
         errorMessage = (error as Error).message;
       }
 
-      // The first rollback error will be from v7 (irreversible).
-      expect(errorMessage).toContain("add_lookup_indexes");
+      expect(errorMessage).toContain("add_owner_column");
+    } finally {
+      storage.close();
+    }
+  });
+
+  test("rollback from v7 to v6 drops lookup indexes", (): void => {
+    const workspace: string = createWorkspace();
+    const storage = openTrekoonDatabase(workspace);
+
+    try {
+      const summary = rollbackDatabase(storage.db, 6);
+      const indexes: string[] = indexNames(storage.db);
+
+      expect(summary.fromVersion).toBe(7);
+      expect(summary.toVersion).toBe(6);
+      expect(summary.rolledBack).toBe(1);
+      expect(summary.rolledBackMigrations).toEqual(["0007_add_lookup_indexes"]);
+      expect(indexes).not.toContain("idx_conflicts_resolution_updated_at");
+      expect(indexes).not.toContain("idx_dependencies_depends_on_kind");
+      expect(indexes).not.toContain("idx_tasks_owner");
+      expect(indexes).not.toContain("idx_subtasks_owner");
     } finally {
       storage.close();
     }

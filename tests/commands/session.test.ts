@@ -1,3 +1,4 @@
+import { randomUUID } from "node:crypto";
 import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -7,6 +8,7 @@ import { afterEach, describe, expect, test } from "bun:test";
 import { runEpic } from "../../src/commands/epic";
 import { runSession } from "../../src/commands/session";
 import { runTask } from "../../src/commands/task";
+import { openTrekoonDatabase } from "../../src/storage/database";
 
 const tempDirs: string[] = [];
 
@@ -160,5 +162,46 @@ describe("session command", (): void => {
     expect(data.sync.git.branchName).toBeNull();
 
     expect(data.next).toBeNull();
+  });
+
+  test("does not prune events or conflicts while reporting diagnostics", async (): Promise<void> => {
+    const cwd = createWorkspace();
+    initializeRepository(cwd);
+    const storage = openTrekoonDatabase(cwd);
+    const oldTimestamp = Date.now() - 120 * 24 * 60 * 60 * 1000;
+    const eventId = randomUUID();
+
+    try {
+      storage.db
+        .query(
+          "INSERT INTO events (id, entity_kind, entity_id, operation, payload, git_branch, git_head, created_at, updated_at, version) VALUES (?, 'task', ?, 'task.updated', '{}', 'main', NULL, ?, ?, 1);",
+        )
+        .run(eventId, randomUUID(), oldTimestamp, oldTimestamp);
+
+      storage.db
+        .query(
+          "INSERT INTO sync_conflicts (id, event_id, entity_kind, entity_id, field_name, ours_value, theirs_value, resolution, created_at, updated_at, version) VALUES (?, ?, 'task', ?, 'title', 'ours', 'theirs', 'ours', ?, ?, 1);",
+        )
+        .run(randomUUID(), eventId, randomUUID(), oldTimestamp, oldTimestamp);
+    } finally {
+      storage.close();
+    }
+
+    const result = await runSession({ cwd, mode: "toon", args: [] });
+    expect(result.ok).toBeTrue();
+
+    const verifyStorage = openTrekoonDatabase(cwd);
+    try {
+      const eventCount = verifyStorage.db.query("SELECT COUNT(*) AS count FROM events;").get() as { count: number };
+      const conflictCount = verifyStorage.db.query("SELECT COUNT(*) AS count FROM sync_conflicts;").get() as { count: number };
+
+      expect(eventCount.count).toBe(1);
+      expect(conflictCount.count).toBe(1);
+    } finally {
+      verifyStorage.close();
+    }
+
+    expect(result.human).not.toContain("Pruned events:");
+    expect(result.human).not.toContain("Pruned conflicts:");
   });
 });

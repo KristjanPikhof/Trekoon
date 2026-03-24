@@ -207,6 +207,58 @@ describe("epic progress", (): void => {
   });
 });
 
+describe("batch creation boundaries", (): void => {
+  test("createTaskBatch handles more than sqlite variable limit worth of ids", (): void => {
+    const cwd = createWorkspace();
+    const storage = openTrekoonDatabase(cwd);
+
+    try {
+      const domain = new TrackerDomain(storage.db);
+      const epic = domain.createEpic({ title: "Large batch", description: "desc" });
+      const specs = Array.from({ length: 1005 }, (_value, index) => ({
+        tempKey: `task-${index}`,
+        title: `Task ${index}`,
+        description: `Description ${index}`,
+        status: "todo",
+      }));
+
+      const result = domain.createTaskBatch({ epicId: epic.id, specs });
+
+      expect(result.tasks).toHaveLength(specs.length);
+      expect(result.result.mappings).toHaveLength(specs.length);
+      expect(new Set(result.tasks.map((task) => task.id)).size).toBe(specs.length);
+    } finally {
+      storage.close();
+    }
+  });
+
+  test("createSubtaskBatch handles more than sqlite variable limit worth of ids", (): void => {
+    const cwd = createWorkspace();
+    const storage = openTrekoonDatabase(cwd);
+
+    try {
+      const domain = new TrackerDomain(storage.db);
+      const epic = domain.createEpic({ title: "Large batch", description: "desc" });
+      const task = domain.createTask({ epicId: epic.id, title: "Parent task", description: "desc" });
+      const specs = Array.from({ length: 1005 }, (_value, index) => ({
+        tempKey: `subtask-${index}`,
+        parent: { kind: "id" as const, id: task.id },
+        title: `Subtask ${index}`,
+        description: `Description ${index}`,
+        status: "todo",
+      }));
+
+      const result = domain.createSubtaskBatch({ taskId: task.id, specs });
+
+      expect(result.subtasks).toHaveLength(specs.length);
+      expect(result.result.mappings).toHaveLength(specs.length);
+      expect(new Set(result.subtasks.map((subtask) => subtask.id)).size).toBe(specs.length);
+    } finally {
+      storage.close();
+    }
+  });
+});
+
 // ---------------------------------------------------------------------------
 // 3. Status transition rejection
 // ---------------------------------------------------------------------------

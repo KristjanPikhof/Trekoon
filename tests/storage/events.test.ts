@@ -5,7 +5,7 @@ import { join } from "node:path";
 
 import { afterEach, describe, expect, test } from "bun:test";
 
-import { type EventPruneSummary, pruneEvents } from "../../src/storage/events-retention";
+import { type EventPruneSummary, pruneEvents, pruneResolvedConflicts } from "../../src/storage/events-retention";
 import { openTrekoonDatabase } from "../../src/storage/database";
 
 const DAY_IN_MILLISECONDS = 24 * 60 * 60 * 1000;
@@ -29,6 +29,21 @@ function insertEvent(
   db.query(
     "INSERT INTO events (id, entity_kind, entity_id, operation, payload, git_branch, git_head, created_at, updated_at, version) VALUES (?, 'epic', ?, 'upsert', ?, 'main', NULL, ?, ?, 1);",
   ).run(params.id, params.entityId, params.payload ?? "{}", params.createdAt, params.createdAt);
+}
+
+function insertConflict(
+  db: ReturnType<typeof openTrekoonDatabase>["db"],
+  params: {
+    readonly id: string;
+    readonly eventId: string;
+    readonly entityId: string;
+    readonly resolution: string;
+    readonly updatedAt: number;
+  },
+): void {
+  db.query(
+    "INSERT INTO sync_conflicts (id, event_id, entity_kind, entity_id, field_name, ours_value, theirs_value, resolution, created_at, updated_at, version) VALUES (?, ?, 'task', ?, 'title', 'ours', 'theirs', ?, ?, ?, 1);",
+  ).run(params.id, params.eventId, params.entityId, params.resolution, params.updatedAt, params.updatedAt);
 }
 
 afterEach((): void => {
@@ -297,6 +312,103 @@ describe("event retention", (): void => {
       });
 
       expect(summary.staleCursorCount).toBeGreaterThanOrEqual(1);
+    } finally {
+      storage.close();
+    }
+  });
+
+  test("conflict prune dry-run reports eligible resolved conflicts only", (): void => {
+    const workspace: string = createWorkspace();
+    const storage = openTrekoonDatabase(workspace);
+    const now: number = Date.now();
+
+    try {
+      const oldEventId = randomUUID();
+      insertEvent(storage.db, {
+        id: oldEventId,
+        entityId: randomUUID(),
+        createdAt: now - 120 * DAY_IN_MILLISECONDS,
+      });
+
+      insertConflict(storage.db, {
+        id: randomUUID(),
+        eventId: oldEventId,
+        entityId: randomUUID(),
+        resolution: "ours",
+        updatedAt: now - 40 * DAY_IN_MILLISECONDS,
+      });
+      insertConflict(storage.db, {
+        id: randomUUID(),
+        eventId: oldEventId,
+        entityId: randomUUID(),
+        resolution: "pending",
+        updatedAt: now - 40 * DAY_IN_MILLISECONDS,
+      });
+
+      const summary = pruneResolvedConflicts(storage.db, {
+        retentionDays: 30,
+        dryRun: true,
+        now,
+      });
+
+      expect(summary.candidateCount).toBe(1);
+      expect(summary.deletedCount).toBe(0);
+    } finally {
+      storage.close();
+    }
+  });
+
+  test("conflict prune deletes only resolved conflicts older than the retention window", (): void => {
+    const workspace: string = createWorkspace();
+    const storage = openTrekoonDatabase(workspace);
+    const now: number = Date.now();
+
+    try {
+      const oldEventId = randomUUID();
+      insertEvent(storage.db, {
+        id: oldEventId,
+        entityId: randomUUID(),
+        createdAt: now - 120 * DAY_IN_MILLISECONDS,
+      });
+
+      const oldResolvedConflictId = randomUUID();
+      insertConflict(storage.db, {
+        id: oldResolvedConflictId,
+        eventId: oldEventId,
+        entityId: randomUUID(),
+        resolution: "theirs",
+        updatedAt: now - 45 * DAY_IN_MILLISECONDS,
+      });
+      insertConflict(storage.db, {
+        id: randomUUID(),
+        eventId: oldEventId,
+        entityId: randomUUID(),
+        resolution: "pending",
+        updatedAt: now - 45 * DAY_IN_MILLISECONDS,
+      });
+      insertConflict(storage.db, {
+        id: randomUUID(),
+        eventId: oldEventId,
+        entityId: randomUUID(),
+        resolution: "ours",
+        updatedAt: now - 5 * DAY_IN_MILLISECONDS,
+      });
+
+      const summary = pruneResolvedConflicts(storage.db, {
+        retentionDays: 30,
+        now,
+      });
+
+      expect(summary.candidateCount).toBe(1);
+      expect(summary.deletedCount).toBe(1);
+
+      const deletedConflict = storage.db.query("SELECT id FROM sync_conflicts WHERE id = ?;").get(oldResolvedConflictId) as
+        | { id: string }
+        | null;
+      const remainingCount = storage.db.query("SELECT COUNT(*) AS count FROM sync_conflicts;").get() as { count: number };
+
+      expect(deletedConflict).toBeNull();
+      expect(remainingCount.count).toBe(2);
     } finally {
       storage.close();
     }
