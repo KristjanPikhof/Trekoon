@@ -11,7 +11,7 @@ interface EventRecordInput {
   readonly fields: Record<string, unknown>;
 }
 
-function nextEventTimestamp(db: Database): number {
+export function nextEventTimestamp(db: Database): number {
   const now: number = Date.now();
   const latestEvent = db
     .query(
