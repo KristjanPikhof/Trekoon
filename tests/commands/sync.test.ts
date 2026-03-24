@@ -1909,33 +1909,34 @@ describe("sync command", (): void => {
     }
   });
 
-  test("concurrent syncResolve on same conflict: exactly one succeeds", async (): Promise<void> => {
+  test("second syncResolve on same conflict throws already resolved", async (): Promise<void> => {
     const { workspace, conflictId } = await setupConflictWorkspace("feature/concurrent-resolve");
 
-    const results = await Promise.allSettled([
-      Promise.resolve(syncResolve(workspace, conflictId, "ours")),
-      Promise.resolve(syncResolve(workspace, conflictId, "theirs")),
-    ]);
+    // First resolve succeeds.
+    syncResolve(workspace, conflictId, "ours");
 
-    const fulfilled = results.filter((r) => r.status === "fulfilled");
-    const rejected = results.filter((r) => r.status === "rejected");
+    // Second resolve on the same conflict must throw because
+    // lookupPendingConflict is inside the writeTransaction.
+    let secondError: Error | null = null;
+    try {
+      syncResolve(workspace, conflictId, "theirs");
+    } catch (error: unknown) {
+      secondError = error as Error;
+    }
 
-    expect(fulfilled).toHaveLength(1);
-    expect(rejected).toHaveLength(1);
-
-    const error = (rejected[0] as PromiseRejectedResult).reason as Error;
-    expect(error.message).toContain("already resolved");
+    expect(secondError).not.toBeNull();
+    expect(secondError!.message).toContain("already resolved");
 
     const storage = openTrekoonDatabase(workspace);
     try {
       const conflict = storage.db
         .query("SELECT resolution FROM sync_conflicts WHERE id = ?;")
         .get(conflictId) as { resolution: string } | null;
-      expect(conflict?.resolution).not.toBe("pending");
+      expect(conflict?.resolution).toBe("ours");
 
       const resolutionEvents = storage.db
-        .query("SELECT COUNT(*) AS count FROM events WHERE entity_kind = 'sync_conflict' AND entity_id = ?;")
-        .get(conflictId) as { count: number };
+        .query("SELECT COUNT(*) AS count FROM events WHERE operation = 'resolve_conflict';")
+        .get() as { count: number };
       expect(resolutionEvents.count).toBe(1);
     } finally {
       storage.close();
@@ -1966,9 +1967,9 @@ describe("sync command", (): void => {
     try {
       const resolutionEvent = verifyStorage.db
         .query(
-          "SELECT created_at FROM events WHERE entity_kind = 'sync_conflict' AND entity_id = ? LIMIT 1;",
+          "SELECT created_at FROM events WHERE operation = 'resolve_conflict' LIMIT 1;",
         )
-        .get(conflictId) as { created_at: number } | null;
+        .get() as { created_at: number } | null;
 
       expect(resolutionEvent).not.toBeNull();
       expect(resolutionEvent!.created_at).toBeGreaterThan(maxEventTimestamp);
