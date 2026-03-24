@@ -1,4 +1,4 @@
-import { findUnknownOption, parseArgs, readMissingOptionValue, readOption, suggestOptions } from "./arg-parser";
+import { findUnknownOption, hasFlag, parseArgs, readMissingOptionValue, readOption, suggestOptions } from "./arg-parser";
 import { safeErrorMessage, sqliteBusyFailure } from "./error-utils";
 
 import { DomainError } from "../domain/types";
@@ -6,12 +6,12 @@ import { failResult, okResult } from "../io/output";
 import { type CliContext, type CliResult } from "../runtime/command-types";
 import { resolveStorageResolutionDiagnostics } from "../storage/database";
 import { assertValidSourceRef } from "../sync/branch-db";
-import { getSyncConflict, listSyncConflicts, syncPull, syncResolve, syncStatus } from "../sync/service";
+import { getSyncConflict, listSyncConflicts, syncPull, syncResolve, syncResolvePreview, syncStatus } from "../sync/service";
 import { type SyncResolution } from "../sync/types";
 
 const STATUS_OPTIONS = ["from"] as const;
 const PULL_OPTIONS = ["from"] as const;
-const RESOLVE_OPTIONS = ["use"] as const;
+const RESOLVE_OPTIONS = ["use", "dry-run"] as const;
 const CONFLICTS_LIST_OPTIONS = ["mode"] as const;
 const CONFLICTS_SHOW_OPTIONS: readonly string[] = [];
 
@@ -219,6 +219,25 @@ export async function runSync(context: CliContext): Promise<CliResult> {
 
       if (rawResolution !== "ours" && rawResolution !== "theirs") {
         return usage("sync resolve --use only accepts ours|theirs.", "sync.resolve");
+      }
+
+      const dryRun: boolean = hasFlag(parsed.flags, "dry-run");
+
+      if (dryRun) {
+        const preview = syncResolvePreview(context.cwd, conflictId, rawResolution as SyncResolution);
+
+        return okResult({
+          command: "sync.resolve",
+          human: [
+            `[dry-run] Would resolve ${preview.conflictId} using ${preview.resolution}.`,
+            `Entity: ${preview.entityKind} ${preview.entityId}`,
+            `Field: ${preview.fieldName}`,
+            `Ours: ${JSON.stringify(preview.oursValue)}`,
+            `Theirs: ${JSON.stringify(preview.theirsValue)}`,
+            `Would write: ${JSON.stringify(preview.wouldWrite)}`,
+          ].join("\n"),
+          data: preview,
+        });
       }
 
       const summary = syncResolve(context.cwd, conflictId, rawResolution as SyncResolution);
