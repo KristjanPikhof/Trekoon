@@ -135,12 +135,17 @@ function formatTheirsConfirmation(preview: ResolvePreviewSummary): string {
 
 function promptConfirmation(message: string, timeoutMs: number = 30_000): Promise<boolean> {
   return new Promise<boolean>((resolve): void => {
+    let settled = false;
     const rl = createInterface({ input: process.stdin, output: process.stderr });
     const timer = setTimeout((): void => {
+      if (settled) return;
+      settled = true;
       rl.close();
       resolve(false);
     }, timeoutMs);
     rl.question(message, (answer: string): void => {
+      if (settled) return;
+      settled = true;
       clearTimeout(timer);
       rl.close();
       resolve(answer.trim().toLowerCase() === "y");
