@@ -570,8 +570,8 @@ Key consequences:
   is outside the git object store, so switching branches does not roll back or
   swap task data.
 - **Sync operates on tracker events, not on the database file itself.** Use
-  `sync pull` / `sync push` to exchange events between branches — never copy or
-  commit the `.db` file.
+  `sync pull` to import events between branches — never copy or commit the
+  `.db` file.
 
 Treat every write as a mutation of shared repo-wide state, not branch-scoped
 state.
