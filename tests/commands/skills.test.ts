@@ -40,7 +40,7 @@ afterEach((): void => {
 });
 
 describe("skills command", (): void => {
-  test("install creates a symlink to bundled dir and reruns idempotently", async (): Promise<void> => {
+  test("install copies bundled dir to local and reruns idempotently", async (): Promise<void> => {
     const cwd = createWorkspace();
 
     const first = await runSkills({
@@ -63,17 +63,16 @@ describe("skills command", (): void => {
     expect(firstData.linkPath).toBeNull();
     expect(firstData.linkTarget).toBeNull();
 
-    // Installed dir should be a symlink, not a plain directory.
-    expect(lstatSync(firstData.installedDir).isSymbolicLink()).toBeTrue();
-    const resolvedTarget = resolve(dirname(firstData.installedDir), readlinkSync(firstData.installedDir));
-    expect(resolvedTarget).toBe(resolve(bundledSkillDir()));
+    // Installed dir should be a real directory, not a symlink.
+    expect(lstatSync(firstData.installedDir).isDirectory()).toBeTrue();
+    expect(lstatSync(firstData.installedDir).isSymbolicLink()).toBeFalse();
 
-    // Contents accessible through the symlink should match the source.
+    // Copied contents should match the source.
     const sourceContents = readFileSync(firstData.sourcePath, "utf8");
     const installedContents = readFileSync(firstData.installedPath, "utf8");
     expect(installedContents).toBe(sourceContents);
 
-    // Idempotent rerun should succeed and resolve to the same target.
+    // Idempotent rerun should succeed without re-copying.
     const second = await runSkills({
       cwd,
       mode: "json",
@@ -85,19 +84,19 @@ describe("skills command", (): void => {
     expect(secondData.installedPath).toBe(firstData.installedPath);
     expect(secondData.installedDir).toBe(firstData.installedDir);
     expect(secondData.linked).toBeFalse();
-    expect(lstatSync(secondData.installedDir).isSymbolicLink()).toBeTrue();
+    expect(lstatSync(secondData.installedDir).isDirectory()).toBeTrue();
+    expect(lstatSync(secondData.installedDir).isSymbolicLink()).toBeFalse();
   });
 
-  test("install migrates legacy directory to symlink", async (): Promise<void> => {
+  test("install replaces legacy symlink with directory copy", async (): Promise<void> => {
     const cwd = createWorkspace();
 
-    // Create a legacy directory install (file-copy era).
+    // Create a legacy symlink install (symlink era).
     const legacyDir = join(cwd, ".agents", "skills", "trekoon");
-    mkdirSync(legacyDir, { recursive: true });
-    writeFileSync(join(legacyDir, "SKILL.md"), "legacy copy content", "utf8");
+    mkdirSync(dirname(legacyDir), { recursive: true });
+    symlinkSync(relative(dirname(legacyDir), bundledSkillDir()), legacyDir, "dir");
 
-    expect(lstatSync(legacyDir).isDirectory()).toBeTrue();
-    expect(lstatSync(legacyDir).isSymbolicLink()).toBeFalse();
+    expect(lstatSync(legacyDir).isSymbolicLink()).toBeTrue();
 
     const result = await runSkills({
       cwd,
@@ -107,10 +106,14 @@ describe("skills command", (): void => {
 
     expect(result.ok).toBeTrue();
 
-    // Should now be a symlink, not a plain directory.
-    expect(lstatSync(legacyDir).isSymbolicLink()).toBeTrue();
-    const resolvedTarget = resolve(dirname(legacyDir), readlinkSync(legacyDir));
-    expect(resolvedTarget).toBe(resolve(bundledSkillDir()));
+    // Should now be a real directory, not a symlink.
+    expect(lstatSync(legacyDir).isDirectory()).toBeTrue();
+    expect(lstatSync(legacyDir).isSymbolicLink()).toBeFalse();
+
+    // Contents should match bundled source.
+    const sourceContents = readFileSync(join(bundledSkillDir(), "SKILL.md"), "utf8");
+    const installedContents = readFileSync(join(legacyDir, "SKILL.md"), "utf8");
+    expect(installedContents).toBe(sourceContents);
   });
 
   test("install --link supports opencode, claude, and pi destinations", async (): Promise<void> => {
@@ -493,11 +496,12 @@ describe("skills command", (): void => {
       }>;
     };
 
-    // Local anchor should be ok (already a correct symlink from install).
+    // Local anchor should be ok (already a correct directory copy from install).
     const localAnchor = updatedData.entries.find((e) => e.scope === "local" && e.label === "anchor");
     expect(localAnchor).toBeDefined();
     expect(localAnchor!.action).toBe("ok");
-    expect(lstatSync(localAnchor!.path).isSymbolicLink()).toBeTrue();
+    expect(lstatSync(localAnchor!.path).isDirectory()).toBeTrue();
+    expect(lstatSync(localAnchor!.path).isSymbolicLink()).toBeFalse();
 
     // Local claude editor link should be created (config dir exists, no prior link).
     const localClaude = updatedData.entries.find((e) => e.scope === "local" && e.label === "claude");
@@ -539,10 +543,10 @@ describe("skills command", (): void => {
     }
   });
 
-  test("skills update repairs stale local symlinks", async (): Promise<void> => {
+  test("skills update migrates legacy local symlink to directory copy", async (): Promise<void> => {
     const cwd = createWorkspace();
 
-    // Create a stale anchor symlink pointing to a wrong target.
+    // Create a legacy anchor symlink (from the old symlink era).
     const anchorPath = join(cwd, ".agents", "skills", "trekoon");
     const wrongTarget = join(cwd, "wrong-target");
     mkdirSync(wrongTarget, { recursive: true });
@@ -564,12 +568,15 @@ describe("skills command", (): void => {
 
     const localAnchor = updatedData.entries.find((e) => e.scope === "local" && e.label === "anchor");
     expect(localAnchor).toBeDefined();
-    expect(localAnchor!.status).toBe("stale");
-    expect(localAnchor!.action).toBe("repointed");
+    expect(localAnchor!.status).toBe("legacy");
+    expect(localAnchor!.action).toBe("migrated");
 
-    // After repair, should point to the bundled dir.
-    expect(lstatSync(anchorPath).isSymbolicLink()).toBeTrue();
-    expect(resolve(dirname(anchorPath), readlinkSync(anchorPath))).toBe(resolve(bundledSkillDir()));
+    // After migration, should be a real directory with correct contents.
+    expect(lstatSync(anchorPath).isDirectory()).toBeTrue();
+    expect(lstatSync(anchorPath).isSymbolicLink()).toBeFalse();
+    const sourceContents = readFileSync(join(bundledSkillDir(), "SKILL.md"), "utf8");
+    const installedContents = readFileSync(join(anchorPath, "SKILL.md"), "utf8");
+    expect(installedContents).toBe(sourceContents);
   });
 
   test("trekoon update command smoke test via skills router", async (): Promise<void> => {
