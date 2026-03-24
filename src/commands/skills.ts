@@ -1,4 +1,4 @@
-import { existsSync, lstatSync, mkdirSync, readlinkSync, realpathSync, rmSync, symlinkSync } from "node:fs";
+import { cpSync, existsSync, lstatSync, mkdirSync, readFileSync, readlinkSync, realpathSync, rmSync, symlinkSync } from "node:fs";
 import { homedir } from "node:os";
 import { dirname, isAbsolute, join, relative, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -262,8 +262,8 @@ function installCanonicalSkill(cwd: string): CliResult | { sourcePath: string; i
   const resolvedSourceDir: string = resolve(sourceDir);
 
   // Self-reference guard: when cwd IS the package dir (e.g. developing Trekoon
-  // itself), the source dir and installed dir are the same path. Do not create
-  // a circular symlink — the directory already contains the bundled files.
+  // itself), the source dir and installed dir are the same path. Do not copy
+  // over itself — the directory already contains the bundled files.
   if (resolve(installedDir) === resolvedSourceDir) {
     return { sourcePath, installedPath, installedDir };
   }
@@ -286,32 +286,30 @@ function installCanonicalSkill(cwd: string): CliResult | { sourcePath: string; i
     }
 
     if (pathOccupied) {
-      if (existingIsSymlink) {
-        // Already a symlink — check whether it points to the correct target.
-        // Use realpathSync so OS-level symlinks (macOS /var → /private/var)
-        // do not cause false mismatches.
+      if (existingIsDir && !existingIsSymlink) {
+        // Real directory — check whether contents are already up to date.
         try {
-          const resolvedExisting: string = realpathSync(installedDir);
-          if (resolvedExisting === realpathSync(resolvedSourceDir)) {
-            // Symlink is already correct; idempotent success.
+          const sourceContents = readFileSync(sourcePath, "utf8");
+          const installedContents = readFileSync(installedPath, "utf8");
+          if (sourceContents === installedContents) {
+            // Already up to date; idempotent success.
             return { sourcePath, installedPath, installedDir };
           }
         } catch {
-          // Broken symlink — fall through to remove and recreate.
+          // Can't read installed file — refresh below.
         }
-        // Stale or broken symlink — remove and recreate.
-        rmSync(installedDir, { force: true });
-      } else if (existingIsDir) {
-        // Legacy directory install (file-copy era) — migrate by removing.
+        // Stale copy — remove and recopy.
         rmSync(installedDir, { recursive: true, force: true });
+      } else if (existingIsSymlink) {
+        // Legacy symlink (pre-copy era) — remove and replace with copy.
+        rmSync(installedDir, { force: true });
       } else {
         // Unexpected file — remove.
         rmSync(installedDir, { force: true });
       }
     }
 
-    const symlinkTarget: string = toRelativeSymlinkTarget(installedDir, resolvedSourceDir);
-    symlinkSync(symlinkTarget, installedDir, "dir");
+    cpSync(resolvedSourceDir, installedDir, { recursive: true });
   } catch (error: unknown) {
     const message = error instanceof Error ? error.message : "Unknown skills install failure";
     return failResult({
@@ -784,6 +782,93 @@ function probeAndRepairIfInstalled(linkPath: string, expectedTarget: string): Re
   return repairSymlink(probe);
 }
 
+/** Probe and repair local anchor using directory copy instead of symlinks. */
+function probeAndRepairLocalAnchor(installedDir: string, sourceDir: string): RepairResult {
+  const resolvedExpected: string = resolve(sourceDir);
+  const sourcePath: string = join(sourceDir, "SKILL.md");
+  const installedPath: string = join(installedDir, "SKILL.md");
+
+  // Self-reference guard: source and install are the same path (dev mode).
+  if (resolve(installedDir) === resolvedExpected) {
+    return {
+      probe: { path: installedDir, expectedTarget: resolvedExpected, status: "ok", currentTarget: resolvedExpected },
+      action: "ok",
+    };
+  }
+
+  let existingIsSymlink = false;
+  let existingIsDir = false;
+  let pathOccupied = false;
+
+  try {
+    const stat = lstatSync(installedDir);
+    pathOccupied = true;
+    existingIsSymlink = stat.isSymbolicLink();
+    existingIsDir = stat.isDirectory();
+  } catch {
+    // Not installed.
+  }
+
+  if (!pathOccupied) {
+    return {
+      probe: { path: installedDir, expectedTarget: resolvedExpected, status: "not_installed", currentTarget: null },
+      action: "skipped",
+    };
+  }
+
+  if (existingIsSymlink) {
+    // Legacy symlink — migrate to directory copy.
+    let currentTarget: string | null = null;
+    try {
+      const rawTarget = readlinkSync(installedDir);
+      currentTarget = resolve(dirname(installedDir), rawTarget);
+    } catch {
+      // Broken symlink.
+    }
+    rmSync(installedDir, { force: true });
+    mkdirSync(dirname(installedDir), { recursive: true });
+    cpSync(resolvedExpected, installedDir, { recursive: true });
+    return {
+      probe: { path: installedDir, expectedTarget: resolvedExpected, status: "legacy", currentTarget },
+      action: "migrated",
+    };
+  }
+
+  if (existingIsDir) {
+    // Real directory — check if contents match.
+    try {
+      const sourceContents = readFileSync(sourcePath, "utf8");
+      const installedContents = readFileSync(installedPath, "utf8");
+      if (sourceContents === installedContents) {
+        return {
+          probe: { path: installedDir, expectedTarget: resolvedExpected, status: "ok", currentTarget: null },
+          action: "ok",
+        };
+      }
+    } catch {
+      // Can't read — treat as stale.
+    }
+
+    // Stale copy — refresh.
+    rmSync(installedDir, { recursive: true, force: true });
+    mkdirSync(dirname(installedDir), { recursive: true });
+    cpSync(resolvedExpected, installedDir, { recursive: true });
+    return {
+      probe: { path: installedDir, expectedTarget: resolvedExpected, status: "stale", currentTarget: null },
+      action: "repointed",
+    };
+  }
+
+  // Unexpected file type — remove and copy.
+  rmSync(installedDir, { force: true });
+  mkdirSync(dirname(installedDir), { recursive: true });
+  cpSync(resolvedExpected, installedDir, { recursive: true });
+  return {
+    probe: { path: installedDir, expectedTarget: resolvedExpected, status: "legacy", currentTarget: null },
+    action: "migrated",
+  };
+}
+
 type UpdateScope = "global" | "local";
 
 interface UpdateEntry {
@@ -847,9 +932,9 @@ function runSkillsUpdate(context: CliContext): CliResult {
       entries.push({ scope: "global", label: editor, repair: probeAndRepairIfInstalled(linkPath, globalAnchorPath) });
     }
 
-    // Local anchor: <cwd>/.agents/skills/trekoon → bundled package dir.
+    // Local anchor: <cwd>/.agents/skills/trekoon — directory copy of bundled source.
     const localAnchorPath: string = join(context.cwd, ".agents", "skills", "trekoon");
-    entries.push({ scope: "local", label: "anchor", repair: probeAndRepairIfInstalled(localAnchorPath, sourceDir) });
+    entries.push({ scope: "local", label: "anchor", repair: probeAndRepairLocalAnchor(localAnchorPath, sourceDir) });
 
     // Local editor links: <cwd>/.<editor>/skills/trekoon → local anchor.
     for (const editor of EDITOR_NAMES) {
