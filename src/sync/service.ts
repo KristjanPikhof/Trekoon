@@ -1157,12 +1157,12 @@ function queryPendingConflicts(
   const conditions: string[] = ["resolution = 'pending'"];
   const params: string[] = [];
 
-  if (filters.entityId) {
+  if (filters.entityId !== undefined) {
     conditions.push("entity_id = ?");
     params.push(filters.entityId);
   }
 
-  if (filters.fieldName) {
+  if (filters.fieldName !== undefined) {
     conditions.push("field_name = ?");
     params.push(filters.fieldName);
   }
