@@ -70,7 +70,10 @@ const QUICKSTART_TEXT = [
   "7) Pre-merge sync flow",
   "- Run: trekoon --toon sync status",
   "- Pull upstream tracker events: trekoon --toon sync pull --from main",
-  "- Resolve conflicts if needed: trekoon --toon sync resolve <id> --use ours",
+  "- Inspect conflicts before resolving:",
+  "  1. trekoon --toon sync conflicts list",
+  "  2. trekoon --toon sync conflicts show <id>",
+  "  3. trekoon --toon sync resolve <id> --use ours|theirs",
   "- Run sync status again before opening or merging a PR.",
   "",
   "8) Shared-storage wipe warning",
@@ -120,7 +123,9 @@ export async function runQuickstart(_: CliContext): Promise<CliResult> {
       preMergeFlow: [
         "trekoon --toon sync status",
         "trekoon --toon sync pull --from main",
-        "trekoon --toon sync resolve <id> --use ours",
+        "trekoon --toon sync conflicts list",
+        "trekoon --toon sync conflicts show <id>",
+        "trekoon --toon sync resolve <id> --use ours|theirs",
         "trekoon --toon sync status",
       ],
       executionLoop: [
