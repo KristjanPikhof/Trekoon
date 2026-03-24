@@ -179,10 +179,10 @@ describe("cli shell dispatch", (): void => {
     expect(initData.text).toContain("Keep .trekoon gitignored");
 
     expect(quickstartData.topic).toBe("quickstart");
-    expect(quickstartData.text).toContain("Flow:");
-    expect(quickstartData.text).toContain("trekoon --toon init");
+    expect(quickstartData.text).toContain("Primary flow (session-first):");
+    expect(quickstartData.text).toContain("trekoon --toon session");
     expect(quickstartData.text).toContain("Fail fast on recoveryRequired");
-    expect(quickstartData.text).toContain("trekoon --toon task next");
+    expect(quickstartData.text).toContain("trekoon --toon task done <task-id>");
 
     expect(wipeData.topic).toBe("wipe");
     expect(wipeData.text).toContain("shared Trekoon storage directory");
