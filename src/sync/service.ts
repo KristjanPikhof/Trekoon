@@ -1125,6 +1125,7 @@ export function syncResolve(cwd: string, conflictId: string, resolution: SyncRes
   }
 }
 
+// Preview is read-only — no git context persistence needed.
 export function syncResolvePreview(cwd: string, conflictId: string, resolution: SyncResolution): ResolvePreviewSummary {
   const storage = openTrekoonDatabase(cwd);
 
