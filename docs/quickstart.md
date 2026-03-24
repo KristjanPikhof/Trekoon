@@ -239,7 +239,7 @@ trekoon skills install -g             # global (~/.agents/skills/trekoon)
 trekoon skills install --link --editor claude  # repo-local + editor symlink
 ```
 
-After upgrading Trekoon, refresh all installed symlinks:
+After upgrading Trekoon, refresh all installed skills:
 
 ```bash
 trekoon update                        # alias for: trekoon skills update
@@ -258,6 +258,7 @@ trekoon --toon sync status
 trekoon --toon sync pull --from main
 trekoon --toon sync conflicts list
 trekoon --toon sync conflicts show <id>
+trekoon --toon sync resolve <id> --use theirs --dry-run
 trekoon --toon sync resolve <id> --use ours|theirs
 trekoon --toon sync status
 ```
@@ -268,11 +269,14 @@ Steps:
 2. `sync conflicts list` — list all unresolved conflicts by ID.
 3. `sync conflicts show <id>` — inspect the ours/theirs diff for a specific
    conflict before deciding how to resolve it.
-4. `sync resolve <id> --use ours|theirs` — apply the resolution.
-5. Run `sync status` again to confirm no conflicts remain before merging.
+4. `sync resolve <id> --use theirs --dry-run` — preview what the resolution
+   would write without mutating the database (optional but recommended).
+5. `sync resolve <id> --use ours|theirs` — apply the resolution.
+6. Run `sync status` again to confirm no conflicts remain before merging.
 
 Never call `sync resolve` without first running `sync conflicts show` to
-understand what will be overwritten.
+understand what will be overwritten. In human mode (no `--toon`), `--use theirs`
+prompts for confirmation with a 30-second timeout.
 
 ## What to read next
 
