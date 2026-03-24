@@ -37,7 +37,7 @@ create plan and decomposes the plan into an epic with tasks, subtasks, and depen
 then writes the whole graph into Trekoon in a single transaction.
 
 ```
-/trekoon <id> plan
+/trekoon plan <description>
 ```
 
 What the agent does during planning:
@@ -106,8 +106,8 @@ The skill bundles three reference documents that agents load on demand:
 
 ```
 /trekoon                     → load the skill
+/trekoon plan                → decompose into tasks/subtasks/deps
 /trekoon <id>                → show status and next steps for an entity
-/trekoon <id> plan           → decompose into tasks/subtasks/deps
 /trekoon <id> execute        → start the execution loop
 /trekoon <id> analyze        → run progress + suggest, report findings
 ```
