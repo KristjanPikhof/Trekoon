@@ -166,12 +166,14 @@ trekoon --toon sync conflicts list
 trekoon --toon sync conflicts show <id>
 trekoon --toon sync resolve <id> --use theirs --dry-run
 trekoon --toon sync resolve <id> --use ours|theirs
+trekoon --toon sync resolve --all --use ours          # batch: all pending at once
 trekoon --toon sync status
 ```
 
 Always run `sync conflicts show` before resolving so you know what you're
-overwriting. In human mode, `--use theirs` prompts for confirmation with a
-30-second timeout.
+overwriting. For uniform conflicts, `--all` resolves every pending conflict in
+one command. Optional `--entity <id>` and `--field <name>` narrow the batch.
+In human mode, `--use theirs` prompts for confirmation with a 30-second timeout.
 
 ## What to read next
 
