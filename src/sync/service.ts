@@ -4,6 +4,7 @@ import { type Database } from "bun:sqlite";
 
 import { openTrekoonDatabase, writeTransaction } from "../storage/database";
 import { countBranchEventsSince, queryBranchEventsSince } from "./branch-db";
+import { nextEventTimestamp } from "./event-writes";
 import { persistGitContext, resolveGitContext } from "./git-context";
 import {
   type PullSummary,
@@ -950,7 +951,7 @@ function appendResolutionEvent(
   conflict: ConflictRow,
   resolution: SyncResolution,
 ): void {
-  const now: number = Date.now();
+  const now: number = nextEventTimestamp(db);
   const resolvedValue: string | null = resolution === "theirs" ? conflict.theirs_value : conflict.ours_value;
 
   db.query(
@@ -1092,25 +1093,31 @@ export function syncResolve(cwd: string, conflictId: string, resolution: SyncRes
   try {
     persistGitContext(storage.db, git);
 
-    const conflict = lookupPendingConflict(storage.db, conflictId);
+    // lookupPendingConflict is inside the writeTransaction so that the
+    // "is this still pending?" check and the resolution mutation are
+    // atomic.  Without this, two concurrent resolves could both pass
+    // the check and double-resolve the same conflict.
+    const conflict = writeTransaction(storage.db, (): ConflictRow => {
+      const row = lookupPendingConflict(storage.db, conflictId);
 
-    writeTransaction(storage.db, (): void => {
       if (resolution === "theirs") {
         updateSingleField(
           storage.db,
-          conflict.entity_kind,
-          conflict.entity_id,
-          conflict.field_name,
-          parseConflictValue(conflict.theirs_value),
+          row.entity_kind,
+          row.entity_id,
+          row.field_name,
+          parseConflictValue(row.theirs_value),
         );
       }
 
       const now: number = Date.now();
       storage.db
         .query("UPDATE sync_conflicts SET resolution = ?, updated_at = ?, version = version + 1 WHERE id = ?;")
-        .run(resolution, now, conflict.id);
+        .run(resolution, now, row.id);
 
-      appendResolutionEvent(storage.db, git.branchName, git.headSha, conflict, resolution);
+      appendResolutionEvent(storage.db, git.branchName, git.headSha, row, resolution);
+
+      return row;
     });
 
     return {
