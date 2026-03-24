@@ -2349,16 +2349,29 @@ describe("sync command", (): void => {
 
       const storage = openTrekoonDatabase(workspace);
       try {
+        const conflicts = storage.db
+          .query("SELECT id, entity_id FROM sync_conflicts WHERE resolution != 'pending' ORDER BY created_at ASC;")
+          .all() as Array<{ id: string; entity_id: string }>;
+
+        // All 4 conflicts should be resolved.
+        expect(conflicts).toHaveLength(4);
+        for (const c of conflicts) {
+          expect(conflictIds).toContain(c.id);
+        }
+
         const resolutionEvents = storage.db
           .query("SELECT entity_id FROM events WHERE operation = 'resolve_conflict' ORDER BY created_at ASC;")
           .all() as Array<{ entity_id: string }>;
 
+        // One resolution event per conflict.
         expect(resolutionEvents).toHaveLength(4);
 
-        // Each conflict ID should have a corresponding resolution event.
+        // Resolution events reference the entity, not the conflict row.
+        // Each conflict's entity_id should appear in the resolution events.
         const eventEntityIds = resolutionEvents.map((e) => e.entity_id);
-        for (const id of conflictIds) {
-          expect(eventEntityIds).toContain(id);
+        const conflictEntityIds = conflicts.map((c) => c.entity_id);
+        for (const entityId of conflictEntityIds) {
+          expect(eventEntityIds).toContain(entityId);
         }
       } finally {
         storage.close();
