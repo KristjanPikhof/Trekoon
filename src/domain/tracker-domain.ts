@@ -39,6 +39,7 @@ import {
 
 const DEFAULT_STATUS = "todo";
 const DEPENDENCY_GATED_STATUSES = new Set<string>(["in_progress", "done"]);
+const SQLITE_MAX_VARIABLES = 999;
 
 interface EpicRow {
   id: string;
@@ -391,8 +392,17 @@ export class TrackerDomain {
       status: normalizeStatus(spec.status),
     }));
 
+    if (validatedSpecs.length === 0) {
+      return {
+        tasks: [],
+        result: {
+          mappings: [],
+        },
+      };
+    }
+
     const TASK_COLS_PER_ROW = 7; // id, epic_id, title, description, status, created_at, updated_at (version is literal 1)
-    const CHUNK_SIZE: number = Math.floor(999 / TASK_COLS_PER_ROW);
+    const WRITE_CHUNK_SIZE: number = Math.floor(SQLITE_MAX_VARIABLES / TASK_COLS_PER_ROW);
 
     const prepared: Array<{ id: string; now: number; spec: ValidatedTaskBatchSpec }> = validatedSpecs.map((spec) => ({
       id: randomUUID(),
@@ -400,8 +410,8 @@ export class TrackerDomain {
       spec,
     }));
 
-    for (let offset = 0; offset < prepared.length; offset += CHUNK_SIZE) {
-      const chunk = prepared.slice(offset, offset + CHUNK_SIZE);
+    for (let offset = 0; offset < prepared.length; offset += WRITE_CHUNK_SIZE) {
+      const chunk = prepared.slice(offset, offset + WRITE_CHUNK_SIZE);
       const placeholders: string = chunk.map(() => "(?, ?, ?, ?, ?, ?, ?, 1)").join(", ");
       const params: Array<string | number> = [];
       for (const item of chunk) {
@@ -415,12 +425,17 @@ export class TrackerDomain {
     }
 
     const allIds: string[] = prepared.map((p) => p.id);
-    const inPlaceholders: string = allIds.map(() => "?").join(", ");
-    const fetchedRows = this.#db
-      .query(
-        `SELECT id, epic_id, title, description, status, owner, created_at, updated_at FROM tasks WHERE id IN (${inPlaceholders});`,
-      )
-      .all(...allIds) as TaskRow[];
+    const fetchedRows: TaskRow[] = [];
+    for (let offset = 0; offset < allIds.length; offset += SQLITE_MAX_VARIABLES) {
+      const chunkIds = allIds.slice(offset, offset + SQLITE_MAX_VARIABLES);
+      const inPlaceholders: string = chunkIds.map(() => "?").join(", ");
+      const chunkRows = this.#db
+        .query(
+          `SELECT id, epic_id, title, description, status, owner, created_at, updated_at FROM tasks WHERE id IN (${inPlaceholders});`,
+        )
+        .all(...chunkIds) as TaskRow[];
+      fetchedRows.push(...chunkRows);
+    }
 
     const rowById = new Map<string, TaskRow>(fetchedRows.map((row) => [row.id, row]));
     const tasks: TaskRecord[] = allIds.map((id) => {
@@ -543,8 +558,17 @@ export class TrackerDomain {
       };
     });
 
+    if (validatedSpecs.length === 0) {
+      return {
+        subtasks: [],
+        result: {
+          mappings: [],
+        },
+      };
+    }
+
     const SUBTASK_COLS_PER_ROW = 7; // id, task_id, title, description, status, created_at, updated_at (version is literal 1)
-    const CHUNK_SIZE: number = Math.floor(999 / SUBTASK_COLS_PER_ROW);
+    const WRITE_CHUNK_SIZE: number = Math.floor(SQLITE_MAX_VARIABLES / SUBTASK_COLS_PER_ROW);
 
     const prepared: Array<{ id: string; now: number; spec: ValidatedSubtaskBatchSpec }> = validatedSpecs.map((spec) => ({
       id: randomUUID(),
@@ -552,8 +576,8 @@ export class TrackerDomain {
       spec,
     }));
 
-    for (let offset = 0; offset < prepared.length; offset += CHUNK_SIZE) {
-      const chunk = prepared.slice(offset, offset + CHUNK_SIZE);
+    for (let offset = 0; offset < prepared.length; offset += WRITE_CHUNK_SIZE) {
+      const chunk = prepared.slice(offset, offset + WRITE_CHUNK_SIZE);
       const placeholders: string = chunk.map(() => "(?, ?, ?, ?, ?, ?, ?, 1)").join(", ");
       const params: Array<string | number> = [];
       for (const item of chunk) {
@@ -567,12 +591,17 @@ export class TrackerDomain {
     }
 
     const allIds: string[] = prepared.map((p) => p.id);
-    const inPlaceholders: string = allIds.map(() => "?").join(", ");
-    const fetchedRows = this.#db
-      .query(
-        `SELECT id, task_id, title, description, status, owner, created_at, updated_at FROM subtasks WHERE id IN (${inPlaceholders});`,
-      )
-      .all(...allIds) as SubtaskRow[];
+    const fetchedRows: SubtaskRow[] = [];
+    for (let offset = 0; offset < allIds.length; offset += SQLITE_MAX_VARIABLES) {
+      const chunkIds = allIds.slice(offset, offset + SQLITE_MAX_VARIABLES);
+      const inPlaceholders: string = chunkIds.map(() => "?").join(", ");
+      const chunkRows = this.#db
+        .query(
+          `SELECT id, task_id, title, description, status, owner, created_at, updated_at FROM subtasks WHERE id IN (${inPlaceholders});`,
+        )
+        .all(...chunkIds) as SubtaskRow[];
+      fetchedRows.push(...chunkRows);
+    }
 
     const rowById = new Map<string, SubtaskRow>(fetchedRows.map((row) => [row.id, row]));
     const subtasks: SubtaskRecord[] = allIds.map((id) => {

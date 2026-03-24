@@ -58,6 +58,21 @@ const EVENT_ARCHIVE_MIGRATION_DOWN_STATEMENTS: readonly string[] = [
   "DROP TABLE IF EXISTS event_archive;",
 ];
 
+const LOOKUP_INDEX_MIGRATION_UP_STATEMENTS: readonly string[] = [
+  "CREATE INDEX IF NOT EXISTS idx_dependencies_depends_on_kind ON dependencies(depends_on_id, depends_on_kind);",
+  "CREATE INDEX IF NOT EXISTS idx_tasks_owner ON tasks(owner);",
+  "CREATE INDEX IF NOT EXISTS idx_subtasks_owner ON subtasks(owner);",
+  "CREATE INDEX IF NOT EXISTS idx_conflicts_resolution_updated_at ON sync_conflicts(resolution, updated_at);",
+];
+
+const LOOKUP_INDEX_MIGRATION_DOWN_STATEMENTS: readonly string[] = [
+  "DROP INDEX IF EXISTS idx_conflicts_resolution_updated_at;",
+  "DROP INDEX IF EXISTS idx_subtasks_owner;",
+  "DROP INDEX IF EXISTS idx_tasks_owner;",
+  "DROP INDEX IF EXISTS idx_dependencies_depends_on_kind;",
+  "DROP INDEX IF EXISTS idx_conflicts_entity;",
+];
+
 function tableHasColumn(db: Database, tableName: string, columnName: string): boolean {
   const columns = db.query(`PRAGMA table_info(${tableName});`).all() as Array<{ name: string }>;
   return columns.some((column) => column.name === columnName);
@@ -241,16 +256,14 @@ const MIGRATIONS: readonly Migration[] = [
     version: 7,
     name: "0007_add_lookup_indexes",
     up(db: Database): void {
-      db.exec("CREATE INDEX IF NOT EXISTS idx_dependencies_depends_on_kind ON dependencies(depends_on_id, depends_on_kind);");
-      db.exec("CREATE INDEX IF NOT EXISTS idx_tasks_owner ON tasks(owner);");
-      db.exec("CREATE INDEX IF NOT EXISTS idx_subtasks_owner ON subtasks(owner);");
-      db.exec("CREATE INDEX IF NOT EXISTS idx_conflicts_entity ON sync_conflicts(entity_kind, entity_id);");
+      for (const statement of LOOKUP_INDEX_MIGRATION_UP_STATEMENTS) {
+        db.exec(statement);
+      }
     },
-    down(_db: Database): void {
-      throw new Error(
-        "Migration 0007 (add_lookup_indexes) is irreversible. " +
-        "Rollback below version 7 is not supported.",
-      );
+    down(db: Database): void {
+      for (const statement of LOOKUP_INDEX_MIGRATION_DOWN_STATEMENTS) {
+        db.exec(statement);
+      }
     },
   },
 ];

@@ -7,7 +7,6 @@ import { TrackerDomain } from "../domain/tracker-domain";
 import { okResult } from "../io/output";
 import { type CliContext, type CliResult } from "../runtime/command-types";
 import { openTrekoonDatabase, type TrekoonDatabase } from "../storage/database";
-import { pruneEvents, pruneResolvedConflicts } from "../storage/events-retention";
 import { type GitContextSnapshot } from "../sync/types";
 
 interface SessionReadiness {
@@ -35,8 +34,6 @@ interface SessionResult {
     readonly storageMode: string;
     readonly recoveryRequired: boolean;
     readonly recoveryStatus: string;
-    readonly prunedEvents: number;
-    readonly prunedConflicts: number;
   };
   readonly sync: {
     readonly ahead: number;
@@ -57,8 +54,6 @@ function formatSessionHuman(result: SessionResult): string {
   lines.push(`Storage mode: ${result.diagnostics.storageMode}`);
   lines.push(`Recovery required: ${result.diagnostics.recoveryRequired}`);
   lines.push(`Recovery status: ${result.diagnostics.recoveryStatus}`);
-  lines.push(`Pruned events: ${result.diagnostics.prunedEvents}`);
-  lines.push(`Pruned conflicts: ${result.diagnostics.prunedConflicts}`);
 
   lines.push("");
   lines.push("=== Sync ===");
@@ -113,9 +108,6 @@ export async function runSession(context: CliContext): Promise<CliResult> {
     database = openTrekoonDatabase(context.cwd);
     const diagnostics = database.diagnostics;
 
-    const eventPruneSummary = pruneEvents(database.db, { archive: false });
-    const conflictPruneSummary = pruneResolvedConflicts(database.db);
-
     const syncSummary = resolveSyncStatus(database, context.cwd, DEFAULT_SOURCE_BRANCH);
     const domain = new TrackerDomain(database.db);
     const readiness = buildTaskReadiness(domain, epicId);
@@ -132,8 +124,6 @@ export async function runSession(context: CliContext): Promise<CliResult> {
         storageMode: diagnostics.storageMode,
         recoveryRequired: diagnostics.recoveryRequired,
         recoveryStatus: diagnostics.recoveryStatus,
-        prunedEvents: eventPruneSummary.deletedCount,
-        prunedConflicts: conflictPruneSummary.deletedCount,
       },
       sync: {
         ahead: syncSummary.ahead,
