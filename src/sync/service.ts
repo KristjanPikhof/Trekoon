@@ -6,8 +6,12 @@ import { openTrekoonDatabase, writeTransaction } from "../storage/database";
 import { countBranchEventsSince, queryBranchEventsSince } from "./branch-db";
 import { nextEventTimestamp } from "./event-writes";
 import { persistGitContext, resolveGitContext } from "./git-context";
+import { DomainError } from "../domain/types";
 import {
   type PullSummary,
+  type ResolveAllFilters,
+  type ResolveAllPreviewSummary,
+  type ResolveAllSummary,
   type ResolvePreviewSummary,
   type ResolveSummary,
   type SyncConflictDetail,
@@ -1139,6 +1143,131 @@ export function syncResolvePreview(cwd: string, conflictId: string, resolution: 
       oursValue,
       theirsValue,
       wouldWrite,
+      dryRun: true,
+    };
+  } finally {
+    storage.close();
+  }
+}
+
+function queryPendingConflicts(
+  db: Database,
+  filters: { entityId?: string; fieldName?: string },
+): readonly ConflictRow[] {
+  const conditions: string[] = ["resolution = 'pending'"];
+  const params: unknown[] = [];
+
+  if (filters.entityId) {
+    conditions.push("entity_id = ?");
+    params.push(filters.entityId);
+  }
+
+  if (filters.fieldName) {
+    conditions.push("field_name = ?");
+    params.push(filters.fieldName);
+  }
+
+  const sql = `
+    SELECT id, event_id, entity_kind, entity_id, field_name, ours_value, theirs_value, resolution, created_at, updated_at
+    FROM sync_conflicts
+    WHERE ${conditions.join(" AND ")}
+    ORDER BY created_at ASC;
+  `;
+
+  return db.query(sql).all(...params) as ConflictRow[];
+}
+
+export function syncResolveAll(
+  cwd: string,
+  resolution: SyncResolution,
+  filters: { entityId?: string; fieldName?: string },
+): ResolveAllSummary {
+  const storage = openTrekoonDatabase(cwd);
+  const git = resolveGitContext(cwd);
+
+  try {
+    persistGitContext(storage.db, git);
+
+    const resolvedIds: string[] = writeTransaction(storage.db, (): string[] => {
+      const conflicts = queryPendingConflicts(storage.db, filters);
+
+      if (conflicts.length === 0) {
+        throw new DomainError({
+          code: "no_matching_conflicts",
+          message: "No pending conflicts match the given filters.",
+          details: { filters },
+        });
+      }
+
+      const ids: string[] = [];
+
+      for (const conflict of conflicts) {
+        if (resolution === "theirs") {
+          updateSingleField(
+            storage.db,
+            conflict.entity_kind,
+            conflict.entity_id,
+            conflict.field_name,
+            parseConflictValue(conflict.theirs_value),
+          );
+        }
+
+        const now: number = nextEventTimestamp(storage.db);
+        storage.db
+          .query("UPDATE sync_conflicts SET resolution = ?, updated_at = ?, version = version + 1 WHERE id = ?;")
+          .run(resolution, now, conflict.id);
+
+        appendResolutionEvent(storage.db, git.branchName, git.headSha, conflict, resolution, now);
+        ids.push(conflict.id);
+      }
+
+      return ids;
+    });
+
+    const normalizedFilters: ResolveAllFilters = {
+      entity: filters.entityId ?? null,
+      field: filters.fieldName ?? null,
+    };
+
+    return {
+      resolution,
+      resolvedCount: resolvedIds.length,
+      resolvedIds,
+      filters: normalizedFilters,
+    };
+  } finally {
+    storage.close();
+  }
+}
+
+export function syncResolveAllPreview(
+  cwd: string,
+  resolution: SyncResolution,
+  filters: { entityId?: string; fieldName?: string },
+): ResolveAllPreviewSummary {
+  const storage = openTrekoonDatabase(cwd);
+
+  try {
+    const conflicts = queryPendingConflicts(storage.db, filters);
+
+    if (conflicts.length === 0) {
+      throw new DomainError({
+        code: "no_matching_conflicts",
+        message: "No pending conflicts match the given filters.",
+        details: { filters },
+      });
+    }
+
+    const normalizedFilters: ResolveAllFilters = {
+      entity: filters.entityId ?? null,
+      field: filters.fieldName ?? null,
+    };
+
+    return {
+      resolution,
+      matchedCount: conflicts.length,
+      matchedIds: conflicts.map((c) => c.id),
+      filters: normalizedFilters,
       dryRun: true,
     };
   } finally {
