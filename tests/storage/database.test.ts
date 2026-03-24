@@ -649,7 +649,7 @@ describe("storage lifecycle", (): void => {
     }
   });
 
-  test("preserves schema_migrations after rejected v6 rollback", (): void => {
+  test("preserves schema_migrations after rejected v7 rollback", (): void => {
     const workspace: string = createWorkspace();
     const storage = openTrekoonDatabase(workspace);
 
@@ -664,21 +664,21 @@ describe("storage lifecycle", (): void => {
         .query("SELECT COALESCE(MAX(version), 0) AS version FROM schema_migrations;")
         .get() as { version: number };
 
-      expect(row.version).toBe(6);
+      expect(row.version).toBe(7);
     } finally {
       storage.close();
     }
   });
 
-  test("rollback to v6 from v6 is a valid no-op", (): void => {
+  test("rollback to v7 from v7 is a valid no-op", (): void => {
     const workspace: string = createWorkspace();
     const storage = openTrekoonDatabase(workspace);
 
     try {
-      const summary = rollbackDatabase(storage.db, 6);
+      const summary = rollbackDatabase(storage.db, 7);
 
-      expect(summary.fromVersion).toBe(6);
-      expect(summary.toVersion).toBe(6);
+      expect(summary.fromVersion).toBe(7);
+      expect(summary.toVersion).toBe(7);
       expect(summary.rolledBack).toBe(0);
       expect(summary.rolledBackMigrations).toEqual([]);
     } finally {
@@ -694,15 +694,15 @@ describe("storage lifecycle", (): void => {
       let errorMessage = "";
 
       try {
-        // Roll back to v3 to trigger irreversible errors. v6 rollback
+        // Roll back to v3 to trigger irreversible errors. v7 rollback
         // is attempted first (descending order) and throws.
         rollbackDatabase(storage.db, 3);
       } catch (error: unknown) {
         errorMessage = (error as Error).message;
       }
 
-      // The first rollback error will be from v6 (irreversible).
-      expect(errorMessage).toContain("add_owner_column");
+      // The first rollback error will be from v7 (irreversible).
+      expect(errorMessage).toContain("add_lookup_indexes");
     } finally {
       storage.close();
     }
