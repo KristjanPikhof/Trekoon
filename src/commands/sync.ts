@@ -133,10 +133,15 @@ function formatTheirsConfirmation(preview: ResolvePreviewSummary): string {
   ].join("\n");
 }
 
-function promptConfirmation(message: string): Promise<boolean> {
+function promptConfirmation(message: string, timeoutMs: number = 30_000): Promise<boolean> {
   return new Promise<boolean>((resolve): void => {
     const rl = createInterface({ input: process.stdin, output: process.stderr });
+    const timer = setTimeout((): void => {
+      rl.close();
+      resolve(false);
+    }, timeoutMs);
     rl.question(message, (answer: string): void => {
+      clearTimeout(timer);
       rl.close();
       resolve(answer.trim().toLowerCase() === "y");
     });
@@ -256,7 +261,9 @@ export async function runSync(context: CliContext): Promise<CliResult> {
             `Field: ${preview.fieldName}`,
             `Ours: ${JSON.stringify(preview.oursValue)}`,
             `Theirs: ${JSON.stringify(preview.theirsValue)}`,
-            `Would write: ${JSON.stringify(preview.wouldWrite)}`,
+            preview.resolution === "theirs"
+              ? `Would write: ${JSON.stringify(preview.wouldWrite)}`
+              : `Field stays: ${JSON.stringify(preview.wouldWrite)} (no entity write)`,
           ].join("\n"),
           data: preview,
         });
