@@ -533,9 +533,10 @@ describe("skills command", (): void => {
       entries: Array<{ scope: string; label: string; action: string }>;
     };
 
-    // All entries should be skipped.
+    // The local anchor is maintained automatically; everything else should be skipped.
     for (const entry of updatedData.entries) {
-      expect(entry.action).toBe("skipped");
+      const expectedAction = entry.scope === "local" && entry.label === "anchor" ? "ok" : "skipped";
+      expect(entry.action).toBe(expectedAction);
     }
   });
 
@@ -593,9 +594,10 @@ describe("skills command", (): void => {
     expect(data.sourceDir).toBeTruthy();
     expect(data.entries.length).toBeGreaterThan(0);
 
-    // With no prior installs and no editor dirs, all should be skipped.
+    // The local anchor is maintained automatically; everything else should be skipped.
     for (const entry of data.entries) {
-      expect(entry.action).toBe("skipped");
+      const expectedAction = entry.scope === "local" && entry.label === "anchor" ? "ok" : "skipped";
+      expect(entry.action).toBe(expectedAction);
     }
   });
 
