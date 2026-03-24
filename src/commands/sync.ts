@@ -253,10 +253,11 @@ export async function runSync(context: CliContext): Promise<CliResult> {
         return usage("sync resolve --use only accepts ours|theirs.", "sync.resolve");
       }
 
+      const resolution: SyncResolution = rawResolution;
       const dryRun: boolean = hasFlag(parsed.flags, "dry-run");
 
       if (dryRun) {
-        const preview = syncResolvePreview(context.cwd, conflictId, rawResolution as SyncResolution);
+        const preview = syncResolvePreview(context.cwd, conflictId, resolution);
 
         return okResult({
           command: "sync.resolve",
@@ -274,8 +275,8 @@ export async function runSync(context: CliContext): Promise<CliResult> {
         });
       }
 
-      if (rawResolution === "theirs" && context.mode !== "toon") {
-        const preview = syncResolvePreview(context.cwd, conflictId, rawResolution as SyncResolution);
+      if (resolution === "theirs" && context.mode !== "toon") {
+        const preview = syncResolvePreview(context.cwd, conflictId, resolution);
         const confirmed = await promptConfirmation(formatTheirsConfirmation(preview));
 
         if (!confirmed) {
@@ -284,7 +285,7 @@ export async function runSync(context: CliContext): Promise<CliResult> {
             human: "Resolution cancelled by user.",
             data: {
               conflictId,
-              resolution: rawResolution,
+              resolution,
               cancelled: true,
             },
             error: {
@@ -295,7 +296,7 @@ export async function runSync(context: CliContext): Promise<CliResult> {
         }
       }
 
-      const summary = syncResolve(context.cwd, conflictId, rawResolution as SyncResolution);
+      const summary = syncResolve(context.cwd, conflictId, resolution);
 
       return okResult({
         command: "sync.resolve",
