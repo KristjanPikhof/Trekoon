@@ -31,6 +31,7 @@ export function nextEventTimestamp(db: Database): number {
   return Math.max(now, latestEvent.created_at + 1);
 }
 
+/** Append a single event to the events table with git context. Returns void (event ID is not exposed). */
 export function appendEventWithGitContext(
   db: Database,
   cwd: string,
