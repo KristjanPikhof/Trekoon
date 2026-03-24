@@ -485,6 +485,7 @@ describe("skills command", (): void => {
         scope: string;
         label: string;
         path: string;
+        linkPath?: string;
         expectedTarget: string;
         status: string;
         action: string;

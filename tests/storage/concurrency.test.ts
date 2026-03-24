@@ -301,8 +301,8 @@ function runScenario(
   // Interleaved round-robin writes to maximize contention
   for (let seq = 0; seq < WRITES_PER_WRITER; seq++) {
     for (let w = 0; w < WRITER_COUNT; w++) {
-      const conn = connections[w];
-      const s = state[w];
+      const conn = connections[w]!;
+      const s = state[w]!;
 
       try {
         if (writerFactory === runWriteTransactionWriter) {

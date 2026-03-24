@@ -643,6 +643,7 @@ describe("sync command", (): void => {
         quarantinedEvents: number;
         conflictEvents: number;
         malformedPayloadEvents: number;
+        staleCursor: boolean;
         errorHints: string[];
       };
     }).diagnostics).toEqual({
