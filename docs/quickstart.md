@@ -248,6 +248,32 @@ trekoon update                        # alias for: trekoon skills update
 For detailed installation, editor linking, and example prompts, read
 [AI agents and the Trekoon skill](ai-agents.md).
 
+## Pre-merge sync flow
+
+Before opening or merging a PR, sync and inspect any conflicts before resolving
+them:
+
+```bash
+trekoon --toon sync status
+trekoon --toon sync pull --from main
+trekoon --toon sync conflicts list
+trekoon --toon sync conflicts show <id>
+trekoon --toon sync resolve <id> --use ours|theirs
+trekoon --toon sync status
+```
+
+Steps:
+
+1. `sync pull --from main` — fetch upstream tracker events.
+2. `sync conflicts list` — list all unresolved conflicts by ID.
+3. `sync conflicts show <id>` — inspect the ours/theirs diff for a specific
+   conflict before deciding how to resolve it.
+4. `sync resolve <id> --use ours|theirs` — apply the resolution.
+5. Run `sync status` again to confirm no conflicts remain before merging.
+
+Never call `sync resolve` without first running `sync conflicts show` to
+understand what will be overwritten.
+
 ## What to read next
 
 - [Command reference](commands.md)
