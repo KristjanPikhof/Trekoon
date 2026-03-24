@@ -32,8 +32,8 @@ separately or back to back.
 
 ### Plan
 
-Tell the agent what you want to build or find and fix bugs in yor code. Then ask Trekoon to 
-create plan and decomposes the plan into an epic with tasks, subtasks, and dependency edges, 
+Tell the agent what you want to build or find and fix bugs in your code. Then ask Trekoon to
+create plan and decomposes the plan into an epic with tasks, subtasks, and dependency edges,
 then writes the whole graph into Trekoon in a single transaction.
 
 ```
@@ -91,7 +91,7 @@ agents don't know how to use Trekoon properly.
 ```bash
 trekoon skills install          # repo-local (.agents/skills/trekoon/)
 trekoon skills install -g       # global (~/.agents/skills/trekoon)
-trekoon update                  # refresh all installed skill links
+trekoon update                  # refresh all installed skills
 ```
 
 The skill bundles three reference documents that agents load on demand:
