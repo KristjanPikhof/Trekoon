@@ -32,9 +32,9 @@ separately or back to back.
 
 ### Plan
 
-Tell the agent what you want to build. It decomposes the feature into an epic
-with tasks, subtasks, and dependency edges, then writes the whole graph into
-Trekoon in a single transaction.
+Tell the agent what you want to build or find and fix bugs in yor code. Then ask Trekoon to 
+create plan and decomposes the plan into an epic with tasks, subtasks, and dependency edges, 
+then writes the whole graph into Trekoon in a single transaction.
 
 ```
 /trekoon <id> plan
@@ -57,7 +57,7 @@ task and execute it without re-reading the codebase to figure out what to do.
 ### Execute
 
 Point the agent at an epic and it works through the dependency graph
-automatically.
+automatically. It is recommended to do it with clean context window.
 
 ```
 /trekoon <id> execute
@@ -99,8 +99,8 @@ The skill bundles three reference documents that agents load on demand:
 | Agent needs to... | Skill reads | What it covers |
 | --- | --- | --- |
 | Plan a feature | `reference/planning.md` | Decomposition, writing standard, dependency modeling, validation |
-| Execute an epic | `reference/execution.md` | Graph building, lane grouping, sub-agent dispatch, verification |
-| Execute with Agent Teams | `reference/execution-with-team.md` | TeamCreate/SendMessage, parallel Claude Code instances |
+| Execute an epic | `reference/execution.md` | Graph building, lane grouping, sub-agent dispatch, verification (universal) |
+| Execute with Agent Teams | `reference/execution-with-team.md` | TeamCreate/SendMessage, parallel Claude Code instances in tmux |
 
 ### Invoke the skill
 
@@ -139,7 +139,7 @@ For larger epics, Trekoon supports Claude Code Agent Teams. Instead of
 sequential sub-agents, you get real parallel Claude Code instances coordinated
 through `TeamCreate` and `SendMessage`, each running in its own tmux pane.
 
-Requires `CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS=true`.
+Requires Claude Code env variable `CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS=true`.
 
 The team lead orchestrator creates a team, populates a shared task list, spawns
 3-5 teammates per lane, and coordinates via messages. Teammates claim tasks,
@@ -163,7 +163,7 @@ call it from any non-done status.
 
 ## Local board
 
-Trekoon includes a browser-based board for humans who want a visual overview.
+Trekoon includes a browser-based board for humans who like having visual overview.
 No build step, no framework dependencies, works offline.
 
 ```bash
