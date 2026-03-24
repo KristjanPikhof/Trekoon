@@ -296,7 +296,20 @@ export async function runSync(context: CliContext): Promise<CliResult> {
         }
       }
 
-      const summary = syncResolve(context.cwd, conflictId, resolution);
+      let summary;
+      try {
+        summary = syncResolve(context.cwd, conflictId, resolution);
+      } catch (resolveError: unknown) {
+        if (resolveError instanceof Error && resolveError.message.includes("already resolved")) {
+          return failResult({
+            command: "sync.resolve",
+            human: `Conflict '${conflictId}' was resolved by another process while waiting for confirmation.`,
+            data: { conflictId, resolution, reason: "already_resolved" },
+            error: { code: "already_resolved", message: resolveError.message },
+          });
+        }
+        throw resolveError;
+      }
 
       return okResult({
         command: "sync.resolve",
