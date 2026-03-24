@@ -1,39 +1,37 @@
 # AI agents and the Trekoon skill
 
-Use this guide when an AI agent needs to plan work in Trekoon, execute it, and
-keep task state current while it works.
+How to wire an AI agent into Trekoon so it can plan work, execute it, and keep
+task state current as it goes.
 
-## What the `trekoon` skill does
+## What the skill does
 
-The bundled `trekoon` skill is the operating guide for agents. It tells the
+The bundled `trekoon` skill is the operating guide for agents. It teaches the
 agent to:
 
 - use `--toon` on Trekoon commands
-- prefer the smallest sufficient read
-- use transactional bulk planning commands when possible
-- append progress and blocker notes instead of rewriting full descriptions
+- prefer the smallest read that answers the question
+- use batch planning commands when possible
+- append progress and blocker notes instead of rewriting descriptions
 - preview scoped replace before `--apply`
-- treat `.trekoon` as shared repo-scoped operational state
+- treat `.trekoon` as shared repo-scoped state
 
-The skill ships with bundled reference guides for planning and execution so the
-agent can handle the full plan-to-completion workflow from a single skill:
+The skill ships with reference guides so the agent can handle the full
+plan-to-completion workflow from one install:
 
 ```
 .agents/skills/trekoon/
-  SKILL.md                      ← command reference, status machine, agent loop
+  SKILL.md                      <- command reference, status machine, agent loop
   reference/
-    planning.md                 ← decomposition, writing standard, validation
-    execution.md                ← graph building, lane dispatch, verification
-    execution-with-team.md      ← Agent Teams pattern (Claude Code only)
+    planning.md                 <- decomposition, writing standard, validation
+    execution.md                <- graph building, lane dispatch, verification
+    execution-with-team.md      <- Agent Teams pattern (Claude Code only)
 ```
 
-The agent reads the relevant reference file on demand — `planning.md` when asked
-to plan, `execution.md` when asked to execute, `execution-with-team.md` when Agent
+The agent loads the relevant reference on demand: `planning.md` when asked to
+plan, `execution.md` when asked to execute, `execution-with-team.md` when Agent
 Teams are available.
 
 ## Install the skill
-
-Install the bundled skill into the repository:
 
 ```bash
 trekoon skills install
@@ -51,10 +49,10 @@ trekoon skills update
 
 Path behavior:
 
-- canonical install path: `.agents/skills/trekoon/SKILL.md`
-- default OpenCode link path: `.opencode/skills/trekoon`
-- default Claude link path: `.claude/skills/trekoon`
-- default Pi link path: `.pi/skills/trekoon`
+- Canonical install: `.agents/skills/trekoon/SKILL.md`
+- OpenCode link: `.opencode/skills/trekoon`
+- Claude link: `.claude/skills/trekoon`
+- Pi link: `.pi/skills/trekoon`
 - `--to <path>` changes only the editor link root
 - `--allow-outside-repo` is for intentional external links
 
@@ -63,40 +61,37 @@ Path behavior:
 The skill accepts an optional entity ID and action text:
 
 ```
-/trekoon                              → loads the skill normally
-/trekoon <id>                         → resolves the entity, shows status and next steps
-/trekoon <id> analyze                 → runs epic progress + suggest, reports findings
-/trekoon <id> execute                 → starts the execution loop for the entity's epic
-/trekoon <id> plan the implementation → decomposes into tasks/subtasks/deps
+/trekoon                              -> loads the skill normally
+/trekoon <id>                         -> resolves the entity, shows status and next steps
+/trekoon <id> analyze                 -> runs epic progress + suggest, reports findings
+/trekoon <id> execute                 -> starts the execution loop for the entity's epic
+/trekoon <id> plan the implementation -> decomposes into tasks/subtasks/deps
 ```
 
 The skill resolves the ID as an epic, task, or subtask. For tasks and subtasks,
 it scopes session/suggest/progress calls to the parent epic automatically.
 
-## Skill stack
+## Companion skills
 
-The `trekoon` skill is self-contained for the full plan-to-completion workflow.
-It bundles planning methodology, execution orchestration, and the command
-reference in one install.
-
-For specialized needs, these optional companion skills add value:
+The `trekoon` skill handles the full plan-to-completion workflow on its own.
+These optional companions add value for specialized needs:
 
 | Job | Skill | When to use |
 | --- | --- | --- |
 | Clarify architecture before planning | `architecting-systems` | Boundaries or ownership are still fuzzy |
-| Specialized code review | `code-review-expert` | Want structured review before closing an epic |
+| Structured code review | `code-review-expert` | Want review before closing an epic |
 
-In practice, the flow is:
+Typical flow:
 
-1. `/trekoon` — load the skill
-2. Plan the work (skill reads `reference/planning.md` internally)
-3. Create or update the Trekoon graph
-4. Execute the plan (skill reads `reference/execution.md` internally)
-5. Update progress, blockers, and completion state as work moves forward
+1. `/trekoon` to load the skill
+2. Plan the work (reads `reference/planning.md` internally)
+3. Create the Trekoon graph
+4. Execute the plan (reads `reference/execution.md` internally)
+5. Update progress, blockers, and completion state as you go
 
-## Default execution loop for agents
+## Default execution loop
 
-The main loop is: **session → work → task done → repeat**.
+The core loop: **session, work, task done, repeat**.
 
 Start with a single orientation call, optionally scoped to an epic:
 
@@ -105,15 +100,14 @@ trekoon --toon session
 trekoon --toon session --epic <epic-id>
 ```
 
-Or use `suggest` for priority-ranked next-action recommendations:
+Or use `suggest` for priority-ranked recommendations:
 
 ```bash
 trekoon --toon suggest
 trekoon --toon suggest --epic <epic-id>
 ```
 
-If the session output shows you are behind, pull tracker events before claiming
-work:
+If the session shows you're behind, pull tracker events before claiming work:
 
 ```bash
 trekoon --toon sync pull --from main
@@ -127,74 +121,47 @@ trekoon --toon task done <task-id>
 trekoon --toon task update <task-id> --append "Blocked by <reason>" --status blocked
 ```
 
-Use `task done` when the task is actually finished. It marks the task complete
-and returns the next ready candidate with blockers inline. `task done`
-auto-transitions through `in_progress` when the current status is `todo` or
-`blocked`. The response also reports newly unblocked downstream tasks and warns
-about incomplete subtasks.
-
-Use `--compact` to strip contract metadata from envelopes when you do not need
-it:
+Use `task done` when the task is actually finished. It marks the task complete,
+auto-transitions through `in_progress` if needed, reports newly unblocked
+downstream tasks, warns about incomplete subtasks, and returns the next ready
+candidate. Strip envelope metadata with `--compact` when you don't need it:
 
 ```bash
 trekoon --toon --compact task done <task-id>
 ```
 
-## Status machine rules
+## Status machine
 
-Trekoon enforces valid status transitions. Do not attempt direct jumps like
-`todo → done` — they will fail with `status_transition_invalid`. Use `task done`
-for completing tasks (it handles the intermediate step automatically).
+Trekoon enforces valid transitions. Don't try direct jumps like `todo` to
+`done`; they fail with `status_transition_invalid`. Use `task done` for
+completing tasks (it handles the intermediate step).
 
-Valid transitions:
+See [Command reference: Status machine](commands.md#status-machine) for the
+full transition table.
 
-| From | Allowed targets |
-| --- | --- |
-| `todo` | `in_progress`, `blocked` |
-| `in_progress` | `done`, `blocked` |
-| `blocked` | `in_progress`, `todo` |
-| `done` | `in_progress` |
+## Cascade mode
 
-## Track epic progress
-
-Use `epic progress` to get a summary of task status counts and the next ready
-candidate for an epic:
-
-```bash
-trekoon --toon epic progress <epic-id>
-```
-
-## Use descendant cascade mode when closing a whole tree
-
-When an agent needs to close or reopen an entire epic or task tree from the
-command layer, use positional-ID `update --all` instead of looping one row at a
-time:
+When you need to close or reopen an entire epic or task tree, use positional-ID
+`update --all` instead of looping one row at a time:
 
 ```bash
 trekoon --toon epic update <epic-id> --all --status done
-trekoon --toon epic update <epic-id> --all --status todo
 trekoon --toon task update <task-id> --all --status done
-trekoon --toon task update <task-id> --all --status todo
-trekoon --toon subtask update <subtask-id> --all --status done
 ```
 
-Notes:
-
-- Epic/task cascade mode is atomic: blocked descendants abort the whole update
-- Use it only with `--status done|todo`
-- Do not combine positional ID + `--all` with `--append`, `--description`,
-  `--title`, or `--ids`
-- Subtask positional-ID `--all` is accepted for contract consistency, but it is
-  equivalent to a normal single-subtask status update
+Epic and task cascades are atomic. If any descendant is blocked, the whole update
+fails. Only `--status done|todo` is supported. See
+[Command reference: Cascade mode](commands.md#cascade-mode-with-positional-id)
+for the full rules.
 
 ## Tell the agent exactly what to do
 
-These prompts work well because they are explicit about the expected workflow.
+These prompts work well because they're explicit about the expected workflow.
 
 ### Plan first, then create the backlog
 
 ```text
-/trekoon — plan this feature as one epic with tasks, subtasks, and dependencies,
+/trekoon -- plan this feature as one epic with tasks, subtasks, and dependencies,
 then create the graph in Trekoon.
 ```
 
@@ -207,7 +174,7 @@ then create the graph in Trekoon.
 Or more explicitly:
 
 ```text
-/trekoon — run session, take the next ready task, do the work, append progress
+/trekoon -- run session, take the next ready task, do the work, append progress
 notes, mark it done, and repeat until there are no ready tasks or you hit a
 blocker.
 ```
@@ -215,7 +182,7 @@ blocker.
 ### Plan and execute end to end
 
 ```text
-/trekoon — plan this feature, create the backlog, then execute the tasks in
+/trekoon -- plan this feature, create the backlog, then execute the tasks in
 dependency order until the epic is complete.
 ```
 
@@ -223,7 +190,7 @@ dependency order until the epic is complete.
 
 Use the narrowest command that answers the question:
 
-| Need | Preferred command |
+| Need | Command |
 | --- | --- |
 | Session startup | `trekoon --toon session` |
 | Session scoped to epic | `trekoon --toon session --epic <epic-id>` |
@@ -237,11 +204,9 @@ Use the narrowest command that answers the question:
 
 For repeated text changes, use the safe replace loop:
 
-1. search the narrowest valid scope
-2. preview replace
-3. run `--apply` only after the preview matches the intended scope
-
-Example:
+1. Search the narrowest valid scope
+2. Preview replace
+3. Run `--apply` only after the preview matches the intended scope
 
 ```bash
 trekoon --toon epic search <epic-id> "path/to/somewhere"
@@ -251,68 +216,49 @@ trekoon --toon epic replace <epic-id> --search "path/to/somewhere" --replace "pa
 
 ## Shared-database model
 
-Trekoon uses **one live SQLite database per repository**, stored at
-`<repoRoot>/.trekoon/trekoon.db`. In git worktree setups, storage resolves from
-the shared repository root (via `git rev-parse --git-common-dir`), so all
-linked worktrees read and write the same database.
+Trekoon uses one live SQLite database per repository at
+`<repoRoot>/.trekoon/trekoon.db`. In worktree setups, storage resolves from the
+shared repository root, so all linked worktrees read and write the same database.
 
-Important implications for agents:
+What this means for agents:
 
-- **Worktrees share state.** A task marked `done` in one worktree is `done` in
-  every worktree immediately.
-- **Branch checkout does not switch tracker state.** The database lives outside
-  the git object store. Running `git checkout feature-branch` does not roll back
-  or swap the task graph.
-- **Sync exchanges tracker events between branches, not database snapshots.**
-  Use `sync pull --from main` to import events, not file copies.
-
-Keep this model in mind when resolving conflicts — the shared DB is the live
-source of truth, and `--use theirs` overwrites its current field values.
+- **Worktrees share state.** A task marked `done` in one worktree is `done`
+  everywhere immediately.
+- **Branch checkout doesn't switch tracker state.** The database lives outside
+  the git object store. `git checkout feature-branch` doesn't roll back the
+  task graph.
+- **Sync moves events, not database snapshots.** Use `sync pull --from main`
+  to import events, not file copies.
 
 ## Worktree and sync rules
 
-- Treat `meta.storageRootDiagnostics` as the source of truth for storage.
-- In linked worktrees, `sharedStorageRoot` may differ from `worktreeRoot`. That
-  is expected.
-- Do not commit `.trekoon/trekoon.db` as a recovery fix.
+- `meta.storageRootDiagnostics` is the source of truth for storage location.
+- In linked worktrees, `sharedStorageRoot` may differ from `worktreeRoot`.
+  That's expected.
+- Don't commit `.trekoon/trekoon.db` as a recovery fix.
 - Run `trekoon sync status` at session start and before merge.
 - Resolve sync conflicts explicitly when they appear.
 
-### Conflict resolution: ours vs theirs
+### Ours vs theirs
 
-Conflicts are **field-level**, not whole-record. Each conflict targets a single
-field (`status`, `title`, `description`, etc.) on one entity (epic, task, or
-subtask).
+Conflicts are field-level, not whole-record. Each conflict targets a single
+field (`status`, `title`, `description`, etc.) on one entity.
 
-- `--use ours` — keep the current entity field value in the shared DB. The
-  entity is not written, but the conflict record is marked resolved and a
-  resolution event is appended.
-- `--use theirs` — overwrite the shared DB entity field with the source-branch
-  value. The conflict record is marked resolved and a resolution event is
-  appended.
+- `--use ours` keeps the current DB value. The entity isn't written, but the
+  conflict is marked resolved and a resolution event is appended.
+- `--use theirs` overwrites the DB field with the source-branch value.
 
-**Example:** after `sync pull --from main`, a conflict appears on epic `abc123`,
-field `status`:
-- ours (current DB): `in_progress`
-- theirs (source branch): `done`
-- `--use ours` keeps status as `in_progress`
-- `--use theirs` changes status to `done` in the live shared DB
-
-Always inspect conflicts before resolving. Choosing `theirs` without inspection
-can overwrite in-progress work.
-
-Use `--dry-run` to preview what a resolution would do without mutating the
-database:
+Always inspect conflicts before resolving. Choosing `theirs` without looking
+can overwrite in-progress work. Use `--dry-run` to preview first:
 
 ```bash
 trekoon --toon sync resolve <conflict-id> --use theirs --dry-run
 ```
 
-In human mode (no `--toon`), `--use theirs` shows an interactive confirmation
-prompt with a 30-second timeout that defaults to rejection. Toon mode skips the
-prompt.
+In human mode (no `--toon`), `--use theirs` shows a confirmation prompt with a
+30-second timeout that defaults to rejection. Toon mode skips the prompt.
 
-Useful commands:
+Quick reference:
 
 ```bash
 trekoon --toon sync status
