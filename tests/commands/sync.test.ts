@@ -1605,7 +1605,7 @@ describe("sync command", (): void => {
     }
   });
 
-  test("sync resolve --dry-run returns preview without mutating", async (): Promise<void> => {
+  async function setupConflictWorkspace(branchName: string): Promise<{ workspace: string; epicId: string; conflictId: string }> {
     const workspace: string = createWorkspace();
     initializeRepository(workspace);
 
@@ -1635,7 +1635,7 @@ describe("sync command", (): void => {
       }
     }
 
-    runGit(workspace, ["checkout", "-b", "feature/dry-run"]);
+    runGit(workspace, ["checkout", "-b", branchName]);
 
     {
       const storage = openTrekoonDatabase(workspace);
@@ -1674,42 +1674,52 @@ describe("sync command", (): void => {
 
       expect(typeof pendingConflict?.id).toBe("string");
 
-      // Dry-run with --use theirs
-      const dryRunTheirs = await runSync({
-        args: ["resolve", pendingConflict!.id, "--use", "theirs", "--dry-run"],
-        cwd: workspace,
-        mode: "toon",
-      });
+      return { workspace, epicId, conflictId: pendingConflict!.id };
+    } finally {
+      storage.close();
+    }
+  }
 
-      expect(dryRunTheirs.ok).toBe(true);
-      expect(dryRunTheirs.command).toBe("sync.resolve");
+  test("sync resolve --dry-run returns preview without mutating", async (): Promise<void> => {
+    const { workspace, epicId, conflictId } = await setupConflictWorkspace("feature/dry-run");
 
-      const theirsData = dryRunTheirs.data as {
-        conflictId: string;
-        resolution: string;
-        entityKind: string;
-        entityId: string;
-        fieldName: string;
-        oursValue: unknown;
-        theirsValue: unknown;
-        wouldWrite: unknown;
-        dryRun: boolean;
-      };
+    const dryRunTheirs = await runSync({
+      args: ["resolve", conflictId, "--use", "theirs", "--dry-run"],
+      cwd: workspace,
+      mode: "toon",
+    });
 
-      expect(theirsData.dryRun).toBe(true);
-      expect(theirsData.conflictId).toBe(pendingConflict!.id);
-      expect(theirsData.resolution).toBe("theirs");
-      expect(theirsData.entityKind).toBe("epic");
-      expect(theirsData.entityId).toBe(epicId);
-      expect(theirsData.fieldName).toBe("title");
-      expect(theirsData.oursValue).toBe("Local epic");
-      expect(theirsData.theirsValue).toBe("Remote epic");
-      expect(theirsData.wouldWrite).toBe("Remote epic");
+    expect(dryRunTheirs.ok).toBe(true);
+    expect(dryRunTheirs.command).toBe("sync.resolve");
 
+    const theirsData = dryRunTheirs.data as {
+      conflictId: string;
+      resolution: string;
+      entityKind: string;
+      entityId: string;
+      fieldName: string;
+      oursValue: unknown;
+      theirsValue: unknown;
+      wouldWrite: unknown;
+      dryRun: boolean;
+    };
+
+    expect(theirsData.dryRun).toBe(true);
+    expect(theirsData.conflictId).toBe(conflictId);
+    expect(theirsData.resolution).toBe("theirs");
+    expect(theirsData.entityKind).toBe("epic");
+    expect(theirsData.entityId).toBe(epicId);
+    expect(theirsData.fieldName).toBe("title");
+    expect(theirsData.oursValue).toBe("Local epic");
+    expect(theirsData.theirsValue).toBe("Remote epic");
+    expect(theirsData.wouldWrite).toBe("Remote epic");
+
+    const storage = openTrekoonDatabase(workspace);
+    try {
       // Verify the conflict is still pending (not mutated)
       const stillPending = storage.db
         .query("SELECT resolution FROM sync_conflicts WHERE id = ?;")
-        .get(pendingConflict!.id) as { resolution: string } | null;
+        .get(conflictId) as { resolution: string } | null;
       expect(stillPending?.resolution).toBe("pending");
 
       // Verify the epic title was NOT changed by dry-run
@@ -1719,34 +1729,28 @@ describe("sync command", (): void => {
       // Verify no resolution events were created by dry-run
       const resolutionEvents = storage.db
         .query("SELECT id FROM events WHERE entity_kind = 'sync_conflict' AND entity_id = ? LIMIT 1;")
-        .get(pendingConflict!.id) as { id: string } | null;
+        .get(conflictId) as { id: string } | null;
       expect(resolutionEvents).toBeNull();
-
-      // Dry-run with --use ours
-      const dryRunOurs = await runSync({
-        args: ["resolve", pendingConflict!.id, "--use", "ours", "--dry-run"],
-        cwd: workspace,
-        mode: "toon",
-      });
-
-      expect(dryRunOurs.ok).toBe(true);
-      const oursData = dryRunOurs.data as {
-        resolution: string;
-        wouldWrite: unknown;
-        dryRun: boolean;
-      };
-      expect(oursData.dryRun).toBe(true);
-      expect(oursData.resolution).toBe("ours");
-      expect(oursData.wouldWrite).toBe("Local epic");
-
-      // Conflict is still pending after ours dry-run too
-      const stillPendingAfterOurs = storage.db
-        .query("SELECT resolution FROM sync_conflicts WHERE id = ?;")
-        .get(pendingConflict!.id) as { resolution: string } | null;
-      expect(stillPendingAfterOurs?.resolution).toBe("pending");
     } finally {
       storage.close();
     }
+
+    // Dry-run with --use ours
+    const dryRunOurs = await runSync({
+      args: ["resolve", conflictId, "--use", "ours", "--dry-run"],
+      cwd: workspace,
+      mode: "toon",
+    });
+
+    expect(dryRunOurs.ok).toBe(true);
+    const oursData = dryRunOurs.data as {
+      resolution: string;
+      wouldWrite: unknown;
+      dryRun: boolean;
+    };
+    expect(oursData.dryRun).toBe(true);
+    expect(oursData.resolution).toBe("ours");
+    expect(oursData.wouldWrite).toBe("Local epic");
   });
 
   test("sync resolve --dry-run fails on nonexistent conflict", async (): Promise<void> => {
@@ -1763,171 +1767,41 @@ describe("sync command", (): void => {
   });
 
   test("sync resolve --dry-run fails on already-resolved conflict", async (): Promise<void> => {
-    const workspace: string = createWorkspace();
-    initializeRepository(workspace);
+    const { workspace, conflictId } = await setupConflictWorkspace("feature/dry-run-already-resolved");
 
-    const epicId: string = randomUUID();
+    const resolveResult = await runSync({
+      args: ["resolve", conflictId, "--use", "ours"],
+      cwd: workspace,
+      mode: "toon",
+    });
+    expect(resolveResult.ok).toBe(true);
 
-    {
-      const storage = openTrekoonDatabase(workspace);
-      try {
-        storage.db
-          .query(
-            "INSERT INTO epics (id, title, description, status, created_at, updated_at, version) VALUES (?, ?, ?, ?, ?, ?, 1);",
-          )
-          .run(epicId, "Remote epic", "", "open", Date.now(), Date.now());
-
-        appendEventWithGitContext(storage.db, workspace, {
-          entityKind: "epic",
-          entityId: epicId,
-          operation: "upsert",
-          fields: {
-            title: "Remote epic",
-            description: "",
-            status: "open",
-          },
-        });
-      } finally {
-        storage.close();
-      }
-    }
-
-    runGit(workspace, ["checkout", "-b", "feature/dry-run-already-resolved"]);
-
-    {
-      const storage = openTrekoonDatabase(workspace);
-      try {
-        storage.db
-          .query("UPDATE epics SET title = ?, updated_at = ?, version = version + 1 WHERE id = ?;")
-          .run("Local epic", Date.now(), epicId);
-
-        appendEventWithGitContext(storage.db, workspace, {
-          entityKind: "epic",
-          entityId: epicId,
-          operation: "upsert",
-          fields: {
-            title: "Local epic",
-          },
-        });
-      } finally {
-        storage.close();
-      }
-    }
-
-    await runSync({
-      args: ["pull", "--from", "main"],
+    const dryRunResult = await runSync({
+      args: ["resolve", conflictId, "--use", "theirs", "--dry-run"],
       cwd: workspace,
       mode: "toon",
     });
 
-    const storage = openTrekoonDatabase(workspace);
-    try {
-      const pendingConflict = storage.db
-        .query("SELECT id FROM sync_conflicts WHERE resolution = 'pending' LIMIT 1;")
-        .get() as { id: string } | null;
-
-      expect(typeof pendingConflict?.id).toBe("string");
-
-      // Resolve the conflict normally first
-      const resolveResult = await runSync({
-        args: ["resolve", pendingConflict!.id, "--use", "ours"],
-        cwd: workspace,
-        mode: "toon",
-      });
-      expect(resolveResult.ok).toBe(true);
-
-      // Now dry-run should fail because conflict is already resolved
-      const dryRunResult = await runSync({
-        args: ["resolve", pendingConflict!.id, "--use", "theirs", "--dry-run"],
-        cwd: workspace,
-        mode: "toon",
-      });
-
-      expect(dryRunResult.ok).toBe(false);
-    } finally {
-      storage.close();
-    }
+    expect(dryRunResult.ok).toBe(false);
   });
 
   test("toon mode skips confirmation prompt for theirs resolution", async (): Promise<void> => {
-    const workspace: string = createWorkspace();
-    initializeRepository(workspace);
+    const { workspace, epicId, conflictId } = await setupConflictWorkspace("feature/toon-no-prompt");
 
-    const epicId: string = randomUUID();
-
-    {
-      const storage = openTrekoonDatabase(workspace);
-      try {
-        storage.db
-          .query(
-            "INSERT INTO epics (id, title, description, status, created_at, updated_at, version) VALUES (?, ?, ?, ?, ?, ?, 1);",
-          )
-          .run(epicId, "Remote epic", "", "open", Date.now(), Date.now());
-
-        appendEventWithGitContext(storage.db, workspace, {
-          entityKind: "epic",
-          entityId: epicId,
-          operation: "upsert",
-          fields: {
-            title: "Remote epic",
-            description: "",
-            status: "open",
-          },
-        });
-      } finally {
-        storage.close();
-      }
-    }
-
-    runGit(workspace, ["checkout", "-b", "feature/toon-no-prompt"]);
-
-    {
-      const storage = openTrekoonDatabase(workspace);
-      try {
-        storage.db
-          .query("UPDATE epics SET title = ?, updated_at = ?, version = version + 1 WHERE id = ?;")
-          .run("Local epic", Date.now(), epicId);
-
-        appendEventWithGitContext(storage.db, workspace, {
-          entityKind: "epic",
-          entityId: epicId,
-          operation: "upsert",
-          fields: {
-            title: "Local epic",
-          },
-        });
-      } finally {
-        storage.close();
-      }
-    }
-
-    await runSync({
-      args: ["pull", "--from", "main"],
+    const resolveResult = await runSync({
+      args: ["resolve", conflictId, "--use", "theirs"],
       cwd: workspace,
       mode: "toon",
     });
 
+    expect(resolveResult.ok).toBe(true);
+    expect(resolveResult.command).toBe("sync.resolve");
+
     const storage = openTrekoonDatabase(workspace);
     try {
-      const pendingConflict = storage.db
-        .query("SELECT id FROM sync_conflicts WHERE resolution = 'pending' LIMIT 1;")
-        .get() as { id: string } | null;
-
-      expect(typeof pendingConflict?.id).toBe("string");
-
-      // Toon mode: should resolve without any prompt (no stdin needed)
-      const resolveResult = await runSync({
-        args: ["resolve", pendingConflict!.id, "--use", "theirs"],
-        cwd: workspace,
-        mode: "toon",
-      });
-
-      expect(resolveResult.ok).toBe(true);
-      expect(resolveResult.command).toBe("sync.resolve");
-
       const resolved = storage.db
         .query("SELECT resolution FROM sync_conflicts WHERE id = ?;")
-        .get(pendingConflict!.id) as { resolution: string } | null;
+        .get(conflictId) as { resolution: string } | null;
       expect(resolved?.resolution).toBe("theirs");
 
       const epic = storage.db.query("SELECT title FROM epics WHERE id = ?;").get(epicId) as { title: string } | null;
@@ -1938,276 +1812,20 @@ describe("sync command", (): void => {
   });
 
   test("human mode theirs resolution prompts for confirmation and accepts y", async (): Promise<void> => {
-    const workspace: string = createWorkspace();
-    initializeRepository(workspace);
+    const { workspace, conflictId } = await setupConflictWorkspace("feature/human-confirm-y");
 
-    const epicId: string = randomUUID();
+    const originalStdin = process.stdin;
+    const mockStdin = new Readable({ read(): void {} });
+    Object.defineProperty(process, "stdin", { value: mockStdin, writable: true, configurable: true });
 
-    {
-      const storage = openTrekoonDatabase(workspace);
-      try {
-        storage.db
-          .query(
-            "INSERT INTO epics (id, title, description, status, created_at, updated_at, version) VALUES (?, ?, ?, ?, ?, ?, 1);",
-          )
-          .run(epicId, "Remote epic", "", "open", Date.now(), Date.now());
-
-        appendEventWithGitContext(storage.db, workspace, {
-          entityKind: "epic",
-          entityId: epicId,
-          operation: "upsert",
-          fields: {
-            title: "Remote epic",
-            description: "",
-            status: "open",
-          },
-        });
-      } finally {
-        storage.close();
-      }
-    }
-
-    runGit(workspace, ["checkout", "-b", "feature/human-confirm-y"]);
-
-    {
-      const storage = openTrekoonDatabase(workspace);
-      try {
-        storage.db
-          .query("UPDATE epics SET title = ?, updated_at = ?, version = version + 1 WHERE id = ?;")
-          .run("Local epic", Date.now(), epicId);
-
-        appendEventWithGitContext(storage.db, workspace, {
-          entityKind: "epic",
-          entityId: epicId,
-          operation: "upsert",
-          fields: {
-            title: "Local epic",
-          },
-        });
-      } finally {
-        storage.close();
-      }
-    }
-
-    await runSync({
-      args: ["pull", "--from", "main"],
-      cwd: workspace,
-      mode: "toon",
-    });
-
-    const storage = openTrekoonDatabase(workspace);
     try {
-      const pendingConflict = storage.db
-        .query("SELECT id FROM sync_conflicts WHERE resolution = 'pending' LIMIT 1;")
-        .get() as { id: string } | null;
+      setTimeout((): void => {
+        mockStdin.push("y\n");
+        mockStdin.push(null);
+      }, 50);
 
-      expect(typeof pendingConflict?.id).toBe("string");
-
-      // Mock stdin to provide "y" response
-      const originalStdin = process.stdin;
-      const mockStdin = new Readable({ read(): void {} });
-      Object.defineProperty(process, "stdin", { value: mockStdin, writable: true, configurable: true });
-
-      try {
-        // Push "y\n" shortly after the prompt starts
-        setTimeout((): void => {
-          mockStdin.push("y\n");
-          mockStdin.push(null);
-        }, 50);
-
-        const resolveResult = await runSync({
-          args: ["resolve", pendingConflict!.id, "--use", "theirs"],
-          cwd: workspace,
-          mode: "human",
-        });
-
-        expect(resolveResult.ok).toBe(true);
-        expect(resolveResult.command).toBe("sync.resolve");
-
-        const resolved = storage.db
-          .query("SELECT resolution FROM sync_conflicts WHERE id = ?;")
-          .get(pendingConflict!.id) as { resolution: string } | null;
-        expect(resolved?.resolution).toBe("theirs");
-      } finally {
-        Object.defineProperty(process, "stdin", { value: originalStdin, writable: true, configurable: true });
-      }
-    } finally {
-      storage.close();
-    }
-  });
-
-  test("human mode theirs resolution prompts for confirmation and rejects n", async (): Promise<void> => {
-    const workspace: string = createWorkspace();
-    initializeRepository(workspace);
-
-    const epicId: string = randomUUID();
-
-    {
-      const storage = openTrekoonDatabase(workspace);
-      try {
-        storage.db
-          .query(
-            "INSERT INTO epics (id, title, description, status, created_at, updated_at, version) VALUES (?, ?, ?, ?, ?, ?, 1);",
-          )
-          .run(epicId, "Remote epic", "", "open", Date.now(), Date.now());
-
-        appendEventWithGitContext(storage.db, workspace, {
-          entityKind: "epic",
-          entityId: epicId,
-          operation: "upsert",
-          fields: {
-            title: "Remote epic",
-            description: "",
-            status: "open",
-          },
-        });
-      } finally {
-        storage.close();
-      }
-    }
-
-    runGit(workspace, ["checkout", "-b", "feature/human-confirm-n"]);
-
-    {
-      const storage = openTrekoonDatabase(workspace);
-      try {
-        storage.db
-          .query("UPDATE epics SET title = ?, updated_at = ?, version = version + 1 WHERE id = ?;")
-          .run("Local epic", Date.now(), epicId);
-
-        appendEventWithGitContext(storage.db, workspace, {
-          entityKind: "epic",
-          entityId: epicId,
-          operation: "upsert",
-          fields: {
-            title: "Local epic",
-          },
-        });
-      } finally {
-        storage.close();
-      }
-    }
-
-    await runSync({
-      args: ["pull", "--from", "main"],
-      cwd: workspace,
-      mode: "toon",
-    });
-
-    const storage = openTrekoonDatabase(workspace);
-    try {
-      const pendingConflict = storage.db
-        .query("SELECT id FROM sync_conflicts WHERE resolution = 'pending' LIMIT 1;")
-        .get() as { id: string } | null;
-
-      expect(typeof pendingConflict?.id).toBe("string");
-
-      // Mock stdin to provide "n" response
-      const originalStdin = process.stdin;
-      const mockStdin = new Readable({ read(): void {} });
-      Object.defineProperty(process, "stdin", { value: mockStdin, writable: true, configurable: true });
-
-      try {
-        setTimeout((): void => {
-          mockStdin.push("n\n");
-          mockStdin.push(null);
-        }, 50);
-
-        const resolveResult = await runSync({
-          args: ["resolve", pendingConflict!.id, "--use", "theirs"],
-          cwd: workspace,
-          mode: "human",
-        });
-
-        expect(resolveResult.ok).toBe(false);
-        expect(resolveResult.error?.code).toBe("cancelled");
-
-        // Conflict should still be pending
-        const stillPending = storage.db
-          .query("SELECT resolution FROM sync_conflicts WHERE id = ?;")
-          .get(pendingConflict!.id) as { resolution: string } | null;
-        expect(stillPending?.resolution).toBe("pending");
-
-        // Epic title should not have changed
-        const epic = storage.db.query("SELECT title FROM epics WHERE id = ?;").get(epicId) as { title: string } | null;
-        expect(epic?.title).toBe("Local epic");
-      } finally {
-        Object.defineProperty(process, "stdin", { value: originalStdin, writable: true, configurable: true });
-      }
-    } finally {
-      storage.close();
-    }
-  });
-
-  test("human mode ours resolution does not prompt for confirmation", async (): Promise<void> => {
-    const workspace: string = createWorkspace();
-    initializeRepository(workspace);
-
-    const epicId: string = randomUUID();
-
-    {
-      const storage = openTrekoonDatabase(workspace);
-      try {
-        storage.db
-          .query(
-            "INSERT INTO epics (id, title, description, status, created_at, updated_at, version) VALUES (?, ?, ?, ?, ?, ?, 1);",
-          )
-          .run(epicId, "Remote epic", "", "open", Date.now(), Date.now());
-
-        appendEventWithGitContext(storage.db, workspace, {
-          entityKind: "epic",
-          entityId: epicId,
-          operation: "upsert",
-          fields: {
-            title: "Remote epic",
-            description: "",
-            status: "open",
-          },
-        });
-      } finally {
-        storage.close();
-      }
-    }
-
-    runGit(workspace, ["checkout", "-b", "feature/human-ours-no-prompt"]);
-
-    {
-      const storage = openTrekoonDatabase(workspace);
-      try {
-        storage.db
-          .query("UPDATE epics SET title = ?, updated_at = ?, version = version + 1 WHERE id = ?;")
-          .run("Local epic", Date.now(), epicId);
-
-        appendEventWithGitContext(storage.db, workspace, {
-          entityKind: "epic",
-          entityId: epicId,
-          operation: "upsert",
-          fields: {
-            title: "Local epic",
-          },
-        });
-      } finally {
-        storage.close();
-      }
-    }
-
-    await runSync({
-      args: ["pull", "--from", "main"],
-      cwd: workspace,
-      mode: "toon",
-    });
-
-    const storage = openTrekoonDatabase(workspace);
-    try {
-      const pendingConflict = storage.db
-        .query("SELECT id FROM sync_conflicts WHERE resolution = 'pending' LIMIT 1;")
-        .get() as { id: string } | null;
-
-      expect(typeof pendingConflict?.id).toBe("string");
-
-      // Ours resolution in human mode should NOT prompt (no stdin mock needed)
       const resolveResult = await runSync({
-        args: ["resolve", pendingConflict!.id, "--use", "ours"],
+        args: ["resolve", conflictId, "--use", "theirs"],
         cwd: workspace,
         mode: "human",
       });
@@ -2215,12 +1833,78 @@ describe("sync command", (): void => {
       expect(resolveResult.ok).toBe(true);
       expect(resolveResult.command).toBe("sync.resolve");
 
+      const storage = openTrekoonDatabase(workspace);
+      try {
+        const resolved = storage.db
+          .query("SELECT resolution FROM sync_conflicts WHERE id = ?;")
+          .get(conflictId) as { resolution: string } | null;
+        expect(resolved?.resolution).toBe("theirs");
+      } finally {
+        storage.close();
+      }
+    } finally {
+      Object.defineProperty(process, "stdin", { value: originalStdin, writable: true, configurable: true });
+    }
+  });
+
+  test("human mode theirs resolution prompts for confirmation and rejects n", async (): Promise<void> => {
+    const { workspace, epicId, conflictId } = await setupConflictWorkspace("feature/human-confirm-n");
+
+    const originalStdin = process.stdin;
+    const mockStdin = new Readable({ read(): void {} });
+    Object.defineProperty(process, "stdin", { value: mockStdin, writable: true, configurable: true });
+
+    try {
+      setTimeout((): void => {
+        mockStdin.push("n\n");
+        mockStdin.push(null);
+      }, 50);
+
+      const resolveResult = await runSync({
+        args: ["resolve", conflictId, "--use", "theirs"],
+        cwd: workspace,
+        mode: "human",
+      });
+
+      expect(resolveResult.ok).toBe(false);
+      expect(resolveResult.error?.code).toBe("cancelled");
+
+      const storage = openTrekoonDatabase(workspace);
+      try {
+        const stillPending = storage.db
+          .query("SELECT resolution FROM sync_conflicts WHERE id = ?;")
+          .get(conflictId) as { resolution: string } | null;
+        expect(stillPending?.resolution).toBe("pending");
+
+        const epic = storage.db.query("SELECT title FROM epics WHERE id = ?;").get(epicId) as { title: string } | null;
+        expect(epic?.title).toBe("Local epic");
+      } finally {
+        storage.close();
+      }
+    } finally {
+      Object.defineProperty(process, "stdin", { value: originalStdin, writable: true, configurable: true });
+    }
+  });
+
+  test("human mode ours resolution does not prompt for confirmation", async (): Promise<void> => {
+    const { workspace, epicId, conflictId } = await setupConflictWorkspace("feature/human-ours-no-prompt");
+
+    const resolveResult = await runSync({
+      args: ["resolve", conflictId, "--use", "ours"],
+      cwd: workspace,
+      mode: "human",
+    });
+
+    expect(resolveResult.ok).toBe(true);
+    expect(resolveResult.command).toBe("sync.resolve");
+
+    const storage = openTrekoonDatabase(workspace);
+    try {
       const resolved = storage.db
         .query("SELECT resolution FROM sync_conflicts WHERE id = ?;")
-        .get(pendingConflict!.id) as { resolution: string } | null;
+        .get(conflictId) as { resolution: string } | null;
       expect(resolved?.resolution).toBe("ours");
 
-      // Epic title should remain as ours
       const epic = storage.db.query("SELECT title FROM epics WHERE id = ?;").get(epicId) as { title: string } | null;
       expect(epic?.title).toBe("Local epic");
     } finally {
