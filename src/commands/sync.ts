@@ -1,3 +1,5 @@
+import { createInterface } from "node:readline";
+
 import { findUnknownOption, hasFlag, parseArgs, readMissingOptionValue, readOption, suggestOptions } from "./arg-parser";
 import { safeErrorMessage, sqliteBusyFailure } from "./error-utils";
 
@@ -7,7 +9,7 @@ import { type CliContext, type CliResult } from "../runtime/command-types";
 import { resolveStorageResolutionDiagnostics } from "../storage/database";
 import { assertValidSourceRef } from "../sync/branch-db";
 import { getSyncConflict, listSyncConflicts, syncPull, syncResolve, syncResolvePreview, syncStatus } from "../sync/service";
-import { type SyncResolution } from "../sync/types";
+import { type ResolvePreviewSummary, type SyncResolution } from "../sync/types";
 
 const STATUS_OPTIONS = ["from"] as const;
 const PULL_OPTIONS = ["from"] as const;
@@ -119,6 +121,26 @@ function formatDomainErrorHuman(message: string, details: Record<string, unknown
 
 function isStorageBootstrapError(code: string): boolean {
   return code === "tracked_ignored_mismatch" || code === "ambiguous_legacy_state" || code === "legacy_import_failed";
+}
+
+function formatTheirsConfirmation(preview: ResolvePreviewSummary): string {
+  return [
+    `Resolve conflict ${preview.conflictId} using theirs?`,
+    `  Field: ${preview.fieldName}`,
+    `  Current (ours): ${JSON.stringify(preview.oursValue)}`,
+    `  Incoming (theirs): ${JSON.stringify(preview.theirsValue)}`,
+    "Confirm? [y/N] ",
+  ].join("\n");
+}
+
+function promptConfirmation(message: string): Promise<boolean> {
+  return new Promise<boolean>((resolve): void => {
+    const rl = createInterface({ input: process.stdin, output: process.stderr });
+    rl.question(message, (answer: string): void => {
+      rl.close();
+      resolve(answer.trim().toLowerCase() === "y");
+    });
+  });
 }
 
 export async function runSync(context: CliContext): Promise<CliResult> {
@@ -238,6 +260,27 @@ export async function runSync(context: CliContext): Promise<CliResult> {
           ].join("\n"),
           data: preview,
         });
+      }
+
+      if (rawResolution === "theirs" && context.mode !== "toon") {
+        const preview = syncResolvePreview(context.cwd, conflictId, rawResolution as SyncResolution);
+        const confirmed = await promptConfirmation(formatTheirsConfirmation(preview));
+
+        if (!confirmed) {
+          return failResult({
+            command: "sync.resolve",
+            human: "Resolution cancelled by user.",
+            data: {
+              conflictId,
+              resolution: rawResolution,
+              cancelled: true,
+            },
+            error: {
+              code: "cancelled",
+              message: "Resolution cancelled by user.",
+            },
+          });
+        }
       }
 
       const summary = syncResolve(context.cwd, conflictId, rawResolution as SyncResolution);
