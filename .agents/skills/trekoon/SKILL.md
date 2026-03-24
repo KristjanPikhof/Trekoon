@@ -504,8 +504,9 @@ Rules:
 
 Use `session` as the primary entry point — it returns diagnostics, sync status,
 and the next ready task in one call. Use `suggest` for priority-ranked
-recommendations. Use `quickstart` and `help` only when the operator needs a
-human-readable walkthrough or exact flag syntax.
+recommendations. Use `quickstart` for the canonical bootstrapping walkthrough
+and execution loop reference. Use `help` when you need exact flag syntax for a
+specific command.
 
 ## Sync reminders
 
