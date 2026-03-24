@@ -207,25 +207,41 @@ export function pruneResolvedConflicts(db: Database, options: ConflictPruneOptio
   const now: number = options.now ?? Date.now();
   const cutoffTimestamp: number = now - retentionDays * DAY_IN_MILLISECONDS;
 
-  const candidateRow = db
-    .query(
-      "SELECT COUNT(*) AS count FROM sync_conflicts WHERE resolution != 'pending' AND updated_at < ?;",
-    )
-    .get(cutoffTimestamp) as { count: number } | null;
+  if (dryRun) {
+    const candidateRow = db
+      .query(
+        "SELECT COUNT(*) AS count FROM sync_conflicts WHERE resolution != 'pending' AND updated_at < ?;",
+      )
+      .get(cutoffTimestamp) as { count: number } | null;
 
-  const candidateCount: number = candidateRow?.count ?? 0;
-
-  if (dryRun || candidateCount === 0) {
     return {
       retentionDays,
       cutoffTimestamp,
       dryRun,
-      candidateCount,
+      candidateCount: candidateRow?.count ?? 0,
       deletedCount: 0,
     };
   }
 
   return writeTransaction(db, (): ConflictPruneSummary => {
+    const candidateRow = db
+      .query(
+        "SELECT COUNT(*) AS count FROM sync_conflicts WHERE resolution != 'pending' AND updated_at < ?;",
+      )
+      .get(cutoffTimestamp) as { count: number } | null;
+
+    const candidateCount: number = candidateRow?.count ?? 0;
+
+    if (candidateCount === 0) {
+      return {
+        retentionDays,
+        cutoffTimestamp,
+        dryRun,
+        candidateCount,
+        deletedCount: 0,
+      };
+    }
+
     const deleted = db
       .query(
         "DELETE FROM sync_conflicts WHERE resolution != 'pending' AND updated_at < ?;",
