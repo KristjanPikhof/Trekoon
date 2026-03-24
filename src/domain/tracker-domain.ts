@@ -401,8 +401,14 @@ export class TrackerDomain {
       };
     }
 
-    // Callers must wrap this method in a writeTransaction (see MutationService)
-    // so that chunked inserts roll back atomically on failure.
+    if (!this.#db.inTransaction) {
+      throw new DomainError({
+        code: "invalid_state",
+        message: "createTaskBatch must be called inside a writeTransaction",
+        details: { entity: "task" },
+      });
+    }
+
     const TASK_COLS_PER_ROW = 7; // id, epic_id, title, description, status, created_at, updated_at (version is literal 1)
     const WRITE_CHUNK_SIZE: number = Math.floor(SQLITE_MAX_VARIABLES / TASK_COLS_PER_ROW);
     const batchTimestamp: number = Date.now();
@@ -548,9 +554,13 @@ export class TrackerDomain {
     const defaultTaskId: string = assertNonEmpty("taskId", input.taskId);
     this.getTaskOrThrow(defaultTaskId);
 
+    const validatedTaskIds = new Set<string>([defaultTaskId]);
     const validatedSpecs: ValidatedSubtaskBatchSpec[] = input.specs.map((spec) => {
       const taskId = spec.parent.kind === "id" ? assertNonEmpty("taskId", spec.parent.id) : defaultTaskId;
-      this.getTaskOrThrow(taskId);
+      if (!validatedTaskIds.has(taskId)) {
+        this.getTaskOrThrow(taskId);
+        validatedTaskIds.add(taskId);
+      }
 
       return {
         tempKey: assertNonEmpty("tempKey", spec.tempKey),
@@ -570,8 +580,14 @@ export class TrackerDomain {
       };
     }
 
-    // Callers must wrap this method in a writeTransaction (see MutationService)
-    // so that chunked inserts roll back atomically on failure.
+    if (!this.#db.inTransaction) {
+      throw new DomainError({
+        code: "invalid_state",
+        message: "createSubtaskBatch must be called inside a writeTransaction",
+        details: { entity: "subtask" },
+      });
+    }
+
     const SUBTASK_COLS_PER_ROW = 7; // id, task_id, title, description, status, created_at, updated_at (version is literal 1)
     const WRITE_CHUNK_SIZE: number = Math.floor(SQLITE_MAX_VARIABLES / SUBTASK_COLS_PER_ROW);
     const batchTimestamp: number = Date.now();
@@ -1038,6 +1054,9 @@ export class TrackerDomain {
     }
 
     const dependencies: DependencyRecord[] = [];
+    const newIds: string[] = [];
+    const batchNow: number = Date.now();
+
     for (const spec of resolvedSpecs) {
       const edgeKey = `${spec.sourceId}\0${spec.dependsOnId}`;
       const existing = existingEdgeMap.get(edgeKey);
@@ -1047,15 +1066,33 @@ export class TrackerDomain {
       }
 
       const id: string = randomUUID();
-      const now: number = Date.now();
 
       this.#db
         .query(
           "INSERT INTO dependencies (id, source_id, source_kind, depends_on_id, depends_on_kind, created_at, updated_at, version) VALUES (?, ?, ?, ?, ?, ?, ?, 1);",
         )
-        .run(id, spec.sourceId, spec.sourceKind, spec.dependsOnId, spec.dependsOnKind, now, now);
+        .run(id, spec.sourceId, spec.sourceKind, spec.dependsOnId, spec.dependsOnKind, batchNow, batchNow);
 
-      dependencies.push(this.getDependencyOrThrow(id));
+      newIds.push(id);
+    }
+
+    // Batch-fetch all newly inserted dependencies instead of one getDependencyOrThrow per row.
+    for (let offset = 0; offset < newIds.length; offset += SQLITE_MAX_VARIABLES) {
+      const chunkIds = newIds.slice(offset, offset + SQLITE_MAX_VARIABLES);
+      const inPlaceholders: string = chunkIds.map(() => "?").join(", ");
+      const rows = this.#db
+        .query(
+          `SELECT id, source_id, source_kind, depends_on_id, depends_on_kind, created_at, updated_at FROM dependencies WHERE id IN (${inPlaceholders});`,
+        )
+        .all(...chunkIds) as DependencyRow[];
+      const rowMap = new Map(rows.map((row) => [row.id, row]));
+      for (const id of chunkIds) {
+        const row = rowMap.get(id);
+        if (!row) {
+          throw new DomainError({ code: "not_found", message: `dependency not found: ${id}`, details: { entity: "dependency", id } });
+        }
+        dependencies.push(mapDependency(row));
+      }
     }
 
     return {
@@ -1722,30 +1759,33 @@ export class TrackerDomain {
       return [];
     }
 
-    // Batch-fetch all dependency rows with their target statuses using a single
-    // prepared statement (one execution per eligible ID), mirroring the JOIN
-    // pattern from batchResolveDependencyStatuses.  This eliminates the previous
-    // N+1 pattern of listDependencies() + getTask()/getSubtask() per edge.
-    const stmt = this.#db.query(
-      `SELECT d.source_id, d.source_kind, d.depends_on_id, d.depends_on_kind,
-              COALESCE(t.status, s.status) AS dep_status
-       FROM dependencies d
-       LEFT JOIN tasks t ON d.depends_on_kind = 'task' AND d.depends_on_id = t.id
-       LEFT JOIN subtasks s ON d.depends_on_kind = 'subtask' AND d.depends_on_id = s.id
-       WHERE d.source_id = ?
-       ORDER BY d.created_at ASC, d.id ASC;`,
-    );
+    // Batch-fetch all dependency rows with their target statuses using a
+    // chunked IN query with JOINs.  This replaces the previous per-ID
+    // prepared statement approach, reducing N queries to ceil(N/999).
+    type DepStatusRow = {
+      source_id: string;
+      source_kind: "task" | "subtask";
+      depends_on_id: string;
+      depends_on_kind: "task" | "subtask";
+      dep_status: string | null;
+    };
 
     const blockers: StatusCascadeBlocker[] = [];
 
-    for (const sourceId of eligibleIds) {
-      const rows = stmt.all(sourceId) as Array<{
-        source_id: string;
-        source_kind: "task" | "subtask";
-        depends_on_id: string;
-        depends_on_kind: "task" | "subtask";
-        dep_status: string | null;
-      }>;
+    for (let offset = 0; offset < eligibleIds.length; offset += SQLITE_MAX_VARIABLES) {
+      const chunkIds = eligibleIds.slice(offset, offset + SQLITE_MAX_VARIABLES);
+      const inPlaceholders: string = chunkIds.map(() => "?").join(", ");
+      const rows = this.#db
+        .query(
+          `SELECT d.source_id, d.source_kind, d.depends_on_id, d.depends_on_kind,
+                  COALESCE(t.status, s.status) AS dep_status
+           FROM dependencies d
+           LEFT JOIN tasks t ON d.depends_on_kind = 'task' AND d.depends_on_id = t.id
+           LEFT JOIN subtasks s ON d.depends_on_kind = 'subtask' AND d.depends_on_id = s.id
+           WHERE d.source_id IN (${inPlaceholders})
+           ORDER BY d.created_at ASC, d.id ASC;`,
+        )
+        .all(...chunkIds) as DepStatusRow[];
 
       for (const row of rows) {
         // Skip orphaned dependency rows where the referenced node no longer exists.
