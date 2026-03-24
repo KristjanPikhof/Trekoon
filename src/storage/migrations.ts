@@ -70,7 +70,6 @@ const LOOKUP_INDEX_MIGRATION_DOWN_STATEMENTS: readonly string[] = [
   "DROP INDEX IF EXISTS idx_subtasks_owner;",
   "DROP INDEX IF EXISTS idx_tasks_owner;",
   "DROP INDEX IF EXISTS idx_dependencies_depends_on_kind;",
-  "DROP INDEX IF EXISTS idx_conflicts_entity;",
 ];
 
 function tableHasColumn(db: Database, tableName: string, columnName: string): boolean {
