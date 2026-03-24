@@ -284,8 +284,12 @@ Conflicts are **field-level**, not whole-record. Each conflict targets a single
 field (`status`, `title`, `description`, etc.) on one entity (epic, task, or
 subtask).
 
-- `--use ours` — keep the current value in the shared DB. No write occurs.
-- `--use theirs` — overwrite the shared DB field with the source-branch value.
+- `--use ours` — keep the current entity field value in the shared DB. The
+  entity is not written, but the conflict record is marked resolved and a
+  resolution event is appended.
+- `--use theirs` — overwrite the shared DB entity field with the source-branch
+  value. The conflict record is marked resolved and a resolution event is
+  appended.
 
 **Example:** after `sync pull --from main`, a conflict appears on epic `abc123`,
 field `status`:
@@ -297,6 +301,17 @@ field `status`:
 Always inspect conflicts before resolving. Choosing `theirs` without inspection
 can overwrite in-progress work.
 
+Use `--dry-run` to preview what a resolution would do without mutating the
+database:
+
+```bash
+trekoon --toon sync resolve <conflict-id> --use theirs --dry-run
+```
+
+In human mode (no `--toon`), `--use theirs` shows an interactive confirmation
+prompt with a 30-second timeout that defaults to rejection. Toon mode skips the
+prompt.
+
 Useful commands:
 
 ```bash
@@ -304,6 +319,7 @@ trekoon --toon sync status
 trekoon --toon sync pull --from main
 trekoon --toon sync conflicts list
 trekoon --toon sync conflicts show <conflict-id>
+trekoon --toon sync resolve <conflict-id> --use theirs --dry-run
 trekoon --toon sync resolve <conflict-id> --use ours
 ```
 
