@@ -401,12 +401,15 @@ export class TrackerDomain {
       };
     }
 
+    // Callers must wrap this method in a writeTransaction (see MutationService)
+    // so that chunked inserts roll back atomically on failure.
     const TASK_COLS_PER_ROW = 7; // id, epic_id, title, description, status, created_at, updated_at (version is literal 1)
     const WRITE_CHUNK_SIZE: number = Math.floor(SQLITE_MAX_VARIABLES / TASK_COLS_PER_ROW);
+    const batchTimestamp: number = Date.now();
 
     const prepared: Array<{ id: string; now: number; spec: ValidatedTaskBatchSpec }> = validatedSpecs.map((spec) => ({
       id: randomUUID(),
-      now: Date.now(),
+      now: batchTimestamp,
       spec,
     }));
 
@@ -567,12 +570,15 @@ export class TrackerDomain {
       };
     }
 
+    // Callers must wrap this method in a writeTransaction (see MutationService)
+    // so that chunked inserts roll back atomically on failure.
     const SUBTASK_COLS_PER_ROW = 7; // id, task_id, title, description, status, created_at, updated_at (version is literal 1)
     const WRITE_CHUNK_SIZE: number = Math.floor(SQLITE_MAX_VARIABLES / SUBTASK_COLS_PER_ROW);
+    const batchTimestamp: number = Date.now();
 
     const prepared: Array<{ id: string; now: number; spec: ValidatedSubtaskBatchSpec }> = validatedSpecs.map((spec) => ({
       id: randomUUID(),
-      now: Date.now(),
+      now: batchTimestamp,
       spec,
     }));
 
