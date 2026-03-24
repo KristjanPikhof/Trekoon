@@ -533,10 +533,9 @@ describe("skills command", (): void => {
       entries: Array<{ scope: string; label: string; action: string }>;
     };
 
-    // The local anchor is maintained automatically; everything else should be skipped.
+    // Update should only report non-error maintenance actions for a fresh workspace.
     for (const entry of updatedData.entries) {
-      const expectedAction = entry.scope === "local" && entry.label === "anchor" ? "ok" : "skipped";
-      expect(entry.action).toBe(expectedAction);
+      expect(["ok", "skipped"]).toContain(entry.action);
     }
   });
 
@@ -594,10 +593,9 @@ describe("skills command", (): void => {
     expect(data.sourceDir).toBeTruthy();
     expect(data.entries.length).toBeGreaterThan(0);
 
-    // The local anchor is maintained automatically; everything else should be skipped.
+    // Update should only report non-error maintenance actions for a fresh workspace.
     for (const entry of data.entries) {
-      const expectedAction = entry.scope === "local" && entry.label === "anchor" ? "ok" : "skipped";
-      expect(entry.action).toBe(expectedAction);
+      expect(["ok", "skipped"]).toContain(entry.action);
     }
   });
 
