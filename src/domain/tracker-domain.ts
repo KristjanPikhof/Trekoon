@@ -391,19 +391,45 @@ export class TrackerDomain {
       status: normalizeStatus(spec.status),
     }));
 
-    const tasks: TaskRecord[] = [];
-    for (const spec of validatedSpecs) {
-      const now: number = Date.now();
-      const id: string = randomUUID();
+    const TASK_COLS_PER_ROW = 7; // id, epic_id, title, description, status, created_at, updated_at (version is literal 1)
+    const CHUNK_SIZE: number = Math.floor(999 / TASK_COLS_PER_ROW);
 
+    const prepared: Array<{ id: string; now: number; spec: ValidatedTaskBatchSpec }> = validatedSpecs.map((spec) => ({
+      id: randomUUID(),
+      now: Date.now(),
+      spec,
+    }));
+
+    for (let offset = 0; offset < prepared.length; offset += CHUNK_SIZE) {
+      const chunk = prepared.slice(offset, offset + CHUNK_SIZE);
+      const placeholders: string = chunk.map(() => "(?, ?, ?, ?, ?, ?, ?, 1)").join(", ");
+      const params: Array<string | number> = [];
+      for (const item of chunk) {
+        params.push(item.id, epicId, item.spec.title, item.spec.description, item.spec.status, item.now, item.now);
+      }
       this.#db
         .query(
-          "INSERT INTO tasks (id, epic_id, title, description, status, created_at, updated_at, version) VALUES (?, ?, ?, ?, ?, ?, ?, 1);",
+          `INSERT INTO tasks (id, epic_id, title, description, status, created_at, updated_at, version) VALUES ${placeholders};`,
         )
-        .run(id, epicId, spec.title, spec.description, spec.status, now, now);
-
-      tasks.push(this.getTaskOrThrow(id));
+        .run(...params);
     }
+
+    const allIds: string[] = prepared.map((p) => p.id);
+    const inPlaceholders: string = allIds.map(() => "?").join(", ");
+    const fetchedRows = this.#db
+      .query(
+        `SELECT id, epic_id, title, description, status, owner, created_at, updated_at FROM tasks WHERE id IN (${inPlaceholders});`,
+      )
+      .all(...allIds) as TaskRow[];
+
+    const rowById = new Map<string, TaskRow>(fetchedRows.map((row) => [row.id, row]));
+    const tasks: TaskRecord[] = allIds.map((id) => {
+      const row = rowById.get(id);
+      if (!row) {
+        throw new DomainError({ code: "not_found", message: `task not found: ${id}`, details: { entity: "task", id } });
+      }
+      return mapTask(row);
+    });
 
     return {
       tasks,
@@ -517,19 +543,49 @@ export class TrackerDomain {
       };
     });
 
-    const subtasks: SubtaskRecord[] = [];
-    for (const spec of validatedSpecs) {
-      const now: number = Date.now();
-      const id: string = randomUUID();
+    const SUBTASK_COLS_PER_ROW = 7; // id, task_id, title, description, status, created_at, updated_at (version is literal 1)
+    const CHUNK_SIZE: number = Math.floor(999 / SUBTASK_COLS_PER_ROW);
 
+    const prepared: Array<{ id: string; now: number; spec: ValidatedSubtaskBatchSpec }> = validatedSpecs.map((spec) => ({
+      id: randomUUID(),
+      now: Date.now(),
+      spec,
+    }));
+
+    for (let offset = 0; offset < prepared.length; offset += CHUNK_SIZE) {
+      const chunk = prepared.slice(offset, offset + CHUNK_SIZE);
+      const placeholders: string = chunk.map(() => "(?, ?, ?, ?, ?, ?, ?, 1)").join(", ");
+      const params: Array<string | number> = [];
+      for (const item of chunk) {
+        params.push(item.id, item.spec.taskId, item.spec.title, item.spec.description, item.spec.status, item.now, item.now);
+      }
       this.#db
         .query(
-          "INSERT INTO subtasks (id, task_id, title, description, status, created_at, updated_at, version) VALUES (?, ?, ?, ?, ?, ?, ?, 1);",
+          `INSERT INTO subtasks (id, task_id, title, description, status, created_at, updated_at, version) VALUES ${placeholders};`,
         )
-        .run(id, spec.taskId, spec.title, spec.description, spec.status, now, now);
-
-      subtasks.push(this.getSubtaskOrThrow(id));
+        .run(...params);
     }
+
+    const allIds: string[] = prepared.map((p) => p.id);
+    const inPlaceholders: string = allIds.map(() => "?").join(", ");
+    const fetchedRows = this.#db
+      .query(
+        `SELECT id, task_id, title, description, status, owner, created_at, updated_at FROM subtasks WHERE id IN (${inPlaceholders});`,
+      )
+      .all(...allIds) as SubtaskRow[];
+
+    const rowById = new Map<string, SubtaskRow>(fetchedRows.map((row) => [row.id, row]));
+    const subtasks: SubtaskRecord[] = allIds.map((id) => {
+      const row = rowById.get(id);
+      if (!row) {
+        throw new DomainError({
+          code: "not_found",
+          message: `subtask not found: ${id}`,
+          details: { entity: "subtask", id },
+        });
+      }
+      return mapSubtask(row);
+    });
 
     return {
       subtasks,
