@@ -264,13 +264,16 @@ ok: false
 error:
   code: status_transition_invalid
   message: "cannot transition <kind> <id> from '<from>' to '<to>'"
-  details:
-    entity: epic|task|subtask
-    id: <entity-id>
-    fromStatus: <current-status>
-    toStatus: <attempted-status>
-    allowedTransitions[]: <valid targets from current status>
+data:
+  entity: epic|task|subtask
+  id: <entity-id>
+  fromStatus: <current-status>
+  toStatus: <attempted-status>
+  allowedTransitions[]: <valid targets from current status>
 ```
+
+Note: the transition details are in `data`, not `error.details`. `error` only
+contains `code` and `message`.
 
 ## Epic progress contract
 
@@ -365,6 +368,31 @@ data:
 
 The board API accepts `owner` on `PATCH /api/tasks/{id}` and
 `PATCH /api/subtasks/{id}`.
+
+## Sync resolve dry-run contract
+
+```bash
+trekoon --toon sync resolve <conflict-id> --use ours|theirs --dry-run
+```
+
+Payload fields:
+
+```text
+ok: true
+command: sync.resolve
+data:
+  conflictId: <conflict-id>
+  resolution: ours|theirs
+  entityKind: epic|task|subtask
+  entityId: <entity-id>
+  fieldName: <conflicted field>
+  oursValue: <current DB value>
+  theirsValue: <source branch value>
+  wouldWrite: <value that would be written>
+  dryRun: true
+```
+
+No database mutation occurs. The conflict remains pending.
 
 ## Related docs
 
