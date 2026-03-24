@@ -1062,6 +1062,29 @@ export function getSyncConflict(cwd: string, conflictId: string): SyncConflictDe
   }
 }
 
+function lookupPendingConflict(db: Database, conflictId: string): ConflictRow {
+  const conflict = db
+    .query(
+      `
+      SELECT id, event_id, entity_kind, entity_id, field_name, ours_value, theirs_value, resolution, created_at, updated_at
+      FROM sync_conflicts
+      WHERE id = ?
+      LIMIT 1;
+      `,
+    )
+    .get(conflictId) as ConflictRow | null;
+
+  if (!conflict) {
+    throw new Error(`Conflict '${conflictId}' not found.`);
+  }
+
+  if (conflict.resolution !== "pending") {
+    throw new Error(`Conflict '${conflictId}' already resolved.`);
+  }
+
+  return conflict;
+}
+
 export function syncResolve(cwd: string, conflictId: string, resolution: SyncResolution): ResolveSummary {
   const storage = openTrekoonDatabase(cwd);
   const git = resolveGitContext(cwd);
@@ -1069,24 +1092,7 @@ export function syncResolve(cwd: string, conflictId: string, resolution: SyncRes
   try {
     persistGitContext(storage.db, git);
 
-    const conflict = storage.db
-      .query(
-        `
-        SELECT id, event_id, entity_kind, entity_id, field_name, ours_value, theirs_value, resolution, created_at, updated_at
-        FROM sync_conflicts
-        WHERE id = ?
-        LIMIT 1;
-        `,
-      )
-      .get(conflictId) as ConflictRow | null;
-
-    if (!conflict) {
-      throw new Error(`Conflict '${conflictId}' not found.`);
-    }
-
-    if (conflict.resolution !== "pending") {
-      throw new Error(`Conflict '${conflictId}' already resolved.`);
-    }
+    const conflict = lookupPendingConflict(storage.db, conflictId);
 
     writeTransaction(storage.db, (): void => {
       if (resolution === "theirs") {
@@ -1123,24 +1129,7 @@ export function syncResolvePreview(cwd: string, conflictId: string, resolution: 
   const storage = openTrekoonDatabase(cwd);
 
   try {
-    const conflict = storage.db
-      .query(
-        `
-        SELECT id, event_id, entity_kind, entity_id, field_name, ours_value, theirs_value, resolution, created_at, updated_at
-        FROM sync_conflicts
-        WHERE id = ?
-        LIMIT 1;
-        `,
-      )
-      .get(conflictId) as ConflictRow | null;
-
-    if (!conflict) {
-      throw new Error(`Conflict '${conflictId}' not found.`);
-    }
-
-    if (conflict.resolution !== "pending") {
-      throw new Error(`Conflict '${conflictId}' already resolved.`);
-    }
+    const conflict = lookupPendingConflict(storage.db, conflictId);
 
     const oursValue: unknown = parseConflictValue(conflict.ours_value);
     const theirsValue: unknown = parseConflictValue(conflict.theirs_value);
