@@ -300,6 +300,8 @@ const SYNC_HELP = [
   "      Show full details for one conflict.",
   "  resolve <conflict-id> --use ours|theirs [--dry-run]",
   "      Resolve a conflict. --dry-run previews without writing.",
+  "  resolve --all --use ours|theirs [--entity <id>] [--field <name>] [--dry-run]",
+  "      Batch-resolve all pending conflicts matching filters.",
   "",
   "Ours vs theirs:",
   "  Conflicts are field-level (e.g., status, title, description on one entity).",
@@ -326,6 +328,9 @@ const SYNC_HELP = [
   "  trekoon sync conflicts list --mode all",
   "  trekoon sync conflicts show <conflict-id>",
   "  trekoon sync resolve <conflict-id> --use ours",
+  "  trekoon sync resolve --all --use ours",
+  "  trekoon sync resolve --all --use ours --field status",
+  "  trekoon sync resolve --all --use ours --entity <id> --dry-run",
 ].join("\n");
 
 const SESSION_HELP = [
