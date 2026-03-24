@@ -13,6 +13,7 @@ import { runTask } from "../../src/commands/task";
 import { buildTaskReadiness } from "../../src/commands/task-readiness";
 import { TrackerDomain } from "../../src/domain/tracker-domain";
 import { toToonEnvelope } from "../../src/io/output";
+import { writeTransaction } from "../../src/storage/database";
 import { openTrekoonDatabase } from "../../src/storage/database";
 
 const tempDirs: string[] = [];
@@ -222,7 +223,7 @@ describe("batch creation boundaries", (): void => {
         status: "todo",
       }));
 
-      const result = domain.createTaskBatch({ epicId: epic.id, specs });
+      const result = writeTransaction(storage.db, () => domain.createTaskBatch({ epicId: epic.id, specs }));
 
       expect(result.tasks).toHaveLength(specs.length);
       expect(result.result.mappings).toHaveLength(specs.length);
@@ -248,7 +249,7 @@ describe("batch creation boundaries", (): void => {
         status: "todo",
       }));
 
-      const result = domain.createSubtaskBatch({ taskId: task.id, specs });
+      const result = writeTransaction(storage.db, () => domain.createSubtaskBatch({ taskId: task.id, specs }));
 
       expect(result.subtasks).toHaveLength(specs.length);
       expect(result.result.mappings).toHaveLength(specs.length);
