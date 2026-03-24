@@ -2,6 +2,60 @@
 
 All notable changes to Trekoon are documented in this file.
 
+## 0.3.4
+
+### Added
+
+- `sync resolve --dry-run` flag that previews what a resolution would do without
+  mutating the database, returning ours/theirs values and what would be written.
+- User confirmation prompt for `sync resolve --use theirs` in human mode,
+  showing the field, current value, and incoming value before overwriting the
+  shared database. Toon (machine) mode skips the prompt. Includes a 30-second
+  timeout that defaults to rejection.
+- `ResolvePreviewSummary` interface in sync types for structured dry-run output.
+- Resolved-conflict pruning via `pruneResolvedConflicts` with configurable
+  retention (default 30 days), dry-run support, and transaction-wrapped deletes.
+- Database migration v7 (`0007_add_lookup_indexes`): adds indexes on
+  `dependencies(depends_on_id, depends_on_kind)`, `tasks(owner)`,
+  `subtasks(owner)`, and `sync_conflicts(resolution, updated_at)`.
+- Conflict resolution semantics documentation in SKILL.md, ai-agents.md,
+  quickstart.md, and CLI help text, explaining field-level ours/theirs behavior.
+- Shared-database model documentation in SKILL.md and ai-agents.md, clarifying
+  that all worktrees share one live SQLite database.
+- Pre-merge sync flow guide in quickstart.md with step-by-step conflict
+  inspection workflow.
+- Tests for large batch creation exceeding SQLite variable limit (1005 items),
+  dry-run preview, confirmation prompt acceptance/rejection, toon-mode prompt
+  bypass, stale-event/conflict session diagnostics, and migration v7
+  rollback.
+
+### Changed
+
+- Batch task and subtask creation (`createTaskBatch`, `createSubtaskBatch`) now
+  uses chunked multi-row `INSERT` statements respecting the SQLite 999-variable
+  limit, followed by a batched `SELECT ... WHERE id IN (...)` fetch, replacing
+  the previous per-row insert-then-fetch loop.
+- Dependency edge lookup during `addDependencyBatch` now uses a single prepared
+  statement reused across specs instead of per-spec `#getDependencyByEdge`
+  calls.
+- Status cascade blocker detection replaced N+1 `listDependencies` +
+  `getTask`/`getSubtask` calls with a single SQL query joining dependencies
+  against tasks and subtasks to resolve statuses in one pass.
+- `appendEventWithGitContext` return type changed from `string` to `void`; no
+  callers used the returned event ID.
+- Quickstart pre-merge flow expanded from a single resolve command to a
+  three-step inspect-then-resolve workflow.
+- `lookupPendingConflict` extracted as a shared helper used by both
+  `syncResolve` and `syncResolvePreview`.
+- Skills update test expectations relaxed to accept `ok` alongside `skipped`
+  for fresh workspaces.
+- Concurrency test array access updated for stricter null safety.
+
+### Fixed
+
+- Session diagnostics no longer prune events or conflicts as a side effect;
+  pruning metrics are reported without mutation.
+
 ## 0.3.3
 
 ### Added
