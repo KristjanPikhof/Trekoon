@@ -154,8 +154,8 @@ describe("cli shell dispatch", (): void => {
     expect(syncData.text).toContain("resolve <conflict-id> --use ours|theirs");
 
     expect(skillsData.topic).toBe("skills");
-    expect(skillsData.text).toContain("Local install behavior");
-    expect(skillsData.text).toContain("Global install behavior");
+    expect(skillsData.text).toContain("Local install (default):");
+    expect(skillsData.text).toContain("Global install (-g|--global):");
     expect(skillsData.text).toContain("--allow-outside-repo");
   });
 
@@ -174,21 +174,20 @@ describe("cli shell dispatch", (): void => {
     const wipeData = wipeHelp.data as { topic: string; text: string };
 
     expect(initData.topic).toBe("init");
-    expect(initData.text).toContain("Purpose:");
-    expect(initData.text).toContain("Initialize repo-scoped Trekoon storage");
+    expect(initData.text).toContain("re-bootstraps the repo-scoped .trekoon");
     expect(initData.text).toContain("Keep .trekoon gitignored");
 
     expect(quickstartData.topic).toBe("quickstart");
-    expect(quickstartData.text).toContain("Primary flow (session-first):");
+    expect(quickstartData.text).toContain("Recommended startup flow:");
     expect(quickstartData.text).toContain("trekoon --toon session");
-    expect(quickstartData.text).toContain("Fail fast on recoveryRequired");
+    expect(quickstartData.text).toContain("recoveryRequired");
     expect(quickstartData.text).toContain("trekoon --toon task done <task-id>");
 
     expect(wipeData.topic).toBe("wipe");
-    expect(wipeData.text).toContain("shared Trekoon storage directory");
-    expect(wipeData.text).toContain("same .trekoon state for every linked worktree");
-    expect(wipeData.text).toContain("--yes  Required confirmation for destructive repo-wide removal");
-    expect(wipeData.text).toContain("Do not use wipe to fix gitignore mistakes");
+    expect(wipeData.text).toContain("shared .trekoon directory");
+    expect(wipeData.text).toContain("erases state for every linked worktree");
+    expect(wipeData.text).toContain("--yes  Required");
+    expect(wipeData.text).toContain("Don't use this for routine cleanup");
   });
 
   test("dispatches board update and board help", async (): Promise<void> => {
