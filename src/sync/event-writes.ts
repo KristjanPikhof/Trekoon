@@ -11,6 +11,11 @@ interface EventRecordInput {
   readonly fields: Record<string, unknown>;
 }
 
+export interface AppendEventResult {
+  readonly eventId: string;
+  readonly timestamp: number;
+}
+
 function nextEventTimestamp(db: Database): number {
   const now: number = Date.now();
   const latestEvent = db
@@ -31,11 +36,19 @@ function nextEventTimestamp(db: Database): number {
   return Math.max(now, latestEvent.created_at + 1);
 }
 
-export function appendEventWithGitContext(db: Database, cwd: string, input: EventRecordInput): string {
+export function appendEventWithGitContext(
+  db: Database,
+  cwd: string,
+  input: EventRecordInput,
+  cachedTimestamp?: number,
+): AppendEventResult {
   const git = resolveGitContext(cwd);
   persistGitContext(db, git);
 
-  const now: number = nextEventTimestamp(db);
+  const now: number =
+    cachedTimestamp !== undefined
+      ? Math.max(cachedTimestamp + 1, Date.now())
+      : nextEventTimestamp(db);
   const eventId: string = randomUUID();
 
   db.query(
@@ -65,5 +78,5 @@ export function appendEventWithGitContext(db: Database, cwd: string, input: Even
     now,
   );
 
-  return eventId;
+  return { eventId, timestamp: now };
 }
