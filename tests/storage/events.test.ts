@@ -6,6 +6,7 @@ import { join } from "node:path";
 import { afterEach, describe, expect, test } from "bun:test";
 
 import { type EventPruneSummary, pruneEvents, pruneResolvedConflicts } from "../../src/storage/events-retention";
+import { nextEventTimestamp } from "../../src/sync/event-writes";
 import { openTrekoonDatabase } from "../../src/storage/database";
 
 const DAY_IN_MILLISECONDS = 24 * 60 * 60 * 1000;
@@ -353,6 +354,64 @@ describe("event retention", (): void => {
 
       expect(summary.candidateCount).toBe(1);
       expect(summary.deletedCount).toBe(0);
+    } finally {
+      storage.close();
+    }
+  });
+
+  test("nextEventTimestamp returns Date.now when no events exist", (): void => {
+    const workspace: string = createWorkspace();
+    const storage = openTrekoonDatabase(workspace);
+
+    try {
+      const before: number = Date.now();
+      const ts: number = nextEventTimestamp(storage.db);
+      const after: number = Date.now();
+
+      expect(ts).toBeGreaterThanOrEqual(before);
+      expect(ts).toBeLessThanOrEqual(after);
+    } finally {
+      storage.close();
+    }
+  });
+
+  test("nextEventTimestamp returns latest + 1 when Date.now would collide", (): void => {
+    const workspace: string = createWorkspace();
+    const storage = openTrekoonDatabase(workspace);
+
+    try {
+      // Insert an event with a timestamp far in the future so Date.now() < latest.
+      const futureTimestamp: number = Date.now() + 1_000_000;
+      insertEvent(storage.db, {
+        id: randomUUID(),
+        entityId: randomUUID(),
+        createdAt: futureTimestamp,
+      });
+
+      const ts: number = nextEventTimestamp(storage.db);
+
+      expect(ts).toBe(futureTimestamp + 1);
+    } finally {
+      storage.close();
+    }
+  });
+
+  test("nextEventTimestamp returns strictly increasing values for consecutive calls", (): void => {
+    const workspace: string = createWorkspace();
+    const storage = openTrekoonDatabase(workspace);
+
+    try {
+      const ts1: number = nextEventTimestamp(storage.db);
+      // Simulate the first event being written at ts1.
+      insertEvent(storage.db, {
+        id: randomUUID(),
+        entityId: randomUUID(),
+        createdAt: ts1,
+      });
+
+      const ts2: number = nextEventTimestamp(storage.db);
+
+      expect(ts2).toBeGreaterThan(ts1);
     } finally {
       storage.close();
     }
