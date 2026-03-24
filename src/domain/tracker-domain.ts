@@ -930,9 +930,26 @@ export class TrackerDomain {
       });
     }
 
+    // Batch-fetch all existing edges with a single prepared statement instead
+    // of one #getDependencyByEdge call per spec (eliminates N+1 pattern).
+    const edgeLookupStmt = this.#db.query(
+      "SELECT id, source_id, source_kind, depends_on_id, depends_on_kind, created_at, updated_at FROM dependencies WHERE source_id = ? AND depends_on_id = ?;",
+    );
+    const existingEdgeMap = new Map<string, DependencyRecord>();
+    for (const spec of resolvedSpecs) {
+      const edgeKey = `${spec.sourceId}\0${spec.dependsOnId}`;
+      if (!existingEdgeMap.has(edgeKey)) {
+        const row = edgeLookupStmt.get(spec.sourceId, spec.dependsOnId) as DependencyRow | null;
+        if (row) {
+          existingEdgeMap.set(edgeKey, mapDependency(row));
+        }
+      }
+    }
+
     const dependencies: DependencyRecord[] = [];
     for (const spec of resolvedSpecs) {
-      const existing = this.#getDependencyByEdge(spec.sourceId, spec.dependsOnId);
+      const edgeKey = `${spec.sourceId}\0${spec.dependsOnId}`;
+      const existing = existingEdgeMap.get(edgeKey);
       if (existing) {
         dependencies.push(existing);
         continue;
@@ -1602,36 +1619,61 @@ export class TrackerDomain {
       return [];
     }
 
-    const blockers: StatusCascadeBlocker[] = [];
+    // Collect all dependency-eligible change IDs upfront.
+    const eligibleIds: string[] = [];
     for (const change of changes) {
-      if (change.kind !== "task" && change.kind !== "subtask") {
-        continue;
+      if (change.kind === "task" || change.kind === "subtask") {
+        eligibleIds.push(change.id);
       }
+    }
 
-      for (const dependency of this.listDependencies(change.id)) {
-        const dependencyNode =
-          dependency.dependsOnKind === "task"
-            ? this.getTask(dependency.dependsOnId)
-            : this.getSubtask(dependency.dependsOnId);
+    if (eligibleIds.length === 0) {
+      return [];
+    }
 
+    // Batch-fetch all dependency rows with their target statuses using a single
+    // prepared statement (one execution per eligible ID), mirroring the JOIN
+    // pattern from batchResolveDependencyStatuses.  This eliminates the previous
+    // N+1 pattern of listDependencies() + getTask()/getSubtask() per edge.
+    const stmt = this.#db.query(
+      `SELECT d.source_id, d.source_kind, d.depends_on_id, d.depends_on_kind,
+              COALESCE(t.status, s.status) AS dep_status
+       FROM dependencies d
+       LEFT JOIN tasks t ON d.depends_on_kind = 'task' AND d.depends_on_id = t.id
+       LEFT JOIN subtasks s ON d.depends_on_kind = 'subtask' AND d.depends_on_id = s.id
+       WHERE d.source_id = ?
+       ORDER BY d.created_at ASC, d.id ASC;`,
+    );
+
+    const blockers: StatusCascadeBlocker[] = [];
+
+    for (const sourceId of eligibleIds) {
+      const rows = stmt.all(sourceId) as Array<{
+        source_id: string;
+        source_kind: "task" | "subtask";
+        depends_on_id: string;
+        depends_on_kind: "task" | "subtask";
+        dep_status: string | null;
+      }>;
+
+      for (const row of rows) {
         // Skip orphaned dependency rows where the referenced node no longer exists.
-        if (!dependencyNode) {
+        if (row.dep_status === null) {
           continue;
         }
 
-        const dependencyStatus = dependencyNode.status;
-        const inScope = scopeIdSet.has(dependency.dependsOnId);
-        const willCascade = targetStatus === "done" && changedIdSet.has(dependency.dependsOnId);
-        if (dependencyStatus === "done" || willCascade) {
+        const inScope = scopeIdSet.has(row.depends_on_id);
+        const willCascade = targetStatus === "done" && changedIdSet.has(row.depends_on_id);
+        if (row.dep_status === "done" || willCascade) {
           continue;
         }
 
         blockers.push({
-          sourceId: dependency.sourceId,
-          sourceKind: dependency.sourceKind,
-          dependsOnId: dependency.dependsOnId,
-          dependsOnKind: dependency.dependsOnKind,
-          dependsOnStatus: dependencyStatus,
+          sourceId: row.source_id,
+          sourceKind: row.source_kind,
+          dependsOnId: row.depends_on_id,
+          dependsOnKind: row.depends_on_kind,
+          dependsOnStatus: row.dep_status,
           inScope,
           willCascade,
         });
