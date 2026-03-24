@@ -1,11 +1,12 @@
 # Trekoon
 
-Local-first issue tracking for your terminal. Works for humans and AI agents
-against the same repo-scoped task graph.
+AI-first task tracking that lives in your repo. You describe what to build, your
+agent plans it as a dependency graph, then executes it task by task.
 
-You plan work as **epics > tasks > subtasks**, track it from the command line,
-and get structured output (`--toon`, `--json`) when automation needs to read it.
-No server, no accounts, no context switching.
+Trekoon stores work as **epics > tasks > subtasks** with dependency edges in a
+local SQLite database. Every command has structured output (`--toon`, `--json`)
+so agents can read and update state without parsing human text. No server, no
+accounts. The database lives in `.trekoon/` inside your repo.
 
 ## Install
 
@@ -19,84 +20,179 @@ Or via npm (Bun still needs to be installed as the runtime):
 npm i -g trekoon
 ```
 
-Then:
-
 ```bash
 trekoon init          # set up .trekoon/ in your repo
 trekoon quickstart    # walkthrough of the basics
 ```
 
-## Core commands
+## The two workflows
+
+Trekoon gives agents two modes: **plan** and **execute**. You can run them
+separately or back to back.
+
+### Plan
+
+Tell the agent what you want to build. It decomposes the feature into an epic
+with tasks, subtasks, and dependency edges, then writes the whole graph into
+Trekoon in a single transaction.
+
+```
+/trekoon <id> plan
+```
+
+What the agent does during planning:
+
+1. Asks clarifying questions if requirements are ambiguous
+2. Creates an epic with outcome-oriented title and scoped description
+3. Breaks it into tasks grouped by subsystem (auth, billing, UI, etc.)
+4. Adds subtasks with concrete file paths, acceptance criteria, and test commands
+5. Wires dependency edges so the execution order is explicit
+6. Assigns lane owners when multiple agents will work in parallel
+7. Validates the graph with `epic progress` and `suggest` before handing off
+
+Each task description includes target files, read-first files, do-not-touch
+paths, and verification commands. Another agent (or a human) can pick up any
+task and execute it without re-reading the codebase to figure out what to do.
+
+### Execute
+
+Point the agent at an epic and it works through the dependency graph
+automatically.
+
+```
+/trekoon <id> execute
+```
+
+What the agent does during execution:
+
+1. Runs `session --epic <id>` to get diagnostics, sync status, and the first
+   ready task
+2. Marks the epic `in_progress`
+3. Groups ready tasks into lanes by subsystem to minimize redundant codebase
+   exploration
+4. Spawns sub-agents for parallel lanes (auth tasks go to one agent, billing
+   tasks to another)
+5. Each sub-agent claims a task, does the work, appends progress notes, and
+   calls `task done`
+6. `task done` returns which downstream tasks just became unblocked, so the
+   orchestrator knows what to dispatch next
+7. After all tasks complete: code review, tests, manual verification, then marks
+   the epic `done`
+
+The orchestrator uses `task done` responses to drive the whole loop. No polling,
+no guessing. When a task finishes, Trekoon tells you exactly what's ready next.
+
+## Install the skill
+
+The `trekoon` skill is what teaches agents the planning methodology, execution
+orchestration, status machine rules, and command reference. Without the skill,
+agents don't know how to use Trekoon properly.
+
+```bash
+trekoon skills install          # repo-local (.agents/skills/trekoon/)
+trekoon skills install -g       # global (~/.agents/skills/trekoon)
+trekoon update                  # refresh all installed skill links
+```
+
+The skill bundles three reference documents that agents load on demand:
+
+| Agent needs to... | Skill reads | What it covers |
+| --- | --- | --- |
+| Plan a feature | `reference/planning.md` | Decomposition, writing standard, dependency modeling, validation |
+| Execute an epic | `reference/execution.md` | Graph building, lane grouping, sub-agent dispatch, verification |
+| Execute with Agent Teams | `reference/execution-with-team.md` | TeamCreate/SendMessage, parallel Claude Code instances |
+
+### Invoke the skill
+
+```
+/trekoon                     → load the skill
+/trekoon <id>                → show status and next steps for an entity
+/trekoon <id> plan           → decompose into tasks/subtasks/deps
+/trekoon <id> execute        → start the execution loop
+/trekoon <id> analyze        → run progress + suggest, report findings
+```
+
+### Example prompts
+
+Plan only:
+
+```
+/trekoon — plan this feature as one epic with tasks, subtasks, and dependencies
+```
+
+Execute only:
+
+```
+/trekoon <epic-id> execute
+```
+
+Plan and execute end to end:
+
+```
+/trekoon — plan this feature, create the backlog, then execute the tasks in
+dependency order until the epic is complete
+```
+
+## Agent Teams
+
+For larger epics, Trekoon supports Claude Code Agent Teams. Instead of
+sequential sub-agents, you get real parallel Claude Code instances coordinated
+through `TeamCreate` and `SendMessage`, each running in its own tmux pane.
+
+Requires `CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS=true`.
+
+The team lead orchestrator creates a team, populates a shared task list, spawns
+3-5 teammates per lane, and coordinates via messages. Teammates claim tasks,
+report completions and blockers, and the lead dispatches new work as tasks get
+unblocked.
+
+## Status machine
+
+Trekoon enforces valid transitions. You can't skip straight from `todo` to
+`done`.
+
+| From | Allowed targets |
+| --- | --- |
+| `todo` | `in_progress`, `blocked` |
+| `in_progress` | `done`, `blocked` |
+| `blocked` | `in_progress`, `todo` |
+| `done` | `in_progress` |
+
+Exception: `task done` auto-transitions through `in_progress`, so agents can
+call it from any non-done status.
+
+## Local board
+
+Trekoon includes a browser-based board for humans who want a visual overview.
+No build step, no framework dependencies, works offline.
+
+```bash
+trekoon board open      # starts a local server, opens browser
+trekoon board update    # refresh assets only
+```
+
+Binds to `127.0.0.1` only with a per-session token. Gives you an epics
+overview, kanban workspace per epic, task detail modals, and search.
+
+## Commands
 
 | What you want to do | How |
 | --- | --- |
 | Set up a repo | `trekoon init` |
 | Open the local board | `trekoon board open` |
-| Plan work | `trekoon epic ...`, `trekoon task ...`, `trekoon subtask ...` |
-| Add dependencies | `trekoon dep ...` |
+| Plan work | `trekoon epic create ...`, `trekoon epic expand ...` |
+| Create tasks in bulk | `trekoon task create-many ...` |
+| Add dependencies | `trekoon dep add-many ...` |
+| Start an agent session | `trekoon session --epic <id>` |
+| Get next-action suggestions | `trekoon suggest --epic <id>` |
 | Check epic progress | `trekoon epic progress <id>` |
-| Start an execution session | `trekoon session`, `trekoon session --epic <id>` |
-| Get next-action suggestions | `trekoon suggest`, `trekoon suggest --epic <id>` |
-| Sync across worktrees | `trekoon sync ...` |
-| Install the AI skill | `trekoon skills install` (local) or `trekoon skills install -g` (global) |
+| Mark a task done | `trekoon task done <id>` |
+| Sync across worktrees | `trekoon sync pull --from main` |
 | Get help | `trekoon [command] -h` |
 
-### Machine output
-
-Every command supports structured output for scripting and agent consumption:
-
-- `--toon` for TOON-encoded payloads
-- `--json` for JSON
-- `--compact` to strip envelope metadata
-- `--compat <mode>` for explicit compatibility behavior
+Every command supports `--toon`, `--json`, `--compact` for structured output.
 
 Full flag reference in [docs/commands.md](docs/commands.md).
-
-## Local board
-
-Trekoon includes a browser-based board. No extra install, no build step, no
-framework dependencies. Everything is self-hosted (CSS, fonts, JS) and works
-offline.
-
-```bash
-trekoon board open      # copies assets, starts a local server, opens browser
-trekoon board update    # refresh assets only, no server
-```
-
-The server binds to `127.0.0.1` only, uses a per-session token, and prints a
-fallback URL if the browser launch fails. Nothing leaves your machine.
-
-The board gives you an epics overview, a kanban workspace per epic, task detail
-modals, search across all fields, and a theme toggle. It adapts to screen size
-with responsive breakpoints.
-
-## AI skill
-
-Trekoon ships a skill that teaches AI agents the full plan-to-completion
-workflow: decomposition, dependency modeling, lane grouping, sub-agent dispatch,
-and verification.
-
-Install per-repo or globally:
-
-```bash
-trekoon skills install          # repo-local
-trekoon skills install -g       # global (~/.agents/skills/trekoon)
-trekoon update                  # refresh all installed skill links
-```
-
-Quick actions from the prompt:
-
-```
-/trekoon                     → load the skill
-/trekoon <id>                → status and next steps for an entity
-/trekoon <id> execute        → start executing the epic
-/trekoon <id> plan           → decompose into tasks/subtasks/deps
-```
-
-Supports Claude Code agent teams (`TeamCreate`/`SendMessage`) for parallel
-execution when `CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS=true` is set.
-
-More in [docs/ai-agents.md](docs/ai-agents.md).
 
 ## Docs
 
