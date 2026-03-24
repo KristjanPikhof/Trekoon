@@ -365,6 +365,46 @@ data:
 
 No mutation occurs. The conflict stays pending.
 
+## Sync batch resolve
+
+```bash
+trekoon --toon sync resolve --all --use ours|theirs [--entity <id>] [--field <name>]
+```
+
+```text
+ok: true
+command: sync.resolve
+data:
+  resolution: ours|theirs
+  resolvedCount: <number>
+  resolvedIds: [<conflict-id>, ...]
+  filters:
+    entity: <entity-id> | null
+    field: <field-name> | null
+```
+
+## Sync batch resolve dry-run
+
+```bash
+trekoon --toon sync resolve --all --use ours|theirs [--entity <id>] [--field <name>] --dry-run
+```
+
+```text
+ok: true
+command: sync.resolve
+data:
+  resolution: ours|theirs
+  matchedCount: <number>
+  matchedIds: [<conflict-id>, ...]
+  filters:
+    entity: <entity-id> | null
+    field: <field-name> | null
+  dryRun: true
+```
+
+No mutation occurs. Returns `no_matching_conflicts` error when no pending
+conflicts match the filters.
+
 ## Related docs
 
 - [Quickstart](quickstart.md)
