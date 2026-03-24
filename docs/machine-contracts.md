@@ -1,11 +1,11 @@
 # Machine contracts
 
-Use `--toon` for production agent loops. Use `--json` only when an integration
-explicitly requires JSON.
+Use `--toon` for agent loops. Use `--json` only when an integration explicitly
+requires JSON.
 
 ## Base envelope
 
-All machine responses use the same top-level shape:
+Every machine response uses the same top-level shape:
 
 ```text
 ok: true|false
@@ -16,22 +16,19 @@ metadata:
   requestId: req-<stable-id>
 ```
 
-Most subcommand identifiers are dot-namespaced, such as `task.list` or
-`sync.pull`. Root-level commands may use single-token IDs such as `help`,
-`init`, `quickstart`, `wipe`, or `version`.
+Most subcommand IDs are dot-namespaced (`task.list`, `sync.pull`). Root-level
+commands use single tokens (`help`, `init`, `quickstart`, `wipe`, `version`).
 
-Additional metadata may appear when relevant:
+Additional metadata appears when relevant:
 
 - `metadata.compatibility` when `--compat` mode is active
 - `meta.storageRootDiagnostics` when storage resolves from a non-canonical cwd
 
-## Ready queue contract
+## Ready queue
 
 ```bash
 trekoon --toon task ready --limit 3
 ```
-
-Payload fields:
 
 ```text
 ok: true
@@ -58,8 +55,6 @@ data:
 trekoon --toon dep reverse <task-or-subtask-id>
 ```
 
-Payload fields:
-
 ```text
 ok: true
 command: dep.reverse
@@ -69,22 +64,19 @@ data:
   blockedNodes[]: { id, kind, distance, isDirect }
 ```
 
-## Pagination contract for list calls
+## Pagination
 
 ```bash
 trekoon --toon task list --status todo --limit 2
 trekoon --toon task list --status todo --limit 2 --cursor 2
 ```
 
-Cursor rules:
+Rules:
 
 - `--cursor <n>` is offset-like pagination for `epic list`, `task list`, and
   `subtask list`
-- do not combine `--all` with `--cursor`
-- machine consumers should page using `meta.pagination.hasMore` and
-  `meta.pagination.nextCursor`
-
-Payload fields:
+- Don't combine `--all` with `--cursor`
+- Page using `meta.pagination.hasMore` and `meta.pagination.nextCursor`
 
 ```text
 ok: true
@@ -98,14 +90,14 @@ meta:
   pagination: { hasMore, nextCursor }
 ```
 
-## Descendant cascade update contract
+## Descendant cascade update
 
 ```bash
 trekoon --toon epic update <epic-id> --all --status done
 trekoon --toon task update <task-id> --all --status todo
 ```
 
-Success payload fields for epic/task cascade mode:
+Success:
 
 ```text
 ok: true
@@ -129,7 +121,7 @@ data:
       changedSubtasks
 ```
 
-Failure contract for blocked epic/task cascade mode:
+Failure (blocked descendants):
 
 ```text
 ok: false
@@ -157,16 +149,13 @@ data:
 
 Notes:
 
-- `subtask update <subtask-id> --all --status done|todo` is accepted, but it
-  returns the normal single-subtask `subtask.update` payload because there are
-  no descendants to traverse
-- Cascade mode is reserved for status-only close/reopen operations; combine
-  append/title/description changes in separate commands
+- `subtask update <subtask-id> --all --status done|todo` is accepted but
+  returns the normal single-subtask payload (no descendants to traverse)
+- Cascade is status-only; use separate commands for append/title/description
 
-## Batch create and expand payloads
+## Batch create and expand
 
-Trekoon uses stable batch payloads for one-shot graph creation and sibling batch
-creation commands.
+Stable batch payloads for one-shot graph creation and sibling batch commands.
 
 ### `epic create` and `epic expand`
 
@@ -174,8 +163,6 @@ creation commands.
 trekoon --toon epic create --title "..." --description "..." --task "..."
 trekoon --toon epic expand <epic-id> --task "..."
 ```
-
-Payload fields:
 
 ```text
 ok: true
@@ -197,8 +184,6 @@ data:
 trekoon --toon task create-many --epic <epic-id> --task "..."
 ```
 
-Payload fields:
-
 ```text
 ok: true
 command: task.create-many
@@ -215,8 +200,6 @@ data:
 trekoon --toon subtask create-many --task <task-id> --subtask "..."
 ```
 
-Payload fields:
-
 ```text
 ok: true
 command: subtask.create-many
@@ -229,35 +212,31 @@ data:
 
 ## Sync compatibility mode
 
-Compatibility mode exists for integrations that still consume legacy sync
-command IDs:
+For integrations that still use legacy sync command IDs:
 
 ```bash
 trekoon --json --compat legacy-sync-command-ids sync status
 trekoon --toon --compat legacy-sync-command-ids sync pull --from main
 ```
 
-Behavior:
+- Default output uses canonical dotted IDs (`sync.status`)
+- Compat mode rewrites to legacy forms (`sync_status`)
+- Machine-only, valid only for `sync` commands
+- Output includes `metadata.compatibility` with migration guidance and removal
+  timing
 
-- default output uses canonical dotted IDs such as `sync.status`
-- compatibility mode rewrites sync command IDs to legacy forms such as
-  `sync_status`
-- compatibility mode is machine-only and valid only for `sync` commands
-- machine output includes `metadata.compatibility` with migration guidance and
-  removal timing
-
-## Compact envelope mode
+## Compact envelope
 
 ```bash
 trekoon --toon --compact task list
 ```
 
-When `--compact` is passed, the `metadata` key is omitted from the TOON/JSON
-envelope. The `ok`, `command`, `data`, `error`, and `meta` keys are unaffected.
+`--compact` omits the `metadata` key from the envelope. `ok`, `command`, `data`,
+`error`, and `meta` are unaffected.
 
-## Status transition error contract
+## Status transition errors
 
-Invalid status transitions return:
+Invalid transitions return:
 
 ```text
 ok: false
@@ -272,16 +251,14 @@ data:
   allowedTransitions[]: <valid targets from current status>
 ```
 
-Note: the transition details are in `data`, not `error.details`. `error` only
-contains `code` and `message`.
+Transition details are in `data`, not `error.details`. `error` only has `code`
+and `message`.
 
-## Epic progress contract
+## Epic progress
 
 ```bash
 trekoon --toon epic progress <epic-id>
 ```
-
-Payload fields:
 
 ```text
 ok: true
@@ -298,13 +275,11 @@ data:
   nextCandidate: { id, title } | null
 ```
 
-## Task done enhanced contract
+## Task done (enhanced)
 
 ```bash
 trekoon --toon task done <task-id>
 ```
-
-Payload fields:
 
 ```text
 ok: true
@@ -327,13 +302,11 @@ data:
     blockedCount
 ```
 
-## Suggest command contract
+## Suggest
 
 ```bash
 trekoon --toon suggest [--epic <epic-id>]
 ```
-
-Payload fields:
 
 ```text
 ok: true
@@ -355,9 +328,9 @@ data:
     pendingConflicts
 ```
 
-## Owner field in update payloads
+## Owner field in updates
 
-Task and subtask update payloads now include `owner` in their event data:
+Task and subtask update payloads include `owner`:
 
 ```text
 data:
@@ -369,13 +342,11 @@ data:
 The board API accepts `owner` on `PATCH /api/tasks/{id}` and
 `PATCH /api/subtasks/{id}`.
 
-## Sync resolve dry-run contract
+## Sync resolve dry-run
 
 ```bash
 trekoon --toon sync resolve <conflict-id> --use ours|theirs --dry-run
 ```
-
-Payload fields:
 
 ```text
 ok: true
@@ -392,7 +363,7 @@ data:
   dryRun: true
 ```
 
-No database mutation occurs. The conflict remains pending.
+No mutation occurs. The conflict stays pending.
 
 ## Related docs
 
