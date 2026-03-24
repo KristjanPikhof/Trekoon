@@ -502,8 +502,10 @@ Rules:
 - Do not commit `.trekoon/trekoon.db`; remove the tracked DB and keep
   `.trekoon` ignored instead.
 
-Use `quickstart` for the canonical execution loop. Use help when you need exact
-syntax.
+Use `session` as the primary entry point — it returns diagnostics, sync status,
+and the next ready task in one call. Use `suggest` for priority-ranked
+recommendations. Use `quickstart` and `help` only when the operator needs a
+human-readable walkthrough or exact flag syntax.
 
 ## Sync reminders
 
@@ -524,6 +526,7 @@ Cross-branch sync matters before merging a feature branch back:
   ```bash
   trekoon --toon sync conflicts list
   trekoon --toon sync conflicts show <conflict-id>
+  trekoon --toon sync resolve <conflict-id> --use theirs --dry-run
   trekoon --toon sync resolve <conflict-id> --use ours
   ```
 
@@ -532,8 +535,15 @@ Cross-branch sync matters before merging a feature branch back:
 Conflicts are **field-level**, not whole-record. Each conflict targets one field
 (e.g., `status`, `title`, `description`) on one entity.
 
-- `--use ours` — keep the current value in the shared DB. No write occurs.
-- `--use theirs` — overwrite the shared DB field with the source-branch value.
+- `--use ours` — keep the current entity field value in the shared DB. The
+  entity is not written, but the conflict record is marked resolved and a
+  resolution event is appended.
+- `--use theirs` — overwrite the shared DB entity field with the source-branch
+  value. The conflict record is marked resolved and a resolution event is
+  appended.
+- `--dry-run` — preview the resolution without mutating the database. Returns
+  `oursValue`, `theirsValue`, `wouldWrite`, and `dryRun: true`. Use this before
+  committing to a resolution.
 
 **Example:** after `sync pull --from main`, a conflict appears on epic `abc123`,
 field `status`:
