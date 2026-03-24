@@ -249,6 +249,26 @@ trekoon --toon epic replace <epic-id> --search "path/to/somewhere" --replace "pa
 trekoon --toon epic replace <epic-id> --search "path/to/somewhere" --replace "path/to/new-path" --apply
 ```
 
+## Shared-database model
+
+Trekoon uses **one live SQLite database per repository**, stored at
+`<repoRoot>/.trekoon/trekoon.db`. In git worktree setups, storage resolves from
+the shared repository root (via `git rev-parse --git-common-dir`), so all
+linked worktrees read and write the same database.
+
+Important implications for agents:
+
+- **Worktrees share state.** A task marked `done` in one worktree is `done` in
+  every worktree immediately.
+- **Branch checkout does not switch tracker state.** The database lives outside
+  the git object store. Running `git checkout feature-branch` does not roll back
+  or swap the task graph.
+- **Sync exchanges tracker events between branches, not database snapshots.**
+  Use `sync pull --from main` to import events, not file copies.
+
+Keep this model in mind when resolving conflicts — the shared DB is the live
+source of truth, and `--use theirs` overwrites its current field values.
+
 ## Worktree and sync rules
 
 - Treat `meta.storageRootDiagnostics` as the source of truth for storage.
@@ -257,6 +277,25 @@ trekoon --toon epic replace <epic-id> --search "path/to/somewhere" --replace "pa
 - Do not commit `.trekoon/trekoon.db` as a recovery fix.
 - Run `trekoon sync status` at session start and before merge.
 - Resolve sync conflicts explicitly when they appear.
+
+### Conflict resolution: ours vs theirs
+
+Conflicts are **field-level**, not whole-record. Each conflict targets a single
+field (`status`, `title`, `description`, etc.) on one entity (epic, task, or
+subtask).
+
+- `--use ours` — keep the current value in the shared DB. No write occurs.
+- `--use theirs` — overwrite the shared DB field with the source-branch value.
+
+**Example:** after `sync pull --from main`, a conflict appears on epic `abc123`,
+field `status`:
+- ours (current DB): `in_progress`
+- theirs (source branch): `done`
+- `--use ours` keeps status as `in_progress`
+- `--use theirs` changes status to `done` in the live shared DB
+
+Always inspect conflicts before resolving. Choosing `theirs` without inspection
+can overwrite in-progress work.
 
 Useful commands:
 
