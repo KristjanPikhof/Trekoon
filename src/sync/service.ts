@@ -17,6 +17,13 @@ import {
   type SyncStatusSummary,
 } from "./types";
 
+const SYNC_ALLOWED_FIELDS: Readonly<Record<string, readonly string[]>> = {
+  epics: ["title", "description", "status"],
+  tasks: ["epic_id", "title", "description", "status"],
+  subtasks: ["task_id", "title", "description", "status"],
+  dependencies: ["source_id", "source_kind", "depends_on_id", "depends_on_kind"],
+};
+
 function isCursorStale(db: Database, cursorToken: string, sourceBranch: string): boolean {
   if (cursorToken === "0:") {
     return false;
@@ -303,14 +310,7 @@ function currentEntityFieldValue(db: Database, entityKind: string, entityId: str
     return undefined;
   }
 
-  const allowedFields: Record<string, readonly string[]> = {
-    epics: ["title", "description", "status"],
-    tasks: ["epic_id", "title", "description", "status"],
-    subtasks: ["task_id", "title", "description", "status"],
-    dependencies: ["source_id", "source_kind", "depends_on_id", "depends_on_kind"],
-  };
-
-  const validFields = allowedFields[tableName] ?? [];
+  const validFields = SYNC_ALLOWED_FIELDS[tableName] ?? [];
   if (!validFields.includes(fieldName)) {
     return undefined;
   }
@@ -566,18 +566,11 @@ function applyUpdatePatch(db: Database, event: StoredEvent, fields: Record<strin
     return false;
   }
 
-  const allowedFields: Record<string, readonly string[]> = {
-    epics: ["title", "description", "status"],
-    tasks: ["epic_id", "title", "description", "status"],
-    subtasks: ["task_id", "title", "description", "status"],
-    dependencies: ["source_id", "source_kind", "depends_on_id", "depends_on_kind"],
-  };
-
   if (!rowExists(db, tableName, event.entity_id)) {
     return false;
   }
 
-  const allowed = new Set(allowedFields[tableName] ?? []);
+  const allowed = new Set(SYNC_ALLOWED_FIELDS[tableName] ?? []);
   const entries = Object.entries(fields).filter(([fieldName, value]) => allowed.has(fieldName) && typeof value === "string");
 
   if (entries.length === 0) {
@@ -907,7 +900,7 @@ export function syncPull(cwd: string, sourceBranch: string): PullSummary {
 }
 
 function parseConflictValue(value: string | null): unknown {
-  if (!value) {
+  if (value === null || value === undefined) {
     return null;
   }
 
@@ -924,14 +917,7 @@ function updateSingleField(db: Database, entityKind: string, entityId: string, f
     return;
   }
 
-  const allowedFields: Record<string, readonly string[]> = {
-    epics: ["title", "description", "status"],
-    tasks: ["epic_id", "title", "description", "status"],
-    subtasks: ["task_id", "title", "description", "status"],
-    dependencies: ["source_id", "source_kind", "depends_on_id", "depends_on_kind"],
-  };
-
-  const validFields: readonly string[] = allowedFields[tableName] ?? [];
+  const validFields: readonly string[] = SYNC_ALLOWED_FIELDS[tableName] ?? [];
   if (!validFields.includes(fieldName)) {
     return;
   }
@@ -950,8 +936,9 @@ function appendResolutionEvent(
   gitHead: string | null,
   conflict: ConflictRow,
   resolution: SyncResolution,
+  timestamp?: number,
 ): void {
-  const now: number = nextEventTimestamp(db);
+  const now: number = timestamp ?? nextEventTimestamp(db);
   const resolvedValue: string | null = resolution === "theirs" ? conflict.theirs_value : conflict.ours_value;
 
   db.query(
@@ -1110,12 +1097,12 @@ export function syncResolve(cwd: string, conflictId: string, resolution: SyncRes
         );
       }
 
-      const now: number = Date.now();
+      const now: number = nextEventTimestamp(storage.db);
       storage.db
         .query("UPDATE sync_conflicts SET resolution = ?, updated_at = ?, version = version + 1 WHERE id = ?;")
         .run(resolution, now, row.id);
 
-      appendResolutionEvent(storage.db, git.branchName, git.headSha, row, resolution);
+      appendResolutionEvent(storage.db, git.branchName, git.headSha, row, resolution, now);
 
       return row;
     });
