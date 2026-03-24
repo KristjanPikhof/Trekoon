@@ -1812,78 +1812,73 @@ describe("sync command", (): void => {
     }
   });
 
-  test("human mode theirs resolution prompts for confirmation and accepts y", async (): Promise<void> => {
-    const { workspace, conflictId } = await setupConflictWorkspace("feature/human-confirm-y");
-
+  async function withMockStdin<T>(answer: string, fn: () => Promise<T>): Promise<T> {
     const originalStdin = process.stdin;
     const mockStdin = new Readable({ read(): void {} });
     Object.defineProperty(process, "stdin", { value: mockStdin, writable: true, configurable: true });
 
     try {
       setTimeout((): void => {
-        mockStdin.push("y\n");
+        mockStdin.push(`${answer}\n`);
         mockStdin.push(null);
       }, 50);
 
-      const resolveResult = await runSync({
+      return await fn();
+    } finally {
+      Object.defineProperty(process, "stdin", { value: originalStdin, writable: true, configurable: true });
+    }
+  }
+
+  test("human mode theirs resolution prompts for confirmation and accepts y", async (): Promise<void> => {
+    const { workspace, conflictId } = await setupConflictWorkspace("feature/human-confirm-y");
+
+    const resolveResult = await withMockStdin("y", () =>
+      runSync({
         args: ["resolve", conflictId, "--use", "theirs"],
         cwd: workspace,
         mode: "human",
-      });
+      }),
+    );
 
-      expect(resolveResult.ok).toBe(true);
-      expect(resolveResult.command).toBe("sync.resolve");
+    expect(resolveResult.ok).toBe(true);
+    expect(resolveResult.command).toBe("sync.resolve");
 
-      const storage = openTrekoonDatabase(workspace);
-      try {
-        const resolved = storage.db
-          .query("SELECT resolution FROM sync_conflicts WHERE id = ?;")
-          .get(conflictId) as { resolution: string } | null;
-        expect(resolved?.resolution).toBe("theirs");
-      } finally {
-        storage.close();
-      }
+    const storage = openTrekoonDatabase(workspace);
+    try {
+      const resolved = storage.db
+        .query("SELECT resolution FROM sync_conflicts WHERE id = ?;")
+        .get(conflictId) as { resolution: string } | null;
+      expect(resolved?.resolution).toBe("theirs");
     } finally {
-      Object.defineProperty(process, "stdin", { value: originalStdin, writable: true, configurable: true });
+      storage.close();
     }
   });
 
   test("human mode theirs resolution prompts for confirmation and rejects n", async (): Promise<void> => {
     const { workspace, epicId, conflictId } = await setupConflictWorkspace("feature/human-confirm-n");
 
-    const originalStdin = process.stdin;
-    const mockStdin = new Readable({ read(): void {} });
-    Object.defineProperty(process, "stdin", { value: mockStdin, writable: true, configurable: true });
-
-    try {
-      setTimeout((): void => {
-        mockStdin.push("n\n");
-        mockStdin.push(null);
-      }, 50);
-
-      const resolveResult = await runSync({
+    const resolveResult = await withMockStdin("n", () =>
+      runSync({
         args: ["resolve", conflictId, "--use", "theirs"],
         cwd: workspace,
         mode: "human",
-      });
+      }),
+    );
 
-      expect(resolveResult.ok).toBe(false);
-      expect(resolveResult.error?.code).toBe("cancelled");
+    expect(resolveResult.ok).toBe(false);
+    expect(resolveResult.error?.code).toBe("cancelled");
 
-      const storage = openTrekoonDatabase(workspace);
-      try {
-        const stillPending = storage.db
-          .query("SELECT resolution FROM sync_conflicts WHERE id = ?;")
-          .get(conflictId) as { resolution: string } | null;
-        expect(stillPending?.resolution).toBe("pending");
+    const storage = openTrekoonDatabase(workspace);
+    try {
+      const stillPending = storage.db
+        .query("SELECT resolution FROM sync_conflicts WHERE id = ?;")
+        .get(conflictId) as { resolution: string } | null;
+      expect(stillPending?.resolution).toBe("pending");
 
-        const epic = storage.db.query("SELECT title FROM epics WHERE id = ?;").get(epicId) as { title: string } | null;
-        expect(epic?.title).toBe("Local epic");
-      } finally {
-        storage.close();
-      }
+      const epic = storage.db.query("SELECT title FROM epics WHERE id = ?;").get(epicId) as { title: string } | null;
+      expect(epic?.title).toBe("Local epic");
     } finally {
-      Object.defineProperty(process, "stdin", { value: originalStdin, writable: true, configurable: true });
+      storage.close();
     }
   });
 
