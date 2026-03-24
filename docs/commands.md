@@ -17,8 +17,12 @@ surface, defaults, and flag rules.
 - `trekoon dep <add|add-many|remove|list|reverse>`
 - `trekoon events prune [--dry-run] [--archive] [--retention-days <n>]`
 - `trekoon migrate <status|rollback> [--to-version <n>]`
-- `trekoon sync <status|pull|resolve|conflicts>`
+- `trekoon sync status [--from <branch>]`
+- `trekoon sync pull --from <branch>`
+- `trekoon sync resolve <conflict-id> --use ours|theirs [--dry-run]`
+- `trekoon sync conflicts <list|show> [--mode pending|all]`
 - `trekoon skills install [--link --editor opencode|claude|pi] [--to <path>] [--allow-outside-repo]`
+- `trekoon skills install -g|--global [--editor opencode|claude|pi]`
 - `trekoon skills update`
 - `trekoon wipe --yes`
 
@@ -292,6 +296,55 @@ Returns up to 3 priority-ranked next-action suggestions based on recovery state,
 sync status, task readiness, and epic progress. Categories: `recovery`, `sync`,
 `execution`, `planning`. Each suggestion includes an `action`, `command`, and
 `reason`.
+
+## Sync commands
+
+### `sync status`
+
+```bash
+trekoon --toon sync status [--from <branch>]
+```
+
+Reports ahead/behind counts and pending conflicts against a source branch.
+Defaults to `--from main` when omitted.
+
+### `sync pull`
+
+```bash
+trekoon --toon sync pull --from <branch>
+```
+
+Pulls tracker events from the source branch into the current worktree. Creates
+conflicts when the same field was modified on both sides. `--from` is required.
+
+### `sync resolve`
+
+```bash
+trekoon --toon sync resolve <conflict-id> --use ours|theirs [--dry-run]
+```
+
+Resolves a pending conflict. `--use ours` keeps the current DB value (no entity
+write). `--use theirs` overwrites the shared DB field with the source-branch
+value.
+
+Flags:
+
+- `--dry-run` — preview the resolution without mutating the database. Returns a
+  `ResolvePreviewSummary` with `oursValue`, `theirsValue`, `wouldWrite`, and
+  `dryRun: true`.
+- In human mode (no `--toon`), `--use theirs` shows an interactive confirmation
+  prompt with a 30-second timeout that defaults to rejection. Toon mode skips
+  the prompt.
+
+### `sync conflicts`
+
+```bash
+trekoon --toon sync conflicts list [--mode pending|all]
+trekoon --toon sync conflicts show <conflict-id>
+```
+
+`list` defaults to `--mode pending`. Use `--mode all` to include resolved
+conflicts.
 
 ## Related docs
 
