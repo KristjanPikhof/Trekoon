@@ -904,7 +904,7 @@ export function syncPull(cwd: string, sourceBranch: string): PullSummary {
 }
 
 function parseConflictValue(value: string | null): unknown {
-  if (value === null || value === undefined) {
+  if (value === null) {
     return null;
   }
 
