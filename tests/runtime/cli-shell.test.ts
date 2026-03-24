@@ -187,7 +187,7 @@ describe("cli shell dispatch", (): void => {
     expect(wipeData.text).toContain("shared .trekoon directory");
     expect(wipeData.text).toContain("erases state for every linked worktree");
     expect(wipeData.text).toContain("--yes  Required");
-    expect(wipeData.text).toContain("Don't use this for routine cleanup");
+    expect(wipeData.text).toContain("last-resort recovery tool");
   });
 
   test("dispatches board update and board help", async (): Promise<void> => {
