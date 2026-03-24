@@ -1155,7 +1155,7 @@ function queryPendingConflicts(
   filters: { entityId?: string; fieldName?: string },
 ): readonly ConflictRow[] {
   const conditions: string[] = ["resolution = 'pending'"];
-  const params: unknown[] = [];
+  const params: string[] = [];
 
   if (filters.entityId) {
     conditions.push("entity_id = ?");
