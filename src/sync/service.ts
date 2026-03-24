@@ -789,6 +789,10 @@ export function syncPull(cwd: string, sourceBranch: string): PullSummary {
     let conflictEvents = 0;
     let lastToken: string | null = null;
     let lastEventAt: number | null = cursor?.last_event_at ?? null;
+    // Monotonic timestamp cache: tracks the highest created_at seen during
+    // this bulk write so that downstream helpers (e.g. appendEventWithGitContext)
+    // can skip the per-event MAX(created_at) query.
+    let cachedTs: number | undefined;
 
     writeTransaction(storage.db, (): void => {
       for (const incoming of incomingEvents) {
@@ -809,6 +813,7 @@ export function syncPull(cwd: string, sourceBranch: string): PullSummary {
           storeEvent(storage.db, incoming);
           lastToken = cursorTokenFromEvent(incoming);
           lastEventAt = incoming.created_at;
+          cachedTs = cachedTs !== undefined ? Math.max(cachedTs, incoming.created_at) : incoming.created_at;
           continue;
         }
 
@@ -827,6 +832,7 @@ export function syncPull(cwd: string, sourceBranch: string): PullSummary {
           storeEvent(storage.db, incoming);
           lastToken = cursorTokenFromEvent(incoming);
           lastEventAt = incoming.created_at;
+          cachedTs = cachedTs !== undefined ? Math.max(cachedTs, incoming.created_at) : incoming.created_at;
           continue;
         }
 
@@ -868,6 +874,7 @@ export function syncPull(cwd: string, sourceBranch: string): PullSummary {
         storeEvent(storage.db, incoming);
         lastToken = cursorTokenFromEvent(incoming);
         lastEventAt = incoming.created_at;
+        cachedTs = cachedTs !== undefined ? Math.max(cachedTs, incoming.created_at) : incoming.created_at;
       }
 
       if (lastToken) {
