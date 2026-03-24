@@ -7,6 +7,7 @@ import { countBranchEventsSince, queryBranchEventsSince } from "./branch-db";
 import { persistGitContext, resolveGitContext } from "./git-context";
 import {
   type PullSummary,
+  type ResolvePreviewSummary,
   type ResolveSummary,
   type SyncConflictDetail,
   type SyncConflictListItem,
@@ -1112,6 +1113,49 @@ export function syncResolve(cwd: string, conflictId: string, resolution: SyncRes
       entityKind: conflict.entity_kind,
       entityId: conflict.entity_id,
       fieldName: conflict.field_name,
+    };
+  } finally {
+    storage.close();
+  }
+}
+
+export function syncResolvePreview(cwd: string, conflictId: string, resolution: SyncResolution): ResolvePreviewSummary {
+  const storage = openTrekoonDatabase(cwd);
+
+  try {
+    const conflict = storage.db
+      .query(
+        `
+        SELECT id, event_id, entity_kind, entity_id, field_name, ours_value, theirs_value, resolution, created_at, updated_at
+        FROM sync_conflicts
+        WHERE id = ?
+        LIMIT 1;
+        `,
+      )
+      .get(conflictId) as ConflictRow | null;
+
+    if (!conflict) {
+      throw new Error(`Conflict '${conflictId}' not found.`);
+    }
+
+    if (conflict.resolution !== "pending") {
+      throw new Error(`Conflict '${conflictId}' already resolved.`);
+    }
+
+    const oursValue: unknown = parseConflictValue(conflict.ours_value);
+    const theirsValue: unknown = parseConflictValue(conflict.theirs_value);
+    const wouldWrite: unknown = resolution === "theirs" ? theirsValue : oursValue;
+
+    return {
+      conflictId,
+      resolution,
+      entityKind: conflict.entity_kind,
+      entityId: conflict.entity_id,
+      fieldName: conflict.field_name,
+      oursValue,
+      theirsValue,
+      wouldWrite,
+      dryRun: true,
     };
   } finally {
     storage.close();
