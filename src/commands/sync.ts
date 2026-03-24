@@ -239,12 +239,13 @@ export async function runSync(context: CliContext): Promise<CliResult> {
 
       const conflictId: string | undefined = parsed.positional[1];
       const batchAll: boolean = hasFlag(parsed.flags, "all");
+      const resolveUsage: string = batchAll
+        ? "sync resolve --all requires --use ours|theirs."
+        : "sync resolve requires <conflict-id> --use ours|theirs.";
+
       const missingResolutionOption = readMissingOptionValue(parsed.missingOptionValues, "use");
       if (missingResolutionOption !== undefined) {
-        const usageMsg = batchAll
-          ? "sync resolve --all requires --use ours|theirs."
-          : "sync resolve requires <conflict-id> --use ours|theirs.";
-        return usage(usageMsg, "sync.resolve");
+        return usage(resolveUsage, "sync.resolve");
       }
 
       const rawResolution: string | undefined = readOption(parsed.options, "use");
@@ -258,10 +259,7 @@ export async function runSync(context: CliContext): Promise<CliResult> {
       }
 
       if (!rawResolution) {
-        const usageMsg = batchAll
-          ? "sync resolve --all requires --use ours|theirs."
-          : "sync resolve requires <conflict-id> --use ours|theirs.";
-        return usage(usageMsg, "sync.resolve");
+        return usage(resolveUsage, "sync.resolve");
       }
 
       if (rawResolution !== "ours" && rawResolution !== "theirs") {
@@ -290,6 +288,8 @@ export async function runSync(context: CliContext): Promise<CliResult> {
         }
 
         if (context.mode !== "toon") {
+          // Preview count may drift before resolve; the final output uses
+          // syncResolveAll's actual resolvedCount, so the user sees the truth.
           const preview = syncResolveAllPreview(context.cwd, resolution, filters);
           const confirmed = await promptConfirmation(
             `Resolve ${preview.matchedCount} conflict(s) using ${resolution}? [y/N] `,
