@@ -244,6 +244,7 @@ conflicts when the same field was modified on both sides. `--from` is required.
 
 ```bash
 trekoon --toon sync resolve <conflict-id> --use ours|theirs [--dry-run]
+trekoon --toon sync resolve --all --use ours|theirs [--entity <id>] [--field <name>] [--dry-run]
 ```
 
 Resolves a pending conflict. `--use ours` keeps the current DB value.
@@ -252,6 +253,8 @@ Resolves a pending conflict. `--use ours` keeps the current DB value.
 - `--dry-run` previews the resolution without mutating the database
 - In human mode, `--use theirs` shows a 30-second confirmation prompt (defaults
   to rejection). Toon mode skips the prompt.
+- `--all` batch-resolves all pending conflicts. `--entity` and `--field` narrow
+  the batch. `--all` and a positional conflict ID are mutually exclusive.
 
 ### `sync conflicts`
 
