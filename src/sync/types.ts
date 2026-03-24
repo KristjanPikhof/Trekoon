@@ -43,6 +43,18 @@ export interface ResolveSummary {
   readonly fieldName: string;
 }
 
+export interface ResolvePreviewSummary {
+  readonly conflictId: string;
+  readonly resolution: SyncResolution;
+  readonly entityKind: string;
+  readonly entityId: string;
+  readonly fieldName: string;
+  readonly oursValue: unknown;
+  readonly theirsValue: unknown;
+  readonly wouldWrite: unknown;
+  readonly dryRun: true;
+}
+
 export interface SyncConflictListItem {
   readonly id: string;
   readonly event_id: string;
