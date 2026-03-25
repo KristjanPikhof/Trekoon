@@ -2614,6 +2614,90 @@ describe("sync command", (): void => {
       }
     });
 
+    test("batch theirs applies duplicate field conflicts in source event order", async (): Promise<void> => {
+      const workspace: string = createWorkspace();
+      initializeRepository(workspace);
+
+      const epicId: string = randomUUID();
+      const baseTime: number = Date.now();
+
+      const storage = openTrekoonDatabase(workspace);
+      try {
+        storage.db
+          .query("INSERT INTO epics (id, title, description, status, created_at, updated_at, version) VALUES (?, ?, ?, ?, ?, ?, 1);")
+          .run(epicId, "Local title", "desc", "open", baseTime, baseTime);
+
+        const firstEventId: string = randomUUID();
+        const secondEventId: string = randomUUID();
+
+        storage.db
+          .query(
+            "INSERT INTO events (id, entity_kind, entity_id, operation, payload, git_branch, git_head, created_at, updated_at, version) VALUES (?, 'epic', ?, 'upsert', ?, 'main', NULL, ?, ?, 1);",
+          )
+          .run(
+            firstEventId,
+            epicId,
+            JSON.stringify({ fields: { title: 'Remote title v1' } }),
+            baseTime + 10,
+            baseTime + 10,
+          );
+
+        storage.db
+          .query(
+            "INSERT INTO events (id, entity_kind, entity_id, operation, payload, git_branch, git_head, created_at, updated_at, version) VALUES (?, 'epic', ?, 'upsert', ?, 'main', NULL, ?, ?, 1);",
+          )
+          .run(
+            secondEventId,
+            epicId,
+            JSON.stringify({ fields: { title: 'Remote title v2' } }),
+            baseTime + 20,
+            baseTime + 20,
+          );
+
+        // Intentionally reverse the conflict row timestamps to verify batch resolve
+        // uses source event order rather than sync_conflicts.created_at order.
+        storage.db
+          .query(
+            `INSERT INTO sync_conflicts (id, event_id, entity_kind, entity_id, field_name, ours_value, theirs_value, resolution, created_at, updated_at, version)
+             VALUES (?, ?, 'epic', ?, 'title', ?, ?, 'pending', ?, ?, 1);`,
+          )
+          .run(randomUUID(), firstEventId, epicId, JSON.stringify("Local title"), JSON.stringify("Remote title v1"), baseTime + 200, baseTime + 200);
+
+        storage.db
+          .query(
+            `INSERT INTO sync_conflicts (id, event_id, entity_kind, entity_id, field_name, ours_value, theirs_value, resolution, created_at, updated_at, version)
+             VALUES (?, ?, 'epic', ?, 'title', ?, ?, 'pending', ?, ?, 1);`,
+          )
+          .run(randomUUID(), secondEventId, epicId, JSON.stringify("Local title"), JSON.stringify("Remote title v2"), baseTime + 100, baseTime + 100);
+      } finally {
+        storage.close();
+      }
+
+      const result = await runSync({
+        args: ["resolve", "--all", "--use", "theirs"],
+        cwd: workspace,
+        mode: "toon",
+      });
+
+      expect(result.ok).toBe(true);
+
+      const verifyStorage = openTrekoonDatabase(workspace);
+      try {
+        const epic = verifyStorage.db.query("SELECT title FROM epics WHERE id = ?;").get(epicId) as { title: string } | null;
+        const resolutions = verifyStorage.db
+          .query("SELECT resolution FROM sync_conflicts WHERE entity_id = ? ORDER BY created_at ASC;")
+          .all(epicId) as Array<{ resolution: string }>;
+
+        expect(epic?.title).toBe("Remote title v2");
+        expect(resolutions).toHaveLength(2);
+        for (const row of resolutions) {
+          expect(row.resolution).toBe("theirs");
+        }
+      } finally {
+        verifyStorage.close();
+      }
+    });
+
     test("already-resolved conflicts are not re-resolved", async (): Promise<void> => {
       const { workspace, epicAId } = await setupBatchConflictWorkspace("feature/batch-already-resolved");
 
