@@ -248,6 +248,16 @@ export async function runSync(context: CliContext): Promise<CliResult> {
         return usage(resolveUsage, "sync.resolve");
       }
 
+      const missingEntityOption = readMissingOptionValue(parsed.missingOptionValues, "entity");
+      if (missingEntityOption !== undefined) {
+        return usage("sync resolve --entity requires a value.", "sync.resolve");
+      }
+
+      const missingFieldOption = readMissingOptionValue(parsed.missingOptionValues, "field");
+      if (missingFieldOption !== undefined) {
+        return usage("sync resolve --field requires a value.", "sync.resolve");
+      }
+
       const rawResolution: string | undefined = readOption(parsed.options, "use");
 
       if (batchAll && conflictId) {
@@ -287,7 +297,7 @@ export async function runSync(context: CliContext): Promise<CliResult> {
           });
         }
 
-        if (context.mode !== "toon") {
+        if (context.mode === "human") {
           // Preview count may drift before resolve; the final output uses
           // syncResolveAll's actual resolvedCount, so the user sees the truth.
           const preview = syncResolveAllPreview(context.cwd, resolution, filters);
@@ -334,7 +344,7 @@ export async function runSync(context: CliContext): Promise<CliResult> {
         });
       }
 
-      if (resolution === "theirs" && context.mode !== "toon") {
+      if (resolution === "theirs" && context.mode === "human") {
         const preview = syncResolvePreview(context.cwd, conflictId!, resolution);
         const confirmed = await promptConfirmation(formatTheirsConfirmation(preview));
 
