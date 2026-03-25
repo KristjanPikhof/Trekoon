@@ -2365,6 +2365,132 @@ describe("sync command", (): void => {
       expect(result.error?.code).toBe("invalid_args");
     });
 
+    test.skip("--entity/--field without --all are rejected when single-resolve validation supports it", async (): Promise<void> => {
+      const { workspace, conflictId } = await setupConflictWorkspace("feature/single-resolve-filter-validation");
+
+      const entityResult = await runSync({
+        args: ["resolve", conflictId, "--use", "ours", "--entity", "some-entity"],
+        cwd: workspace,
+        mode: "toon",
+      });
+
+      const fieldResult = await runSync({
+        args: ["resolve", conflictId, "--use", "ours", "--field", "title"],
+        cwd: workspace,
+        mode: "toon",
+      });
+
+      expect(entityResult.ok).toBe(false);
+      expect(entityResult.error?.code).toBe("invalid_args");
+      expect(fieldResult.ok).toBe(false);
+      expect(fieldResult.error?.code).toBe("invalid_args");
+    });
+
+    test("human mode batch resolve prompts for confirmation and accepts y", async (): Promise<void> => {
+      const { workspace } = await setupBatchConflictWorkspace("feature/batch-human-confirm-y");
+
+      const result = await withMockStdin("y", () =>
+        runSync({
+          args: ["resolve", "--all", "--use", "theirs"],
+          cwd: workspace,
+          mode: "human",
+        }),
+      );
+
+      expect(result.ok).toBe(true);
+      expect(result.command).toBe("sync.resolve");
+      expect((result.data as { resolvedCount: number; resolution: string }).resolvedCount).toBe(4);
+      expect((result.data as { resolvedCount: number; resolution: string }).resolution).toBe("theirs");
+    });
+
+    test("human mode batch resolve cancellation leaves conflicts and entities untouched", async (): Promise<void> => {
+      const { workspace, epicAId, epicBId } = await setupBatchConflictWorkspace("feature/batch-human-confirm-n");
+
+      const result = await withMockStdin("n", () =>
+        runSync({
+          args: ["resolve", "--all", "--use", "theirs"],
+          cwd: workspace,
+          mode: "human",
+        }),
+      );
+
+      expect(result.ok).toBe(false);
+      expect(result.error?.code).toBe("cancelled");
+      expect(result.data).toMatchObject({
+        resolution: "theirs",
+        cancelled: true,
+        filters: { entity: null, field: null },
+      });
+
+      const storage = openTrekoonDatabase(workspace);
+      try {
+        const pending = storage.db
+          .query("SELECT COUNT(*) AS count FROM sync_conflicts WHERE resolution = 'pending';")
+          .get() as { count: number };
+        const resolutionEvents = storage.db
+          .query("SELECT COUNT(*) AS count FROM events WHERE operation = 'resolve_conflict';")
+          .get() as { count: number };
+        const epicA = storage.db.query("SELECT title, description FROM epics WHERE id = ?;").get(epicAId) as {
+          title: string;
+          description: string;
+        } | null;
+        const epicB = storage.db.query("SELECT title, description FROM epics WHERE id = ?;").get(epicBId) as {
+          title: string;
+          description: string;
+        } | null;
+
+        expect(pending.count).toBe(4);
+        expect(resolutionEvents.count).toBe(0);
+        expect(epicA).toEqual({ title: "Local A title", description: "Local A desc" });
+        expect(epicB).toEqual({ title: "Local B title", description: "Local B desc" });
+      } finally {
+        storage.close();
+      }
+    });
+
+    test("--all --use theirs --dry-run stays non-mutating", async (): Promise<void> => {
+      const { workspace, epicAId, epicBId } = await setupBatchConflictWorkspace("feature/batch-theirs-dry-run");
+
+      const result = await runSync({
+        args: ["resolve", "--all", "--use", "theirs", "--dry-run"],
+        cwd: workspace,
+        mode: "toon",
+      });
+
+      expect(result.ok).toBe(true);
+      expect(result.data).toMatchObject({
+        resolution: "theirs",
+        matchedCount: 4,
+        filters: { entity: null, field: null },
+        dryRun: true,
+      });
+
+      const storage = openTrekoonDatabase(workspace);
+      try {
+        const pending = storage.db
+          .query("SELECT COUNT(*) AS count FROM sync_conflicts WHERE resolution = 'pending';")
+          .get() as { count: number };
+        const resolutionEvents = storage.db
+          .query("SELECT COUNT(*) AS count FROM events WHERE operation = 'resolve_conflict';")
+          .get() as { count: number };
+        const epicA = storage.db.query("SELECT title, description FROM epics WHERE id = ?;").get(epicAId) as {
+          title: string;
+          description: string;
+        } | null;
+        const epicB = storage.db.query("SELECT title, description FROM epics WHERE id = ?;").get(epicBId) as {
+          title: string;
+          description: string;
+        } | null;
+
+        expect(pending.count).toBe(4);
+        expect(resolutionEvents.count).toBe(0);
+        expect(epicA).toEqual({ title: "Local A title", description: "Local A desc" });
+        expect(epicB).toEqual({ title: "Local B title", description: "Local B desc" });
+      } finally {
+        storage.close();
+      }
+    });
+
     test("resolution events are appended for each conflict", async (): Promise<void> => {
       const { workspace, conflictIds } = await setupBatchConflictWorkspace("feature/batch-events");
 
@@ -2400,6 +2526,75 @@ describe("sync command", (): void => {
         for (const entityId of conflictEntityIds) {
           expect(eventEntityIds).toContain(entityId);
         }
+      } finally {
+        storage.close();
+      }
+    });
+
+    test("batch resolution events include stable payload fields", async (): Promise<void> => {
+      const { workspace } = await setupBatchConflictWorkspace("feature/batch-event-payloads");
+
+      const result = await runSync({
+        args: ["resolve", "--all", "--use", "theirs", "--field", "title"],
+        cwd: workspace,
+        mode: "toon",
+      });
+
+      expect(result.ok).toBe(true);
+
+      const storage = openTrekoonDatabase(workspace);
+      try {
+        const resolvedConflicts = storage.db
+          .query(
+            "SELECT id, entity_id, field_name, theirs_value FROM sync_conflicts WHERE resolution = 'theirs' ORDER BY created_at ASC;",
+          )
+          .all() as Array<{ id: string; entity_id: string; field_name: string; theirs_value: string | null }>;
+        const resolutionEvents = storage.db
+          .query(
+            "SELECT entity_kind, entity_id, payload FROM events WHERE operation = 'resolve_conflict' ORDER BY created_at ASC;",
+          )
+          .all() as Array<{ entity_kind: string; entity_id: string; payload: string }>;
+
+        expect(resolvedConflicts).toHaveLength(2);
+        expect(resolutionEvents).toHaveLength(2);
+
+        expect(
+          resolutionEvents.map((event, index) => ({
+            entity_kind: event.entity_kind,
+            entity_id: event.entity_id,
+            payload: JSON.parse(event.payload),
+            conflictId: resolvedConflicts[index]?.id,
+            fieldName: resolvedConflicts[index]?.field_name,
+            theirsValue: resolvedConflicts[index]?.theirs_value ? JSON.parse(resolvedConflicts[index]!.theirs_value!) : null,
+          })),
+        ).toEqual([
+          {
+            entity_kind: "epic",
+            entity_id: resolvedConflicts[0]!.entity_id,
+            payload: {
+              conflict_id: resolvedConflicts[0]!.id,
+              field: "title",
+              resolution: "theirs",
+              value: JSON.stringify("Remote A title"),
+            },
+            conflictId: resolvedConflicts[0]!.id,
+            fieldName: "title",
+            theirsValue: "Remote A title",
+          },
+          {
+            entity_kind: "epic",
+            entity_id: resolvedConflicts[1]!.entity_id,
+            payload: {
+              conflict_id: resolvedConflicts[1]!.id,
+              field: "title",
+              resolution: "theirs",
+              value: JSON.stringify("Remote B title"),
+            },
+            conflictId: resolvedConflicts[1]!.id,
+            fieldName: "title",
+            theirsValue: "Remote B title",
+          },
+        ]);
       } finally {
         storage.close();
       }
@@ -2539,6 +2734,30 @@ describe("sync command", (): void => {
       // The unsupported field must cause an error — not silently succeed.
       expect(result.ok).toBe(false);
       expect(result.error?.code).toBe("disallowed_field");
+
+      const verifyStorage = openTrekoonDatabase(workspace);
+      try {
+        const pending = verifyStorage.db
+          .query("SELECT COUNT(*) AS count FROM sync_conflicts WHERE resolution = 'pending';")
+          .get() as { count: number };
+        const resolved = verifyStorage.db
+          .query("SELECT COUNT(*) AS count FROM sync_conflicts WHERE resolution != 'pending';")
+          .get() as { count: number };
+        const resolutionEvents = verifyStorage.db
+          .query("SELECT COUNT(*) AS count FROM events WHERE operation = 'resolve_conflict';")
+          .get() as { count: number };
+        const epicA = verifyStorage.db.query("SELECT title, description FROM epics WHERE id = ?;").get(epicAId) as {
+          title: string;
+          description: string;
+        } | null;
+
+        expect(pending.count).toBe(5);
+        expect(resolved.count).toBe(0);
+        expect(resolutionEvents.count).toBe(0);
+        expect(epicA).toEqual({ title: "Local A title", description: "Local A desc" });
+      } finally {
+        verifyStorage.close();
+      }
     });
   });
 });
