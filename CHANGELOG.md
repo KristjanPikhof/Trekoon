@@ -8,10 +8,20 @@ All notable changes to Trekoon are documented in this file.
 
 - `sync resolve --all` batch-resolves all pending conflicts in one command.
   Optional `--entity <id>` and `--field <name>` filters narrow the batch.
-  `--dry-run` previews without mutation. Human mode prompts for confirmation;
-  toon mode resolves directly.
+  `--dry-run` previews without mutation. In human mode, batch resolve always
+  prompts for confirmation before execution; toon mode resolves directly.
 - Agent guidance in SKILL.md: why conflicts happen, decision framework for
   choosing ours vs theirs, and batch resolve command patterns.
+
+### Changed
+
+- Documentation, CLI help, and quickstart text now match final sync resolve
+  behavior: single-conflict human prompts only apply to `--use theirs`, while
+  batch `sync resolve --all` prompts for both `--use ours` and `--use theirs`
+  using a count-only confirmation.
+- Machine-contract docs now describe explicit `sync.resolve` error contracts for
+  `cancelled`, `already_resolved`, `no_matching_conflicts`, and hardened domain
+  failures (`unsupported_entity_kind`, `disallowed_field`, `row_not_found`).
 
 ## 0.3.4
 

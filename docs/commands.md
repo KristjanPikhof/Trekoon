@@ -20,6 +20,7 @@ the quickest way to get started, read [Quickstart](quickstart.md) first.
 - `trekoon sync status [--from <branch>]`
 - `trekoon sync pull --from <branch>`
 - `trekoon sync resolve <conflict-id> --use ours|theirs [--dry-run]`
+- `trekoon sync resolve --all --use ours|theirs [--entity <id>] [--field <name>] [--dry-run]`
 - `trekoon sync conflicts <list|show> [--mode pending|all]`
 - `trekoon skills install [--link --editor opencode|claude|pi] [--to <path>] [--allow-outside-repo]`
 - `trekoon skills install -g|--global [--editor opencode|claude|pi]`
@@ -251,8 +252,13 @@ Resolves a pending conflict. `--use ours` keeps the current DB value.
 `--use theirs` overwrites with the source-branch value.
 
 - `--dry-run` previews the resolution without mutating the database
-- In human mode, `--use theirs` shows a 30-second confirmation prompt (defaults
-  to rejection). Toon mode skips the prompt.
+- In human mode, single-conflict `--use theirs` shows a 30-second confirmation
+  prompt with the field, current value, and incoming value. `--use ours` does
+  not prompt for single-conflict resolves.
+- In human mode, batch `sync resolve --all` always shows a 30-second
+  confirmation prompt before execution for both `--use ours` and `--use theirs`.
+  The prompt is count-only (`Resolve N conflict(s) using ...? [y/N]`) and does
+  not show per-conflict values. Toon mode skips all confirmation prompts.
 - `--all` batch-resolves all pending conflicts. `--entity` and `--field` narrow
   the batch. `--all` and a positional conflict ID are mutually exclusive.
 

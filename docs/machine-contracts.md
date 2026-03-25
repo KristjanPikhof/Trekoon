@@ -383,6 +383,10 @@ data:
     field: <field-name> | null
 ```
 
+Human-mode note: `sync resolve --all` asks for confirmation before execution for
+both `ours` and `theirs`. Cancellation returns `error.code: cancelled` with the
+requested `resolution`, `cancelled: true`, and the normalized `filters`.
+
 ## Sync batch resolve dry-run
 
 ```bash
@@ -404,6 +408,91 @@ data:
 
 No mutation occurs. Returns `no_matching_conflicts` error when no pending
 conflicts match the filters.
+
+## Sync resolve hardening errors
+
+Recent `sync.resolve` hardening added explicit machine-visible failure modes for
+race conditions and invalid persisted conflict targets.
+
+### Single resolve — cancelled
+
+Returned in human mode when the user rejects or times out a confirmation prompt.
+Single-conflict prompts only appear for `--use theirs`.
+
+```text
+ok: false
+command: sync.resolve
+data:
+  conflictId: <conflict-id>
+  resolution: ours|theirs
+  cancelled: true
+error:
+  code: cancelled
+  message: "Resolution cancelled by user."
+```
+
+### Batch resolve — cancelled
+
+Returned in human mode when the user rejects or times out the batch prompt.
+
+```text
+ok: false
+command: sync.resolve
+data:
+  resolution: ours|theirs
+  cancelled: true
+  filters:
+    entity: <entity-id> | null
+    field: <field-name> | null
+error:
+  code: cancelled
+  message: "Batch resolution cancelled by user."
+```
+
+### Single resolve — already_resolved
+
+Returned when a conflict is still pending at preview time but another process
+resolves it before the confirmed write happens.
+
+```text
+ok: false
+command: sync.resolve
+data:
+  conflictId: <conflict-id>
+  resolution: ours|theirs
+  reason: already_resolved
+error:
+  code: already_resolved
+  message: "Conflict '<conflict-id>' already resolved."
+```
+
+### Resolve write hardening errors
+
+These surface as domain failures when persisted conflict metadata no longer maps
+to a valid writable target.
+
+```text
+ok: false
+command: sync.resolve
+data:
+  reason: unsupported_entity_kind | disallowed_field | row_not_found
+  ...details
+error:
+  code: unsupported_entity_kind | disallowed_field | row_not_found
+  message: <stable human-readable message>
+```
+
+Per-code details:
+
+- `unsupported_entity_kind`
+  - `data.entityKind`
+- `disallowed_field`
+  - `data.tableName`
+  - `data.fieldName`
+- `row_not_found`
+  - `data.tableName`
+  - `data.entityKind`
+  - `data.entityId`
 
 ## Sync batch resolve — no_matching_conflicts error
 
