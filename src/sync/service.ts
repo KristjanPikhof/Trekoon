@@ -105,6 +105,11 @@ interface ConflictRow {
   readonly updated_at: number;
 }
 
+interface ResolutionWriteContext {
+  readonly branchName: string | null;
+  readonly headSha: string | null;
+}
+
 interface EventPayload {
   readonly fields: Record<string, unknown>;
 }
@@ -948,6 +953,26 @@ function updateSingleField(db: Database, entityKind: string, entityId: string, f
   }
 }
 
+function resolveConflictRow(
+  db: Database,
+  conflict: ConflictRow,
+  resolution: SyncResolution,
+  git: ResolutionWriteContext,
+): void {
+  if (resolution === "theirs") {
+    updateSingleField(db, conflict.entity_kind, conflict.entity_id, conflict.field_name, parseConflictValue(conflict.theirs_value));
+  }
+
+  const now: number = nextEventTimestamp(db);
+  db.query("UPDATE sync_conflicts SET resolution = ?, updated_at = ?, version = version + 1 WHERE id = ?;").run(
+    resolution,
+    now,
+    conflict.id,
+  );
+
+  appendResolutionEvent(db, git.branchName, git.headSha, conflict, resolution, now);
+}
+
 function appendResolutionEvent(
   db: Database,
   gitBranch: string | null,
@@ -1104,24 +1129,7 @@ export function syncResolve(cwd: string, conflictId: string, resolution: SyncRes
     // the check and double-resolve the same conflict.
     const conflict = writeTransaction(storage.db, (): ConflictRow => {
       const row = lookupPendingConflict(storage.db, conflictId);
-
-      if (resolution === "theirs") {
-        updateSingleField(
-          storage.db,
-          row.entity_kind,
-          row.entity_id,
-          row.field_name,
-          parseConflictValue(row.theirs_value),
-        );
-      }
-
-      const now: number = nextEventTimestamp(storage.db);
-      storage.db
-        .query("UPDATE sync_conflicts SET resolution = ?, updated_at = ?, version = version + 1 WHERE id = ?;")
-        .run(resolution, now, row.id);
-
-      appendResolutionEvent(storage.db, git.branchName, git.headSha, row, resolution, now);
-
+      resolveConflictRow(storage.db, row, resolution, git);
       return row;
     });
 
@@ -1182,10 +1190,11 @@ function queryPendingConflicts(
   }
 
   const sql = `
-    SELECT id, event_id, entity_kind, entity_id, field_name, ours_value, theirs_value, resolution, created_at, updated_at
-    FROM sync_conflicts
-    WHERE ${conditions.join(" AND ")}
-    ORDER BY created_at ASC;
+    SELECT c.id, c.event_id, c.entity_kind, c.entity_id, c.field_name, c.ours_value, c.theirs_value, c.resolution, c.created_at, c.updated_at
+    FROM sync_conflicts c
+    JOIN events e ON e.id = c.event_id
+    WHERE ${conditions.map((condition) => condition.replaceAll("resolution", "c.resolution").replaceAll("entity_id", "c.entity_id").replaceAll("field_name", "c.field_name")).join(" AND ")}
+    ORDER BY e.created_at ASC, e.id ASC, c.created_at ASC, c.id ASC;
   `;
 
   return db.query(sql).all(...params) as ConflictRow[];
@@ -1216,22 +1225,7 @@ export function syncResolveAll(
       const ids: string[] = [];
 
       for (const conflict of conflicts) {
-        if (resolution === "theirs") {
-          updateSingleField(
-            storage.db,
-            conflict.entity_kind,
-            conflict.entity_id,
-            conflict.field_name,
-            parseConflictValue(conflict.theirs_value),
-          );
-        }
-
-        const now: number = nextEventTimestamp(storage.db);
-        storage.db
-          .query("UPDATE sync_conflicts SET resolution = ?, updated_at = ?, version = version + 1 WHERE id = ?;")
-          .run(resolution, now, conflict.id);
-
-        appendResolutionEvent(storage.db, git.branchName, git.headSha, conflict, resolution, now);
+        resolveConflictRow(storage.db, conflict, resolution, git);
         ids.push(conflict.id);
       }
 

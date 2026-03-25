@@ -268,6 +268,14 @@ export async function runSync(context: CliContext): Promise<CliResult> {
         return usage("sync resolve requires <conflict-id> or --all.", "sync.resolve");
       }
 
+      if (!batchAll && readOption(parsed.options, "entity") !== undefined) {
+        return usage("sync resolve --entity is only supported with --all.", "sync.resolve");
+      }
+
+      if (!batchAll && readOption(parsed.options, "field") !== undefined) {
+        return usage("sync resolve --field is only supported with --all.", "sync.resolve");
+      }
+
       if (!rawResolution) {
         return usage(resolveUsage, "sync.resolve");
       }
@@ -297,7 +305,7 @@ export async function runSync(context: CliContext): Promise<CliResult> {
           });
         }
 
-        if (context.mode === "human") {
+        if (resolution === "theirs" && context.mode === "human") {
           // Preview count may drift before resolve; the final output uses
           // syncResolveAll's actual resolvedCount, so the user sees the truth.
           const preview = syncResolveAllPreview(context.cwd, resolution, filters);
