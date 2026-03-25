@@ -413,13 +413,14 @@ Returned when the given filters match zero pending conflicts.
 ```text
 ok: false
 command: sync.resolve
+data:
+  filters:
+    entityId: <entity-id>        # absent when no --entity filter
+    fieldName: <field-name>      # absent when no --field filter
+  reason: no_matching_conflicts
 error:
   code: no_matching_conflicts
   message: "No pending conflicts match the given filters."
-  details:
-    filters:
-      entity: <entity-id> | null
-      field: <field-name> | null
 ```
 
 ## Related docs
