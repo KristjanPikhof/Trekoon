@@ -405,6 +405,23 @@ data:
 No mutation occurs. Returns `no_matching_conflicts` error when no pending
 conflicts match the filters.
 
+## Sync batch resolve — no_matching_conflicts error
+
+Applies to both the execute and dry-run variants of `sync resolve --all`.
+Returned when the given filters match zero pending conflicts.
+
+```text
+ok: false
+command: sync.resolve
+error:
+  code: no_matching_conflicts
+  message: "No pending conflicts match the given filters."
+  details:
+    filters:
+      entity: <entity-id> | null
+      field: <field-name> | null
+```
+
 ## Related docs
 
 - [Quickstart](quickstart.md)
