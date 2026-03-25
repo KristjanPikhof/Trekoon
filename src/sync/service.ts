@@ -918,20 +918,34 @@ function parseConflictValue(value: string | null): unknown {
 function updateSingleField(db: Database, entityKind: string, entityId: string, fieldName: string, value: unknown): void {
   const tableName = tableForEntityKind(entityKind);
   if (!tableName) {
-    return;
+    throw new DomainError({
+      code: "unsupported_entity_kind",
+      message: `No table mapping for entity kind: ${entityKind}`,
+      details: { entityKind },
+    });
   }
 
   const validFields: readonly string[] = SYNC_ALLOWED_FIELDS[tableName] ?? [];
   if (!validFields.includes(fieldName)) {
-    return;
+    throw new DomainError({
+      code: "disallowed_field",
+      message: `Field '${fieldName}' is not allowed for table '${tableName}'`,
+      details: { tableName, fieldName },
+    });
   }
 
   const now: number = Date.now();
-  db.query(`UPDATE ${tableName} SET ${fieldName} = ?, updated_at = ?, version = version + 1 WHERE id = ?;`).run(
-    typeof value === "string" ? value : JSON.stringify(value),
-    now,
-    entityId,
-  );
+  const result = db
+    .query(`UPDATE ${tableName} SET ${fieldName} = ?, updated_at = ?, version = version + 1 WHERE id = ?;`)
+    .run(typeof value === "string" ? value : JSON.stringify(value), now, entityId);
+
+  if (result.changes === 0) {
+    throw new DomainError({
+      code: "row_not_found",
+      message: `No row updated: entity '${entityKind}' with id '${entityId}' not found in table '${tableName}'`,
+      details: { tableName, entityKind, entityId },
+    });
+  }
 }
 
 function appendResolutionEvent(
