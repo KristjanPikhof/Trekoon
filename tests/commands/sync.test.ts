@@ -1830,6 +1830,33 @@ describe("sync command", (): void => {
     }
   }
 
+  test("json mode single theirs resolve does not prompt (passes without stdin)", async (): Promise<void> => {
+    const { workspace, epicId, conflictId } = await setupConflictWorkspace("feature/json-single-no-prompt");
+
+    // json mode should not prompt — if it did, this would hang waiting for stdin.
+    const resolveResult = await runSync({
+      args: ["resolve", conflictId, "--use", "theirs"],
+      cwd: workspace,
+      mode: "json",
+    });
+
+    expect(resolveResult.ok).toBe(true);
+    expect(resolveResult.command).toBe("sync.resolve");
+
+    const storage = openTrekoonDatabase(workspace);
+    try {
+      const resolved = storage.db
+        .query("SELECT resolution FROM sync_conflicts WHERE id = ?;")
+        .get(conflictId) as { resolution: string } | null;
+      expect(resolved?.resolution).toBe("theirs");
+
+      const epic = storage.db.query("SELECT title FROM epics WHERE id = ?;").get(epicId) as { title: string } | null;
+      expect(epic?.title).toBe("Remote epic");
+    } finally {
+      storage.close();
+    }
+  });
+
   test("human mode theirs resolution prompts for confirmation and accepts y", async (): Promise<void> => {
     const { workspace, conflictId } = await setupConflictWorkspace("feature/human-confirm-y");
 
@@ -2427,6 +2454,91 @@ describe("sync command", (): void => {
       } finally {
         storage.close();
       }
+    });
+
+    test("json mode batch resolve does not prompt (passes without stdin)", async (): Promise<void> => {
+      const { workspace, conflictIds } = await setupBatchConflictWorkspace("feature/batch-json-no-prompt");
+
+      // json mode must not prompt — if it did, this would hang waiting for stdin.
+      const result = await runSync({
+        args: ["resolve", "--all", "--use", "theirs"],
+        cwd: workspace,
+        mode: "json",
+      });
+
+      expect(result.ok).toBe(true);
+      expect((result.data as { resolvedCount: number }).resolvedCount).toBe(conflictIds.length);
+    });
+
+    test("--all --use ours --entity with no value returns usage error", async (): Promise<void> => {
+      const workspace: string = createWorkspace();
+      initializeRepository(workspace);
+
+      const result = await runSync({
+        args: ["resolve", "--all", "--use", "ours", "--entity"],
+        cwd: workspace,
+        mode: "toon",
+      });
+
+      expect(result.ok).toBe(false);
+      expect(result.error?.code).toBe("invalid_args");
+    });
+
+    test("--all --use ours --field with no value returns usage error", async (): Promise<void> => {
+      const workspace: string = createWorkspace();
+      initializeRepository(workspace);
+
+      const result = await runSync({
+        args: ["resolve", "--all", "--use", "ours", "--field"],
+        cwd: workspace,
+        mode: "toon",
+      });
+
+      expect(result.ok).toBe(false);
+      expect(result.error?.code).toBe("invalid_args");
+    });
+
+    test("batch theirs with conflict on unsupported field returns error (not silent success)", async (): Promise<void> => {
+      const { workspace, epicAId } = await setupBatchConflictWorkspace("feature/batch-unsupported-field");
+
+      // Inject a conflict with a field name that is not in SYNC_ALLOWED_FIELDS.
+      const storage = openTrekoonDatabase(workspace);
+      try {
+        // Grab an existing event id to satisfy the event_id foreign-key-like column.
+        const eventRow = storage.db
+          .query("SELECT id FROM events LIMIT 1;")
+          .get() as { id: string };
+
+        const now: number = Date.now();
+        storage.db
+          .query(
+            `INSERT INTO sync_conflicts (id, event_id, entity_kind, entity_id, field_name, ours_value, theirs_value, resolution, created_at, updated_at, version)
+             VALUES (?, ?, ?, ?, ?, ?, ?, 'pending', ?, ?, 1);`,
+          )
+          .run(
+            randomUUID(),
+            eventRow.id,
+            "epic",
+            epicAId,
+            "bad_field",
+            JSON.stringify("local value"),
+            JSON.stringify("remote value"),
+            now,
+            now,
+          );
+      } finally {
+        storage.close();
+      }
+
+      const result = await runSync({
+        args: ["resolve", "--all", "--use", "theirs"],
+        cwd: workspace,
+        mode: "toon",
+      });
+
+      // The unsupported field must cause an error — not silently succeed.
+      expect(result.ok).toBe(false);
+      expect(result.error?.code).toBe("disallowed_field");
     });
   });
 });
