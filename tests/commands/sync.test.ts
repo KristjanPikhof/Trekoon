@@ -2365,7 +2365,7 @@ describe("sync command", (): void => {
       expect(result.error?.code).toBe("invalid_args");
     });
 
-    test.skip("--entity/--field without --all are rejected when single-resolve validation supports it", async (): Promise<void> => {
+    test("--entity/--field without --all are rejected", async (): Promise<void> => {
       const { workspace, conflictId } = await setupConflictWorkspace("feature/single-resolve-filter-validation");
 
       const entityResult = await runSync({
@@ -2386,7 +2386,7 @@ describe("sync command", (): void => {
       expect(fieldResult.error?.code).toBe("invalid_args");
     });
 
-    test("human mode batch resolve prompts for confirmation and accepts y", async (): Promise<void> => {
+    test("human mode batch theirs resolve prompts for confirmation and accepts y", async (): Promise<void> => {
       const { workspace } = await setupBatchConflictWorkspace("feature/batch-human-confirm-y");
 
       const result = await withMockStdin("y", () =>
@@ -2401,6 +2401,20 @@ describe("sync command", (): void => {
       expect(result.command).toBe("sync.resolve");
       expect((result.data as { resolvedCount: number; resolution: string }).resolvedCount).toBe(4);
       expect((result.data as { resolvedCount: number; resolution: string }).resolution).toBe("theirs");
+    });
+
+    test("human mode batch ours resolve does not prompt", async (): Promise<void> => {
+      const { workspace } = await setupBatchConflictWorkspace("feature/batch-human-ours-no-prompt");
+
+      const result = await runSync({
+        args: ["resolve", "--all", "--use", "ours"],
+        cwd: workspace,
+        mode: "human",
+      });
+
+      expect(result.ok).toBe(true);
+      expect((result.data as { resolvedCount: number; resolution: string }).resolvedCount).toBe(4);
+      expect((result.data as { resolvedCount: number; resolution: string }).resolution).toBe("ours");
     });
 
     test("human mode batch resolve cancellation leaves conflicts and entities untouched", async (): Promise<void> => {

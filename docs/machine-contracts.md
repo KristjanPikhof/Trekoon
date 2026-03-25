@@ -383,9 +383,9 @@ data:
     field: <field-name> | null
 ```
 
-Human-mode note: `sync resolve --all` asks for confirmation before execution for
-both `ours` and `theirs`. Cancellation returns `error.code: cancelled` with the
-requested `resolution`, `cancelled: true`, and the normalized `filters`.
+Human-mode note: `sync resolve --all --use theirs` asks for confirmation before
+execution. Cancellation returns `error.code: cancelled` with the requested
+`resolution`, `cancelled: true`, and the normalized `filters`.
 
 ## Sync batch resolve dry-run
 

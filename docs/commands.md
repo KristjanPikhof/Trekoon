@@ -252,13 +252,11 @@ Resolves a pending conflict. `--use ours` keeps the current DB value.
 `--use theirs` overwrites with the source-branch value.
 
 - `--dry-run` previews the resolution without mutating the database
-- In human mode, single-conflict `--use theirs` shows a 30-second confirmation
-  prompt with the field, current value, and incoming value. `--use ours` does
-  not prompt for single-conflict resolves.
-- In human mode, batch `sync resolve --all` always shows a 30-second
-  confirmation prompt before execution for both `--use ours` and `--use theirs`.
-  The prompt is count-only (`Resolve N conflict(s) using ...? [y/N]`) and does
-  not show per-conflict values. Toon mode skips all confirmation prompts.
+- In human mode, `--use theirs` shows a 30-second confirmation prompt. Single-
+  conflict prompts include the field, current value, and incoming value.
+- In human mode, batch `sync resolve --all --use theirs` shows a count-only
+  confirmation prompt (`Resolve N conflict(s) using ...? [y/N]`). `--use ours`
+  does not prompt. Toon mode skips all confirmation prompts.
 - `--all` batch-resolves all pending conflicts. `--entity` and `--field` narrow
   the batch. `--all` and a positional conflict ID are mutually exclusive.
 

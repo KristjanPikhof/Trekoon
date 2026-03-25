@@ -173,10 +173,10 @@ trekoon --toon sync status
 Always run `sync conflicts show` before resolving so you know what you're
 overwriting. For uniform conflicts, `--all` resolves every pending conflict in
 one command. Optional `--entity <id>` and `--field <name>` narrow the batch.
-In human mode, single-conflict `--use theirs` prompts with field/value details;
-batch `sync resolve --all` prompts for both `--use ours` and `--use theirs`
-using a count-only confirmation. All prompts time out after 30 seconds and
-default to rejection. Toon mode skips prompts.
+In human mode, `--use theirs` prompts for both single-conflict and batch
+resolve. Single-conflict prompts include field/value details; batch prompts use
+a count-only confirmation. All prompts time out after 30 seconds and default to
+rejection. Toon mode skips prompts.
 
 ## What to read next
 

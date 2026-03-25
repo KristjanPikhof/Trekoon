@@ -8,8 +8,8 @@ All notable changes to Trekoon are documented in this file.
 
 - `sync resolve --all` batch-resolves all pending conflicts in one command.
   Optional `--entity <id>` and `--field <name>` filters narrow the batch.
-  `--dry-run` previews without mutation. In human mode, batch resolve always
-  prompts for confirmation before execution; toon mode resolves directly.
+  `--dry-run` previews without mutation. In human mode, `--use theirs` prompts
+  for confirmation before execution; toon mode resolves directly.
 - Agent guidance in SKILL.md: why conflicts happen, decision framework for
   choosing ours vs theirs, and batch resolve command patterns.
 
