@@ -249,7 +249,8 @@ trekoon --toon sync resolve --all --use ours|theirs [--entity <id>] [--field <na
 ```
 
 Resolves a pending conflict. `--use ours` keeps the current DB value.
-`--use theirs` overwrites with the source-branch value.
+`--use theirs` applies the source-branch value (or deletes the entity for
+delete conflicts).
 
 - `--dry-run` previews the resolution without mutating the database
 - In human mode, `--use theirs` shows a 30-second confirmation prompt. Single-
