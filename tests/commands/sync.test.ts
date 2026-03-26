@@ -1899,7 +1899,7 @@ describe("sync command", (): void => {
     }
   });
 
-  async function withMockStdin<T>(answer: string, fn: () => Promise<T>): Promise<T> {
+  async function withMockStdin<T>(answer: string, fn: () => Promise<T>, delayMs: number = 50): Promise<T> {
     const originalStdin = process.stdin;
     const mockStdin = new Readable({ read(): void {} });
     Object.defineProperty(process, "stdin", { value: mockStdin, writable: true, configurable: true });
@@ -1908,7 +1908,7 @@ describe("sync command", (): void => {
       setTimeout((): void => {
         mockStdin.push(`${answer}\n`);
         mockStdin.push(null);
-      }, 50);
+      }, delayMs);
 
       return await fn();
     } finally {
@@ -2597,7 +2597,7 @@ describe("sync command", (): void => {
           mode: "human",
         });
 
-        await Bun.sleep(10);
+        await Bun.sleep(50);
 
         const storage = openTrekoonDatabase(workspace);
         try {
@@ -2607,7 +2607,7 @@ describe("sync command", (): void => {
         }
 
         return pendingResult;
-      });
+      }, 250);
 
       expect(result.ok).toBe(false);
       expect(result.error?.code).toBe("conflict_set_changed");
