@@ -2422,6 +2422,33 @@ describe("sync command", (): void => {
 
       expect(result.ok).toBe(false);
       expect(result.error?.code).toBe("no_matching_conflicts");
+      expect(result.data).toMatchObject({
+        filters: { entity: null, field: null },
+        reason: "no_matching_conflicts",
+      });
+    });
+
+    test("single delete conflict resolves with theirs by deleting the entity", async (): Promise<void> => {
+      const { workspace, epicId, conflictId } = await setupDeleteConflictWorkspace("feature/delete-resolve-theirs");
+
+      const result = await runSync({
+        args: ["resolve", conflictId, "--use", "theirs"],
+        cwd: workspace,
+        mode: "toon",
+      });
+
+      expect(result.ok).toBe(true);
+
+      const storage = openTrekoonDatabase(workspace);
+      try {
+        const epic = storage.db.query("SELECT id FROM epics WHERE id = ?;").get(epicId) as { id: string } | null;
+        const conflict = storage.db.query("SELECT resolution FROM sync_conflicts WHERE id = ?;").get(conflictId) as { resolution: string } | null;
+
+        expect(epic).toBeNull();
+        expect(conflict?.resolution).toBe("theirs");
+      } finally {
+        storage.close();
+      }
     });
 
     test("--all + positional ID returns error", async (): Promise<void> => {
@@ -2547,6 +2574,39 @@ describe("sync command", (): void => {
       } finally {
         storage.close();
       }
+    });
+
+    test("human mode batch theirs aborts when previewed conflict set changes", async (): Promise<void> => {
+      const { workspace, epicAId } = await setupBatchConflictWorkspace("feature/batch-human-drift");
+
+      const result = await withMockStdin("y", async () => {
+        const pendingResult = runSync({
+          args: ["resolve", "--all", "--use", "theirs", "--entity", epicAId],
+          cwd: workspace,
+          mode: "human",
+        });
+
+        await Bun.sleep(10);
+
+        const storage = openTrekoonDatabase(workspace);
+        try {
+          const conflict = storage.db
+            .query("SELECT id FROM sync_conflicts WHERE entity_id = ? AND resolution = 'pending' ORDER BY created_at ASC LIMIT 1;")
+            .get(epicAId) as { id: string };
+          storage.db.query("UPDATE sync_conflicts SET resolution = 'ours', updated_at = ?, version = version + 1 WHERE id = ?;").run(Date.now(), conflict.id);
+        } finally {
+          storage.close();
+        }
+
+        return pendingResult;
+      });
+
+      expect(result.ok).toBe(false);
+      expect(result.error?.code).toBe("conflict_set_changed");
+      expect(result.data).toMatchObject({
+        filters: { entity: epicAId, field: null },
+        reason: "conflict_set_changed",
+      });
     });
 
     test("--all --use theirs --dry-run stays non-mutating", async (): Promise<void> => {
@@ -2943,6 +3003,45 @@ describe("sync command", (): void => {
       } finally {
         verifyStorage.close();
       }
+    });
+
+    test("batch resolve still sees pending conflicts after source events are pruned", async (): Promise<void> => {
+      const { workspace } = await setupBatchConflictWorkspace("feature/batch-pruned-events");
+
+      const storage = openTrekoonDatabase(workspace);
+      try {
+        const oldestPending = storage.db
+          .query(
+            "SELECT MIN(e.created_at) AS oldest FROM sync_conflicts c LEFT JOIN events e ON e.id = c.event_id WHERE c.resolution = 'pending';",
+          )
+          .get() as { oldest: number | null };
+        expect(oldestPending.oldest).not.toBeNull();
+
+        const pruneResult = pruneEvents(storage.db, {
+          retentionDays: 1,
+          now: oldestPending.oldest! + 2 * 24 * 60 * 60 * 1000,
+        });
+        expect(pruneResult.deletedCount).toBeGreaterThan(0);
+
+        const remainingEvents = storage.db
+          .query("SELECT COUNT(*) AS count FROM events WHERE id IN (SELECT event_id FROM sync_conflicts WHERE resolution = 'pending');")
+          .get() as { count: number };
+        expect(remainingEvents.count).toBe(0);
+      } finally {
+        storage.close();
+      }
+
+      const result = await runSync({
+        args: ["resolve", "--all", "--use", "ours"],
+        cwd: workspace,
+        mode: "toon",
+      });
+
+      expect(result.ok).toBe(true);
+      expect(result.data).toMatchObject({
+        resolvedCount: 4,
+        resolution: "ours",
+      });
     });
   });
 });
