@@ -1311,11 +1311,6 @@ export function syncResolveAll(
       return ids;
     });
 
-    const normalizedFilters: ResolveAllFilters = {
-      entity: filters.entityId ?? null,
-      field: filters.fieldName ?? null,
-    };
-
     return {
       resolution,
       resolvedCount: resolvedIds.length,

@@ -10,7 +10,6 @@ import { runSync } from "../../src/commands/sync";
 import { appendEventWithGitContext } from "../../src/sync/event-writes";
 import { syncResolve } from "../../src/sync/service";
 import { openTrekoonDatabase } from "../../src/storage/database";
-import { pruneEvents } from "../../src/storage/events-retention";
 import { resolveStoragePaths } from "../../src/storage/path";
 
 const tempDirs: string[] = [];
@@ -2579,6 +2578,18 @@ describe("sync command", (): void => {
     test("human mode batch theirs aborts when previewed conflict set changes", async (): Promise<void> => {
       const { workspace, epicAId } = await setupBatchConflictWorkspace("feature/batch-human-drift");
 
+      const storage = openTrekoonDatabase(workspace);
+      let driftConflictId: string;
+      try {
+        const conflict = storage.db
+          .query("SELECT id FROM sync_conflicts WHERE entity_id = ? AND resolution = 'pending' ORDER BY created_at ASC LIMIT 1;")
+          .get(epicAId) as { id: string } | null;
+        expect(conflict).not.toBeNull();
+        driftConflictId = conflict!.id;
+      } finally {
+        storage.close();
+      }
+
       const result = await withMockStdin("y", async () => {
         const pendingResult = runSync({
           args: ["resolve", "--all", "--use", "theirs", "--entity", epicAId],
@@ -2590,10 +2601,7 @@ describe("sync command", (): void => {
 
         const storage = openTrekoonDatabase(workspace);
         try {
-          const conflict = storage.db
-            .query("SELECT id FROM sync_conflicts WHERE entity_id = ? AND resolution = 'pending' ORDER BY created_at ASC LIMIT 1;")
-            .get(epicAId) as { id: string };
-          storage.db.query("UPDATE sync_conflicts SET resolution = 'ours', updated_at = ?, version = version + 1 WHERE id = ?;").run(Date.now(), conflict.id);
+          storage.db.query("UPDATE sync_conflicts SET resolution = 'ours', updated_at = ?, version = version + 1 WHERE id = ?;").run(Date.now(), driftConflictId);
         } finally {
           storage.close();
         }
@@ -3010,18 +3018,10 @@ describe("sync command", (): void => {
 
       const storage = openTrekoonDatabase(workspace);
       try {
-        const oldestPending = storage.db
-          .query(
-            "SELECT MIN(e.created_at) AS oldest FROM sync_conflicts c LEFT JOIN events e ON e.id = c.event_id WHERE c.resolution = 'pending';",
-          )
-          .get() as { oldest: number | null };
-        expect(oldestPending.oldest).not.toBeNull();
-
-        const pruneResult = pruneEvents(storage.db, {
-          retentionDays: 1,
-          now: oldestPending.oldest! + 2 * 24 * 60 * 60 * 1000,
-        });
-        expect(pruneResult.deletedCount).toBeGreaterThan(0);
+        const deleted = storage.db
+          .query("DELETE FROM events WHERE id IN (SELECT event_id FROM sync_conflicts WHERE resolution = 'pending');")
+          .run();
+        expect(deleted.changes).toBeGreaterThan(0);
 
         const remainingEvents = storage.db
           .query("SELECT COUNT(*) AS count FROM events WHERE id IN (SELECT event_id FROM sync_conflicts WHERE resolution = 'pending');")
