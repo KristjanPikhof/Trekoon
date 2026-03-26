@@ -10,6 +10,7 @@ import { runSync } from "../../src/commands/sync";
 import { appendEventWithGitContext } from "../../src/sync/event-writes";
 import { syncResolve } from "../../src/sync/service";
 import { openTrekoonDatabase } from "../../src/storage/database";
+import { pruneEvents } from "../../src/storage/events-retention";
 import { resolveStoragePaths } from "../../src/storage/path";
 
 const tempDirs: string[] = [];
@@ -1673,6 +1674,92 @@ describe("sync command", (): void => {
       const pendingConflict = storage.db
         .query("SELECT id FROM sync_conflicts WHERE resolution = 'pending' LIMIT 1;")
         .get() as { id: string } | null;
+
+      expect(typeof pendingConflict?.id).toBe("string");
+
+      return { workspace, epicId, conflictId: pendingConflict!.id };
+    } finally {
+      storage.close();
+    }
+  }
+
+  async function setupDeleteConflictWorkspace(branchName: string): Promise<{ workspace: string; epicId: string; conflictId: string }> {
+    const workspace: string = createWorkspace();
+    initializeRepository(workspace);
+
+    const epicId: string = randomUUID();
+    const now: number = Date.now();
+
+    {
+      const storage = openTrekoonDatabase(workspace);
+      try {
+        storage.db
+          .query("INSERT INTO epics (id, title, description, status, created_at, updated_at, version) VALUES (?, ?, ?, ?, ?, ?, 1);")
+          .run(epicId, "Delete target", "seed", "open", now, now);
+
+        storage.db
+          .query(
+            "INSERT INTO events (id, entity_kind, entity_id, operation, payload, git_branch, git_head, created_at, updated_at, version) VALUES (?, 'epic', ?, 'epic.created', ?, 'main', NULL, ?, ?, 1);",
+          )
+          .run(
+            randomUUID(),
+            epicId,
+            JSON.stringify({ fields: { title: "Delete target", description: "seed", status: "open" } }),
+            now,
+            now,
+          );
+      } finally {
+        storage.close();
+      }
+    }
+
+    runGit(workspace, ["checkout", "-b", branchName]);
+
+    {
+      const storage = openTrekoonDatabase(workspace);
+      try {
+        storage.db.query("UPDATE epics SET title = ?, updated_at = ?, version = version + 1 WHERE id = ?;").run("Locally edited", now + 1, epicId);
+
+        appendEventWithGitContext(storage.db, workspace, {
+          entityKind: "epic",
+          entityId: epicId,
+          operation: "upsert",
+          fields: { title: "Locally edited" },
+        });
+      } finally {
+        storage.close();
+      }
+    }
+
+    runGit(workspace, ["checkout", "main"]);
+    {
+      const storage = openTrekoonDatabase(workspace);
+      try {
+        storage.db
+          .query(
+            "INSERT INTO events (id, entity_kind, entity_id, operation, payload, git_branch, git_head, created_at, updated_at, version) VALUES (?, 'epic', ?, 'epic.deleted', ?, 'main', NULL, ?, ?, 1);",
+          )
+          .run(randomUUID(), epicId, JSON.stringify({ fields: {} }), now + 10, now + 10);
+      } finally {
+        storage.close();
+      }
+    }
+
+    runGit(workspace, ["checkout", branchName]);
+
+    const pullResult = await runSync({
+      args: ["pull", "--from", "main"],
+      cwd: workspace,
+      mode: "toon",
+    });
+
+    expect(pullResult.ok).toBe(true);
+
+    const storage = openTrekoonDatabase(workspace);
+    try {
+      const pendingConflict = storage.db
+        .query("SELECT id FROM sync_conflicts WHERE entity_id = ? AND field_name = '__delete__' AND resolution = 'pending' LIMIT 1;")
+        .get(epicId) as { id: string } | null;
 
       expect(typeof pendingConflict?.id).toBe("string");
 
