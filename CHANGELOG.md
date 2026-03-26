@@ -17,8 +17,7 @@ All notable changes to Trekoon are documented in this file.
 
 - Documentation, CLI help, and quickstart text now match final sync resolve
   behavior: single-conflict human prompts only apply to `--use theirs`, while
-  batch `sync resolve --all` prompts for both `--use ours` and `--use theirs`
-  using a count-only confirmation.
+  batch `sync resolve --all --use theirs` uses a count-only confirmation.
 - Machine-contract docs now describe explicit `sync.resolve` error contracts for
   `cancelled`, `already_resolved`, `no_matching_conflicts`, and hardened domain
   failures (`unsupported_entity_kind`, `disallowed_field`, `row_not_found`).

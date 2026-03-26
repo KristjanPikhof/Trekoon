@@ -387,6 +387,11 @@ Human-mode note: `sync resolve --all --use theirs` asks for confirmation before
 execution. Cancellation returns `error.code: cancelled` with the requested
 `resolution`, `cancelled: true`, and the normalized `filters`.
 
+When confirmation is required, execution is bound to the previewed conflict ID
+set. If another process resolves one of those conflicts before the confirmed
+write happens, the command fails with `error.code: conflict_set_changed`
+instead of partially resolving a drifted batch.
+
 ## Sync batch resolve dry-run
 
 ```bash
@@ -504,12 +509,33 @@ ok: false
 command: sync.resolve
 data:
   filters:
-    entityId: <entity-id>        # absent when no --entity filter
-    fieldName: <field-name>      # absent when no --field filter
+    entity: <entity-id> | null
+    field: <field-name> | null
   reason: no_matching_conflicts
 error:
   code: no_matching_conflicts
   message: "No pending conflicts match the given filters."
+```
+
+## Sync batch resolve — conflict_set_changed error
+
+Returned in human mode when batch confirmation was based on one pending conflict
+set but one or more of those conflicts were resolved before the confirmed write
+was applied.
+
+```text
+ok: false
+command: sync.resolve
+data:
+  filters:
+    entity: <entity-id> | null
+    field: <field-name> | null
+  expectedConflictIds: [<conflict-id>, ...]
+  availableConflictIds: [<conflict-id>, ...]
+  reason: conflict_set_changed
+error:
+  code: conflict_set_changed
+  message: "Pending conflicts changed before batch resolution could be applied."
 ```
 
 ## Related docs

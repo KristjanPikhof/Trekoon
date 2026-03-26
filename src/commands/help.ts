@@ -310,7 +310,7 @@ const SYNC_HELP = [
   "  --use theirs  Overwrite the DB field with the source-branch value.",
   "  Human prompts only apply to --use theirs.",
   "  Single-conflict prompts show field/value details; batch prompts show counts.",
-  "  Batch human prompts apply to both ours and theirs and only show the match count.",
+  "  Batch human prompts apply only to --use theirs and only show the match count.",
   "",
   "  Example: epic abc123, field: status",
   "    ours (current DB): in_progress",
