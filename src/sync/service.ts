@@ -9,6 +9,7 @@ import { persistGitContext, resolveGitContext } from "./git-context";
 import { DomainError } from "../domain/types";
 import {
   type PullSummary,
+  type ResolveAllOptions,
   type ResolveAllFilters,
   type ResolveAllPreviewSummary,
   type ResolveAllSummary,
@@ -108,6 +109,11 @@ interface ConflictRow {
 interface ResolutionWriteContext {
   readonly branchName: string | null;
   readonly headSha: string | null;
+}
+
+interface ResolveAllQueryFilters {
+  readonly entityId?: string;
+  readonly fieldName?: string;
 }
 
 interface EventPayload {
@@ -953,6 +959,34 @@ function updateSingleField(db: Database, entityKind: string, entityId: string, f
   }
 }
 
+function deleteSingleEntity(db: Database, entityKind: string, entityId: string): void {
+  const tableName = tableForEntityKind(entityKind);
+  if (!tableName) {
+    throw new DomainError({
+      code: "unsupported_entity_kind",
+      message: `No table mapping for entity kind: ${entityKind}`,
+      details: { entityKind },
+    });
+  }
+
+  const result = db.query(`DELETE FROM ${tableName} WHERE id = ?;`).run(entityId);
+
+  if (result.changes === 0) {
+    throw new DomainError({
+      code: "row_not_found",
+      message: `No row deleted: entity '${entityKind}' with id '${entityId}' not found in table '${tableName}'`,
+      details: { tableName, entityKind, entityId },
+    });
+  }
+}
+
+function normalizeResolveAllFilters(filters: ResolveAllQueryFilters): ResolveAllFilters {
+  return {
+    entity: filters.entityId ?? null,
+    field: filters.fieldName ?? null,
+  };
+}
+
 function resolveConflictRow(
   db: Database,
   conflict: ConflictRow,
@@ -960,7 +994,11 @@ function resolveConflictRow(
   git: ResolutionWriteContext,
 ): void {
   if (resolution === "theirs") {
-    updateSingleField(db, conflict.entity_kind, conflict.entity_id, conflict.field_name, parseConflictValue(conflict.theirs_value));
+    if (conflict.field_name === "__delete__") {
+      deleteSingleEntity(db, conflict.entity_kind, conflict.entity_id);
+    } else {
+      updateSingleField(db, conflict.entity_kind, conflict.entity_id, conflict.field_name, parseConflictValue(conflict.theirs_value));
+    }
   }
 
   const now: number = nextEventTimestamp(db);
@@ -1174,7 +1212,7 @@ export function syncResolvePreview(cwd: string, conflictId: string, resolution: 
 
 function queryPendingConflicts(
   db: Database,
-  filters: { entityId?: string; fieldName?: string },
+  filters: ResolveAllQueryFilters,
 ): readonly ConflictRow[] {
   const conditions: string[] = ["resolution = 'pending'"];
   const params: string[] = [];
@@ -1192,33 +1230,74 @@ function queryPendingConflicts(
   const sql = `
     SELECT c.id, c.event_id, c.entity_kind, c.entity_id, c.field_name, c.ours_value, c.theirs_value, c.resolution, c.created_at, c.updated_at
     FROM sync_conflicts c
-    JOIN events e ON e.id = c.event_id
+    LEFT JOIN events e ON e.id = c.event_id
     WHERE ${conditions.map((condition) => condition.replaceAll("resolution", "c.resolution").replaceAll("entity_id", "c.entity_id").replaceAll("field_name", "c.field_name")).join(" AND ")}
-    ORDER BY e.created_at ASC, e.id ASC, c.created_at ASC, c.id ASC;
+    ORDER BY COALESCE(e.created_at, c.created_at) ASC, COALESCE(e.id, c.event_id) ASC, c.created_at ASC, c.id ASC;
   `;
 
   return db.query(sql).all(...params) as ConflictRow[];
 }
 
+function queryPendingConflictsByIds(db: Database, conflictIds: readonly string[]): readonly ConflictRow[] {
+  if (conflictIds.length === 0) {
+    return [];
+  }
+
+  const placeholders = conflictIds.map(() => "?").join(", ");
+  const rows = db
+    .query(
+      `
+      SELECT id, event_id, entity_kind, entity_id, field_name, ours_value, theirs_value, resolution, created_at, updated_at
+      FROM sync_conflicts
+      WHERE resolution = 'pending' AND id IN (${placeholders});
+      `,
+    )
+    .all(...conflictIds) as ConflictRow[];
+
+  const rowById = new Map(rows.map((row) => [row.id, row]));
+
+  return conflictIds.flatMap((conflictId) => {
+    const row = rowById.get(conflictId);
+    return row ? [row] : [];
+  });
+}
+
 export function syncResolveAll(
   cwd: string,
   resolution: SyncResolution,
-  filters: { entityId?: string; fieldName?: string },
+  filters: ResolveAllQueryFilters,
+  options: ResolveAllOptions = {},
 ): ResolveAllSummary {
   const storage = openTrekoonDatabase(cwd);
   const git = resolveGitContext(cwd);
+  const normalizedFilters: ResolveAllFilters = normalizeResolveAllFilters(filters);
 
   try {
     persistGitContext(storage.db, git);
 
     const resolvedIds: string[] = writeTransaction(storage.db, (): string[] => {
-      const conflicts = queryPendingConflicts(storage.db, filters);
+      const expectedConflictIds = options.expectedConflictIds;
+      const conflicts = expectedConflictIds
+        ? queryPendingConflictsByIds(storage.db, expectedConflictIds)
+        : queryPendingConflicts(storage.db, filters);
 
       if (conflicts.length === 0) {
         throw new DomainError({
           code: "no_matching_conflicts",
           message: "No pending conflicts match the given filters.",
-          details: { filters },
+          details: { filters: normalizedFilters },
+        });
+      }
+
+      if (expectedConflictIds && conflicts.length !== expectedConflictIds.length) {
+        throw new DomainError({
+          code: "conflict_set_changed",
+          message: "Pending conflicts changed before batch resolution could be applied.",
+          details: {
+            filters: normalizedFilters,
+            expectedConflictIds,
+            availableConflictIds: conflicts.map((conflict) => conflict.id),
+          },
         });
       }
 
@@ -1251,9 +1330,10 @@ export function syncResolveAll(
 export function syncResolveAllPreview(
   cwd: string,
   resolution: SyncResolution,
-  filters: { entityId?: string; fieldName?: string },
+  filters: ResolveAllQueryFilters,
 ): ResolveAllPreviewSummary {
   const storage = openTrekoonDatabase(cwd);
+  const normalizedFilters: ResolveAllFilters = normalizeResolveAllFilters(filters);
 
   try {
     const conflicts = queryPendingConflicts(storage.db, filters);
@@ -1262,14 +1342,9 @@ export function syncResolveAllPreview(
       throw new DomainError({
         code: "no_matching_conflicts",
         message: "No pending conflicts match the given filters.",
-        details: { filters },
+        details: { filters: normalizedFilters },
       });
     }
-
-    const normalizedFilters: ResolveAllFilters = {
-      entity: filters.entityId ?? null,
-      field: filters.fieldName ?? null,
-    };
 
     return {
       resolution,
