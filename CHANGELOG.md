@@ -29,7 +29,7 @@ All notable changes to Trekoon are documented in this file.
 
 ### Notes
 
-- This changelog entry reflects the final set of changes for version `0.3.5`.
+- Version `0.3.5` is now finalized; this entry reflects its complete change set.
 
 ## 0.3.4
 
