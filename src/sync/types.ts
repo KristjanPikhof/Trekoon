@@ -75,6 +75,10 @@ export interface ResolveAllPreviewSummary {
   readonly dryRun: true;
 }
 
+export interface ResolveAllOptions {
+  readonly expectedConflictIds?: readonly string[];
+}
+
 export interface SyncConflictListItem {
   readonly id: string;
   readonly event_id: string;
