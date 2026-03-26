@@ -10,6 +10,8 @@ All notable changes to Trekoon are documented in this file.
   Optional `--entity <id>` and `--field <name>` filters narrow the batch.
   `--dry-run` previews without mutation. In human mode, `--use theirs` prompts
   for confirmation before execution; toon mode resolves directly.
+- `sync resolve --use theirs` now applies delete conflicts by removing the
+  target entity when the incoming change is a delete.
 - Agent guidance in SKILL.md: why conflicts happen, decision framework for
   choosing ours vs theirs, and batch resolve command patterns.
 
@@ -19,8 +21,15 @@ All notable changes to Trekoon are documented in this file.
   behavior: single-conflict human prompts only apply to `--use theirs`, while
   batch `sync resolve --all --use theirs` uses a count-only confirmation.
 - Machine-contract docs now describe explicit `sync.resolve` error contracts for
-  `cancelled`, `already_resolved`, `no_matching_conflicts`, and hardened domain
-  failures (`unsupported_entity_kind`, `disallowed_field`, `row_not_found`).
+  `cancelled`, `already_resolved`, `no_matching_conflicts`,
+  `conflict_set_changed`, and hardened domain failures
+  (`unsupported_entity_kind`, `disallowed_field`, `row_not_found`).
+- AGENTS.md removes the embedded atomic commit policy; automatic atomic commits
+  remain handled by the editor/agent environment.
+
+### Notes
+
+- This changelog entry reflects the final set of changes for version `0.3.5`.
 
 ## 0.3.4
 
