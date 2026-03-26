@@ -306,8 +306,6 @@ export async function runSync(context: CliContext): Promise<CliResult> {
         }
 
         if (resolution === "theirs" && context.mode === "human") {
-          // Preview count may drift before resolve; the final output uses
-          // syncResolveAll's actual resolvedCount, so the user sees the truth.
           const preview = syncResolveAllPreview(context.cwd, resolution, filters);
           const confirmed = await promptConfirmation(
             `Resolve ${preview.matchedCount} conflict(s) using ${resolution}? [y/N] `,
@@ -321,6 +319,16 @@ export async function runSync(context: CliContext): Promise<CliResult> {
               error: { code: "cancelled", message: "Batch resolution cancelled by user." },
             });
           }
+
+          const summary = syncResolveAll(context.cwd, resolution, filters, {
+            expectedConflictIds: preview.matchedIds,
+          });
+
+          return okResult({
+            command: "sync.resolve",
+            human: `Resolved ${summary.resolvedCount} conflict(s) using ${summary.resolution}.`,
+            data: summary,
+          });
         }
 
         const summary = syncResolveAll(context.cwd, resolution, filters);
