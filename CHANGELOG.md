@@ -2,6 +2,16 @@
 
 All notable changes to Trekoon are documented in this file.
 
+## 0.3.6
+
+### Added
+
+- `trekoon init` auto-creates a `.gitignore` inside `.trekoon/` when running in
+  a git repository, ensuring storage contents (SQLite DB, board assets) are
+  gitignored by default. Reports `created`, `already_exists`, or `skipped` in
+  both human and structured output. No action needed from users — the tool
+  manages its own ignore rules.
+
 ## 0.3.5
 
 ### Added
