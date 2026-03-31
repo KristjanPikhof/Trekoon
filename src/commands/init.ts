@@ -1,3 +1,6 @@
+import { existsSync, readFileSync, writeFileSync } from "node:fs";
+import { resolve } from "node:path";
+
 import { unexpectedFailureResult } from "./error-utils";
 
 import { ensureBoardInstalled } from "../board/install";
@@ -6,6 +9,11 @@ import { DomainError } from "../domain/types";
 import { failResult, okResult } from "../io/output";
 import { type CliContext, type CliResult } from "../runtime/command-types";
 import { openTrekoonDatabase, type TrekoonDatabase } from "../storage/database";
+import { type StorageMode } from "../storage/path";
+
+type GitignoreAction = "created" | "already_exists" | "skipped";
+
+const GITIGNORE_CONTENT = "*\n";
 
 function buildRecoverySummary(database: TrekoonDatabase): string[] {
   const diagnostics = database.diagnostics;
@@ -76,6 +84,24 @@ function recoveryFailureResult(error: DomainError): CliResult | null {
   });
 }
 
+function ensureGitignore(storageDir: string, storageMode: StorageMode): GitignoreAction {
+  if (storageMode === "cwd") {
+    return "skipped";
+  }
+
+  const gitignorePath: string = resolve(storageDir, ".gitignore");
+
+  if (existsSync(gitignorePath)) {
+    const existing: string = readFileSync(gitignorePath, "utf8");
+    if (existing === GITIGNORE_CONTENT) {
+      return "already_exists";
+    }
+  }
+
+  writeFileSync(gitignorePath, GITIGNORE_CONTENT, "utf8");
+  return "created";
+}
+
 export async function runInit(context: CliContext): Promise<CliResult> {
   let database: TrekoonDatabase | undefined;
 
@@ -87,6 +113,11 @@ export async function runInit(context: CliContext): Promise<CliResult> {
       workingDirectory: context.cwd,
       ...(bundledAssetRoot === undefined ? {} : { bundledAssetRoot }),
     });
+    const gitignoreAction: GitignoreAction = ensureGitignore(
+      database.paths.storageDir,
+      diagnostics.storageMode,
+    );
+
     const humanLines: string[] = [
       "Trekoon initialized.",
       `Storage mode: ${diagnostics.storageMode}`,
@@ -96,6 +127,7 @@ export async function runInit(context: CliContext): Promise<CliResult> {
       `Database file: ${database.paths.databaseFile}`,
       `Board assets: ${board.action}`,
       `Board runtime root: ${board.paths.runtimeRoot}`,
+      `Gitignore: ${gitignoreAction}`,
       ...buildRecoverySummary(database),
     ];
 
@@ -114,6 +146,10 @@ export async function runInit(context: CliContext): Promise<CliResult> {
           action: board.action,
           paths: board.paths,
           manifest: board.manifest,
+        },
+        gitignore: {
+          action: gitignoreAction,
+          path: resolve(database.paths.storageDir, ".gitignore"),
         },
         legacyStateDetected: diagnostics.legacyStateDetected,
         recoveryRequired: diagnostics.recoveryRequired,
