@@ -29,10 +29,12 @@ interface BoardRouteError {
 }
 
 interface IdempotentMutationRecord {
-  readonly kind: "subtask" | "dependency";
-  readonly entityId: string;
+  readonly kind: "subtask" | "dependency" | "deleted_subtask" | "deleted_dependency";
+  readonly entityId?: string;
   readonly sourceId?: string;
   readonly dependsOnId?: string;
+  readonly responseData?: Record<string, unknown>;
+  readonly status?: number;
 }
 
 function compactIds(ids: readonly string[]): string[] {
@@ -368,15 +370,35 @@ export function createBoardApiHandler(context: BoardRouteContext): (request: Req
         const deleteSubtaskMatch = request.method === "DELETE" ? url.pathname.match(/^\/api\/subtasks\/([^/]+)$/u) : null;
         if (deleteSubtaskMatch) {
           const subtaskId = deleteSubtaskMatch[1] ?? "";
+          const idempotencyKey = request.headers.get("x-trekoon-idempotency-key")?.trim() || null;
+          if (idempotencyKey) {
+            const cached = idempotentMutations.get(`deleted_subtask:${idempotencyKey}`);
+            if (cached?.kind === "deleted_subtask" && cached.responseData) {
+              return buildMutationResponse(domain, cached.responseData, cached.status ?? 200);
+            }
+          }
           const existingSubtask = domain.getSubtaskOrThrow(subtaskId);
           const task = domain.getTaskOrThrow(existingSubtask.taskId);
           const { deletedDependencyIds } = mutations.deleteSubtask(subtaskId);
-          return buildMutationDeltaResponse(domain, { subtaskId, deleted: true }, {
-            epicIds: [task.epicId],
-            taskIds: [task.id],
-            deletedSubtaskIds: [subtaskId],
-            deletedDependencyIds,
-          });
+          const responseData = {
+            subtaskId,
+            deleted: true,
+            snapshotDelta: buildSnapshotDelta(domain, {
+              epicIds: [task.epicId],
+              taskIds: [task.id],
+              deletedSubtaskIds: [subtaskId],
+              deletedDependencyIds,
+            }),
+          };
+          if (idempotencyKey) {
+            idempotentMutations.set(`deleted_subtask:${idempotencyKey}`, {
+              kind: "deleted_subtask",
+              entityId: subtaskId,
+              responseData,
+              status: 200,
+            });
+          }
+          return buildMutationResponse(domain, responseData, 200);
         }
 
       if (request.method === "POST" && url.pathname === "/api/dependencies") {
@@ -417,6 +439,13 @@ export function createBoardApiHandler(context: BoardRouteContext): (request: Req
       if (request.method === "DELETE" && url.pathname === "/api/dependencies") {
         const sourceId = url.searchParams.get("sourceId") ?? "";
         const dependsOnId = url.searchParams.get("dependsOnId") ?? "";
+        const idempotencyKey = request.headers.get("x-trekoon-idempotency-key")?.trim() || null;
+        if (idempotencyKey) {
+          const cached = idempotentMutations.get(`deleted_dependency:${idempotencyKey}`);
+          if (cached?.kind === "deleted_dependency" && cached.responseData) {
+            return buildMutationResponse(domain, cached.responseData, cached.status ?? 200);
+          }
+        }
         const existingDependencyIds = domain.listDependencies(sourceId)
           .filter((dependency) => dependency.dependsOnId === dependsOnId)
           .map((dependency) => dependency.id);
@@ -431,11 +460,26 @@ export function createBoardApiHandler(context: BoardRouteContext): (request: Req
             },
           });
         }
-        return buildMutationDeltaResponse(domain, { sourceId, dependsOnId, removed }, {
-          taskIds: compactIds([domain.getTask(sourceId)?.id ?? "", domain.getTask(dependsOnId)?.id ?? ""]),
-          subtaskIds: compactIds([domain.getSubtask(sourceId)?.id ?? "", domain.getSubtask(dependsOnId)?.id ?? ""]),
-          deletedDependencyIds: existingDependencyIds,
-        });
+        const responseData = {
+          sourceId,
+          dependsOnId,
+          removed,
+          snapshotDelta: buildSnapshotDelta(domain, {
+            taskIds: compactIds([domain.getTask(sourceId)?.id ?? "", domain.getTask(dependsOnId)?.id ?? ""]),
+            subtaskIds: compactIds([domain.getSubtask(sourceId)?.id ?? "", domain.getSubtask(dependsOnId)?.id ?? ""]),
+            deletedDependencyIds: existingDependencyIds,
+          }),
+        };
+        if (idempotencyKey) {
+          idempotentMutations.set(`deleted_dependency:${idempotencyKey}`, {
+            kind: "deleted_dependency",
+            sourceId,
+            dependsOnId,
+            responseData,
+            status: 200,
+          });
+        }
+        return buildMutationResponse(domain, responseData, 200);
       }
 
       return jsonResponse(404, {
