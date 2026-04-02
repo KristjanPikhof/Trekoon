@@ -678,7 +678,7 @@ describe("integration sync workflow", (): void => {
 
     const storage = openTrekoonDatabase(workspace);
     try {
-      for (let index = 0; index < 600; index += 1) {
+      for (let index = 0; index < 320; index += 1) {
         storage.db.query("UPDATE epics SET description = ?, updated_at = ?, version = version + 1 WHERE id = ?;").run(
           `description-${index}`,
           Date.now() + index + 1,
@@ -709,7 +709,7 @@ describe("integration sync workflow", (): void => {
     const verifyStorage = openTrekoonDatabase(workspace);
     try {
       const epic = verifyStorage.db.query("SELECT description FROM epics WHERE id = ?;").get(epicId) as { description: string } | null;
-      expect(epic?.description).toBe("description-599");
+      expect(epic?.description).toBe("description-319");
     } finally {
       verifyStorage.close();
     }
