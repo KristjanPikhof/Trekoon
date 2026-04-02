@@ -55,6 +55,15 @@ export function assertValidSourceRef(workingDirectory: string, sourceRef: string
 }
 
 export function queryBranchEventsSince(db: Database, branch: string, cursorToken: string): BranchEventRow[] {
+  return queryBranchEventsSinceBatch(db, branch, cursorToken);
+}
+
+export function queryBranchEventsSinceBatch(
+  db: Database,
+  branch: string,
+  cursorToken: string,
+  limit: number = 250,
+): BranchEventRow[] {
   const cursor = parseCursorToken(cursorToken);
 
   return db
@@ -67,13 +76,15 @@ export function queryBranchEventsSince(db: Database, branch: string, cursorToken
           created_at > @createdAt
           OR (created_at = @createdAt AND id > @id)
         )
-      ORDER BY created_at ASC, id ASC;
+      ORDER BY created_at ASC, id ASC
+      LIMIT @limit;
       `,
     )
     .all({
       "@branch": branch,
       "@createdAt": cursor.createdAt,
       "@id": cursor.id ?? "",
+      "@limit": limit,
     }) as BranchEventRow[];
 }
 
