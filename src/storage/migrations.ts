@@ -84,6 +84,26 @@ const SYNC_SCALING_MIGRATION_DOWN_STATEMENTS: readonly string[] = [
   "DROP INDEX IF EXISTS idx_events_branch_cursor;",
 ];
 
+const BOARD_IDEMPOTENCY_MIGRATION_UP_STATEMENTS: readonly string[] = [
+  `
+  CREATE TABLE IF NOT EXISTS board_idempotency_keys (
+    scope TEXT NOT NULL,
+    idempotency_key TEXT NOT NULL,
+    request_fingerprint TEXT NOT NULL,
+    response_status INTEGER NOT NULL,
+    response_body TEXT NOT NULL,
+    created_at INTEGER NOT NULL,
+    PRIMARY KEY (scope, idempotency_key)
+  );
+  `,
+  "CREATE INDEX IF NOT EXISTS idx_board_idempotency_created_at ON board_idempotency_keys(created_at);",
+];
+
+const BOARD_IDEMPOTENCY_MIGRATION_DOWN_STATEMENTS: readonly string[] = [
+  "DROP INDEX IF EXISTS idx_board_idempotency_created_at;",
+  "DROP TABLE IF EXISTS board_idempotency_keys;",
+];
+
 function tableHasColumn(db: Database, tableName: string, columnName: string): boolean {
   const columns = db.query(`PRAGMA table_info(${tableName});`).all() as Array<{ name: string }>;
   return columns.some((column) => column.name === columnName);
@@ -287,6 +307,20 @@ const MIGRATIONS: readonly Migration[] = [
     },
     down(db: Database): void {
       for (const statement of SYNC_SCALING_MIGRATION_DOWN_STATEMENTS) {
+        db.exec(statement);
+      }
+    },
+  },
+  {
+    version: 9,
+    name: "0009_board_idempotency_storage",
+    up(db: Database): void {
+      for (const statement of BOARD_IDEMPOTENCY_MIGRATION_UP_STATEMENTS) {
+        db.exec(statement);
+      }
+    },
+    down(db: Database): void {
+      for (const statement of BOARD_IDEMPOTENCY_MIGRATION_DOWN_STATEMENTS) {
         db.exec(statement);
       }
     },
