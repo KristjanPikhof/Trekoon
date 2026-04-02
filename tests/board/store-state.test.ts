@@ -1,4 +1,4 @@
-import { afterEach, describe, expect, test } from "bun:test";
+import { afterEach, describe, expect, mock, test } from "bun:test";
 
 // @ts-expect-error Untyped browser asset module is exercised directly in tests.
 import { createStore } from "../../src/board/assets/state/store.js";
@@ -175,5 +175,52 @@ describe("board state store reconciliation", () => {
       selectedEpicId: "epic-1",
       selectedTaskId: "task-1",
     });
+  });
+
+  test("storage read and persist failures degrade safely", () => {
+    const setItem = mock(() => {
+      throw new Error("quota exceeded");
+    });
+    globalThis.localStorage = {
+      clear() {},
+      getItem() {
+        throw new Error("storage unavailable");
+      },
+      removeItem() {},
+      setItem,
+    } as Storage;
+
+    const store = createStore({
+      epics: [{ id: "epic-1", title: "Epic 1" }],
+      tasks: [],
+      subtasks: [],
+      dependencies: [],
+    });
+
+    expect(() => store.persist()).not.toThrow();
+    expect(store.getState().theme).toBe("dark");
+    expect(setItem).toHaveBeenCalled();
+  });
+
+  test("invalid timestamps fall back safely for sorting and derived state", () => {
+    globalThis.localStorage = createMockStorage() as Storage;
+
+    const store = createStore({
+      epics: [
+        { id: "epic-invalid", title: "Broken", createdAt: Number.NaN, updatedAt: Number.NaN },
+        { id: "epic-valid", title: "Healthy", createdAt: 200, updatedAt: 300 },
+      ],
+      tasks: [
+        { id: "task-invalid", epicId: "epic-invalid", title: "Task", createdAt: Number.POSITIVE_INFINITY, updatedAt: -1, status: "todo" },
+      ],
+      subtasks: [],
+      dependencies: [],
+    });
+
+    const boardState = store.getBoardState();
+
+    expect(boardState.visibleEpics).toHaveLength(2);
+    expect(Number.isFinite(store.getSnapshot().epics[0]?.createdAt)).toBeTrue();
+    expect(Number.isFinite(store.getSnapshot().tasks[0]?.updatedAt)).toBeTrue();
   });
 });
