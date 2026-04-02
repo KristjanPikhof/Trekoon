@@ -556,13 +556,13 @@ describe("board routes", (): void => {
 
   test("retries subtask creation idempotently when given the same client request id", async (): Promise<void> => {
     const cwd = createWorkspace();
-    const storage = openTrekoonDatabase(cwd);
+    let storage = openTrekoonDatabase(cwd);
 
     try {
       const mutations = new MutationService(storage.db, cwd);
       const epic = mutations.createEpic({ title: "Roadmap", description: "Plan release" });
       const task = mutations.createTask({ epicId: epic.id, title: "Implement", description: "Ship board" });
-      const handler = createBoardApiHandler({ db: storage.db, cwd, token: "secret-token" });
+      let handler = createBoardApiHandler({ db: storage.db, cwd, token: "secret-token" });
 
       const requestBody = JSON.stringify({
         taskId: task.id,
@@ -599,6 +599,10 @@ describe("board routes", (): void => {
         method: "DELETE",
       }));
       expect(deleteResponse.status).toBe(200);
+
+      storage.close();
+      storage = openTrekoonDatabase(cwd);
+      handler = createBoardApiHandler({ db: storage.db, cwd, token: "secret-token" });
 
       const replayResponse = await handler(new Request("http://board.test/api/subtasks?token=secret-token", {
         method: "POST",
@@ -704,14 +708,14 @@ describe("board routes", (): void => {
 
   test("retries dependency creation idempotently when given the same client request id", async (): Promise<void> => {
     const cwd = createWorkspace();
-    const storage = openTrekoonDatabase(cwd);
+    let storage = openTrekoonDatabase(cwd);
 
     try {
       const mutations = new MutationService(storage.db, cwd);
       const epic = mutations.createEpic({ title: "Roadmap", description: "Plan release" });
       const blocker = mutations.createTask({ epicId: epic.id, title: "Blocker", description: "Finish first" });
       const task = mutations.createTask({ epicId: epic.id, title: "Implement", description: "Ship board" });
-      const handler = createBoardApiHandler({ db: storage.db, cwd, token: "secret-token" });
+      let handler = createBoardApiHandler({ db: storage.db, cwd, token: "secret-token" });
 
       const requestBody = JSON.stringify({
         sourceId: task.id,
@@ -746,6 +750,10 @@ describe("board routes", (): void => {
         method: "DELETE",
       }));
       expect(deleteResponse.status).toBe(200);
+
+      storage.close();
+      storage = openTrekoonDatabase(cwd);
+      handler = createBoardApiHandler({ db: storage.db, cwd, token: "secret-token" });
 
       const replayResponse = await handler(new Request("http://board.test/api/dependencies?token=secret-token", {
         method: "POST",
@@ -1076,6 +1084,44 @@ describe("board routes", (): void => {
       expect(firstBody.data.removed).toBe(1);
       expect(secondBody.data.removed).toBe(1);
       expect(secondBody.data.snapshotDelta.deletedDependencyIds).toContain(dependency.id);
+    } finally {
+      storage.close();
+    }
+  });
+
+  test("rejects reusing a dependency delete idempotency key for a different request target", async (): Promise<void> => {
+    const cwd = createWorkspace();
+    const storage = openTrekoonDatabase(cwd);
+
+    try {
+      const mutations = new MutationService(storage.db, cwd);
+      const epic = mutations.createEpic({ title: "Roadmap", description: "Plan release" });
+      const blocker = mutations.createTask({ epicId: epic.id, title: "Blocker", description: "Finish first" });
+      const task = mutations.createTask({ epicId: epic.id, title: "Implement", description: "Ship board" });
+      const otherTask = mutations.createTask({ epicId: epic.id, title: "Review", description: "Check board" });
+      mutations.addDependency(task.id, blocker.id);
+      mutations.addDependency(otherTask.id, blocker.id);
+      const handler = createBoardApiHandler({ db: storage.db, cwd, token: "secret-token" });
+
+      const requestHeaders = { "x-trekoon-idempotency-key": "delete-dependency-target-1" };
+      const firstResponse = await handler(new Request(`http://board.test/api/dependencies?token=secret-token&sourceId=${encodeURIComponent(task.id)}&dependsOnId=${encodeURIComponent(blocker.id)}`, {
+        method: "DELETE",
+        headers: requestHeaders,
+      }));
+      expect(firstResponse.status).toBe(200);
+
+      const secondResponse = await handler(new Request(`http://board.test/api/dependencies?token=secret-token&sourceId=${encodeURIComponent(otherTask.id)}&dependsOnId=${encodeURIComponent(blocker.id)}`, {
+        method: "DELETE",
+        headers: requestHeaders,
+      }));
+      const secondBody = await secondResponse.json() as { error: { code: string; message: string } };
+
+      expect(secondResponse.status).toBe(400);
+      expect(secondBody.error).toEqual(expect.objectContaining({
+        code: "invalid_input",
+        message: "Idempotency key cannot be reused for a different dependency delete request",
+      }));
+      expect(new TrackerDomain(storage.db).listDependencies(otherTask.id)).toHaveLength(1);
     } finally {
       storage.close();
     }
