@@ -33,6 +33,11 @@ function getId(record) {
   return typeof record?.id === "string" && record.id.length > 0 ? record.id : crypto.randomUUID();
 }
 
+function normalizeTimestamp(value, fallback) {
+  const normalized = Number(value);
+  return Number.isFinite(normalized) && normalized > 0 ? normalized : fallback;
+}
+
 /**
  * @param {any[]} tasks
  * @returns {Record<string, number>}
@@ -59,6 +64,7 @@ export function normalizeSnapshot(rawSnapshot) {
   const subtaskIndex = new Map();
 
   const tasks = rawTasks.map((task) => {
+    const createdAt = normalizeTimestamp(task.createdAt, Date.now());
     const normalizedTask = {
       id: getId(task),
       kind: "task",
@@ -66,8 +72,8 @@ export function normalizeSnapshot(rawSnapshot) {
       title: String(task.title ?? "Untitled task"),
       description: String(task.description ?? "").replace(/\\n/g, "\n"),
       status: normalizeStatus(task.status),
-      createdAt: Number(task.createdAt ?? Date.now()),
-      updatedAt: Number(task.updatedAt ?? task.createdAt ?? Date.now()),
+      createdAt,
+      updatedAt: normalizeTimestamp(task.updatedAt, createdAt),
       blockedBy: [],
       blocks: [],
       dependencyIds: [],
@@ -81,6 +87,7 @@ export function normalizeSnapshot(rawSnapshot) {
   });
 
   const subtasks = rawSubtasks.map((subtask) => {
+    const createdAt = normalizeTimestamp(subtask.createdAt, Date.now());
     const normalizedSubtask = {
       id: getId(subtask),
       kind: "subtask",
@@ -88,8 +95,8 @@ export function normalizeSnapshot(rawSnapshot) {
       title: String(subtask.title ?? "Untitled subtask"),
       description: String(subtask.description ?? "").replace(/\\n/g, "\n"),
       status: normalizeStatus(subtask.status),
-      createdAt: Number(subtask.createdAt ?? Date.now()),
-      updatedAt: Number(subtask.updatedAt ?? subtask.createdAt ?? Date.now()),
+      createdAt,
+      updatedAt: normalizeTimestamp(subtask.updatedAt, createdAt),
       blockedBy: [],
       blocks: [],
       dependencyIds: [],
@@ -139,13 +146,14 @@ export function normalizeSnapshot(rawSnapshot) {
   const epics = rawEpics.map((epic) => {
     const epicId = getId(epic);
     const epicTasks = tasks.filter((task) => task.epicId === epicId);
+    const createdAt = normalizeTimestamp(epic.createdAt, Date.now());
     const normalizedEpic = {
       id: epicId,
       title: String(epic.title ?? "Untitled epic"),
       description: String(epic.description ?? "").replace(/\\n/g, "\n"),
       status: normalizeStatus(String(epic.status ?? "todo")),
-      createdAt: Number(epic.createdAt ?? Date.now()),
-      updatedAt: Number(epic.updatedAt ?? epic.createdAt ?? Date.now()),
+      createdAt,
+      updatedAt: normalizeTimestamp(epic.updatedAt, createdAt),
       taskIds: epicTasks.map((task) => task.id),
       counts: deriveCounts(epicTasks),
       searchText: "",
@@ -204,8 +212,14 @@ const dateFormatter = new Intl.DateTimeFormat(undefined, { dateStyle: "medium", 
  * @returns {string}
  */
 export function formatDate(timestamp) {
-  if (!timestamp) return "Unknown";
-  return dateFormatter.format(timestamp);
+  const normalized = Number(timestamp);
+  if (!Number.isFinite(normalized) || normalized <= 0) return "Unknown";
+
+  try {
+    return dateFormatter.format(normalized);
+  } catch {
+    return "Unknown";
+  }
 }
 
 /**
