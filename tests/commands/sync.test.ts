@@ -386,6 +386,7 @@ describe("sync command", (): void => {
   test("sync pull detects conflicts beyond prior history scan limits", async (): Promise<void> => {
     const workspace: string = createWorkspace();
     initializeRepository(workspace);
+    runGit(workspace, ["checkout", "-b", "feature/long-history-conflict"]);
 
     const epicId = randomUUID();
     const now = Date.now();
@@ -395,73 +396,37 @@ describe("sync command", (): void => {
       try {
         storage.db
           .query("INSERT INTO epics (id, title, description, status, created_at, updated_at, version) VALUES (?, ?, ?, ?, ?, ?, 1);")
-          .run(epicId, "Remote start", "seed", "todo", now, now);
+          .run(epicId, "Local title", "Local description 259", "todo", now, now);
 
-        appendEventWithGitContext(storage.db, workspace, {
-          entityKind: "epic",
-          entityId: epicId,
-          operation: "upsert",
-          fields: { title: "Remote start", description: "seed", status: "todo" },
-        });
-      } finally {
-        storage.close();
-      }
-    }
-
-    runGit(workspace, ["checkout", "-b", "feature/long-history-conflict"]);
-
-    const initialPull = await runSync({
-      args: ["pull", "--from", "main"],
-      cwd: workspace,
-      mode: "toon",
-    });
-    expect(initialPull.ok).toBe(true);
-
-    {
-      const storage = openTrekoonDatabase(workspace);
-      try {
         for (let index = 0; index < 260; index += 1) {
-          storage.db.query("UPDATE epics SET description = ?, updated_at = ?, version = version + 1 WHERE id = ?;").run(
-            `Local description ${index}`,
-            now + index + 1,
-            epicId,
-          );
-
-          appendEventWithGitContext(storage.db, workspace, {
-            entityKind: "epic",
-            entityId: epicId,
-            operation: "upsert",
-            fields: { description: `Local description ${index}` },
-          });
+          storage.db
+            .query(
+              "INSERT INTO events (id, entity_kind, entity_id, operation, payload, git_branch, git_head, created_at, updated_at, version) VALUES (?, 'epic', ?, 'upsert', ?, 'feature/long-history-conflict', NULL, ?, ?, 1);",
+            )
+            .run(
+              randomUUID(),
+              epicId,
+              JSON.stringify({ fields: { description: `Local description ${index}` } }),
+              now + index,
+              now + index,
+            );
         }
+
+        storage.db
+          .query(
+            "INSERT INTO events (id, entity_kind, entity_id, operation, payload, git_branch, git_head, created_at, updated_at, version) VALUES (?, 'epic', ?, 'upsert', ?, 'main', NULL, ?, ?, 1);",
+          )
+          .run(
+            randomUUID(),
+            epicId,
+            JSON.stringify({ fields: { description: "Remote changed description" } }),
+            now + 1_000,
+            now + 1_000,
+          );
       } finally {
         storage.close();
       }
     }
-
-    runGit(workspace, ["checkout", "main"]);
-
-    {
-      const storage = openTrekoonDatabase(workspace);
-      try {
-        storage.db.query("UPDATE epics SET description = ?, updated_at = ?, version = version + 1 WHERE id = ?;").run(
-          "Remote changed description",
-          now + 10_000,
-          epicId,
-        );
-
-        appendEventWithGitContext(storage.db, workspace, {
-          entityKind: "epic",
-          entityId: epicId,
-          operation: "upsert",
-          fields: { description: "Remote changed description" },
-        });
-      } finally {
-        storage.close();
-      }
-    }
-
-    runGit(workspace, ["checkout", "feature/long-history-conflict"]);
 
     const pullResult = await runSync({
       args: ["pull", "--from", "main"],
