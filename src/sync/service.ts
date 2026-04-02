@@ -461,14 +461,20 @@ function createConflict(
       updated_at = CASE
         WHEN sync_conflicts.ours_value IS excluded.ours_value
          AND sync_conflicts.theirs_value IS excluded.theirs_value
-         AND sync_conflicts.resolution = excluded.resolution
+         AND sync_conflicts.resolution = CASE
+           WHEN sync_conflicts.resolution = 'pending' THEN excluded.resolution
+           ELSE sync_conflicts.resolution
+         END
         THEN sync_conflicts.updated_at
         ELSE excluded.updated_at
       END,
       version = CASE
         WHEN sync_conflicts.ours_value IS excluded.ours_value
          AND sync_conflicts.theirs_value IS excluded.theirs_value
-         AND sync_conflicts.resolution = excluded.resolution
+         AND sync_conflicts.resolution = CASE
+           WHEN sync_conflicts.resolution = 'pending' THEN excluded.resolution
+           ELSE sync_conflicts.resolution
+         END
         THEN sync_conflicts.version
         ELSE sync_conflicts.version + 1
       END;
