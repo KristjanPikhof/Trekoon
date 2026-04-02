@@ -26,6 +26,29 @@ import {
   DomainError,
 } from "./types";
 
+interface AtomicIdempotencyClaim {
+  readonly scope: "subtask" | "dependency" | "deleted_subtask" | "deleted_dependency";
+  readonly idempotencyKey: string;
+  readonly requestFingerprint: string;
+  readonly conflictMessage: string;
+}
+
+interface AtomicIdempotencyReplayResult {
+  readonly state: "replay";
+  readonly status: number;
+  readonly responseData: Record<string, unknown>;
+}
+
+interface AtomicIdempotencyCompletedResult {
+  readonly state: "completed";
+  readonly status: number;
+  readonly responseData: Record<string, unknown>;
+}
+
+type AtomicIdempotentMutationResult =
+  | AtomicIdempotencyReplayResult
+  | AtomicIdempotencyCompletedResult;
+
 function countMatches(value: string, searchText: string): number {
   if (searchText.length === 0) {
     return 0;
@@ -363,6 +386,30 @@ export class MutationService {
     });
   }
 
+  createSubtaskAtomicallyWithIdempotency(input: {
+    taskId: string;
+    title: string;
+    description?: string | undefined;
+    status?: string | undefined;
+    claim: AtomicIdempotencyClaim;
+    buildResponseData: (result: { subtask: SubtaskRecord; domain: TrackerDomain }) => Record<string, unknown>;
+  }): AtomicIdempotentMutationResult {
+    return this.#completeAtomicIdempotentMutation(input.claim, (): AtomicIdempotencyCompletedResult => {
+      const subtask = this.#domain.createSubtask(input);
+      this.#appendEntityEvent("subtask", subtask.id, ENTITY_OPERATIONS.subtask.created, {
+        task_id: subtask.taskId,
+        title: subtask.title,
+        description: subtask.description,
+        status: subtask.status,
+      });
+      return {
+        state: "completed",
+        status: 201,
+        responseData: input.buildResponseData({ subtask, domain: this.#domain }),
+      };
+    });
+  }
+
   createSubtaskBatch(input: { taskId: string; specs: readonly CompactSubtaskSpec[] }): CompactSubtaskBatchCreateResult {
     return this.#writeTransaction((): CompactSubtaskBatchCreateResult => {
       const created = this.#domain.createSubtaskBatch(input);
@@ -422,6 +469,50 @@ export class MutationService {
     });
   }
 
+  deleteSubtaskAtomicallyWithIdempotency(input: {
+    id: string;
+    claim: AtomicIdempotencyClaim;
+    buildResponseData: (result: {
+      subtaskId: string;
+      deletedDependencyIds: string[];
+      domain: TrackerDomain;
+      taskId: string;
+      epicId: string;
+    }) => Record<string, unknown>;
+  }): AtomicIdempotentMutationResult {
+    return this.#completeAtomicIdempotentMutation(input.claim, (): AtomicIdempotencyCompletedResult => {
+      const existingSubtask = this.#domain.getSubtaskOrThrow(input.id);
+      const task = this.#domain.getTaskOrThrow(existingSubtask.taskId);
+      const touchingDependencies = this.#domain.listDependenciesTouchingNode(input.id);
+      this.#domain.deleteSubtask(input.id);
+      const subtaskDeleteEventId = this.#appendEntityEvent("subtask", input.id, ENTITY_OPERATIONS.subtask.deleted, {});
+      for (const dependency of touchingDependencies) {
+        this.#appendEntityEvent(
+          "dependency",
+          `${dependency.sourceId}->${dependency.dependsOnId}`,
+          ENTITY_OPERATIONS.dependency.removed,
+          {
+            source_id: dependency.sourceId,
+            depends_on_id: dependency.dependsOnId,
+            source_event_id: subtaskDeleteEventId,
+          },
+        );
+      }
+
+      return {
+        state: "completed",
+        status: 200,
+        responseData: input.buildResponseData({
+          subtaskId: input.id,
+          deletedDependencyIds: touchingDependencies.map((dependency) => dependency.id),
+          domain: this.#domain,
+          taskId: task.id,
+          epicId: task.epicId,
+        }),
+      };
+    });
+  }
+
   addDependency(sourceId: string, dependsOnId: string): DependencyRecord {
     return this.#writeTransaction((): DependencyRecord => {
       const dependency = this.#domain.addDependency(sourceId, dependsOnId);
@@ -432,6 +523,28 @@ export class MutationService {
         depends_on_kind: dependency.dependsOnKind,
       });
       return dependency;
+    });
+  }
+
+  addDependencyAtomicallyWithIdempotency(input: {
+    sourceId: string;
+    dependsOnId: string;
+    claim: AtomicIdempotencyClaim;
+    buildResponseData: (result: { dependency: DependencyRecord; domain: TrackerDomain }) => Record<string, unknown>;
+  }): AtomicIdempotentMutationResult {
+    return this.#completeAtomicIdempotentMutation(input.claim, (): AtomicIdempotencyCompletedResult => {
+      const dependency = this.#domain.addDependency(input.sourceId, input.dependsOnId);
+      this.#appendEntityEvent("dependency", dependency.id, ENTITY_OPERATIONS.dependency.added, {
+        source_id: dependency.sourceId,
+        source_kind: dependency.sourceKind,
+        depends_on_id: dependency.dependsOnId,
+        depends_on_kind: dependency.dependsOnKind,
+      });
+      return {
+        state: "completed",
+        status: 201,
+        responseData: input.buildResponseData({ dependency, domain: this.#domain }),
+      };
     });
   }
 
@@ -460,6 +573,51 @@ export class MutationService {
         });
       }
       return removed;
+    });
+  }
+
+  removeDependencyAtomicallyWithIdempotency(input: {
+    sourceId: string;
+    dependsOnId: string;
+    claim: AtomicIdempotencyClaim;
+    buildResponseData: (result: {
+      sourceId: string;
+      dependsOnId: string;
+      removed: number;
+      existingDependencyIds: string[];
+      domain: TrackerDomain;
+    }) => Record<string, unknown>;
+  }): AtomicIdempotentMutationResult {
+    return this.#completeAtomicIdempotentMutation(input.claim, (): AtomicIdempotencyCompletedResult => {
+      const existingDependencyIds = this.#domain.listDependencies(input.sourceId)
+        .filter((dependency) => dependency.dependsOnId === input.dependsOnId)
+        .map((dependency) => dependency.id);
+      const removed = this.#domain.removeDependency(input.sourceId, input.dependsOnId);
+      if (removed === 0) {
+        throw new DomainError({
+          code: "not_found",
+          message: "Dependency edge not found",
+          details: {
+            sourceId: input.sourceId,
+            dependsOnId: input.dependsOnId,
+          },
+        });
+      }
+      this.#appendEntityEvent("dependency", `${input.sourceId}->${input.dependsOnId}`, ENTITY_OPERATIONS.dependency.removed, {
+        source_id: input.sourceId,
+        depends_on_id: input.dependsOnId,
+      });
+      return {
+        state: "completed",
+        status: 200,
+        responseData: input.buildResponseData({
+          sourceId: input.sourceId,
+          dependsOnId: input.dependsOnId,
+          removed,
+          existingDependencyIds,
+          domain: this.#domain,
+        }),
+      };
     });
   }
 
@@ -575,6 +733,86 @@ export class MutationService {
       entityId,
       operation,
       fields,
+    });
+  }
+
+  #completeAtomicIdempotentMutation(
+    claim: AtomicIdempotencyClaim,
+    mutate: () => AtomicIdempotencyCompletedResult,
+  ): AtomicIdempotentMutationResult {
+    return this.#writeTransaction((): AtomicIdempotentMutationResult => {
+      const inserted = this.#db.query(
+        `
+        INSERT INTO board_idempotency_keys (
+          scope,
+          idempotency_key,
+          request_fingerprint,
+          state,
+          response_status,
+          response_body,
+          created_at
+        ) VALUES (?, ?, ?, 'pending', 0, '{}', ?)
+        ON CONFLICT(scope, idempotency_key) DO NOTHING
+        `,
+      ).run(claim.scope, claim.idempotencyKey, claim.requestFingerprint, Date.now());
+
+      if (inserted.changes === 0) {
+        const row = this.#db.query(
+          `
+          SELECT request_fingerprint, response_status, response_body
+          FROM board_idempotency_keys
+          WHERE scope = ? AND idempotency_key = ?
+          `,
+        ).get(claim.scope, claim.idempotencyKey) as {
+          request_fingerprint: string;
+          response_status: number;
+          response_body: string;
+        } | null;
+
+        if (!row) {
+          throw new DomainError({
+            code: "invalid_input",
+            message: "Idempotency claim changed while processing request; retry the request",
+          });
+        }
+
+        if (row.request_fingerprint !== claim.requestFingerprint) {
+          throw new DomainError({
+            code: "invalid_input",
+            message: claim.conflictMessage,
+            details: { field: "clientRequestId" },
+          });
+        }
+
+        if (row.response_status === 0) {
+          throw new DomainError({
+            code: "invalid_input",
+            message: "Idempotency record is incomplete; retry the request with a new idempotency key",
+            details: { field: "clientRequestId" },
+          });
+        }
+
+        return {
+          state: "replay",
+          status: row.response_status,
+          responseData: JSON.parse(row.response_body) as Record<string, unknown>,
+        };
+      }
+
+      const result = mutate();
+      this.#db.query(
+        `
+        UPDATE board_idempotency_keys
+        SET state = 'completed',
+            response_status = ?,
+            response_body = ?,
+            created_at = ?
+        WHERE scope = ?
+          AND idempotency_key = ?
+          AND request_fingerprint = ?
+        `,
+      ).run(result.status, JSON.stringify(result.responseData), Date.now(), claim.scope, claim.idempotencyKey, claim.requestFingerprint);
+      return result;
     });
   }
 
