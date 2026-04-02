@@ -1,7 +1,7 @@
 import { type Database } from "bun:sqlite";
 
 import { writeTransaction } from "../storage/database";
-import { appendEventWithGitContext } from "../sync/event-writes";
+import { appendEventWithGitContext, withTransactionEventContext } from "../sync/event-writes";
 import { ENTITY_OPERATIONS } from "./mutation-operations";
 import { TrackerDomain, validateStatusTransition } from "./tracker-domain";
 import {
@@ -102,6 +102,10 @@ export class MutationService {
     this.#db = db;
     this.#cwd = cwd;
     this.#domain = new TrackerDomain(db);
+  }
+
+  #writeTransaction<T>(fn: () => T): T {
+    return writeTransaction(this.#db, (): T => withTransactionEventContext(this.#db, this.#cwd, fn));
   }
 
   createEpic(input: { title: string; description: string; status?: string | undefined }): EpicRecord {
