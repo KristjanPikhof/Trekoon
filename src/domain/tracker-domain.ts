@@ -804,7 +804,7 @@ export class TrackerDomain {
 
   buildTaskTreeDetailed(taskId: string): TaskTreeDetailed {
     const task: TaskRecord = this.getTaskOrThrow(taskId);
-    const subtasks: readonly SubtaskRecord[] = this.listSubtasks(task.id);
+    const subtasks: readonly SubtaskRecord[] = this.listSubtasksByTaskIds([task.id]).get(task.id) ?? [];
 
     return {
       id: task.id,
@@ -825,13 +825,27 @@ export class TrackerDomain {
   buildEpicTreeDetailed(epicId: string): EpicTreeDetailed {
     const epic: EpicRecord = this.getEpicOrThrow(epicId);
     const tasks: readonly TaskRecord[] = this.listTasks(epic.id);
+    const subtasksByTaskId = this.listSubtasksByTaskIds(tasks.map((task) => task.id));
 
     return {
       id: epic.id,
       title: epic.title,
       description: epic.description,
       status: epic.status,
-      tasks: tasks.map((task) => this.buildTaskTreeDetailed(task.id)),
+      tasks: tasks.map((task) => ({
+        id: task.id,
+        epicId: task.epicId,
+        title: task.title,
+        description: task.description,
+        status: task.status,
+        subtasks: (subtasksByTaskId.get(task.id) ?? []).map((subtask) => ({
+          id: subtask.id,
+          taskId: subtask.taskId,
+          title: subtask.title,
+          description: subtask.description,
+          status: subtask.status,
+        })),
+      })),
     };
   }
 
