@@ -181,14 +181,20 @@ describe("board state store reconciliation", () => {
     const setItem = mock(() => {
       throw new Error("quota exceeded");
     });
-    globalThis.localStorage = {
+    globalThis.localStorage = ({
       clear() {},
       getItem() {
         throw new Error("storage unavailable");
       },
+      key() {
+        return null;
+      },
+      get length() {
+        return 0;
+      },
       removeItem() {},
       setItem,
-    } as Storage;
+    } as unknown) as Storage;
 
     const store = createStore({
       epics: [{ id: "epic-1", title: "Epic 1" }],
