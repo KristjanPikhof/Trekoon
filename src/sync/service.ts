@@ -849,9 +849,44 @@ function latestLocalDependencyOperationForIdentity(
   return row?.operation ?? null;
 }
 
+function hasLocalDependencyRemovalForIdentity(
+  db: Database,
+  sourceBranch: string,
+  identity: DependencyEventIdentity,
+): boolean {
+  const row = db
+    .query(
+      `
+      SELECT 1
+      FROM events
+      WHERE entity_kind = 'dependency'
+        AND operation = 'dependency.removed'
+        AND (git_branch IS NULL OR git_branch != ?)
+        AND json_extract(payload, '$.fields.source_id') = ?
+        AND json_extract(payload, '$.fields.depends_on_id') = ?
+        AND (
+          json_extract(payload, '$.fields.source_kind') IS NULL
+          OR json_extract(payload, '$.fields.source_kind') = ?
+        )
+        AND (
+          json_extract(payload, '$.fields.depends_on_kind') IS NULL
+          OR json_extract(payload, '$.fields.depends_on_kind') = ?
+        )
+      LIMIT 1;
+      `,
+    )
+    .get(sourceBranch, identity.sourceId, identity.dependsOnId, identity.sourceKind, identity.dependsOnKind);
+
+  return row !== null;
+}
+
 function hasLocalDependencyDeleteConflict(db: Database, event: StoredEvent, sourceBranch: string): boolean {
   const identity = dependencyEventIdentity(event);
   if (identity === null) {
+    return false;
+  }
+
+  if (!dependencyRowExistsForIdentity(db, identity) && hasLocalDependencyRemovalForIdentity(db, sourceBranch, identity)) {
     return false;
   }
 
