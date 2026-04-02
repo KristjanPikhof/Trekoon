@@ -1,4 +1,4 @@
-import { normalizeSnapshot, VIEW_MODES } from "./utils.js";
+import { applySnapshotDelta, normalizeSnapshot, VIEW_MODES } from "./utils.js";
 
 export const THEME_STORAGE_KEY = "trekoon-board-theme";
 export const STATE_STORAGE_KEY = "trekoon-board-state";
@@ -477,6 +477,13 @@ export function createStore(initialSnapshot, options = {}) {
      */
     replaceSnapshot(nextRawSnapshot) {
       state.snapshot = normalize(nextRawSnapshot);
+      syncState();
+      persist();
+      notify();
+    },
+
+    applySnapshotDelta(delta) {
+      state.snapshot = normalize(applySnapshotDelta(state.snapshot, delta));
       syncState();
       persist();
       notify();
