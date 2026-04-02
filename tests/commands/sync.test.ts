@@ -800,7 +800,7 @@ describe("sync command", (): void => {
     }
   });
 
-  test("resolving a task delete as theirs removes the full task subtree and touching dependencies", async (): Promise<void> => {
+  test("conflicted task delete keeps emitted cascade events atomic until delete is resolved", async (): Promise<void> => {
     const workspace = createWorkspace();
     initializeRepository(workspace);
 
@@ -845,6 +845,51 @@ describe("sync command", (): void => {
         storage.db
           .query("INSERT INTO events (id, entity_kind, entity_id, operation, payload, git_branch, git_head, created_at, updated_at, version) VALUES (?, 'task', ?, 'task.deleted', ?, 'main', NULL, ?, ?, 1);")
           .run("task-delete-event", taskId, JSON.stringify({ fields: {} }), now + 20, now + 20);
+        storage.db
+          .query("INSERT INTO events (id, entity_kind, entity_id, operation, payload, git_branch, git_head, created_at, updated_at, version) VALUES (?, 'subtask', ?, 'subtask.deleted', ?, 'main', NULL, ?, ?, 1);")
+          .run(
+            randomUUID(),
+            subtaskAId,
+            JSON.stringify({ fields: { task_id: taskId, source_event_id: "task-delete-event" } }),
+            now + 21,
+            now + 21,
+          );
+        storage.db
+          .query("INSERT INTO events (id, entity_kind, entity_id, operation, payload, git_branch, git_head, created_at, updated_at, version) VALUES (?, 'subtask', ?, 'subtask.deleted', ?, 'main', NULL, ?, ?, 1);")
+          .run(
+            randomUUID(),
+            subtaskBId,
+            JSON.stringify({ fields: { task_id: taskId, source_event_id: "task-delete-event" } }),
+            now + 22,
+            now + 22,
+          );
+        storage.db
+          .query("INSERT INTO events (id, entity_kind, entity_id, operation, payload, git_branch, git_head, created_at, updated_at, version) VALUES (?, 'dependency', ?, 'dependency.removed', ?, 'main', NULL, ?, ?, 1);")
+          .run(
+            randomUUID(),
+            `${taskId}->${blockerTaskId}`,
+            JSON.stringify({ fields: { source_id: taskId, depends_on_id: blockerTaskId, source_event_id: "task-delete-event" } }),
+            now + 23,
+            now + 23,
+          );
+        storage.db
+          .query("INSERT INTO events (id, entity_kind, entity_id, operation, payload, git_branch, git_head, created_at, updated_at, version) VALUES (?, 'dependency', ?, 'dependency.removed', ?, 'main', NULL, ?, ?, 1);")
+          .run(
+            randomUUID(),
+            `${subtaskAId}->${blockerTaskId}`,
+            JSON.stringify({ fields: { source_id: subtaskAId, depends_on_id: blockerTaskId, source_event_id: "task-delete-event" } }),
+            now + 24,
+            now + 24,
+          );
+        storage.db
+          .query("INSERT INTO events (id, entity_kind, entity_id, operation, payload, git_branch, git_head, created_at, updated_at, version) VALUES (?, 'dependency', ?, 'dependency.removed', ?, 'main', NULL, ?, ?, 1);")
+          .run(
+            randomUUID(),
+            `${blockerTaskId}->${subtaskBId}`,
+            JSON.stringify({ fields: { source_id: blockerTaskId, depends_on_id: subtaskBId, source_event_id: "task-delete-event" } }),
+            now + 25,
+            now + 25,
+          );
       } finally {
         storage.close();
       }
