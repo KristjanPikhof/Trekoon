@@ -121,7 +121,7 @@ export async function runBoard(context: CliContext): Promise<CliResult> {
         return okResult({
           command: "board.open",
           human: [
-            `Board ready at ${server.url}`,
+            `Board ready at ${server.fallbackUrl}`,
             launch.launched
               ? `Browser launched with ${launch.command}`
               : `Browser launch failed: ${launch.errorMessage ?? "unknown failure"}`,
