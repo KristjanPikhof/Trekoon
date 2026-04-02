@@ -1398,6 +1398,7 @@ export function syncPull(cwd: string, sourceBranch: string): PullSummary {
 
           for (const [fieldName, value] of Object.entries(payload.fields)) {
             if (SYNC_EVENT_METADATA_FIELDS.has(fieldName)) {
+              fieldsToApply[fieldName] = value;
               continue;
             }
 
