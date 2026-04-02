@@ -120,6 +120,7 @@ export const BASE_SCHEMA_STATEMENTS: readonly string[] = [
     scope TEXT NOT NULL,
     idempotency_key TEXT NOT NULL,
     request_fingerprint TEXT NOT NULL,
+    state TEXT NOT NULL DEFAULT 'completed',
     response_status INTEGER NOT NULL,
     response_body TEXT NOT NULL,
     created_at INTEGER NOT NULL,
