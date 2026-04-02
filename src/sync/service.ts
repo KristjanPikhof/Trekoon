@@ -106,6 +106,14 @@ interface ConflictRow {
   readonly updated_at: number;
 }
 
+interface ResolutionEventPayload {
+  readonly conflict_id?: string;
+  readonly source_event_id?: string;
+  readonly field: string;
+  readonly resolution: string;
+  readonly value?: string | null;
+}
+
 interface ResolutionWriteContext {
   readonly branchName: string | null;
   readonly headSha: string | null;
@@ -503,22 +511,91 @@ function createConflict(
   ).run(randomUUID(), event.id, event.entity_kind, event.entity_id, fieldName, oursValue, theirsValue, resolution, now, now);
 }
 
+function findConflictForResolutionEvent(
+  db: Database,
+  event: StoredEvent,
+  payload: ResolutionEventPayload,
+): ConflictRow | null {
+  if (typeof payload.source_event_id === "string" && payload.source_event_id.length > 0) {
+    const bySourceEvent = db
+      .query(
+        `
+        SELECT id, event_id, entity_kind, entity_id, field_name, ours_value, theirs_value, resolution, created_at, updated_at
+        FROM sync_conflicts
+        WHERE event_id = ?
+          AND entity_kind = ?
+          AND entity_id = ?
+          AND field_name = ?
+        ORDER BY CASE WHEN resolution = 'pending' THEN 0 ELSE 1 END, created_at ASC, id ASC
+        LIMIT 1;
+        `,
+      )
+      .get(payload.source_event_id, event.entity_kind, event.entity_id, payload.field) as ConflictRow | null;
+
+    if (bySourceEvent) {
+      return bySourceEvent;
+    }
+  }
+
+  if (typeof payload.conflict_id !== "string" || payload.conflict_id.length === 0) {
+    return null;
+  }
+
+  return db
+    .query(
+      `
+      SELECT id, event_id, entity_kind, entity_id, field_name, ours_value, theirs_value, resolution, created_at, updated_at
+      FROM sync_conflicts
+      WHERE id = ?
+        AND entity_kind = ?
+        AND entity_id = ?
+        AND field_name = ?
+      LIMIT 1;
+      `,
+    )
+    .get(payload.conflict_id, event.entity_kind, event.entity_id, payload.field) as ConflictRow | null;
+}
+
+function removeDependenciesTouchingNode(db: Database, nodeId: string): void {
+  db.query("DELETE FROM dependencies WHERE source_id = ? OR depends_on_id = ?;").run(nodeId, nodeId);
+}
+
+function applyConflictTheirsResolution(db: Database, conflict: ConflictRow): void {
+  if (conflict.field_name === "__delete__") {
+    if (conflict.entity_kind === "subtask" || conflict.entity_kind === "task") {
+      removeDependenciesTouchingNode(db, conflict.entity_id);
+    }
+    deleteSingleEntity(db, conflict.entity_kind, conflict.entity_id);
+    return;
+  }
+
+  updateSingleField(db, conflict.entity_kind, conflict.entity_id, conflict.field_name, parseConflictValue(conflict.theirs_value));
+}
+
 function applyIncomingResolutionEvent(db: Database, event: StoredEvent): boolean {
   const parsed = parseJsonObject(event.payload);
   if (!parsed) {
     return false;
   }
 
-  const conflictId = parsed.conflict_id;
-  const fieldName = parsed.field;
-  const resolution = parsed.resolution;
+  const resolutionPayload = parsed as ResolutionEventPayload;
+  const fieldName = resolutionPayload.field;
+  const resolution = resolutionPayload.resolution;
 
   if (
-    typeof conflictId !== "string" ||
     typeof fieldName !== "string" ||
     (resolution !== "ours" && resolution !== "theirs")
   ) {
     return false;
+  }
+
+  const conflict = findConflictForResolutionEvent(db, event, resolutionPayload);
+  if (!conflict) {
+    return false;
+  }
+
+  if (conflict.resolution === "pending" && resolution === "theirs") {
+    applyConflictTheirsResolution(db, conflict);
   }
 
   const now = nextEventTimestamp(db);
@@ -535,13 +612,13 @@ function applyIncomingResolutionEvent(db: Database, event: StoredEvent): boolean
         AND field_name = @fieldName;
       `,
     )
-    .run({
-      "@resolution": resolution,
-      "@now": now,
-      "@conflictId": conflictId,
-      "@entityKind": event.entity_kind,
-      "@entityId": event.entity_id,
-      "@fieldName": fieldName,
+      .run({
+        "@resolution": resolution,
+        "@now": now,
+        "@conflictId": conflict.id,
+        "@entityKind": event.entity_kind,
+        "@entityId": event.entity_id,
+        "@fieldName": fieldName,
     });
 
   return updated.changes > 0;
@@ -1160,11 +1237,7 @@ function resolveConflictRow(
   git: ResolutionWriteContext,
 ): void {
   if (resolution === "theirs") {
-    if (conflict.field_name === "__delete__") {
-      deleteSingleEntity(db, conflict.entity_kind, conflict.entity_id);
-    } else {
-      updateSingleField(db, conflict.entity_kind, conflict.entity_id, conflict.field_name, parseConflictValue(conflict.theirs_value));
-    }
+    applyConflictTheirsResolution(db, conflict);
   }
 
   const now: number = nextEventTimestamp(db);
@@ -1209,6 +1282,7 @@ function appendResolutionEvent(
     conflict.entity_id,
     JSON.stringify({
       conflict_id: conflict.id,
+      source_event_id: conflict.event_id,
       field: conflict.field_name,
       resolution,
       value: resolvedValue,
