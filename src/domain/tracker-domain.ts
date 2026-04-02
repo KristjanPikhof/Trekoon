@@ -165,6 +165,20 @@ function normalizeSubtaskDescription(value: string | undefined): string {
   return value.trim();
 }
 
+function normalizeOwner(value: string | null | undefined): string | null | undefined {
+  if (value === undefined) {
+    return undefined;
+  }
+
+  if (value === null) {
+    return null;
+  }
+
+  const normalized = value.trim()
+  ;
+  return normalized.length > 0 ? normalized : null;
+}
+
 function isValidStatus(status: string): status is ValidStatus {
   return (VALID_STATUSES as readonly string[]).includes(status);
 }
@@ -526,7 +540,7 @@ export class TrackerDomain {
     const nextDescription: string =
       input.description !== undefined ? assertNonEmpty("description", input.description) : existing.description;
     const nextStatus: string = input.status !== undefined ? assertNonEmpty("status", input.status) : existing.status;
-    const nextOwner: string | null = input.owner !== undefined ? input.owner : existing.owner;
+    const nextOwner: string | null = input.owner !== undefined ? normalizeOwner(input.owner) ?? null : existing.owner;
     this.assertNoUnresolvedDependenciesForStatusTransition(id, "task", existing.status, nextStatus);
     const now: number = Date.now();
 
@@ -777,7 +791,7 @@ export class TrackerDomain {
     const nextDescription: string =
       input.description !== undefined ? normalizeSubtaskDescription(input.description) : existing.description;
     const nextStatus: string = input.status !== undefined ? assertNonEmpty("status", input.status) : existing.status;
-    const nextOwner: string | null = input.owner !== undefined ? input.owner : existing.owner;
+    const nextOwner: string | null = input.owner !== undefined ? normalizeOwner(input.owner) ?? null : existing.owner;
     this.assertNoUnresolvedDependenciesForStatusTransition(id, "subtask", existing.status, nextStatus);
     const now: number = Date.now();
 
