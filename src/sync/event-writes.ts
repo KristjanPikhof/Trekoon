@@ -44,10 +44,11 @@ export function withTransactionEventContext<T>(db: Database, cwd: string, fn: ()
     return fn();
   }
 
-  const git: ResolvedGitContext = resolveGitContext(cwd);
+  const nextTimestamp: number = nextEventTimestamp(db);
+  const git: ResolvedGitContext = resolveGitContext(cwd, nextTimestamp);
   const context: EventWriteContext = {
     git,
-    nextTimestamp: git.persistedAt,
+    nextTimestamp,
   };
   transactionEventContexts.set(db, context);
 
@@ -65,8 +66,8 @@ export function appendEventWithGitContext(
   input: EventRecordInput,
 ): void {
   const context: EventWriteContext | undefined = transactionEventContexts.get(db);
-  const git: ResolvedGitContext = context?.git ?? resolveGitContext(cwd);
-  const now: number = context?.nextTimestamp ?? git.persistedAt;
+  const now: number = context?.nextTimestamp ?? nextEventTimestamp(db);
+  const git: ResolvedGitContext = context?.git ?? resolveGitContext(cwd, now);
 
   persistGitContext(db, git, now);
 
