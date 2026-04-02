@@ -886,12 +886,12 @@ function hasLocalDependencyDeleteConflict(db: Database, event: StoredEvent, sour
     return false;
   }
 
-  if (!dependencyRowExistsForIdentity(db, identity) && hasLocalDependencyRemovalForIdentity(db, sourceBranch, identity)) {
+  if (!dependencyRowExistsForIdentity(db, identity)) {
     return false;
   }
 
   const latestOperation = latestLocalDependencyOperationForIdentity(db, sourceBranch, identity);
-  if (latestOperation === ENTITY_OPERATIONS.dependency.removed && !dependencyRowExistsForIdentity(db, identity)) {
+  if (latestOperation === ENTITY_OPERATIONS.dependency.removed) {
     return false;
   }
 
