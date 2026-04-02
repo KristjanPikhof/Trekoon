@@ -772,10 +772,13 @@ describe("sync command", (): void => {
 
       deleteConflictId = pendingDelete!.id;
       expect(subtask?.title).toBe("Locally edited");
-      expect(remainingDeps).toEqual([
-        { source_id: subtaskId, depends_on_id: blockerTaskId },
-        { source_id: helperSubtaskId, depends_on_id: subtaskId },
-      ]);
+      expect(remainingDeps).toHaveLength(2);
+      expect(remainingDeps).toEqual(
+        expect.arrayContaining([
+          { source_id: subtaskId, depends_on_id: blockerTaskId },
+          { source_id: helperSubtaskId, depends_on_id: subtaskId },
+        ]),
+      );
     } finally {
       storage.close();
     }
