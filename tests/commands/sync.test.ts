@@ -3606,6 +3606,111 @@ describe("sync command", (): void => {
       }
     });
 
+    test("single theirs resolve tolerates a locally deleted conflicted entity", async (): Promise<void> => {
+      const { workspace, epicId, conflictId } = await setupConflictWorkspace("feature/missing-row-single-theirs");
+
+      {
+        const storage = openTrekoonDatabase(workspace);
+        try {
+          storage.db.query("DELETE FROM epics WHERE id = ?;").run(epicId);
+        } finally {
+          storage.close();
+        }
+      }
+
+      const result = await runSync({
+        args: ["resolve", conflictId, "--use", "theirs"],
+        cwd: workspace,
+        mode: "toon",
+      });
+
+      expect(result.ok).toBe(true);
+
+      const storage = openTrekoonDatabase(workspace);
+      try {
+        const epic = storage.db.query("SELECT id FROM epics WHERE id = ?;").get(epicId) as { id: string } | null;
+        const conflict = storage.db.query("SELECT resolution FROM sync_conflicts WHERE id = ?;").get(conflictId) as { resolution: string } | null;
+        const resolutionEvents = storage.db
+          .query("SELECT COUNT(*) AS count FROM events WHERE entity_id = ? AND operation = 'resolve_conflict';")
+          .get(epicId) as { count: number };
+
+        expect(epic).toBeNull();
+        expect(conflict?.resolution).toBe("theirs");
+        expect(resolutionEvents.count).toBeGreaterThanOrEqual(1);
+      } finally {
+        storage.close();
+      }
+    });
+
+    test("pulled theirs resolution tolerates a locally deleted conflicted entity", async (): Promise<void> => {
+      const { workspace, epicId, conflictId } = await setupConflictWorkspace("feature/missing-row-pulled-theirs");
+
+      let sourceEventId = "";
+      let theirsValue: string | null = null;
+      {
+        const storage = openTrekoonDatabase(workspace);
+        try {
+          const conflict = storage.db
+            .query("SELECT event_id, theirs_value FROM sync_conflicts WHERE id = ? LIMIT 1;")
+            .get(conflictId) as { event_id: string; theirs_value: string | null } | null;
+          sourceEventId = conflict?.event_id ?? "";
+          theirsValue = conflict?.theirs_value ?? null;
+          storage.db.query("DELETE FROM epics WHERE id = ?;").run(epicId);
+        } finally {
+          storage.close();
+        }
+      }
+
+      runGit(workspace, ["checkout", "main"]);
+
+      {
+        const storage = openTrekoonDatabase(workspace);
+        try {
+          const now = Date.now();
+          storage.db
+            .query(
+              "INSERT INTO events (id, entity_kind, entity_id, operation, payload, git_branch, git_head, created_at, updated_at, version) VALUES (?, 'epic', ?, 'resolve_conflict', ?, 'main', NULL, ?, ?, 1);",
+            )
+            .run(
+              randomUUID(),
+              epicId,
+              JSON.stringify({
+                conflict_id: conflictId,
+                source_event_id: sourceEventId,
+                field: "title",
+                resolution: "theirs",
+                value: theirsValue,
+              }),
+              now,
+              now,
+            );
+        } finally {
+          storage.close();
+        }
+      }
+
+      runGit(workspace, ["checkout", "feature/missing-row-pulled-theirs"]);
+
+      const pullResult = await runSync({
+        args: ["pull", "--from", "main"],
+        cwd: workspace,
+        mode: "toon",
+      });
+
+      expect(pullResult.ok).toBe(true);
+
+      const storage = openTrekoonDatabase(workspace);
+      try {
+        const epic = storage.db.query("SELECT id FROM epics WHERE id = ?;").get(epicId) as { id: string } | null;
+        const conflict = storage.db.query("SELECT resolution FROM sync_conflicts WHERE id = ?;").get(conflictId) as { resolution: string } | null;
+
+        expect(epic).toBeNull();
+        expect(conflict?.resolution).toBe("theirs");
+      } finally {
+        storage.close();
+      }
+    });
+
     test("--all + positional ID returns error", async (): Promise<void> => {
       const workspace: string = createWorkspace();
       initializeRepository(workspace);
