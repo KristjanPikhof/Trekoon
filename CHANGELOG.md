@@ -4,6 +4,37 @@ All notable changes to Trekoon are documented in this file.
 
 ## 0.3.6
 
+## 0.3.7
+
+### Added
+
+- Durable board idempotency storage for subtask/dependency create and delete
+  mutations, plus request timeouts and retry affordances in the board client.
+- Database migration v9 for board idempotency records and migration v8 sync
+  scaling indexes for branch cursor scans and conflict lookups.
+
+### Changed
+
+- Board mutation routes now return targeted `snapshotDelta` payloads instead of
+  rebuilding full mutation snapshots, while preserving fresh replay data for
+  idempotent responses.
+- Board snapshots and client state normalization now carry richer dependency
+  metadata (`blockedBy`, `blocks`, nested task subtasks, owner support) and can
+  merge partial snapshot deltas after optimistic mutations.
+- Sync pull now processes incoming events in batches, scans local history in
+  chunks, supports nullable task/subtask owners, and resolves large `sync
+  resolve --all` sets incrementally.
+
+### Fixed
+
+- Board retries for timed-out or failed create/delete mutations now safely reuse
+  stable client request IDs and remove optimistic ghost rows when canonical
+  server deltas arrive.
+- Task/subtask deletions now emit and replay dependency-removal events so board
+  state and sync conflict resolution stay consistent for cascade deletes.
+- Remote delete conflicts now account for local edits on child subtasks and
+  touching dependencies, preventing partial delete application during sync.
+
 ### Added
 
 - `trekoon init` auto-creates a `.gitignore` inside `.trekoon/` when running in
