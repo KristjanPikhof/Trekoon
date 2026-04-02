@@ -2,6 +2,7 @@ import { randomUUID } from "node:crypto";
 
 import { type Database } from "bun:sqlite";
 
+import { ENTITY_OPERATIONS } from "../domain/mutation-operations";
 import { openTrekoonDatabase, writeTransaction } from "../storage/database";
 import { countBranchEventsSince, queryBranchEventsSinceBatch } from "./branch-db";
 import { nextEventTimestamp } from "./event-writes";
