@@ -410,6 +410,13 @@ describe("sync command", (): void => {
 
     runGit(workspace, ["checkout", "-b", "feature/long-history-conflict"]);
 
+    const initialPull = await runSync({
+      args: ["pull", "--from", "main"],
+      cwd: workspace,
+      mode: "toon",
+    });
+    expect(initialPull.ok).toBe(true);
+
     {
       const storage = openTrekoonDatabase(workspace);
       try {
