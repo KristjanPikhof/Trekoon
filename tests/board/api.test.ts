@@ -55,6 +55,9 @@ describe("mutation queue", () => {
       replaceSnapshot(snapshot: Snapshot) {
         this.store.snapshot = snapshot;
       },
+      applySnapshotDelta(delta: Snapshot) {
+        this.store.snapshot = { ...this.store.snapshot, ...delta };
+      },
     };
     const queue = createMutationQueue(model, () => {
       rerenders.push(rerenders.length + 1);
@@ -94,8 +97,11 @@ describe("mutation queue", () => {
         notice: null as Notice,
         isMutating: false,
       },
-       replaceSnapshot(snapshot: TaskSnapshot) {
+      replaceSnapshot(snapshot: TaskSnapshot) {
         this.store.snapshot = snapshot;
+      },
+      applySnapshotDelta(delta: TaskSnapshot) {
+        this.store.snapshot = { ...this.store.snapshot, ...delta };
       },
     };
     const queue = createMutationQueue(model, () => {});
@@ -152,6 +158,9 @@ describe("mutation queue", () => {
       },
       replaceSnapshot(snapshot: Snapshot) {
         this.store.snapshot = snapshot;
+      },
+      applySnapshotDelta(delta: Snapshot) {
+        this.store.snapshot = { ...this.store.snapshot, ...delta };
       },
     };
     const api = createApi(model, { sessionToken: "", rerender: () => {}, requestTimeoutMs: 10 });
