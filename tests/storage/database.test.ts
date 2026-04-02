@@ -560,6 +560,7 @@ describe("storage lifecycle", (): void => {
 
     try {
       const tables = ["git_context", "sync_cursors", "sync_conflicts"];
+      tables.push("board_idempotency_keys");
 
       for (const table of tables) {
         const row = storage.db
@@ -610,6 +611,7 @@ describe("storage lifecycle", (): void => {
       expect(indexes).toContain("idx_dependencies_source");
       expect(indexes).toContain("idx_dependencies_depends_on");
       expect(indexes).toContain("idx_conflicts_resolution_updated_at");
+      expect(indexes).toContain("idx_board_idempotency_created_at");
       expect(indexes).not.toContain("idx_conflicts_entity");
     } finally {
       storage.close();
@@ -666,7 +668,7 @@ describe("storage lifecycle", (): void => {
         .query("SELECT COALESCE(MAX(version), 0) AS version FROM schema_migrations;")
         .get() as { version: number };
 
-      expect(row.version).toBe(8);
+      expect(row.version).toBe(9);
     } finally {
       storage.close();
     }
@@ -677,10 +679,10 @@ describe("storage lifecycle", (): void => {
     const storage = openTrekoonDatabase(workspace);
 
     try {
-      const summary = rollbackDatabase(storage.db, 8);
+      const summary = rollbackDatabase(storage.db, 9);
 
-      expect(summary.fromVersion).toBe(8);
-      expect(summary.toVersion).toBe(8);
+      expect(summary.fromVersion).toBe(9);
+      expect(summary.toVersion).toBe(9);
       expect(summary.rolledBack).toBe(0);
       expect(summary.rolledBackMigrations).toEqual([]);
     } finally {
@@ -717,14 +719,19 @@ describe("storage lifecycle", (): void => {
       const summary = rollbackDatabase(storage.db, 6);
       const indexes: string[] = indexNames(storage.db);
 
-      expect(summary.fromVersion).toBe(8);
+      expect(summary.fromVersion).toBe(9);
       expect(summary.toVersion).toBe(6);
-      expect(summary.rolledBack).toBe(2);
-      expect(summary.rolledBackMigrations).toEqual(["0008_sync_scaling_indexes", "0007_add_lookup_indexes"]);
+      expect(summary.rolledBack).toBe(3);
+      expect(summary.rolledBackMigrations).toEqual([
+        "0009_board_idempotency_storage",
+        "0008_sync_scaling_indexes",
+        "0007_add_lookup_indexes",
+      ]);
       expect(indexes).not.toContain("idx_conflicts_resolution_updated_at");
       expect(indexes).not.toContain("idx_dependencies_depends_on_kind");
       expect(indexes).not.toContain("idx_tasks_owner");
       expect(indexes).not.toContain("idx_subtasks_owner");
+      expect(indexes).not.toContain("idx_board_idempotency_created_at");
     } finally {
       storage.close();
     }
@@ -737,6 +744,25 @@ describe("storage lifecycle", (): void => {
     try {
       const indexes: string[] = indexNames(storage.db);
       expect(indexes).toContain("idx_dependencies_edge");
+    } finally {
+      storage.close();
+    }
+  });
+
+  test("creates durable board idempotency storage", (): void => {
+    const workspace: string = createWorkspace();
+    const storage = openTrekoonDatabase(workspace);
+
+    try {
+      const columns: string[] = tableColumns(storage.db, "board_idempotency_keys");
+      expect(columns).toEqual([
+        "scope",
+        "idempotency_key",
+        "request_fingerprint",
+        "response_status",
+        "response_body",
+        "created_at",
+      ]);
     } finally {
       storage.close();
     }
