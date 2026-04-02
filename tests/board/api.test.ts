@@ -270,4 +270,47 @@ describe("mutation queue", () => {
     expect(removeHeaders.get("x-trekoon-idempotency-key")).toBeString();
     expect(deleteHeaders.get("x-trekoon-idempotency-key")).not.toBe(removeHeaders.get("x-trekoon-idempotency-key"));
   });
+
+  test("retries addDependency with a stable idempotency key", async () => {
+    const fetchMock = mock((_path: string, options?: RequestInit) => new Promise((_resolve, reject) => {
+      options?.signal?.addEventListener("abort", () => {
+        reject(options.signal?.reason ?? new Error("aborted"));
+      }, { once: true });
+    }));
+    globalThis.fetch = fetchMock as unknown as typeof fetch;
+
+    const emptySnapshot: Snapshot = { epics: [], tasks: [], subtasks: [], dependencies: [] };
+    const model = {
+      store: {
+        snapshot: emptySnapshot,
+        notice: null as Notice,
+        isMutating: false,
+      },
+      replaceSnapshot(snapshot: Snapshot) {
+        this.store.snapshot = snapshot;
+      },
+      applySnapshotDelta(delta: Snapshot) {
+        this.store.snapshot = { ...this.store.snapshot, ...delta };
+      },
+    };
+    const api = createApi(model, { sessionToken: "", rerender: () => {}, requestTimeoutMs: 10 });
+
+    api.addDependency("task-1", "task-2", (snapshot: Snapshot) => snapshot);
+    await new Promise((resolve) => setTimeout(resolve, 25));
+    expect(api.retryLastFailedMutation()).toBe(true);
+    await new Promise((resolve) => setTimeout(resolve, 25));
+
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+
+    const firstCall = fetchMock.mock.calls[0] as unknown as [string, RequestInit];
+    const secondCall = fetchMock.mock.calls[1] as unknown as [string, RequestInit];
+    const firstHeaders = new Headers(firstCall[1].headers);
+    const secondHeaders = new Headers(secondCall[1].headers);
+    const firstBody = JSON.parse(String(firstCall[1].body)) as { clientRequestId: string; sourceId: string; dependsOnId: string };
+    const secondBody = JSON.parse(String(secondCall[1].body)) as { clientRequestId: string; sourceId: string; dependsOnId: string };
+
+    expect(firstHeaders.get("x-trekoon-idempotency-key")).toBe(firstBody.clientRequestId);
+    expect(secondHeaders.get("x-trekoon-idempotency-key")).toBe(secondBody.clientRequestId);
+    expect(firstBody).toEqual(secondBody);
+  });
 });
