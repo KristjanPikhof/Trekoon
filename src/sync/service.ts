@@ -1114,6 +1114,16 @@ export function syncPull(cwd: string, sourceBranch: string): PullSummary {
 
           const payload: EventPayload = { fields: payloadValidation.fields };
 
+          if (incoming.operation === "dependency.removed") {
+            const sourceEventId = payload.fields.source_event_id;
+            if (typeof sourceEventId === "string" && hasPendingDeleteConflict(storage.db, sourceEventId)) {
+              storeEvent(storage.db, incoming);
+              lastToken = cursorTokenFromEvent(incoming);
+              lastEventAt = incoming.created_at;
+              continue;
+            }
+          }
+
           const isDeleteWithLocalEdits =
             incoming.operation.endsWith(".deleted") &&
             hasLocalEntityEdits(storage.db, incoming.entity_kind, incoming.entity_id, sourceBranch);
