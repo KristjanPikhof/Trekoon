@@ -3,7 +3,7 @@ import { randomUUID } from "node:crypto";
 import { type Database } from "bun:sqlite";
 
 import { openTrekoonDatabase, writeTransaction } from "../storage/database";
-import { countBranchEventsSince, queryBranchEventsSince } from "./branch-db";
+import { countBranchEventsSince, queryBranchEventsSinceBatch } from "./branch-db";
 import { nextEventTimestamp } from "./event-writes";
 import { persistGitContext, resolveGitContext } from "./git-context";
 import { DomainError } from "../domain/types";
@@ -119,6 +119,20 @@ interface ResolveAllQueryFilters {
 interface EventPayload {
   readonly fields: Record<string, unknown>;
 }
+
+interface ConflictOrderRow {
+  readonly id: string;
+}
+
+interface LocalEntityEventRow {
+  readonly payload: string;
+  readonly created_at: number;
+  readonly id: string;
+}
+
+const SYNC_PULL_BATCH_SIZE = 250;
+const CONFLICT_HISTORY_SCAN_BATCH_SIZE = 250;
+const RESOLVE_ALL_CHUNK_SIZE = 200;
 
 interface PayloadValidation {
   readonly ok: boolean;
