@@ -153,6 +153,26 @@ describe("board routes", (): void => {
     }
   });
 
+  test("accepts board session cookies after bootstrap auth", async (): Promise<void> => {
+    const cwd = createWorkspace();
+    const storage = openTrekoonDatabase(cwd);
+
+    try {
+      const handler = createBoardApiHandler({ db: storage.db, cwd, token: "secret-token" });
+      const response = await handler(new Request("http://board.test/api/snapshot", {
+        headers: {
+          cookie: "trekoon_board_session=secret-token",
+        },
+      }));
+      const body = await response.json() as { ok: boolean };
+
+      expect(response.status).toBe(200);
+      expect(body.ok).toBeTrue();
+    } finally {
+      storage.close();
+    }
+  });
+
   test("returns readable dependency blocked errors for mutation routes", async (): Promise<void> => {
     const cwd = createWorkspace();
     const storage = openTrekoonDatabase(cwd);
@@ -794,6 +814,46 @@ describe("board routes", (): void => {
       expect(body.data.task).toEqual(expect.objectContaining({ id: task.id, owner: null }));
       expect(body.data.snapshotDelta.tasks).toContainEqual(expect.objectContaining({ id: task.id, owner: null }));
       expect(new TrackerDomain(storage.db).getTask(task.id)?.owner).toBeNull();
+    } finally {
+      storage.close();
+    }
+  });
+
+  test("normalizes blank owners to null for board task and subtask updates", async (): Promise<void> => {
+    const cwd = createWorkspace();
+    const storage = openTrekoonDatabase(cwd);
+
+    try {
+      const mutations = new MutationService(storage.db, cwd);
+      const epic = mutations.createEpic({ title: "Roadmap", description: "Plan release" });
+      const task = mutations.createTask({ epicId: epic.id, title: "Implement", description: "Ship board" });
+      const subtask = mutations.createSubtask({ taskId: task.id, title: "Verify", description: "Check owner normalization" });
+      mutations.updateTask(task.id, { owner: "alice" });
+      mutations.updateSubtask(subtask.id, { owner: "bob" });
+      const handler = createBoardApiHandler({ db: storage.db, cwd, token: "secret-token" });
+
+      const taskResponse = await handler(new Request(`http://board.test/api/tasks/${task.id}?token=secret-token`, {
+        method: "PATCH",
+        headers: {
+          "content-type": "application/json",
+        },
+        body: JSON.stringify({ owner: "   " }),
+      }));
+      const subtaskResponse = await handler(new Request(`http://board.test/api/subtasks/${subtask.id}?token=secret-token`, {
+        method: "PATCH",
+        headers: {
+          "content-type": "application/json",
+        },
+        body: JSON.stringify({ owner: "   " }),
+      }));
+
+      const taskBody = await taskResponse.json() as { data: { task: { owner: string | null } } };
+      const subtaskBody = await subtaskResponse.json() as { data: { subtask: { owner: string | null } } };
+
+      expect(taskResponse.status).toBe(200);
+      expect(subtaskResponse.status).toBe(200);
+      expect(taskBody.data.task.owner).toBeNull();
+      expect(subtaskBody.data.subtask.owner).toBeNull();
     } finally {
       storage.close();
     }
