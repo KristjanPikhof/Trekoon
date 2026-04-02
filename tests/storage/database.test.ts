@@ -666,21 +666,21 @@ describe("storage lifecycle", (): void => {
         .query("SELECT COALESCE(MAX(version), 0) AS version FROM schema_migrations;")
         .get() as { version: number };
 
-      expect(row.version).toBe(7);
+      expect(row.version).toBe(8);
     } finally {
       storage.close();
     }
   });
 
-  test("rollback to v7 from v7 is a valid no-op", (): void => {
+  test("rollback to v8 from v8 is a valid no-op", (): void => {
     const workspace: string = createWorkspace();
     const storage = openTrekoonDatabase(workspace);
 
     try {
-      const summary = rollbackDatabase(storage.db, 7);
+      const summary = rollbackDatabase(storage.db, 8);
 
-      expect(summary.fromVersion).toBe(7);
-      expect(summary.toVersion).toBe(7);
+      expect(summary.fromVersion).toBe(8);
+      expect(summary.toVersion).toBe(8);
       expect(summary.rolledBack).toBe(0);
       expect(summary.rolledBackMigrations).toEqual([]);
     } finally {
@@ -709,7 +709,7 @@ describe("storage lifecycle", (): void => {
     }
   });
 
-  test("rollback from v7 to v6 drops lookup indexes", (): void => {
+  test("rollback from v8 to v6 drops lookup and sync scaling indexes", (): void => {
     const workspace: string = createWorkspace();
     const storage = openTrekoonDatabase(workspace);
 
@@ -717,10 +717,10 @@ describe("storage lifecycle", (): void => {
       const summary = rollbackDatabase(storage.db, 6);
       const indexes: string[] = indexNames(storage.db);
 
-      expect(summary.fromVersion).toBe(7);
+      expect(summary.fromVersion).toBe(8);
       expect(summary.toVersion).toBe(6);
-      expect(summary.rolledBack).toBe(1);
-      expect(summary.rolledBackMigrations).toEqual(["0007_add_lookup_indexes"]);
+      expect(summary.rolledBack).toBe(2);
+      expect(summary.rolledBackMigrations).toEqual(["0008_sync_scaling_indexes", "0007_add_lookup_indexes"]);
       expect(indexes).not.toContain("idx_conflicts_resolution_updated_at");
       expect(indexes).not.toContain("idx_dependencies_depends_on_kind");
       expect(indexes).not.toContain("idx_tasks_owner");
