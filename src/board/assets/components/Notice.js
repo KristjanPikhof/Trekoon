@@ -75,7 +75,7 @@ export function createNotice() {
       const retryButton = typeof container.querySelector === "function"
         ? container.querySelector("[data-board-notice-retry]")
         : null;
-      if (retryButton instanceof HTMLButtonElement && typeof onRetry === "function") {
+      if (retryButton && typeof retryButton.addEventListener === "function" && typeof onRetry === "function") {
         retryButton.addEventListener("click", onRetry, { once: true });
       }
       if (typeof onDismiss === "function") {
