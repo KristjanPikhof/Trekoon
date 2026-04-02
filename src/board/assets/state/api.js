@@ -110,6 +110,8 @@ export function createMutationQueue(model, rerender) {
 
         if (data?.snapshot) {
           model.replaceSnapshot(data.snapshot);
+        } else if (data?.snapshotDelta) {
+          model.applySnapshotDelta(data.snapshotDelta);
         }
 
         if (typeof mutation.onSuccess === "function") {
