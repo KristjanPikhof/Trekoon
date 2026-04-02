@@ -3154,11 +3154,12 @@ describe("sync command", (): void => {
           {
             entity_kind: "epic",
             entity_id: resolvedConflicts[0]!.entity_id,
-            payload: {
-              conflict_id: resolvedConflicts[0]!.id,
-              field: "title",
-              resolution: "theirs",
-              value: JSON.stringify("Remote A title"),
+             payload: {
+               conflict_id: resolvedConflicts[0]!.id,
+               source_event_id: expect.any(String),
+               field: "title",
+               resolution: "theirs",
+               value: JSON.stringify("Remote A title"),
             },
             conflictId: resolvedConflicts[0]!.id,
             fieldName: "title",
@@ -3167,11 +3168,12 @@ describe("sync command", (): void => {
           {
             entity_kind: "epic",
             entity_id: resolvedConflicts[1]!.entity_id,
-            payload: {
-              conflict_id: resolvedConflicts[1]!.id,
-              field: "title",
-              resolution: "theirs",
-              value: JSON.stringify("Remote B title"),
+             payload: {
+               conflict_id: resolvedConflicts[1]!.id,
+               source_event_id: expect.any(String),
+               field: "title",
+               resolution: "theirs",
+               value: JSON.stringify("Remote B title"),
             },
             conflictId: resolvedConflicts[1]!.id,
             fieldName: "title",
