@@ -290,6 +290,81 @@ describe("mutation conformance", (): void => {
     }
   });
 
+  test("task delete emits canonical subtree and dependency cascade events", async (): Promise<void> => {
+    const cwd = createWorkspace();
+    const storage = openTrekoonDatabase(cwd);
+
+    try {
+      const mutations = new MutationService(storage.db, cwd);
+      const epic = mutations.createEpic({ title: "Roadmap", description: "Scope" });
+      const blocker = mutations.createTask({ epicId: epic.id, title: "Blocker", description: "First" });
+      const task = mutations.createTask({ epicId: epic.id, title: "Implement", description: "Code" });
+      const subtaskA = mutations.createSubtask({ taskId: task.id, title: "Write tests", description: "Coverage" });
+      const subtaskB = mutations.createSubtask({ taskId: task.id, title: "Prep fixtures", description: "Setup" });
+
+      const taskDependency = mutations.addDependency(task.id, blocker.id);
+      const subtaskDependency = mutations.addDependency(subtaskA.id, blocker.id);
+      const reverseSubtaskDependency = mutations.addDependency(blocker.id, subtaskB.id);
+
+      const result = mutations.deleteTask(task.id);
+
+      expect(result.deletedSubtaskIds.sort()).toEqual([subtaskA.id, subtaskB.id].sort());
+      expect(result.deletedDependencyIds.sort()).toEqual([
+        taskDependency.id,
+        subtaskDependency.id,
+        reverseSubtaskDependency.id,
+      ].sort());
+
+      expect(eventOperationsForEntity(cwd, "task", task.id)).toEqual([
+        ENTITY_OPERATIONS.task.created,
+        ENTITY_OPERATIONS.task.deleted,
+      ]);
+      expect(eventOperationsForEntity(cwd, "subtask", subtaskA.id)).toEqual([
+        ENTITY_OPERATIONS.subtask.created,
+        ENTITY_OPERATIONS.subtask.deleted,
+      ]);
+      expect(eventOperationsForEntity(cwd, "subtask", subtaskB.id)).toEqual([
+        ENTITY_OPERATIONS.subtask.created,
+        ENTITY_OPERATIONS.subtask.deleted,
+      ]);
+
+      const deletedTask = storage.db.query("SELECT id FROM tasks WHERE id = ?;").get(task.id) as { id: string } | null;
+      const deletedSubtasks = storage.db.query("SELECT id FROM subtasks WHERE task_id = ?;").all(task.id) as Array<{ id: string }>;
+      const deletedDependencies = storage.db
+        .query("SELECT id FROM dependencies WHERE source_id IN (?, ?, ?) OR depends_on_id IN (?, ?, ?);")
+        .all(task.id, subtaskA.id, subtaskB.id, task.id, subtaskA.id, subtaskB.id) as Array<{ id: string }>;
+
+      expect(deletedTask).toBeNull();
+      expect(deletedSubtasks).toEqual([]);
+      expect(deletedDependencies).toEqual([]);
+
+      const taskDeleteEvent = eventRowsForEntity(cwd, "task", task.id).at(-1);
+      const taskDeleteEventIdRow = storage.db
+        .query("SELECT id FROM events WHERE entity_kind = 'task' AND entity_id = ? AND operation = ? ORDER BY created_at DESC, id DESC LIMIT 1;")
+        .get(task.id, ENTITY_OPERATIONS.task.deleted) as { id: string } | null;
+
+      expect(taskDeleteEvent).toEqual({
+        operation: ENTITY_OPERATIONS.task.deleted,
+        payload: { fields: {} },
+      });
+      expect(taskDeleteEventIdRow?.id).toBeString();
+
+      for (const dependencyEventId of [`${task.id}->${blocker.id}`, `${subtaskA.id}->${blocker.id}`, `${blocker.id}->${subtaskB.id}`]) {
+        const rows = eventRowsForEntity(cwd, "dependency", dependencyEventId);
+        expect(rows.at(-1)).toEqual({
+          operation: ENTITY_OPERATIONS.dependency.removed,
+          payload: {
+            fields: expect.objectContaining({
+              source_event_id: taskDeleteEventIdRow?.id,
+            }),
+          },
+        });
+      }
+    } finally {
+      storage.close();
+    }
+  });
+
   test("batch create and dependency add-many append canonical events atomically", async (): Promise<void> => {
     const cwd = createWorkspace();
 
