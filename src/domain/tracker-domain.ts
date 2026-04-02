@@ -1730,6 +1730,9 @@ export class TrackerDomain {
     const dependencyTargetsBySource = new Map<string, Set<string>>();
     const dependents = new Map<string, Set<string>>();
     const indegree = new Map<string, number>();
+    const dependencyMap = this.listDependenciesBySourceIds(
+      changes.filter((change) => change.kind === "task" || change.kind === "subtask").map((change) => change.id),
+    );
 
     changes.forEach((change, index) => {
       indexById.set(change.id, index);
@@ -1740,7 +1743,7 @@ export class TrackerDomain {
         return;
       }
 
-      const dependencyTargets = new Set(this.listDependencies(change.id).map((dependency) => dependency.dependsOnId));
+      const dependencyTargets = new Set((dependencyMap.get(change.id) ?? []).map((dependency) => dependency.dependsOnId));
       dependencyTargetsBySource.set(change.id, dependencyTargets);
     });
 
