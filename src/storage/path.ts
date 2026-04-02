@@ -72,6 +72,8 @@ export interface StoragePathDiagnostics {
   readonly errors: readonly StoragePathIssue[];
 }
 
+const storagePathCache: Map<string, StoragePaths> = new Map();
+
 function resolveGitPath(workingDirectory: string, argument: "--git-common-dir" | "--show-toplevel"): string | null {
   const result = spawnSync("git", ["rev-parse", argument], {
     cwd: workingDirectory,
@@ -93,6 +95,11 @@ function resolveGitPath(workingDirectory: string, argument: "--git-common-dir" |
 
 export function resolveStoragePaths(workingDirectory: string = process.cwd()): StoragePaths {
   const invocationCwd: string = resolve(workingDirectory);
+  const cachedPaths: StoragePaths | undefined = storagePathCache.get(invocationCwd);
+  if (cachedPaths) {
+    return cachedPaths;
+  }
+
   const worktreeRoot: string = resolveGitPath(invocationCwd, "--show-toplevel") ?? invocationCwd;
   const repoCommonDirRaw: string | null = resolveGitPath(invocationCwd, "--git-common-dir");
   const repoCommonDir: string | null = repoCommonDirRaw ? realpathSync(repoCommonDirRaw) : null;
@@ -148,7 +155,7 @@ export function resolveStoragePaths(workingDirectory: string = process.cwd()): S
     errors: [],
   };
 
-  return {
+  const storagePaths: StoragePaths = {
     invocationCwd,
     storageMode,
     repoCommonDir,
@@ -161,4 +168,8 @@ export function resolveStoragePaths(workingDirectory: string = process.cwd()): S
     boardManifestFile,
     diagnostics,
   };
+
+  storagePathCache.set(invocationCwd, storagePaths);
+
+  return storagePaths;
 }
