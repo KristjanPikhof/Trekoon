@@ -851,19 +851,34 @@ export function syncPull(cwd: string, sourceBranch: string): PullSummary {
     const cursor = loadCursor(storage.db, git.worktreePath, sourceBranch);
     const cursorToken = cursor?.cursor_token ?? "0:";
     const staleCursor: boolean = cursor !== null && isCursorStale(storage.db, cursorToken, sourceBranch);
-    const incomingEvents: StoredEvent[] = queryBranchEventsSince(storage.db, sourceBranch, cursorToken) as StoredEvent[];
 
     // Same-branch fast path: skip conflict detection when already on sourceBranch.
     // Null branchName (detached HEAD) falls through to the normal path.
     if (git.branchName !== null && git.branchName === sourceBranch) {
       let lastToken: string | null = null;
       let lastEventAt: number | null = cursor?.last_event_at ?? null;
+      let scannedEvents = 0;
 
       writeTransaction(storage.db, (): void => {
-        for (const incoming of incomingEvents) {
-          storeEvent(storage.db, incoming);
-          lastToken = cursorTokenFromEvent(incoming);
-          lastEventAt = incoming.created_at;
+        while (true) {
+          const incomingEvents = queryBranchEventsSinceBatch(
+            storage.db,
+            sourceBranch,
+            lastToken ?? cursorToken,
+            SYNC_PULL_BATCH_SIZE,
+          ) as StoredEvent[];
+
+          if (incomingEvents.length === 0) {
+            break;
+          }
+
+          scannedEvents += incomingEvents.length;
+
+          for (const incoming of incomingEvents) {
+            storeEvent(storage.db, incoming);
+            lastToken = cursorTokenFromEvent(incoming);
+            lastEventAt = incoming.created_at;
+          }
         }
 
         if (lastToken) {
@@ -873,7 +888,7 @@ export function syncPull(cwd: string, sourceBranch: string): PullSummary {
 
       return {
         sourceBranch,
-        scannedEvents: incomingEvents.length,
+        scannedEvents,
         appliedEvents: 0,
         createdConflicts: 0,
         cursorToken: lastToken,
@@ -899,85 +914,108 @@ export function syncPull(cwd: string, sourceBranch: string): PullSummary {
     let conflictEvents = 0;
     let lastToken: string | null = null;
     let lastEventAt: number | null = cursor?.last_event_at ?? null;
+    let scannedEvents = 0;
 
     writeTransaction(storage.db, (): void => {
-      for (const incoming of incomingEvents) {
-        const payloadValidation = parsePayload(incoming.payload);
+      while (true) {
+        const incomingEvents = queryBranchEventsSinceBatch(
+          storage.db,
+          sourceBranch,
+          lastToken ?? cursorToken,
+          SYNC_PULL_BATCH_SIZE,
+        ) as StoredEvent[];
 
-        if (!payloadValidation.ok) {
-          malformedPayloadEvents += 1;
-          quarantinedEvents += 1;
-          createConflict(
-            storage.db,
-            incoming,
-            "__payload__",
-            null,
-            payloadValidation.reason ?? "Invalid payload",
-            "invalid",
-          );
-          createdConflicts += 1;
-          storeEvent(storage.db, incoming);
-          lastToken = cursorTokenFromEvent(incoming);
-          lastEventAt = incoming.created_at;
-          continue;
+        if (incomingEvents.length === 0) {
+          break;
         }
 
-        const payload: EventPayload = { fields: payloadValidation.fields };
+        scannedEvents += incomingEvents.length;
 
-        const isDeleteWithLocalEdits =
-          incoming.operation.endsWith(".deleted") &&
-          hasLocalEntityEdits(storage.db, incoming.entity_kind, incoming.entity_id, sourceBranch);
-        if (isDeleteWithLocalEdits) {
-          // Note: dependency.removed is intentionally excluded — dependencies are
-          // edges (not entities with local edit history), so conflict detection
-          // does not apply to them.
-          createConflict(storage.db, incoming, "__delete__", null, "Entity deleted on source branch");
-          createdConflicts += 1;
-          conflictEvents += 1;
-          storeEvent(storage.db, incoming);
-          lastToken = cursorTokenFromEvent(incoming);
-          lastEventAt = incoming.created_at;
-          continue;
-        }
-
-        const fieldsToApply: Record<string, unknown> = {};
-        let withheldConflictCount = 0;
-
-        for (const [fieldName, value] of Object.entries(payload.fields)) {
-          const conflict = entityFieldConflict(storage.db, sourceBranch, incoming, fieldName, value);
-
-          if (conflict) {
-            withheldConflictCount += 1;
-            conflictEvents += 1;
-            createConflict(storage.db, incoming, fieldName, conflict.oursValue, conflict.theirsValue);
-            createdConflicts += 1;
+        for (const incoming of incomingEvents) {
+          if (incoming.operation === "resolve_conflict") {
+            if (applyIncomingResolutionEvent(storage.db, incoming)) {
+              appliedEvents += 1;
+            }
+            storeEvent(storage.db, incoming);
+            lastToken = cursorTokenFromEvent(incoming);
+            lastEventAt = incoming.created_at;
             continue;
           }
 
-          fieldsToApply[fieldName] = value;
-        }
+          const payloadValidation = parsePayload(incoming.payload);
 
-        if (applyEntityFields(storage.db, incoming, fieldsToApply)) {
-          appliedEvents += 1;
-        } else if (applyReplayedCreateWithConflicts(storage.db, incoming, fieldsToApply, withheldConflictCount)) {
-          appliedEvents += 1;
-        } else if (incoming.operation !== "resolve_conflict") {
-          applyRejectedEvents += 1;
-          quarantinedEvents += 1;
-          createConflict(
-            storage.db,
-            incoming,
-            "__apply__",
-            null,
-            `Rejected event ${incoming.operation} for ${incoming.entity_kind}`,
-            "invalid",
-          );
-          createdConflicts += 1;
-        }
+          if (!payloadValidation.ok) {
+            malformedPayloadEvents += 1;
+            quarantinedEvents += 1;
+            createConflict(
+              storage.db,
+              incoming,
+              "__payload__",
+              null,
+              payloadValidation.reason ?? "Invalid payload",
+              "invalid",
+            );
+            createdConflicts += 1;
+            storeEvent(storage.db, incoming);
+            lastToken = cursorTokenFromEvent(incoming);
+            lastEventAt = incoming.created_at;
+            continue;
+          }
 
-        storeEvent(storage.db, incoming);
-        lastToken = cursorTokenFromEvent(incoming);
-        lastEventAt = incoming.created_at;
+          const payload: EventPayload = { fields: payloadValidation.fields };
+
+          const isDeleteWithLocalEdits =
+            incoming.operation.endsWith(".deleted") &&
+            hasLocalEntityEdits(storage.db, incoming.entity_kind, incoming.entity_id, sourceBranch);
+          if (isDeleteWithLocalEdits) {
+            createConflict(storage.db, incoming, "__delete__", null, "Entity deleted on source branch");
+            createdConflicts += 1;
+            conflictEvents += 1;
+            storeEvent(storage.db, incoming);
+            lastToken = cursorTokenFromEvent(incoming);
+            lastEventAt = incoming.created_at;
+            continue;
+          }
+
+          const fieldsToApply: Record<string, unknown> = {};
+          let withheldConflictCount = 0;
+
+          for (const [fieldName, value] of Object.entries(payload.fields)) {
+            const conflict = entityFieldConflict(storage.db, sourceBranch, incoming, fieldName, value);
+
+            if (conflict) {
+              withheldConflictCount += 1;
+              conflictEvents += 1;
+              createConflict(storage.db, incoming, fieldName, conflict.oursValue, conflict.theirsValue);
+              createdConflicts += 1;
+              continue;
+            }
+
+            fieldsToApply[fieldName] = value;
+          }
+
+          if (applyEntityFields(storage.db, incoming, fieldsToApply)) {
+            appliedEvents += 1;
+          } else if (applyReplayedCreateWithConflicts(storage.db, incoming, fieldsToApply, withheldConflictCount)) {
+            appliedEvents += 1;
+          } else {
+            applyRejectedEvents += 1;
+            quarantinedEvents += 1;
+            createConflict(
+              storage.db,
+              incoming,
+              "__apply__",
+              null,
+              `Rejected event ${incoming.operation} for ${incoming.entity_kind}`,
+              "invalid",
+            );
+            createdConflicts += 1;
+          }
+
+          storeEvent(storage.db, incoming);
+          lastToken = cursorTokenFromEvent(incoming);
+          lastEventAt = incoming.created_at;
+        }
       }
 
       if (lastToken) {
@@ -996,7 +1034,7 @@ export function syncPull(cwd: string, sourceBranch: string): PullSummary {
 
     return {
       sourceBranch,
-      scannedEvents: incomingEvents.length,
+      scannedEvents,
       appliedEvents,
       createdConflicts,
       cursorToken: lastToken,
