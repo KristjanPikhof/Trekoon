@@ -6,7 +6,7 @@ import { join } from "node:path";
 import { afterEach, describe, expect, test } from "bun:test";
 
 import { type EventPruneSummary, pruneEvents, pruneResolvedConflicts } from "../../src/storage/events-retention";
-import { appendEventWithGitContext, nextEventTimestamp, withTransactionEventContext } from "../../src/sync/event-writes";
+import { appendEventWithGitContext, nextEventTimestamp, prepareEventWriteContext, withTransactionEventContext } from "../../src/sync/event-writes";
 import { openTrekoonDatabase } from "../../src/storage/database";
 
 const DAY_IN_MILLISECONDS = 24 * 60 * 60 * 1000;
@@ -422,7 +422,7 @@ describe("event retention", (): void => {
     const storage = openTrekoonDatabase(workspace);
 
     try {
-      withTransactionEventContext(storage.db, workspace, (): void => {
+      withTransactionEventContext(storage.db, prepareEventWriteContext(storage.db, workspace), (): void => {
         appendEventWithGitContext(storage.db, workspace, {
           entityKind: "epic",
           entityId: randomUUID(),
