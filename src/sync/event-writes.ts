@@ -2,7 +2,7 @@ import { randomUUID } from "node:crypto";
 
 import { type Database } from "bun:sqlite";
 
-import { persistGitContext, resolveGitContext } from "./git-context";
+import { persistGitContext, resolveGitContext, type ResolvedGitContext } from "./git-context";
 
 interface EventRecordInput {
   readonly entityKind: string;
@@ -10,6 +10,13 @@ interface EventRecordInput {
   readonly operation: string;
   readonly fields: Record<string, unknown>;
 }
+
+interface EventWriteContext {
+  readonly git: ResolvedGitContext;
+  nextTimestamp: number;
+}
+
+const transactionEventContexts: WeakMap<Database, EventWriteContext> = new WeakMap();
 
 export function nextEventTimestamp(db: Database): number {
   const now: number = Date.now();
@@ -31,16 +38,41 @@ export function nextEventTimestamp(db: Database): number {
   return Math.max(now, latestEvent.created_at + 1);
 }
 
+export function withTransactionEventContext<T>(db: Database, cwd: string, fn: () => T): T {
+  const existingContext: EventWriteContext | undefined = transactionEventContexts.get(db);
+  if (existingContext) {
+    return fn();
+  }
+
+  const git: ResolvedGitContext = resolveGitContext(cwd);
+  const context: EventWriteContext = {
+    git,
+    nextTimestamp: git.persistedAt,
+  };
+  transactionEventContexts.set(db, context);
+
+  try {
+    return fn();
+  } finally {
+    transactionEventContexts.delete(db);
+  }
+}
+
 /** Append a single event to the events table with git context. Returns void (event ID is not exposed). */
 export function appendEventWithGitContext(
   db: Database,
   cwd: string,
   input: EventRecordInput,
 ): void {
-  const git = resolveGitContext(cwd);
-  persistGitContext(db, git);
+  const context: EventWriteContext | undefined = transactionEventContexts.get(db);
+  const git: ResolvedGitContext = context?.git ?? resolveGitContext(cwd);
+  const now: number = context?.nextTimestamp ?? git.persistedAt;
 
-  const now: number = nextEventTimestamp(db);
+  persistGitContext(db, git, now);
+
+  if (context) {
+    context.nextTimestamp += 1;
+  }
 
   db.query(
     `
