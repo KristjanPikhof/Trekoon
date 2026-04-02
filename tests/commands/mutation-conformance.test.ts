@@ -384,12 +384,14 @@ describe("mutation conformance", (): void => {
       const dependencyIds = createdSubtasks.map(() => randomUUID());
 
       for (const [index, subtask] of createdSubtasks.entries()) {
+        const dependencyId = dependencyIds[index];
+        expect(dependencyId).toBeString();
         storage.db
           .query("INSERT INTO subtasks (id, task_id, title, description, status, created_at, updated_at, version) VALUES (?, ?, ?, ?, 'todo', ?, ?, 1);")
           .run(subtask.id, task.id, subtask.title, "Coverage", now + index, now + index);
         storage.db
           .query("INSERT INTO dependencies (id, source_id, source_kind, depends_on_id, depends_on_kind, created_at, updated_at, version) VALUES (?, ?, 'subtask', ?, 'task', ?, ?, 1);")
-          .run(dependencyIds[index], subtask.id, blocker.id, now + index, now + index);
+          .run(dependencyId, subtask.id, blocker.id, now + index, now + index);
       }
 
       const result = mutations.deleteTask(task.id);
