@@ -202,14 +202,14 @@ describe("board routes", (): void => {
         ok: boolean;
         data: {
           task: { id: string; status: string };
-          snapshot: { tasks: Array<{ id: string; status: string }> };
+          snapshotDelta: { tasks: Array<{ id: string; status: string }> };
         };
       };
 
       expect(response.status).toBe(200);
       expect(body.ok).toBeTrue();
       expect(body.data.task.status).toBe("blocked");
-      expect(body.data.snapshot.tasks).toContainEqual(expect.objectContaining({ id: task.id, status: "blocked" }));
+      expect(body.data.snapshotDelta.tasks).toContainEqual(expect.objectContaining({ id: task.id, status: "blocked" }));
     } finally {
       storage.close();
     }
@@ -238,7 +238,7 @@ describe("board routes", (): void => {
         ok: boolean;
         data: {
           plan: { atomic: boolean; changedIds: string[]; blockers: unknown[] };
-          snapshot: {
+          snapshotDelta: {
             epics: Array<{ id: string; status: string }>;
             tasks: Array<{ id: string; status: string }>;
             subtasks: Array<{ id: string; status: string }>;
@@ -253,10 +253,10 @@ describe("board routes", (): void => {
         changedIds: expect.arrayContaining([epic.id, firstTask.id, secondTask.id, subtask.id]),
         blockers: [],
       }));
-      expect(body.data.snapshot.epics).toContainEqual(expect.objectContaining({ id: epic.id, status: "done" }));
-      expect(body.data.snapshot.tasks).toContainEqual(expect.objectContaining({ id: firstTask.id, status: "done" }));
-      expect(body.data.snapshot.tasks).toContainEqual(expect.objectContaining({ id: secondTask.id, status: "done" }));
-      expect(body.data.snapshot.subtasks).toContainEqual(expect.objectContaining({ id: subtask.id, status: "done" }));
+      expect(body.data.snapshotDelta.epics).toContainEqual(expect.objectContaining({ id: epic.id, status: "done" }));
+      expect(body.data.snapshotDelta.tasks).toContainEqual(expect.objectContaining({ id: firstTask.id, status: "done" }));
+      expect(body.data.snapshotDelta.tasks).toContainEqual(expect.objectContaining({ id: secondTask.id, status: "done" }));
+      expect(body.data.snapshotDelta.subtasks).toContainEqual(expect.objectContaining({ id: subtask.id, status: "done" }));
     } finally {
       storage.close();
     }
@@ -456,14 +456,14 @@ describe("board routes", (): void => {
         ok: boolean;
         data: {
           task: { id: string; status: string };
-          snapshot: { tasks: Array<{ id: string; status: string }> };
+          snapshotDelta: { tasks: Array<{ id: string; status: string }> };
         };
       };
 
       expect(response.status).toBe(200);
       expect(body.ok).toBeTrue();
       expect(body.data.task).toEqual(expect.objectContaining({ id: task.id, status: "in_progress" }));
-      expect(body.data.snapshot.tasks).toContainEqual(expect.objectContaining({ id: task.id, status: "in_progress" }));
+      expect(body.data.snapshotDelta.tasks).toContainEqual(expect.objectContaining({ id: task.id, status: "in_progress" }));
     } finally {
       storage.close();
     }
@@ -501,7 +501,7 @@ describe("board routes", (): void => {
         ok: boolean;
         data: {
           subtask: { id: string; title: string; description: string; status: string };
-          snapshot: { subtasks: Array<{ id: string; title: string; description: string; status: string }> };
+          snapshotDelta: { subtasks: Array<{ id: string; title: string; description: string; status: string }> };
         };
       };
 
@@ -513,7 +513,7 @@ describe("board routes", (): void => {
         description: "",
         status: "in_progress",
       }));
-      expect(emptyBody.data.snapshot.subtasks).toContainEqual(expect.objectContaining({
+      expect(emptyBody.data.snapshotDelta.subtasks).toContainEqual(expect.objectContaining({
         id: emptySubtask.id,
         title: "Triage regression",
         description: "",
@@ -535,7 +535,7 @@ describe("board routes", (): void => {
         ok: boolean;
         data: {
           subtask: { id: string; description: string; status: string };
-          snapshot: { subtasks: Array<{ id: string; description: string; status: string }> };
+          snapshotDelta: { subtasks: Array<{ id: string; description: string; status: string }> };
         };
       };
 
@@ -546,7 +546,7 @@ describe("board routes", (): void => {
         description: "",
         status: "in_progress",
       }));
-      expect(clearBody.data.snapshot.subtasks).toContainEqual(expect.objectContaining({
+      expect(clearBody.data.snapshotDelta.subtasks).toContainEqual(expect.objectContaining({
         id: describedSubtask.id,
         description: "",
         status: "in_progress",
@@ -590,12 +590,12 @@ describe("board routes", (): void => {
       }));
 
       const firstBody = await firstResponse.json() as { data: { subtask: { id: string } } };
-      const secondBody = await secondResponse.json() as { data: { subtask: { id: string }; snapshot: { subtasks: Array<{ id: string }> } } };
+      const secondBody = await secondResponse.json() as { data: { subtask: { id: string }; snapshotDelta: { subtasks: Array<{ id: string }> } } };
 
       expect(firstResponse.status).toBe(201);
       expect(secondResponse.status).toBe(201);
       expect(secondBody.data.subtask.id).toBe(firstBody.data.subtask.id);
-      expect(secondBody.data.snapshot.subtasks.filter((subtask) => subtask.id === firstBody.data.subtask.id)).toHaveLength(1);
+      expect(secondBody.data.snapshotDelta.subtasks.filter((subtask) => subtask.id === firstBody.data.subtask.id)).toHaveLength(1);
     } finally {
       storage.close();
     }
@@ -621,7 +621,7 @@ describe("board routes", (): void => {
       }));
       const body = await response.json() as {
         ok: boolean;
-        data: { task: { id: string; owner: string | null }; snapshot: { tasks: Array<{ id: string; owner: string | null }> } };
+        data: { task: { id: string; owner: string | null }; snapshotDelta: { tasks: Array<{ id: string; owner: string | null }> } };
       };
 
       expect(response.status).toBe(200);
@@ -666,12 +666,12 @@ describe("board routes", (): void => {
       }));
 
       const firstBody = await firstResponse.json() as { data: { dependency: { id: string } } };
-      const secondBody = await secondResponse.json() as { data: { dependency: { id: string }; snapshot: { dependencies: Array<{ id: string }> } } };
+      const secondBody = await secondResponse.json() as { data: { dependency: { id: string }; snapshotDelta: { dependencies: Array<{ id: string }> } } };
 
       expect(firstResponse.status).toBe(201);
       expect(secondResponse.status).toBe(201);
       expect(secondBody.data.dependency.id).toBe(firstBody.data.dependency.id);
-      expect(secondBody.data.snapshot.dependencies.filter((dependency) => dependency.id === firstBody.data.dependency.id)).toHaveLength(1);
+      expect(secondBody.data.snapshotDelta.dependencies.filter((dependency) => dependency.id === firstBody.data.dependency.id)).toHaveLength(1);
     } finally {
       storage.close();
     }
@@ -705,7 +705,7 @@ describe("board routes", (): void => {
         ok: boolean;
         data: {
           subtask: { id: string; taskId: string; title: string; description: string; status: string };
-          snapshot: { subtasks: Array<{ id: string; taskId: string; title: string; description: string; status: string }> };
+          snapshotDelta: { subtasks: Array<{ id: string; taskId: string; title: string; description: string; status: string }> };
         };
       };
 
@@ -717,7 +717,7 @@ describe("board routes", (): void => {
         description: "Add the board route tests",
         status: "todo",
       }));
-      expect(createBody.data.snapshot.subtasks).toContainEqual(expect.objectContaining({
+      expect(createBody.data.snapshotDelta.subtasks).toContainEqual(expect.objectContaining({
         id: createBody.data.subtask.id,
         taskId: task.id,
         title: "Write regression coverage",
@@ -732,7 +732,7 @@ describe("board routes", (): void => {
         data: {
           subtaskId: string;
           deleted: boolean;
-          snapshot: { subtasks: Array<{ id: string }> };
+          snapshotDelta: { deletedSubtaskIds: string[] };
         };
       };
 
@@ -742,7 +742,7 @@ describe("board routes", (): void => {
         subtaskId: createBody.data.subtask.id,
         deleted: true,
       }));
-      expect(deleteBody.data.snapshot.subtasks.some((subtask) => subtask.id === createBody.data.subtask.id)).toBeFalse();
+      expect(deleteBody.data.snapshotDelta.deletedSubtaskIds).toContain(createBody.data.subtask.id);
     } finally {
       storage.close();
     }
@@ -775,14 +775,13 @@ describe("board routes", (): void => {
         ok: boolean;
         data: {
           dependency: { id: string; sourceId: string; dependsOnId: string };
-          snapshot: {
+          snapshotDelta: {
             tasks: Array<{
               id: string;
               dependencyIds: string[];
               dependentIds: string[];
-              counts: { dependencies: number; dependents: number };
             }>;
-            counts: { dependencies: number };
+            dependencies: Array<{ id: string }>;
           };
         };
       };
@@ -793,17 +792,15 @@ describe("board routes", (): void => {
         sourceId: task.id,
         dependsOnId: blocker.id,
       }));
-      expect(addBody.data.snapshot.tasks).toContainEqual(expect.objectContaining({
+      expect(addBody.data.snapshotDelta.tasks).toContainEqual(expect.objectContaining({
         id: task.id,
         dependencyIds: [addBody.data.dependency.id],
-        counts: expect.objectContaining({ dependencies: 1 }),
       }));
-      expect(addBody.data.snapshot.tasks).toContainEqual(expect.objectContaining({
+      expect(addBody.data.snapshotDelta.tasks).toContainEqual(expect.objectContaining({
         id: blocker.id,
         dependentIds: [addBody.data.dependency.id],
-        counts: expect.objectContaining({ dependents: 1 }),
       }));
-      expect(addBody.data.snapshot.counts.dependencies).toBe(1);
+      expect(addBody.data.snapshotDelta.dependencies).toContainEqual(expect.objectContaining({ id: addBody.data.dependency.id }));
 
       const removeResponse = await handler(new Request(`http://board.test/api/dependencies?token=secret-token&sourceId=${encodeURIComponent(task.id)}&dependsOnId=${encodeURIComponent(blocker.id)}`, {
         method: "DELETE",
@@ -813,14 +810,13 @@ describe("board routes", (): void => {
         ok: boolean;
         data: {
           removed: number;
-          snapshot: {
+          snapshotDelta: {
             tasks: Array<{
               id: string;
               dependencyIds: string[];
               dependentIds: string[];
-              counts: { dependencies: number; dependents: number };
             }>;
-            counts: { dependencies: number };
+            deletedDependencyIds: string[];
           };
         };
       };
@@ -828,17 +824,15 @@ describe("board routes", (): void => {
       expect(removeResponse.status).toBe(200);
       expect(removeBody.ok).toBeTrue();
       expect(removeBody.data.removed).toBe(1);
-      expect(removeBody.data.snapshot.tasks).toContainEqual(expect.objectContaining({
+      expect(removeBody.data.snapshotDelta.tasks).toContainEqual(expect.objectContaining({
         id: task.id,
         dependencyIds: [],
-        counts: expect.objectContaining({ dependencies: 0 }),
       }));
-      expect(removeBody.data.snapshot.tasks).toContainEqual(expect.objectContaining({
+      expect(removeBody.data.snapshotDelta.tasks).toContainEqual(expect.objectContaining({
         id: blocker.id,
         dependentIds: [],
-        counts: expect.objectContaining({ dependents: 0 }),
       }));
-      expect(removeBody.data.snapshot.counts.dependencies).toBe(0);
+      expect(removeBody.data.snapshotDelta.deletedDependencyIds).toContain(addBody.data.dependency.id);
     } finally {
       storage.close();
     }
