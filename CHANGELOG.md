@@ -2,8 +2,6 @@
 
 All notable changes to Trekoon are documented in this file.
 
-## 0.3.6
-
 ## 0.3.7
 
 ### Added
@@ -34,6 +32,8 @@ All notable changes to Trekoon are documented in this file.
   state and sync conflict resolution stay consistent for cascade deletes.
 - Remote delete conflicts now account for local edits on child subtasks and
   touching dependencies, preventing partial delete application during sync.
+
+## 0.3.6
 
 ### Added
 
