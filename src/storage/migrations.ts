@@ -72,6 +72,20 @@ const LOOKUP_INDEX_MIGRATION_DOWN_STATEMENTS: readonly string[] = [
   "DROP INDEX IF EXISTS idx_dependencies_depends_on_kind;",
 ];
 
+const SYNC_SCALING_MIGRATION_UP_STATEMENTS: readonly string[] = [
+  "CREATE INDEX IF NOT EXISTS idx_events_branch_cursor ON events(git_branch, created_at, id);",
+  "CREATE INDEX IF NOT EXISTS idx_events_entity_branch_cursor ON events(entity_kind, entity_id, git_branch, created_at, id);",
+  "CREATE INDEX IF NOT EXISTS idx_conflicts_resolution_entity_field_id ON sync_conflicts(resolution, entity_id, field_name, id);",
+  "CREATE UNIQUE INDEX IF NOT EXISTS idx_conflicts_event_field ON sync_conflicts(event_id, field_name);",
+];
+
+const SYNC_SCALING_MIGRATION_DOWN_STATEMENTS: readonly string[] = [
+  "DROP INDEX IF EXISTS idx_conflicts_event_field;",
+  "DROP INDEX IF EXISTS idx_conflicts_resolution_entity_field_id;",
+  "DROP INDEX IF EXISTS idx_events_entity_branch_cursor;",
+  "DROP INDEX IF EXISTS idx_events_branch_cursor;",
+];
+
 function tableHasColumn(db: Database, tableName: string, columnName: string): boolean {
   const columns = db.query(`PRAGMA table_info(${tableName});`).all() as Array<{ name: string }>;
   return columns.some((column) => column.name === columnName);
@@ -261,6 +275,20 @@ const MIGRATIONS: readonly Migration[] = [
     },
     down(db: Database): void {
       for (const statement of LOOKUP_INDEX_MIGRATION_DOWN_STATEMENTS) {
+        db.exec(statement);
+      }
+    },
+  },
+  {
+    version: 8,
+    name: "0008_sync_scaling_indexes",
+    up(db: Database): void {
+      for (const statement of SYNC_SCALING_MIGRATION_UP_STATEMENTS) {
+        db.exec(statement);
+      }
+    },
+    down(db: Database): void {
+      for (const statement of SYNC_SCALING_MIGRATION_DOWN_STATEMENTS) {
         db.exec(statement);
       }
     },
