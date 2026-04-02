@@ -759,10 +759,73 @@ describe("storage lifecycle", (): void => {
         "scope",
         "idempotency_key",
         "request_fingerprint",
+        "state",
         "response_status",
         "response_body",
         "created_at",
       ]);
+    } finally {
+      storage.close();
+    }
+  });
+
+  test("backfills legacy board idempotency state only when needed", (): void => {
+    const workspace: string = createWorkspace();
+    const databasePath: string = resolveStoragePaths(workspace).databaseFile;
+    mkdirSync(join(workspace, ".trekoon"), { recursive: true });
+
+    const initializer = new Database(databasePath, { create: true });
+
+    try {
+      initializer.exec("PRAGMA journal_mode = WAL;");
+      initializer.exec(`
+        CREATE TABLE IF NOT EXISTS schema_migrations (
+          id INTEGER PRIMARY KEY AUTOINCREMENT,
+          version INTEGER NOT NULL UNIQUE,
+          name TEXT NOT NULL UNIQUE,
+          applied_at INTEGER NOT NULL
+        );
+      `);
+      initializer.exec(`
+        CREATE TABLE IF NOT EXISTS board_idempotency_keys (
+          scope TEXT NOT NULL,
+          idempotency_key TEXT NOT NULL,
+          request_fingerprint TEXT NOT NULL,
+          response_status INTEGER NOT NULL,
+          response_body TEXT NOT NULL,
+          created_at INTEGER NOT NULL,
+          PRIMARY KEY (scope, idempotency_key)
+        );
+      `);
+      initializer.query("INSERT INTO schema_migrations (version, name, applied_at) VALUES (?, ?, ?);").run(
+        9,
+        "0009_board_idempotency_storage",
+        1,
+      );
+      initializer.query(`
+        INSERT INTO board_idempotency_keys (
+          scope,
+          idempotency_key,
+          request_fingerprint,
+          response_status,
+          response_body,
+          created_at
+        ) VALUES (?, ?, ?, ?, ?, ?);
+      `).run("board", "legacy-key", "fingerprint", 200, "{}", 1);
+    } finally {
+      initializer.close(false);
+    }
+
+    const storage = openTrekoonDatabase(workspace);
+
+    try {
+      const columns: string[] = tableColumns(storage.db, "board_idempotency_keys");
+      expect(columns).toContain("state");
+
+      const row = storage.db
+        .query("SELECT state FROM board_idempotency_keys WHERE scope = ? AND idempotency_key = ?;")
+        .get("board", "legacy-key") as { state: string } | null;
+      expect(row?.state).toBe("completed");
     } finally {
       storage.close();
     }
