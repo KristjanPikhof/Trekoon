@@ -373,10 +373,20 @@ export class MutationService {
     });
   }
 
-  deleteSubtask(id: string): void {
-    this.#writeTransaction((): void => {
+  deleteSubtask(id: string): { deletedDependencyIds: string[] } {
+    return this.#writeTransaction((): { deletedDependencyIds: string[] } => {
+      const touchingDependencies = this.#domain.listDependenciesTouchingNode(id);
       this.#domain.deleteSubtask(id);
+      for (const dependency of touchingDependencies) {
+        this.#appendEntityEvent("dependency", `${dependency.sourceId}->${dependency.dependsOnId}`, ENTITY_OPERATIONS.dependency.removed, {
+          source_id: dependency.sourceId,
+          depends_on_id: dependency.dependsOnId,
+        });
+      }
       this.#appendEntityEvent("subtask", id, ENTITY_OPERATIONS.subtask.deleted, {});
+      return {
+        deletedDependencyIds: touchingDependencies.map((dependency) => dependency.id),
+      };
     });
   }
 

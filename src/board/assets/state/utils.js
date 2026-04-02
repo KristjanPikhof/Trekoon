@@ -42,18 +42,6 @@ function normalizeText(value, fallback = "") {
   return String(value ?? fallback).replace(/\\n/g, "\n");
 }
 
-function isCanonicalTask(task) {
-  return task && typeof task === "object" && Array.isArray(task.subtasks) && typeof task.searchText === "string";
-}
-
-function isCanonicalSubtask(subtask) {
-  return subtask && typeof subtask === "object" && Array.isArray(subtask.blockedBy) && typeof subtask.searchText === "string";
-}
-
-function isCanonicalEpic(epic) {
-  return epic && typeof epic === "object" && epic.counts && typeof epic.searchText === "string";
-}
-
 /**
  * @param {any[]} tasks
  * @returns {Record<string, number>}
@@ -76,16 +64,6 @@ export function normalizeSnapshot(rawSnapshot) {
   const rawTasks = normalizeArray(rawSnapshot?.tasks);
   const rawSubtasks = normalizeArray(rawSnapshot?.subtasks);
   const rawDependencies = normalizeArray(rawSnapshot?.dependencies);
-
-   if (rawEpics.every(isCanonicalEpic) && rawTasks.every(isCanonicalTask) && rawSubtasks.every(isCanonicalSubtask)) {
-    return {
-      generatedAt: rawSnapshot?.generatedAt ?? null,
-      epics: rawEpics,
-      tasks: rawTasks,
-      subtasks: rawSubtasks,
-      dependencies: rawDependencies,
-    };
-  }
 
   const taskIndex = new Map();
   const subtaskIndex = new Map();

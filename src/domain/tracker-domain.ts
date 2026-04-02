@@ -761,7 +761,21 @@ export class TrackerDomain {
 
   deleteSubtask(id: string): void {
     this.getSubtaskOrThrow(id);
+    this.#db.query("DELETE FROM dependencies WHERE source_id = ? OR depends_on_id = ?;").run(id, id);
     this.#db.query("DELETE FROM subtasks WHERE id = ?;").run(id);
+  }
+
+  listDependenciesTouchingNode(nodeId: string): readonly DependencyRecord[] {
+    const normalizedNodeId: string = assertNonEmpty("nodeId", nodeId);
+    this.resolveNodeKind(normalizedNodeId);
+
+    const rows = this.#db
+      .query(
+        "SELECT id, source_id, source_kind, depends_on_id, depends_on_kind, created_at, updated_at FROM dependencies WHERE source_id = ? OR depends_on_id = ? ORDER BY created_at ASC, id ASC;",
+      )
+      .all(normalizedNodeId, normalizedNodeId) as DependencyRow[];
+
+    return rows.map(mapDependency);
   }
 
   buildEpicTree(epicId: string): EpicTree {

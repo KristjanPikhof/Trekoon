@@ -178,4 +178,48 @@ describe("mutation queue", () => {
     await new Promise((resolve) => setTimeout(resolve, 25));
     expect(fetchMock).toHaveBeenCalledTimes(2);
   });
+
+  test("retries createSubtask with a stable client request id", async () => {
+    const fetchMock = mock(() => Promise.resolve(new Response(JSON.stringify({
+      ok: true,
+      data: {
+        snapshotDelta: {
+          subtasks: [],
+        },
+      },
+    }), {
+      status: 201,
+      headers: {
+        "content-type": "application/json",
+      },
+    })));
+    globalThis.fetch = fetchMock as unknown as typeof fetch;
+
+    const emptySnapshot: Snapshot = { epics: [], tasks: [], subtasks: [], dependencies: [] };
+    const model = {
+      store: {
+        snapshot: emptySnapshot,
+        notice: null as Notice,
+        isMutating: false,
+      },
+      replaceSnapshot(snapshot: Snapshot) {
+        this.store.snapshot = snapshot;
+      },
+      applySnapshotDelta(delta: Snapshot) {
+        this.store.snapshot = { ...this.store.snapshot, ...delta };
+      },
+    };
+    const api = createApi(model, { sessionToken: "", rerender: () => {} });
+
+    api.createSubtask({ taskId: "task-1", title: "Write tests", description: "", status: "todo" }, (snapshot: Snapshot) => snapshot);
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    const didRetry = api.retryLastFailedMutation();
+
+    expect(didRetry).toBe(false);
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+
+    const [, firstOptions] = fetchMock.mock.calls[0] as [string, RequestInit];
+    const firstBody = JSON.parse(String(firstOptions.body)) as { clientRequestId: string };
+    expect(firstOptions.headers).toEqual(expect.objectContaining({ "x-trekoon-idempotency-key": firstBody.clientRequestId }));
+  });
 });

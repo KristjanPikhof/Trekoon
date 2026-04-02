@@ -746,6 +746,53 @@ describe("board routes", (): void => {
     }
   });
 
+  test("deleting a subtask removes touching dependency rows and delta ids", async (): Promise<void> => {
+    const cwd = createWorkspace();
+    const storage = openTrekoonDatabase(cwd);
+
+    try {
+      const mutations = new MutationService(storage.db, cwd);
+      const epic = mutations.createEpic({ title: "Roadmap", description: "Plan release" });
+      const task = mutations.createTask({ epicId: epic.id, title: "Implement", description: "Ship board" });
+      const blocker = mutations.createTask({ epicId: epic.id, title: "Blocker", description: "Finish first" });
+      const blockedSubtask = mutations.createSubtask({ taskId: task.id, title: "Write regression coverage", description: "Board sync" });
+      const helperSubtask = mutations.createSubtask({ taskId: task.id, title: "Prepare fixtures", description: "Shared prep" });
+      const incomingDependency = mutations.addDependency(blockedSubtask.id, blocker.id);
+      const outgoingDependency = mutations.addDependency(helperSubtask.id, blockedSubtask.id);
+
+      const handler = createBoardApiHandler({ db: storage.db, cwd, token: "secret-token" });
+      const deleteResponse = await handler(new Request(`http://board.test/api/subtasks/${blockedSubtask.id}?token=secret-token`, {
+        method: "DELETE",
+      }));
+      const deleteBody = await deleteResponse.json() as {
+        ok: boolean;
+        data: {
+          subtaskId: string;
+          deleted: boolean;
+          snapshotDelta: { deletedSubtaskIds: string[]; deletedDependencyIds: string[] };
+        };
+      };
+
+      expect(deleteResponse.status).toBe(200);
+      expect(deleteBody.ok).toBeTrue();
+      expect(deleteBody.data.snapshotDelta.deletedSubtaskIds).toEqual([blockedSubtask.id]);
+      expect(deleteBody.data.snapshotDelta.deletedDependencyIds.sort()).toEqual([incomingDependency.id, outgoingDependency.id].sort());
+
+      const snapshotResponse = await handler(new Request("http://board.test/api/snapshot?token=secret-token"));
+      const snapshotBody = await snapshotResponse.json() as {
+        ok: boolean;
+        data: { snapshot: { subtasks: Array<{ id: string }>; dependencies: Array<{ id: string; sourceId: string; dependsOnId: string }> } };
+      };
+
+      expect(snapshotBody.ok).toBeTrue();
+      expect(snapshotBody.data.snapshot.subtasks.some((subtask) => subtask.id === blockedSubtask.id)).toBeFalse();
+      expect(snapshotBody.data.snapshot.dependencies).not.toContainEqual(expect.objectContaining({ id: incomingDependency.id }));
+      expect(snapshotBody.data.snapshot.dependencies).not.toContainEqual(expect.objectContaining({ id: outgoingDependency.id }));
+    } finally {
+      storage.close();
+    }
+  });
+
   test("keeps dependency snapshot relationships consistent across add and remove", async (): Promise<void> => {
     const cwd = createWorkspace();
     const storage = openTrekoonDatabase(cwd);

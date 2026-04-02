@@ -261,6 +261,35 @@ describe("mutation conformance", (): void => {
     }
   });
 
+  test("subtask delete emits dependency removal events for touching rows", async (): Promise<void> => {
+    const cwd = createWorkspace();
+    const storage = openTrekoonDatabase(cwd);
+
+    try {
+      const mutations = new MutationService(storage.db, cwd);
+      const epic = mutations.createEpic({ title: "Roadmap", description: "Scope" });
+      const blocker = mutations.createTask({ epicId: epic.id, title: "Blocker", description: "First" });
+      const task = mutations.createTask({ epicId: epic.id, title: "Implement", description: "Code" });
+      const subtask = mutations.createSubtask({ taskId: task.id, title: "Write tests", description: "Coverage" });
+      const helper = mutations.createSubtask({ taskId: task.id, title: "Prep fixtures", description: "Setup" });
+
+      mutations.addDependency(subtask.id, blocker.id);
+      mutations.addDependency(helper.id, subtask.id);
+
+      const result = mutations.deleteSubtask(subtask.id);
+
+      expect(result.deletedDependencyIds).toHaveLength(2);
+      expect(eventOperationsForEntity(cwd, "dependency", `${subtask.id}->${blocker.id}`)).toEqual([
+        ENTITY_OPERATIONS.dependency.removed,
+      ]);
+      expect(eventOperationsForEntity(cwd, "dependency", `${helper.id}->${subtask.id}`)).toEqual([
+        ENTITY_OPERATIONS.dependency.removed,
+      ]);
+    } finally {
+      storage.close();
+    }
+  });
+
   test("batch create and dependency add-many append canonical events atomically", async (): Promise<void> => {
     const cwd = createWorkspace();
 

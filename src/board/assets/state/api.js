@@ -49,6 +49,10 @@ function buildRequestError(method, path, response, payload) {
 
 const DEFAULT_REQUEST_TIMEOUT_MS = 10000;
 
+function createClientRequestId() {
+  return crypto.randomUUID();
+}
+
 function createTimeoutError(method, path, timeoutMs) {
   const error = new Error(`${method} ${path} timed out after ${timeoutMs}ms. Retry your change.`);
   error.code = "request_timeout";
@@ -299,12 +303,16 @@ export function createApi(model, options) {
     },
 
     createSubtask(input, optimistic) {
+      const clientRequestId = createClientRequestId();
       enqueueMutation({
         optimistic,
         successMessage: "Subtask added.",
         request: () => request("/api/subtasks", {
           method: "POST",
-          body: JSON.stringify(input),
+          headers: {
+            "x-trekoon-idempotency-key": clientRequestId,
+          },
+          body: JSON.stringify({ ...input, clientRequestId }),
         }),
       });
     },

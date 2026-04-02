@@ -370,15 +370,12 @@ export function createBoardApiHandler(context: BoardRouteContext): (request: Req
           const subtaskId = deleteSubtaskMatch[1] ?? "";
           const existingSubtask = domain.getSubtaskOrThrow(subtaskId);
           const task = domain.getTaskOrThrow(existingSubtask.taskId);
-          const relatedDependencyIds = buildBoardSnapshot(domain).dependencies
-            .filter((dependency) => dependency.sourceId === subtaskId || dependency.dependsOnId === subtaskId)
-            .map((dependency) => dependency.id);
-          mutations.deleteSubtask(subtaskId);
+          const { deletedDependencyIds } = mutations.deleteSubtask(subtaskId);
           return buildMutationDeltaResponse(domain, { subtaskId, deleted: true }, {
             epicIds: [task.epicId],
             taskIds: [task.id],
             deletedSubtaskIds: [subtaskId],
-            deletedDependencyIds: relatedDependencyIds,
+            deletedDependencyIds,
           });
         }
 
