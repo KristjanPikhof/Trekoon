@@ -615,7 +615,7 @@ describe("board routes", (): void => {
 
       expect(replayResponse.status).toBe(201);
       expect(replayBody.data.subtask.id).toBe(firstBody.data.subtask.id);
-      expect(replayBody.data.snapshotDelta.subtasks).toContainEqual(expect.objectContaining({ id: firstBody.data.subtask.id }));
+      expect(replayBody.data.snapshotDelta.subtasks).toEqual([]);
 
       const snapshotResponse = await handler(new Request("http://board.test/api/snapshot?token=secret-token"));
       const snapshotBody = await snapshotResponse.json() as { data: { snapshot: { subtasks: Array<{ id: string }> } } };
@@ -669,6 +669,94 @@ describe("board routes", (): void => {
         code: "invalid_input",
         message: "Idempotency key cannot be reused for a different subtask request",
       }));
+    } finally {
+      storage.close();
+    }
+  });
+
+  test("replays concurrent same-key subtask creation without executing twice", async (): Promise<void> => {
+    const cwd = createWorkspace();
+    const storage = openTrekoonDatabase(cwd);
+
+    try {
+      const mutations = new MutationService(storage.db, cwd);
+      const epic = mutations.createEpic({ title: "Roadmap", description: "Plan release" });
+      const task = mutations.createTask({ epicId: epic.id, title: "Implement", description: "Ship board" });
+      const handler = createBoardApiHandler({ db: storage.db, cwd, token: "secret-token" });
+
+      const requestBody = JSON.stringify({
+        taskId: task.id,
+        title: "Write regression coverage",
+        description: "Add the board route tests",
+        status: "todo",
+        clientRequestId: "create-subtask-concurrent-1",
+      });
+
+      const [firstResponse, secondResponse] = await Promise.all([
+        handler(new Request("http://board.test/api/subtasks?token=secret-token", {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: requestBody,
+        })),
+        handler(new Request("http://board.test/api/subtasks?token=secret-token", {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: requestBody,
+        })),
+      ]);
+
+      const firstBody = await firstResponse.json() as { data: { subtask: { id: string } } };
+      const secondBody = await secondResponse.json() as { data: { subtask: { id: string } } };
+
+      expect(firstResponse.status).toBe(201);
+      expect(secondResponse.status).toBe(201);
+      expect(secondBody.data.subtask.id).toBe(firstBody.data.subtask.id);
+      expect(new TrackerDomain(storage.db).listSubtasks(task.id)).toHaveLength(1);
+    } finally {
+      storage.close();
+    }
+  });
+
+  test("rolls back keyed subtask creation when idempotency completion fails", async (): Promise<void> => {
+    const cwd = createWorkspace();
+    const storage = openTrekoonDatabase(cwd);
+
+    try {
+      const mutations = new MutationService(storage.db, cwd);
+      const epic = mutations.createEpic({ title: "Roadmap", description: "Plan release" });
+      const task = mutations.createTask({ epicId: epic.id, title: "Implement", description: "Ship board" });
+      storage.db.exec(`
+        CREATE TRIGGER board_idempotency_fail_completion
+        BEFORE UPDATE OF state, response_status, response_body ON board_idempotency_keys
+        WHEN NEW.scope = 'subtask' AND NEW.idempotency_key = 'create-subtask-atomic-failure-1'
+        BEGIN
+          SELECT RAISE(ABORT, 'forced idempotency completion failure');
+        END;
+      `);
+
+      const handler = createBoardApiHandler({ db: storage.db, cwd, token: "secret-token" });
+      const response = await handler(new Request("http://board.test/api/subtasks?token=secret-token", {
+        method: "POST",
+        headers: {
+          "content-type": "application/json",
+          "x-trekoon-idempotency-key": "create-subtask-atomic-failure-1",
+        },
+        body: JSON.stringify({
+          taskId: task.id,
+          title: "Write regression coverage",
+          description: "Add atomicity checks",
+          status: "todo",
+        }),
+      }));
+      const body = await response.json() as { error: { code: string; message: string } };
+
+      expect(response.status).toBe(500);
+      expect(body.error.code).toBe("internal_error");
+      expect(new TrackerDomain(storage.db).listSubtasks(task.id)).toHaveLength(0);
+      const idempotencyRow = storage.db.query(
+        "SELECT state, response_status FROM board_idempotency_keys WHERE scope = ? AND idempotency_key = ?",
+      ).get("subtask", "create-subtask-atomic-failure-1") as { state: string; response_status: number } | null;
+      expect(idempotencyRow).toBeNull();
     } finally {
       storage.close();
     }
@@ -766,7 +854,7 @@ describe("board routes", (): void => {
 
       expect(replayResponse.status).toBe(201);
       expect(replayBody.data.dependency.id).toBe(firstBody.data.dependency.id);
-      expect(replayBody.data.snapshotDelta.dependencies).toContainEqual(expect.objectContaining({ id: firstBody.data.dependency.id }));
+      expect(replayBody.data.snapshotDelta.dependencies).toEqual([]);
 
       const snapshotResponse = await handler(new Request("http://board.test/api/snapshot?token=secret-token"));
       const snapshotBody = await snapshotResponse.json() as { data: { snapshot: { dependencies: Array<{ id: string }> } } };
@@ -969,6 +1057,55 @@ describe("board routes", (): void => {
     }
   });
 
+  test("replays subtask deletion with fresh parent records and preserved deleted ids", async (): Promise<void> => {
+    const cwd = createWorkspace();
+    const storage = openTrekoonDatabase(cwd);
+
+    try {
+      const mutations = new MutationService(storage.db, cwd);
+      const epic = mutations.createEpic({ title: "Roadmap", description: "Plan release" });
+      const task = mutations.createTask({ epicId: epic.id, title: "Implement", description: "Ship board" });
+      const subtask = mutations.createSubtask({ taskId: task.id, title: "Write regression coverage", description: "Board sync" });
+      const handler = createBoardApiHandler({ db: storage.db, cwd, token: "secret-token" });
+
+      const requestUrl = `http://board.test/api/subtasks/${subtask.id}?token=secret-token`;
+      const requestHeaders = { "x-trekoon-idempotency-key": "delete-subtask-fresh-replay-1" };
+      const firstResponse = await handler(new Request(requestUrl, { method: "DELETE", headers: requestHeaders }));
+      expect(firstResponse.status).toBe(200);
+
+      mutations.updateEpic(epic.id, { title: "Roadmap refreshed" });
+      mutations.updateTask(task.id, { title: "Implement refreshed" });
+
+      const replayResponse = await handler(new Request(requestUrl, { method: "DELETE", headers: requestHeaders }));
+      const replayBody = await replayResponse.json() as {
+        data: {
+          subtaskId: string;
+          snapshotDelta: {
+            epics: Array<{ id: string; title: string }>;
+            tasks: Array<{ id: string; title: string }>;
+            subtasks: Array<{ id: string }>;
+            deletedSubtaskIds: string[];
+          };
+        };
+      };
+
+      expect(replayResponse.status).toBe(200);
+      expect(replayBody.data.subtaskId).toBe(subtask.id);
+      expect(replayBody.data.snapshotDelta.epics).toContainEqual(expect.objectContaining({
+        id: epic.id,
+        title: "Roadmap refreshed",
+      }));
+      expect(replayBody.data.snapshotDelta.tasks).toContainEqual(expect.objectContaining({
+        id: task.id,
+        title: "Implement refreshed",
+      }));
+      expect(replayBody.data.snapshotDelta.subtasks).toEqual([]);
+      expect(replayBody.data.snapshotDelta.deletedSubtaskIds).toEqual([subtask.id]);
+    } finally {
+      storage.close();
+    }
+  });
+
   test("keeps dependency snapshot relationships consistent across add and remove", async (): Promise<void> => {
     const cwd = createWorkspace();
     const storage = openTrekoonDatabase(cwd);
@@ -1089,6 +1226,57 @@ describe("board routes", (): void => {
     }
   });
 
+  test("replays dependency deletion with fresh related records and preserved deleted ids", async (): Promise<void> => {
+    const cwd = createWorkspace();
+    const storage = openTrekoonDatabase(cwd);
+
+    try {
+      const mutations = new MutationService(storage.db, cwd);
+      const epic = mutations.createEpic({ title: "Roadmap", description: "Plan release" });
+      const task = mutations.createTask({ epicId: epic.id, title: "Implement", description: "Ship board" });
+      const subtask = mutations.createSubtask({ taskId: task.id, title: "Write regression coverage", description: "Board sync" });
+      const blocker = mutations.createTask({ epicId: epic.id, title: "Blocker", description: "Finish first" });
+      const dependency = mutations.addDependency(subtask.id, blocker.id);
+      const handler = createBoardApiHandler({ db: storage.db, cwd, token: "secret-token" });
+
+      const requestUrl = `http://board.test/api/dependencies?token=secret-token&sourceId=${encodeURIComponent(subtask.id)}&dependsOnId=${encodeURIComponent(blocker.id)}`;
+      const requestHeaders = { "x-trekoon-idempotency-key": "delete-dependency-fresh-replay-1" };
+      const firstResponse = await handler(new Request(requestUrl, { method: "DELETE", headers: requestHeaders }));
+      expect(firstResponse.status).toBe(200);
+
+      mutations.updateSubtask(subtask.id, { title: "Write refreshed regression coverage" });
+      mutations.updateTask(blocker.id, { title: "Blocker refreshed" });
+
+      const replayResponse = await handler(new Request(requestUrl, { method: "DELETE", headers: requestHeaders }));
+      const replayBody = await replayResponse.json() as {
+        data: {
+          removed: number;
+          snapshotDelta: {
+            tasks: Array<{ id: string; title: string }>;
+            subtasks: Array<{ id: string; title: string }>;
+            dependencies: Array<{ id: string }>;
+            deletedDependencyIds: string[];
+          };
+        };
+      };
+
+      expect(replayResponse.status).toBe(200);
+      expect(replayBody.data.removed).toBe(1);
+      expect(replayBody.data.snapshotDelta.tasks).toContainEqual(expect.objectContaining({
+        id: blocker.id,
+        title: "Blocker refreshed",
+      }));
+      expect(replayBody.data.snapshotDelta.subtasks).toContainEqual(expect.objectContaining({
+        id: subtask.id,
+        title: "Write refreshed regression coverage",
+      }));
+      expect(replayBody.data.snapshotDelta.dependencies).toEqual([]);
+      expect(replayBody.data.snapshotDelta.deletedDependencyIds).toEqual([dependency.id]);
+    } finally {
+      storage.close();
+    }
+  });
+
   test("rejects reusing a dependency delete idempotency key for a different request target", async (): Promise<void> => {
     const cwd = createWorkspace();
     const storage = openTrekoonDatabase(cwd);
@@ -1126,4 +1314,5 @@ describe("board routes", (): void => {
       storage.close();
     }
   });
+
 });
