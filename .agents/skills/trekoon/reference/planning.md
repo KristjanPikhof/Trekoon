@@ -12,6 +12,43 @@ tradeoffs, ask the user before writing. Present options with clear tradeoffs.
 Use multi-select for independent features that can be combined; use single-select
 for mutually exclusive choices.
 
+Use the harness's interactive user-question tool when you need clarification:
+
+- OpenCode: `question`
+- Claude Code: `AskUserQuestion`
+
+Do not hide planning-critical questions inside a long narrative response.
+
+## Pre-plan synthesis
+
+Before creating or expanding an epic, synthesize the context you already have.
+Planning should consume previous brainstorming, research, and codebase discovery
+rather than redoing it from scratch.
+
+Build a short internal planning brief with:
+
+1. **Goal** — what outcome the user wants
+2. **Decisions already made** — chosen direction, rejected options, known tradeoffs
+3. **Known constraints** — architecture, library constraints, timelines, safety, compatibility
+4. **Affected areas** — subsystems, files, interfaces, or workflows likely involved
+5. **Verification expectations** — what evidence will prove the work is complete
+6. **Remaining unknowns** — only the ones that actually block graph creation
+
+If the brief is already sufficient, go straight into planning. If important
+unknowns remain, do targeted research or ask a narrow user question before
+creating the graph.
+
+## Research-aware planning rules
+
+- Reuse research conclusions in the epic and task descriptions.
+- Carry forward concrete patterns, file paths, APIs, and constraints that were
+  discovered earlier.
+- Do not replace prior decisions with generic planning boilerplate.
+- If the user already chose an approach during brainstorming, plan that approach
+  unless they explicitly reopen the decision.
+- If existing Trekoon items already represent part of the work, expand or refine
+  them instead of recreating parallel tracking state.
+
 ## Planning data model
 
 - **Epic** = full feature outcome and constraints.
@@ -51,6 +88,8 @@ Include:
 4. **Success criteria** (testable outcomes)
 5. **Risks/constraints** (data migration, latency budgets, auth boundaries)
 6. **Verification gates** (tests, manual checks, perf/security checks)
+7. **Key prior decisions or research findings** when they materially affect the
+   implementation path
 
 ### Task title
 
@@ -70,6 +109,8 @@ Must include:
 - required tests/verification commands
 - integration constraints (contracts, backward compatibility)
 - explicit "can run in parallel with ..." or "blocked by ..." note
+- relevant findings from prior research or brainstorming that execution agents
+  should not have to rediscover
 
 **File scope** — declare explicitly so the agent doesn't waste tokens exploring:
 

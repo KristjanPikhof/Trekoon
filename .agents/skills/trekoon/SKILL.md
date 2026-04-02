@@ -47,6 +47,35 @@ tracked in Trekoon.
 When invoked with arguments, determine the mode first, then load only the
 reference needed for that mode.
 
+## Planning preflight
+
+Before entering plan mode, harvest the context already available in the current
+conversation and workspace. Planning should build on prior thinking, not restart
+discovery from zero.
+
+Treat these as primary inputs when they exist:
+
+- brainstorm output
+- research notes or library findings
+- codebase exploration results
+- prior user decisions and constraints
+- existing Trekoon entities that should be expanded rather than replaced
+
+Compress that context into a short internal planning brief before creating the
+epic graph:
+
+- goal and why now
+- decisions already made
+- constraints and risks already known
+- affected systems/files/interfaces
+- verification expectations
+- unresolved questions that actually block planning
+
+If the remaining unknowns are real blockers, do targeted follow-up research or
+ask the user a narrow clarification question. Use the harness's interactive user
+question tool for this — `question` in OpenCode or `AskUserQuestion` in Claude
+Code — instead of guessing.
+
 ### 1. Route by first argument
 
 | Command shape | Mode | Required read | Completion target |
@@ -137,6 +166,17 @@ These stop conditions are the core contract for the skill.
   lane and delegate.
 - Ask the user only when the work is genuinely blocked by ambiguity, approval,
   or missing external access.
+
+## Clarification tool rule
+
+When planning or execution needs user input, use the harness's user-question
+tool rather than burying the question inside narration:
+
+- OpenCode: `question`
+- Claude Code: `AskUserQuestion`
+
+Ask narrow, decision-shaping questions. Prefer one clear question with concrete
+options over a broad list of speculative unknowns.
 
 ## Non-negotiable defaults
 
