@@ -103,7 +103,7 @@ function serializeInlineJson(value: unknown): string {
 }
 
 function buildBoardBootstrapPayload(database: TrekoonDatabase, cwd: string, token: string): string {
-  const domain = new TrackerDomain(database.db, cwd);
+  const domain = new TrackerDomain(database.db);
   return serializeInlineJson({
     token,
     snapshot: buildBoardSnapshot(domain),
