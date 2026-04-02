@@ -151,6 +151,40 @@ describe("mutation queue", () => {
     expect(model.store.notice).toEqual({ type: "success", message: "Task saved." });
   });
 
+  test("cleans up queue state when optimistic updates throw", async () => {
+    const emptySnapshot: Snapshot = { epics: [], tasks: [], subtasks: [], dependencies: [] };
+    const model = {
+      store: {
+        snapshot: emptySnapshot,
+        notice: null as Notice,
+        isMutating: false,
+      },
+      replaceSnapshot(snapshot: Snapshot) {
+        this.store.snapshot = snapshot;
+      },
+      applySnapshotDelta(delta: Snapshot) {
+        this.store.snapshot = { ...this.store.snapshot, ...delta };
+      },
+    };
+    const queue = createMutationQueue(model, () => {});
+
+    queue.enqueue({
+      optimistic() {
+        throw new Error("optimistic failed");
+      },
+      request: async () => ({}),
+    });
+
+    await queue.flush();
+
+    expect(queue.isPending).toBe(false);
+    expect(model.store.isMutating).toBe(false);
+    expect(model.store.notice).toEqual(expect.objectContaining({
+      type: "error",
+      message: "optimistic failed",
+    }));
+  });
+
   test("aborts requests after the explicit timeout and supports retry", async () => {
     const fetchMock = mock((_path: string, options?: RequestInit) => new Promise((_resolve, reject) => {
       options?.signal?.addEventListener("abort", () => {
