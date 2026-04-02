@@ -38,18 +38,22 @@ export function nextEventTimestamp(db: Database): number {
   return Math.max(now, latestEvent.created_at + 1);
 }
 
-export function withTransactionEventContext<T>(db: Database, cwd: string, fn: () => T): T {
+export function prepareEventWriteContext(db: Database, cwd: string): EventWriteContext {
+  const nextTimestamp: number = nextEventTimestamp(db);
+  const git: ResolvedGitContext = resolveGitContext(cwd, nextTimestamp);
+
+  return {
+    git,
+    nextTimestamp,
+  };
+}
+
+export function withTransactionEventContext<T>(db: Database, context: EventWriteContext, fn: () => T): T {
   const existingContext: EventWriteContext | undefined = transactionEventContexts.get(db);
   if (existingContext) {
     return fn();
   }
 
-  const nextTimestamp: number = nextEventTimestamp(db);
-  const git: ResolvedGitContext = resolveGitContext(cwd, nextTimestamp);
-  const context: EventWriteContext = {
-    git,
-    nextTimestamp,
-  };
   transactionEventContexts.set(db, context);
 
   try {
