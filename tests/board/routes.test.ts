@@ -793,6 +793,34 @@ describe("board routes", (): void => {
     }
   });
 
+  test("retries subtask deletion idempotently when given the same client request id", async (): Promise<void> => {
+    const cwd = createWorkspace();
+    const storage = openTrekoonDatabase(cwd);
+
+    try {
+      const mutations = new MutationService(storage.db, cwd);
+      const epic = mutations.createEpic({ title: "Roadmap", description: "Plan release" });
+      const task = mutations.createTask({ epicId: epic.id, title: "Implement", description: "Ship board" });
+      const subtask = mutations.createSubtask({ taskId: task.id, title: "Write regression coverage", description: "Board sync" });
+      const handler = createBoardApiHandler({ db: storage.db, cwd, token: "secret-token" });
+
+      const requestUrl = `http://board.test/api/subtasks/${subtask.id}?token=secret-token`;
+      const requestHeaders = { "x-trekoon-idempotency-key": "delete-subtask-1" };
+      const firstResponse = await handler(new Request(requestUrl, { method: "DELETE", headers: requestHeaders }));
+      const secondResponse = await handler(new Request(requestUrl, { method: "DELETE", headers: requestHeaders }));
+
+      const firstBody = await firstResponse.json() as { data: { subtaskId: string; snapshotDelta: { deletedSubtaskIds: string[] } } };
+      const secondBody = await secondResponse.json() as { data: { subtaskId: string; snapshotDelta: { deletedSubtaskIds: string[] } } };
+
+      expect(firstResponse.status).toBe(200);
+      expect(secondResponse.status).toBe(200);
+      expect(secondBody.data.subtaskId).toBe(firstBody.data.subtaskId);
+      expect(secondBody.data.snapshotDelta.deletedSubtaskIds).toEqual([subtask.id]);
+    } finally {
+      storage.close();
+    }
+  });
+
   test("keeps dependency snapshot relationships consistent across add and remove", async (): Promise<void> => {
     const cwd = createWorkspace();
     const storage = openTrekoonDatabase(cwd);
@@ -878,6 +906,36 @@ describe("board routes", (): void => {
         dependentIds: [],
       }));
       expect(removeBody.data.snapshotDelta.deletedDependencyIds).toContain(addBody.data.dependency.id);
+    } finally {
+      storage.close();
+    }
+  });
+
+  test("retries dependency deletion idempotently when given the same client request id", async (): Promise<void> => {
+    const cwd = createWorkspace();
+    const storage = openTrekoonDatabase(cwd);
+
+    try {
+      const mutations = new MutationService(storage.db, cwd);
+      const epic = mutations.createEpic({ title: "Roadmap", description: "Plan release" });
+      const blocker = mutations.createTask({ epicId: epic.id, title: "Blocker", description: "Finish first" });
+      const task = mutations.createTask({ epicId: epic.id, title: "Implement", description: "Ship board" });
+      const dependency = mutations.addDependency(task.id, blocker.id);
+      const handler = createBoardApiHandler({ db: storage.db, cwd, token: "secret-token" });
+
+      const requestUrl = `http://board.test/api/dependencies?token=secret-token&sourceId=${encodeURIComponent(task.id)}&dependsOnId=${encodeURIComponent(blocker.id)}`;
+      const requestHeaders = { "x-trekoon-idempotency-key": "delete-dependency-1" };
+      const firstResponse = await handler(new Request(requestUrl, { method: "DELETE", headers: requestHeaders }));
+      const secondResponse = await handler(new Request(requestUrl, { method: "DELETE", headers: requestHeaders }));
+
+      const firstBody = await firstResponse.json() as { data: { removed: number; snapshotDelta: { deletedDependencyIds: string[] } } };
+      const secondBody = await secondResponse.json() as { data: { removed: number; snapshotDelta: { deletedDependencyIds: string[] } } };
+
+      expect(firstResponse.status).toBe(200);
+      expect(secondResponse.status).toBe(200);
+      expect(firstBody.data.removed).toBe(1);
+      expect(secondBody.data.removed).toBe(1);
+      expect(secondBody.data.snapshotDelta.deletedDependencyIds).toContain(dependency.id);
     } finally {
       storage.close();
     }
