@@ -555,6 +555,127 @@ describe("board routes", (): void => {
     }
   });
 
+  test("retries subtask creation idempotently when given the same client request id", async (): Promise<void> => {
+    const cwd = createWorkspace();
+    const storage = openTrekoonDatabase(cwd);
+
+    try {
+      const mutations = new MutationService(storage.db, cwd);
+      const epic = mutations.createEpic({ title: "Roadmap", description: "Plan release" });
+      const task = mutations.createTask({ epicId: epic.id, title: "Implement", description: "Ship board" });
+      const handler = createBoardApiHandler({ db: storage.db, cwd, token: "secret-token" });
+
+      const requestBody = JSON.stringify({
+        taskId: task.id,
+        title: "Write regression coverage",
+        description: "Add the board route tests",
+        status: "todo",
+        clientRequestId: "create-subtask-1",
+      });
+
+      const firstResponse = await handler(new Request("http://board.test/api/subtasks?token=secret-token", {
+        method: "POST",
+        headers: {
+          "content-type": "application/json",
+        },
+        body: requestBody,
+      }));
+      const secondResponse = await handler(new Request("http://board.test/api/subtasks?token=secret-token", {
+        method: "POST",
+        headers: {
+          "content-type": "application/json",
+        },
+        body: requestBody,
+      }));
+
+      const firstBody = await firstResponse.json() as { data: { subtask: { id: string } } };
+      const secondBody = await secondResponse.json() as { data: { subtask: { id: string }; snapshot: { subtasks: Array<{ id: string }> } } };
+
+      expect(firstResponse.status).toBe(201);
+      expect(secondResponse.status).toBe(201);
+      expect(secondBody.data.subtask.id).toBe(firstBody.data.subtask.id);
+      expect(secondBody.data.snapshot.subtasks.filter((subtask) => subtask.id === firstBody.data.subtask.id)).toHaveLength(1);
+    } finally {
+      storage.close();
+    }
+  });
+
+  test("accepts null owners for board task updates", async (): Promise<void> => {
+    const cwd = createWorkspace();
+    const storage = openTrekoonDatabase(cwd);
+
+    try {
+      const mutations = new MutationService(storage.db, cwd);
+      const epic = mutations.createEpic({ title: "Roadmap", description: "Plan release" });
+      const task = mutations.createTask({ epicId: epic.id, title: "Implement", description: "Ship board" });
+      mutations.updateTask(task.id, { owner: "alice" });
+      const handler = createBoardApiHandler({ db: storage.db, cwd, token: "secret-token" });
+
+      const response = await handler(new Request(`http://board.test/api/tasks/${task.id}?token=secret-token`, {
+        method: "PATCH",
+        headers: {
+          "content-type": "application/json",
+        },
+        body: JSON.stringify({ owner: null }),
+      }));
+      const body = await response.json() as {
+        ok: boolean;
+        data: { task: { id: string; owner: string | null }; snapshot: { tasks: Array<{ id: string; owner: string | null }> } };
+      };
+
+      expect(response.status).toBe(200);
+      expect(body.ok).toBeTrue();
+      expect(body.data.task).toEqual(expect.objectContaining({ id: task.id, owner: null }));
+      expect(body.data.snapshot.tasks).toContainEqual(expect.objectContaining({ id: task.id, owner: null }));
+    } finally {
+      storage.close();
+    }
+  });
+
+  test("retries dependency creation idempotently when given the same client request id", async (): Promise<void> => {
+    const cwd = createWorkspace();
+    const storage = openTrekoonDatabase(cwd);
+
+    try {
+      const mutations = new MutationService(storage.db, cwd);
+      const epic = mutations.createEpic({ title: "Roadmap", description: "Plan release" });
+      const blocker = mutations.createTask({ epicId: epic.id, title: "Blocker", description: "Finish first" });
+      const task = mutations.createTask({ epicId: epic.id, title: "Implement", description: "Ship board" });
+      const handler = createBoardApiHandler({ db: storage.db, cwd, token: "secret-token" });
+
+      const requestBody = JSON.stringify({
+        sourceId: task.id,
+        dependsOnId: blocker.id,
+        clientRequestId: "dependency-1",
+      });
+
+      const firstResponse = await handler(new Request("http://board.test/api/dependencies?token=secret-token", {
+        method: "POST",
+        headers: {
+          "content-type": "application/json",
+        },
+        body: requestBody,
+      }));
+      const secondResponse = await handler(new Request("http://board.test/api/dependencies?token=secret-token", {
+        method: "POST",
+        headers: {
+          "content-type": "application/json",
+        },
+        body: requestBody,
+      }));
+
+      const firstBody = await firstResponse.json() as { data: { dependency: { id: string } } };
+      const secondBody = await secondResponse.json() as { data: { dependency: { id: string }; snapshot: { dependencies: Array<{ id: string }> } } };
+
+      expect(firstResponse.status).toBe(201);
+      expect(secondResponse.status).toBe(201);
+      expect(secondBody.data.dependency.id).toBe(firstBody.data.dependency.id);
+      expect(secondBody.data.snapshot.dependencies.filter((dependency) => dependency.id === firstBody.data.dependency.id)).toHaveLength(1);
+    } finally {
+      storage.close();
+    }
+  });
+
   test("creates and deletes subtasks through board routes", async (): Promise<void> => {
     const cwd = createWorkspace();
     const storage = openTrekoonDatabase(cwd);
