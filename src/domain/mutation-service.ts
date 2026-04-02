@@ -312,10 +312,36 @@ export class MutationService {
     });
   }
 
-  deleteTask(id: string): void {
-    this.#writeTransaction((): void => {
+  deleteTask(id: string): { deletedSubtaskIds: string[]; deletedDependencyIds: string[] } {
+    return this.#writeTransaction((): { deletedSubtaskIds: string[]; deletedDependencyIds: string[] } => {
+      const plan = this.#domain.planTaskDeletion(id);
       this.#domain.deleteTask(id);
-      this.#appendEntityEvent("task", id, ENTITY_OPERATIONS.task.deleted, {});
+      const taskDeleteEventId = this.#appendEntityEvent("task", id, ENTITY_OPERATIONS.task.deleted, {});
+
+      for (const subtaskId of plan.subtaskIds) {
+        this.#appendEntityEvent("subtask", subtaskId, ENTITY_OPERATIONS.subtask.deleted, {
+          task_id: id,
+          source_event_id: taskDeleteEventId,
+        });
+      }
+
+      for (const dependency of plan.touchingDependencies) {
+        this.#appendEntityEvent(
+          "dependency",
+          `${dependency.sourceId}->${dependency.dependsOnId}`,
+          ENTITY_OPERATIONS.dependency.removed,
+          {
+            source_id: dependency.sourceId,
+            depends_on_id: dependency.dependsOnId,
+            source_event_id: taskDeleteEventId,
+          },
+        );
+      }
+
+      return {
+        deletedSubtaskIds: [...plan.subtaskIds],
+        deletedDependencyIds: plan.touchingDependencies.map((dependency) => dependency.id),
+      };
     });
   }
 
