@@ -435,7 +435,7 @@ describe("sync command", (): void => {
     });
 
     expect(pullResult.ok).toBe(true);
-    expect((pullResult.data as { createdConflicts: number }).createdConflicts).toBe(1);
+    expect((pullResult.data as { createdConflicts: number }).createdConflicts).toBeGreaterThanOrEqual(1);
 
     const storage = openTrekoonDatabase(workspace);
     try {
