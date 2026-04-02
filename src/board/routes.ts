@@ -6,6 +6,15 @@ import { TrackerDomain } from "../domain/tracker-domain";
 import { DomainError } from "../domain/types";
 import { buildBoardSnapshot } from "./snapshot";
 
+interface SnapshotDeltaSelection {
+  readonly epicIds?: readonly string[];
+  readonly taskIds?: readonly string[];
+  readonly subtaskIds?: readonly string[];
+  readonly dependencyIds?: readonly string[];
+  readonly deletedSubtaskIds?: readonly string[];
+  readonly deletedDependencyIds?: readonly string[];
+}
+
 interface BoardRouteContext {
   readonly db: Database;
   readonly cwd: string;
@@ -116,11 +125,38 @@ function describeBoardError(mutations: MutationService, error: unknown, requestL
 function buildMutationResponse(domain: TrackerDomain, data: Record<string, unknown>, status = 200): Response {
   return jsonResponse(status, {
     ok: true,
-    data: {
-      ...data,
-      snapshot: buildBoardSnapshot(domain),
-    },
+    data,
   });
+}
+
+function buildSnapshotDelta(domain: TrackerDomain, selection: SnapshotDeltaSelection): Record<string, unknown> {
+  const snapshot = buildBoardSnapshot(domain);
+  const epicIdSet = new Set(selection.epicIds ?? []);
+  const taskIdSet = new Set(selection.taskIds ?? []);
+  const subtaskIdSet = new Set(selection.subtaskIds ?? []);
+  const dependencyIdSet = new Set(selection.dependencyIds ?? []);
+
+  return jsonResponse(status, {
+    generatedAt: snapshot.generatedAt,
+    epics: snapshot.epics.filter((epic) => epicIdSet.has(epic.id)),
+    tasks: snapshot.tasks.filter((task) => taskIdSet.has(task.id)),
+    subtasks: snapshot.subtasks.filter((subtask) => subtaskIdSet.has(subtask.id)),
+    dependencies: snapshot.dependencies.filter((dependency) => dependencyIdSet.has(dependency.id)),
+    deletedSubtaskIds: [...(selection.deletedSubtaskIds ?? [])],
+    deletedDependencyIds: [...(selection.deletedDependencyIds ?? [])],
+  }) as unknown as Record<string, unknown>;
+}
+
+function buildMutationDeltaResponse(
+  domain: TrackerDomain,
+  data: Record<string, unknown>,
+  selection: SnapshotDeltaSelection,
+  status = 200,
+): Response {
+  return buildMutationResponse(domain, {
+    ...data,
+    snapshotDelta: buildSnapshotDelta(domain, selection),
+  }, status);
 }
 
 async function parseJsonBody(request: Request): Promise<Record<string, unknown>> {
