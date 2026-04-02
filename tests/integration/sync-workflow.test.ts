@@ -666,37 +666,32 @@ describe("integration sync workflow", (): void => {
     expect(initResult.ok).toBe(true);
 
     runGit(workspace, ["checkout", "-b", "feature/large-batch-pull"]);
-    runGit(workspace, ["checkout", "main"]);
-
-    const created = await runEpic({
-      cwd: workspace,
-      mode: "toon",
-      args: ["create", "--title", "Batch epic", "--description", "large history"],
-    });
-    expect(created.ok).toBe(true);
-    const epicId = (created.data as { epic: { id: string } }).epic.id;
+    const epicId = randomUUID();
 
     const storage = openTrekoonDatabase(workspace);
     try {
-      for (let index = 0; index < 260; index += 1) {
-        storage.db.query("UPDATE epics SET description = ?, updated_at = ?, version = version + 1 WHERE id = ?;").run(
-          `description-${index}`,
-          Date.now() + index + 1,
-          epicId,
-        );
+      const now = Date.now();
+      storage.db
+        .query("INSERT INTO epics (id, title, description, status, created_at, updated_at, version) VALUES (?, ?, ?, ?, ?, ?, 1);")
+        .run(epicId, "Batch epic", "description-259", "todo", now, now);
 
-        appendEventWithGitContext(storage.db, workspace, {
-          entityKind: "epic",
-          entityId: epicId,
-          operation: "upsert",
-          fields: { description: `description-${index}` },
-        });
+      for (let index = 0; index < 260; index += 1) {
+        const eventTime = now + index + 1;
+        storage.db
+          .query(
+            "INSERT INTO events (id, entity_kind, entity_id, operation, payload, git_branch, git_head, created_at, updated_at, version) VALUES (?, 'epic', ?, 'upsert', ?, 'main', NULL, ?, ?, 1);",
+          )
+          .run(
+            randomUUID(),
+            epicId,
+            JSON.stringify({ fields: { description: `description-${index}` } }),
+            eventTime,
+            eventTime,
+          );
       }
     } finally {
       storage.close();
     }
-
-    runGit(workspace, ["checkout", "feature/large-batch-pull"]);
 
     const pullResult = await runSync({
       args: ["pull", "--from", "main"],
