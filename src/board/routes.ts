@@ -136,7 +136,7 @@ function buildSnapshotDelta(domain: TrackerDomain, selection: SnapshotDeltaSelec
   const subtaskIdSet = new Set(selection.subtaskIds ?? []);
   const dependencyIdSet = new Set(selection.dependencyIds ?? []);
 
-  return jsonResponse(status, {
+  return {
     generatedAt: snapshot.generatedAt,
     epics: snapshot.epics.filter((epic) => epicIdSet.has(epic.id)),
     tasks: snapshot.tasks.filter((task) => taskIdSet.has(task.id)),
@@ -144,7 +144,7 @@ function buildSnapshotDelta(domain: TrackerDomain, selection: SnapshotDeltaSelec
     dependencies: snapshot.dependencies.filter((dependency) => dependencyIdSet.has(dependency.id)),
     deletedSubtaskIds: [...(selection.deletedSubtaskIds ?? [])],
     deletedDependencyIds: [...(selection.deletedDependencyIds ?? [])],
-  }) as unknown as Record<string, unknown>;
+  };
 }
 
 function buildMutationDeltaResponse(
