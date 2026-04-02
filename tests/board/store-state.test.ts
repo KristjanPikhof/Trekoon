@@ -288,4 +288,81 @@ describe("board state store reconciliation", () => {
     }));
     expect(snapshot.dependencies).toEqual([]);
   });
+
+  test("preserves owner fields and ignores malformed ids during snapshot normalization", () => {
+    globalThis.localStorage = createMockStorage() as Storage;
+
+    const store = createStore({
+      epics: [
+        { id: "epic-1", title: "Epic 1" },
+        { title: "Missing id epic" },
+      ],
+      tasks: [
+        { id: "task-1", epicId: "epic-1", title: "Task 1", status: "todo", owner: "alice" },
+        { epicId: "epic-1", title: "Missing id task", status: "todo", owner: "bob" },
+      ],
+      subtasks: [
+        { id: "subtask-1", taskId: "task-1", title: "Subtask 1", status: "todo", owner: "carol" },
+        { taskId: "task-1", title: "Missing id subtask", status: "todo", owner: "dave" },
+      ],
+      dependencies: [
+        { id: "dep-1", sourceId: "subtask-1", sourceKind: "subtask", dependsOnId: "task-1", dependsOnKind: "task" },
+        { sourceId: "subtask-1", sourceKind: "subtask", dependsOnId: "task-1", dependsOnKind: "task" },
+      ],
+    });
+
+    const snapshot = store.getSnapshot();
+
+    expect(snapshot.epics.map((epic: { id: string }) => epic.id)).toEqual(["epic-1"]);
+    expect(snapshot.tasks).toEqual([
+      expect.objectContaining({ id: "task-1", owner: "alice" }),
+    ]);
+    expect(snapshot.subtasks).toEqual([
+      expect.objectContaining({ id: "subtask-1", owner: "carol" }),
+    ]);
+    expect(snapshot.dependencies).toEqual([
+      expect.objectContaining({ id: "dep-1" }),
+    ]);
+  });
+
+  test("ignores malformed delta records without creating persistent synthetic ids", () => {
+    globalThis.localStorage = createMockStorage() as Storage;
+
+    const store = createStore({
+      epics: [
+        { id: "epic-1", title: "Epic 1" },
+      ],
+      tasks: [
+        { id: "task-1", epicId: "epic-1", title: "Task 1", status: "todo", owner: "alice" },
+      ],
+      subtasks: [
+        { id: "subtask-1", taskId: "task-1", title: "Subtask 1", status: "todo", owner: "bob" },
+      ],
+      dependencies: [],
+    });
+
+    store.applySnapshotDelta({
+      tasks: [
+        { id: "task-1", epicId: "epic-1", title: "Task 1", status: "in_progress", owner: "zoe" },
+        { epicId: "epic-1", title: "Broken task", status: "todo", owner: "mallory" },
+      ],
+      subtasks: [
+        { id: "subtask-1", taskId: "task-1", title: "Subtask 1", status: "done", owner: null },
+        { taskId: "task-1", title: "Broken subtask", status: "todo", owner: "mallory" },
+      ],
+      dependencies: [
+        { sourceId: "subtask-1", sourceKind: "subtask", dependsOnId: "task-1", dependsOnKind: "task" },
+      ],
+    });
+
+    const snapshot = store.getSnapshot();
+
+    expect(snapshot.tasks).toEqual([
+      expect.objectContaining({ id: "task-1", owner: "zoe", status: "in_progress" }),
+    ]);
+    expect(snapshot.subtasks).toEqual([
+      expect.objectContaining({ id: "subtask-1", owner: null, status: "done" }),
+    ]);
+    expect(snapshot.dependencies).toEqual([]);
+  });
 });
