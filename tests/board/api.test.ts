@@ -126,8 +126,10 @@ describe("mutation queue", () => {
   });
 
   test("aborts requests after the explicit timeout and supports retry", async () => {
-    const fetchMock = mock((_path: string, options?: RequestInit) => new Promise((_resolve, _reject) => {
-      options?.signal?.addEventListener("abort", () => {});
+    const fetchMock = mock((_path: string, options?: RequestInit) => new Promise((_resolve, reject) => {
+      options?.signal?.addEventListener("abort", () => {
+        reject(options.signal?.reason ?? new Error("aborted"));
+      }, { once: true });
     }));
     globalThis.fetch = fetchMock as typeof fetch;
 
@@ -141,7 +143,7 @@ describe("mutation queue", () => {
         this.store.snapshot = snapshot;
       },
     };
-    const api = createApi(model, { sessionToken: "", rerender: () => {} });
+    const api = createApi(model, { sessionToken: "", rerender: () => {}, requestTimeoutMs: 10 });
 
     api.patchTask("task-1", { title: "Retry me" }, (snapshot: Snapshot) => snapshot);
     await new Promise((resolve) => setTimeout(resolve, 25));

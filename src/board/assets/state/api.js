@@ -146,7 +146,8 @@ export function createMutationQueue(model, rerender) {
 
   return {
     enqueue(mutation) {
-      queue.push({ ...mutation, id: nextMutationId += 1 });
+      queue.push({ ...mutation, id: nextMutationId });
+      nextMutationId += 1;
       processNext();
     },
 
@@ -173,7 +174,7 @@ export function createMutationQueue(model, rerender) {
  * @returns {object} API methods: patchTask, patchSubtask, createSubtask, deleteSubtask, addDependency, removeDependency
  */
 export function createApi(model, options) {
-  const { sessionToken, rerender } = options;
+  const { sessionToken, rerender, requestTimeoutMs = DEFAULT_REQUEST_TIMEOUT_MS } = options;
   let lastFailedMutation = null;
 
   function enqueueMutation(definition) {
@@ -201,7 +202,7 @@ export function createApi(model, options) {
     const headers = new Headers(requestOptions.headers || {});
     const timeoutMs = Number.isFinite(requestOptions.timeoutMs) && requestOptions.timeoutMs > 0
       ? requestOptions.timeoutMs
-      : DEFAULT_REQUEST_TIMEOUT_MS;
+      : requestTimeoutMs;
     if (sessionToken.length > 0) {
       headers.set("authorization", `Bearer ${sessionToken}`);
     }
