@@ -3,9 +3,11 @@ import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { dirname, extname, resolve } from "node:path";
 
 import { createBoardApiHandler } from "./routes";
+import { buildBoardSnapshot } from "./snapshot";
 
 import { openTrekoonDatabase, type TrekoonDatabase } from "../storage/database";
 import { resolveStoragePaths } from "../storage/path";
+import { TrackerDomain } from "../domain/tracker-domain";
 
 const CONTENT_TYPES: Record<string, string> = {
   ".css": "text/css; charset=utf-8",
@@ -87,6 +89,37 @@ function isUnavailablePortError(error: unknown): boolean {
   return /^(EADDRINUSE|EACCES)$/i.test(errorCode) || /(EADDRINUSE|EACCES|address already in use|permission denied)/i.test(error.message);
 }
 
+function buildBoardSessionCookie(token: string): string {
+  return `trekoon_board_session=${encodeURIComponent(token)}; Path=/; SameSite=Strict; HttpOnly`;
+}
+
+function serializeInlineJson(value: unknown): string {
+  return JSON.stringify(value)
+    .replace(/</g, "\\u003c")
+    .replace(/>/g, "\\u003e")
+    .replace(/&/g, "\\u0026")
+    .replace(/\u2028/g, "\\u2028")
+    .replace(/\u2029/g, "\\u2029");
+}
+
+function buildBoardBootstrapPayload(database: TrekoonDatabase, cwd: string, token: string): string {
+  const domain = new TrackerDomain(database.db, cwd);
+  return serializeInlineJson({
+    token,
+    snapshot: buildBoardSnapshot(domain),
+  });
+}
+
+function injectBoardBootstrap(html: string, bootstrapJson: string): string {
+  const bootstrapTag = `<script id="trekoon-board-bootstrap" type="application/json">${bootstrapJson}</script>`;
+  const closingBodyIndex = html.lastIndexOf("</body>");
+  if (closingBodyIndex === -1) {
+    return `${html}${bootstrapTag}`;
+  }
+
+  return `${html.slice(0, closingBodyIndex)}${bootstrapTag}\n${html.slice(closingBodyIndex)}`;
+}
+
 export function startBoardServer(options: StartBoardServerOptions = {}): BoardServerInfo {
   const cwd: string = options.cwd ?? process.cwd();
   const database: TrekoonDatabase = openTrekoonDatabase(cwd);
@@ -110,6 +143,13 @@ export function startBoardServer(options: StartBoardServerOptions = {}): BoardSe
           return apiHandler(request);
         }
 
+        const responseHeaders: Record<string, string> = {
+          "cache-control": "no-store",
+        };
+        if ((url.searchParams.get("token") ?? "") === token) {
+          responseHeaders["set-cookie"] = buildBoardSessionCookie(token);
+        }
+
         const assetPath = readAssetPath(boardRoot, url.pathname === "/" ? "/index.html" : url.pathname);
         if (assetPath === null) {
           const fallbackPath = readAssetPath(boardRoot, "/index.html");
@@ -117,9 +157,21 @@ export function startBoardServer(options: StartBoardServerOptions = {}): BoardSe
             return new Response("Board assets are not installed", { status: 500 });
           }
 
-          return new Response(readFileSync(fallbackPath), {
+          const html = injectBoardBootstrap(readFileSync(fallbackPath, "utf8"), buildBoardBootstrapPayload(database, cwd, token));
+
+          return new Response(html, {
             headers: {
-              "cache-control": "no-store",
+              ...responseHeaders,
+              "content-type": "text/html; charset=utf-8",
+            },
+          });
+        }
+
+        if (assetPath.endsWith("/index.html")) {
+          const html = injectBoardBootstrap(readFileSync(assetPath, "utf8"), buildBoardBootstrapPayload(database, cwd, token));
+          return new Response(html, {
+            headers: {
+              ...responseHeaders,
               "content-type": "text/html; charset=utf-8",
             },
           });
@@ -127,7 +179,7 @@ export function startBoardServer(options: StartBoardServerOptions = {}): BoardSe
 
         return new Response(readFileSync(assetPath), {
           headers: {
-            "cache-control": "no-store",
+            ...responseHeaders,
             "content-type": guessContentType(assetPath),
           },
         });
@@ -169,11 +221,12 @@ export function startBoardServer(options: StartBoardServerOptions = {}): BoardSe
 
   const origin: string = `http://127.0.0.1:${port}`;
   const url: string = `${origin}/?token=${encodeURIComponent(token)}`;
+  const fallbackUrl: string = origin;
 
   return {
     origin,
     url,
-    fallbackUrl: url,
+    fallbackUrl,
     token,
     hostname: "127.0.0.1",
     port,
