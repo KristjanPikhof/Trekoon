@@ -318,11 +318,15 @@ export function createApi(model, options) {
     },
 
     deleteSubtask(subtaskId, optimistic) {
+      const clientRequestId = createClientRequestId();
       enqueueMutation({
         optimistic,
         successMessage: "Subtask removed.",
         request: () => request(`/api/subtasks/${encodeURIComponent(subtaskId)}`, {
           method: "DELETE",
+          headers: {
+            "x-trekoon-idempotency-key": clientRequestId,
+          },
         }),
       });
     },
@@ -339,11 +343,15 @@ export function createApi(model, options) {
     },
 
     removeDependency(sourceId, dependsOnId, optimistic) {
+      const clientRequestId = createClientRequestId();
       enqueueMutation({
         optimistic,
         successMessage: "Dependency removed.",
         request: () => request(`/api/dependencies?sourceId=${encodeURIComponent(sourceId)}&dependsOnId=${encodeURIComponent(dependsOnId)}`, {
           method: "DELETE",
+          headers: {
+            "x-trekoon-idempotency-key": clientRequestId,
+          },
         }),
       });
     },
