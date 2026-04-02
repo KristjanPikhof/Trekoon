@@ -42,7 +42,12 @@ export function createNotice() {
       }
 
       // Same notice — skip
-      if (lastNotice && lastNotice.type === notice.type && lastNotice.message === notice.message) {
+      if (
+        lastNotice
+        && lastNotice.type === notice.type
+        && lastNotice.message === notice.message
+        && lastNotice.retryMutationId === notice.retryMutationId
+      ) {
         return;
       }
 
@@ -68,7 +73,7 @@ export function createNotice() {
           </section>
         </div>
       `;
-      lastNotice = { type: notice.type, message: notice.message };
+      lastNotice = { type: notice.type, message: notice.message, retryMutationId: notice.retryMutationId };
 
       // Auto-dismiss after 4 s
       clearTimer();
@@ -76,7 +81,7 @@ export function createNotice() {
         ? container.querySelector("[data-board-notice-retry]")
         : null;
       if (retryButton && typeof retryButton.addEventListener === "function" && typeof onRetry === "function") {
-        retryButton.addEventListener("click", onRetry, { once: true });
+        retryButton.addEventListener("click", onRetry);
       }
       if (typeof onDismiss === "function") {
         dismissTimer = setTimeout(() => {
