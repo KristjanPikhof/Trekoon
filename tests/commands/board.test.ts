@@ -96,7 +96,7 @@ describe("board command", (): void => {
       startBoardServer: () => ({
         origin: "http://127.0.0.1:4321",
         url: "http://127.0.0.1:4321/?token=secret-token",
-        fallbackUrl: "http://127.0.0.1:4321/?token=secret-token",
+        fallbackUrl: "http://127.0.0.1:4321",
         hostname: "127.0.0.1",
         port: 4321,
         token: "secret-token",
@@ -121,8 +121,8 @@ describe("board command", (): void => {
 
     expect(result.ok).toBeTrue();
     expect(result.command).toBe("board.open");
-    expect(result.human).toContain("Board ready at http://127.0.0.1:4321/?token=secret-token");
-    expect(result.human).toContain("Open manually if needed: http://127.0.0.1:4321/?token=secret-token");
+    expect(result.human).toContain("Board ready at http://127.0.0.1:4321");
+    expect(result.human).toContain("Open manually if needed: http://127.0.0.1:4321");
     expect(result.data).toEqual({
       install: {
         action: "installed",
@@ -132,7 +132,7 @@ describe("board command", (): void => {
       server: {
         origin: "http://127.0.0.1:4321",
         url: "http://127.0.0.1:4321/?token=secret-token",
-        fallbackUrl: "http://127.0.0.1:4321/?token=secret-token",
+        fallbackUrl: "http://127.0.0.1:4321",
         hostname: "127.0.0.1",
         port: 4321,
         token: "secret-token",
@@ -178,9 +178,9 @@ describe("board command", (): void => {
 
     expect(result.ok).toBeTrue();
     expect(result.command).toBe("board.open");
-    expect(result.human).toContain("Board ready at http://127.0.0.1:4321/?token=secret-token");
+    expect(result.human).toContain("Board ready at http://127.0.0.1:4321");
     expect(result.human).toContain("Browser launch failed: mock browser failure");
-    expect(result.human).toContain("Open manually if needed: http://127.0.0.1:4321/?token=secret-token");
+    expect(result.human).toContain("Open manually if needed: http://127.0.0.1:4321");
     expect(result.data).toEqual({
       install: {
         action: "unchanged",
