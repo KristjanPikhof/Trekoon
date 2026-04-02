@@ -1,4 +1,4 @@
-export const SCHEMA_VERSION = 1;
+export const SCHEMA_VERSION = 2;
 
 export const BASE_SCHEMA_STATEMENTS: readonly string[] = [
   `PRAGMA foreign_keys = ON;`,
@@ -115,6 +115,17 @@ export const BASE_SCHEMA_STATEMENTS: readonly string[] = [
     version INTEGER NOT NULL DEFAULT 1
   );
   `,
+  `
+  CREATE TABLE IF NOT EXISTS board_idempotency_keys (
+    scope TEXT NOT NULL,
+    idempotency_key TEXT NOT NULL,
+    request_fingerprint TEXT NOT NULL,
+    response_status INTEGER NOT NULL,
+    response_body TEXT NOT NULL,
+    created_at INTEGER NOT NULL,
+    PRIMARY KEY (scope, idempotency_key)
+  );
+  `,
   `CREATE INDEX IF NOT EXISTS idx_tasks_epic_id ON tasks(epic_id);`,
   `CREATE INDEX IF NOT EXISTS idx_subtasks_task_id ON subtasks(task_id);`,
   `CREATE INDEX IF NOT EXISTS idx_events_entity ON events(entity_kind, entity_id);`,
@@ -124,4 +135,5 @@ export const BASE_SCHEMA_STATEMENTS: readonly string[] = [
   `CREATE INDEX IF NOT EXISTS idx_sync_cursors_owner ON sync_cursors(owner_scope, owner_worktree_path, source_branch);`,
   `CREATE INDEX IF NOT EXISTS idx_conflicts_resolution ON sync_conflicts(resolution);`,
   `CREATE INDEX IF NOT EXISTS idx_conflicts_resolution_entity_field_id ON sync_conflicts(resolution, entity_id, field_name, id);`,
+  `CREATE INDEX IF NOT EXISTS idx_board_idempotency_created_at ON board_idempotency_keys(created_at);`,
 ];
