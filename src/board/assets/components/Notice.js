@@ -72,7 +72,9 @@ export function createNotice() {
 
       // Auto-dismiss after 4 s
       clearTimer();
-      const retryButton = container.querySelector("[data-board-notice-retry]");
+      const retryButton = typeof container.querySelector === "function"
+        ? container.querySelector("[data-board-notice-retry]")
+        : null;
       if (retryButton instanceof HTMLButtonElement && typeof onRetry === "function") {
         retryButton.addEventListener("click", onRetry, { once: true });
       }
