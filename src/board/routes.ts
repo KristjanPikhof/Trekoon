@@ -33,8 +33,22 @@ interface IdempotentMutationRecord {
   readonly entityId?: string;
   readonly sourceId?: string;
   readonly dependsOnId?: string;
+  readonly requestFingerprint?: string;
   readonly responseData?: Record<string, unknown>;
   readonly status?: number;
+}
+
+function buildCreateSubtaskFingerprint(body: Record<string, unknown>): string {
+  return JSON.stringify({
+    taskId: readRequiredString(body, "taskId"),
+    title: readRequiredString(body, "title"),
+    description: readOptionalString(body, "description") ?? null,
+    status: readOptionalString(body, "status") ?? null,
+  });
+}
+
+function buildCreateDependencyFingerprint(sourceId: string, dependsOnId: string): string {
+  return JSON.stringify({ sourceId, dependsOnId });
 }
 
 function compactIds(ids: readonly string[]): string[] {
@@ -342,14 +356,22 @@ export function createBoardApiHandler(context: BoardRouteContext): (request: Req
       if (request.method === "POST" && url.pathname === "/api/subtasks") {
         const body = await parseJsonBody(request);
         const idempotencyKey = readIdempotencyKey(request, body);
+        const requestFingerprint = buildCreateSubtaskFingerprint(body);
         if (idempotencyKey) {
           const cached = idempotentMutations.get(`subtask:${idempotencyKey}`);
-            if (cached?.kind === "subtask" && cached.entityId) {
-              const subtask = domain.getSubtaskOrThrow(cached.entityId);
-              const task = domain.getTaskOrThrow(subtask.taskId);
-              return buildMutationDeltaResponse(domain, { subtask }, { epicIds: [task.epicId], taskIds: [task.id], subtaskIds: [subtask.id] }, 201);
+          if (cached?.kind === "subtask") {
+            if (cached.requestFingerprint !== requestFingerprint) {
+              throw new DomainError({
+                code: "invalid_input",
+                message: "Idempotency key cannot be reused for a different subtask request",
+                details: { field: "clientRequestId" },
+              });
+            }
+            if (cached.responseData) {
+              return buildMutationResponse(domain, cached.responseData, cached.status ?? 201);
             }
           }
+        }
 
         const subtask = mutations.createSubtask({
           taskId: readRequiredString(body, "taskId"),
@@ -357,14 +379,25 @@ export function createBoardApiHandler(context: BoardRouteContext): (request: Req
           description: readOptionalString(body, "description"),
           status: readOptionalString(body, "status"),
         });
+        const task = domain.getTaskOrThrow(subtask.taskId);
+        const responseData = {
+          subtask,
+          snapshotDelta: buildSnapshotDelta(domain, {
+            epicIds: [task.epicId],
+            taskIds: [task.id],
+            subtaskIds: [subtask.id],
+          }),
+        };
         if (idempotencyKey) {
           idempotentMutations.set(`subtask:${idempotencyKey}`, {
             kind: "subtask",
             entityId: subtask.id,
+            requestFingerprint,
+            responseData,
+            status: 201,
           });
         }
-        const task = domain.getTaskOrThrow(subtask.taskId);
-        return buildMutationDeltaResponse(domain, { subtask }, { epicIds: [task.epicId], taskIds: [task.id], subtaskIds: [subtask.id] }, 201);
+        return buildMutationResponse(domain, responseData, 201);
       }
 
         const deleteSubtaskMatch = request.method === "DELETE" ? url.pathname.match(/^\/api\/subtasks\/([^/]+)$/u) : null;
@@ -406,34 +439,44 @@ export function createBoardApiHandler(context: BoardRouteContext): (request: Req
         const sourceId = readRequiredString(body, "sourceId");
         const dependsOnId = readRequiredString(body, "dependsOnId");
         const idempotencyKey = readIdempotencyKey(request, body);
+        const requestFingerprint = buildCreateDependencyFingerprint(sourceId, dependsOnId);
         if (idempotencyKey) {
           const cached = idempotentMutations.get(`dependency:${idempotencyKey}`);
-            if (cached?.kind === "dependency" && cached.sourceId && cached.dependsOnId) {
-              const dependency = domain.listDependencies(cached.sourceId).find((candidate) => candidate.dependsOnId === cached.dependsOnId);
-              if (dependency) {
-                return buildMutationDeltaResponse(domain, { dependency }, {
-                  taskIds: compactIds([dependency.sourceKind === "task" ? dependency.sourceId : "", dependency.dependsOnKind === "task" ? dependency.dependsOnId : ""]),
-                  subtaskIds: compactIds([dependency.sourceKind === "subtask" ? dependency.sourceId : "", dependency.dependsOnKind === "subtask" ? dependency.dependsOnId : ""]),
-                  dependencyIds: [dependency.id],
-                }, 201);
-              }
+          if (cached?.kind === "dependency") {
+            if (cached.requestFingerprint !== requestFingerprint) {
+              throw new DomainError({
+                code: "invalid_input",
+                message: "Idempotency key cannot be reused for a different dependency request",
+                details: { field: "clientRequestId" },
+              });
+            }
+            if (cached.responseData) {
+              return buildMutationResponse(domain, cached.responseData, cached.status ?? 201);
             }
           }
+        }
 
         const dependency = mutations.addDependency(sourceId, dependsOnId);
+        const responseData = {
+          dependency,
+          snapshotDelta: buildSnapshotDelta(domain, {
+            taskIds: compactIds([dependency.sourceKind === "task" ? dependency.sourceId : "", dependency.dependsOnKind === "task" ? dependency.dependsOnId : ""]),
+            subtaskIds: compactIds([dependency.sourceKind === "subtask" ? dependency.sourceId : "", dependency.dependsOnKind === "subtask" ? dependency.dependsOnId : ""]),
+            dependencyIds: [dependency.id],
+          }),
+        };
         if (idempotencyKey) {
           idempotentMutations.set(`dependency:${idempotencyKey}`, {
             kind: "dependency",
             entityId: dependency.id,
             sourceId: dependency.sourceId,
             dependsOnId: dependency.dependsOnId,
+            requestFingerprint,
+            responseData,
+            status: 201,
           });
         }
-        return buildMutationDeltaResponse(domain, { dependency }, {
-          taskIds: compactIds([dependency.sourceKind === "task" ? dependency.sourceId : "", dependency.dependsOnKind === "task" ? dependency.dependsOnId : ""]),
-          subtaskIds: compactIds([dependency.sourceKind === "subtask" ? dependency.sourceId : "", dependency.dependsOnKind === "subtask" ? dependency.dependsOnId : ""]),
-          dependencyIds: [dependency.id],
-        }, 201);
+        return buildMutationResponse(domain, responseData, 201);
       }
 
       if (request.method === "DELETE" && url.pathname === "/api/dependencies") {
