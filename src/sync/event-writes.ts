@@ -59,15 +59,16 @@ export function withTransactionEventContext<T>(db: Database, cwd: string, fn: ()
   }
 }
 
-/** Append a single event to the events table with git context. Returns void (event ID is not exposed). */
+/** Append a single event to the events table with git context. Returns the event ID. */
 export function appendEventWithGitContext(
   db: Database,
   cwd: string,
   input: EventRecordInput,
-): void {
+): string {
   const context: EventWriteContext | undefined = transactionEventContexts.get(db);
   const now: number = context?.nextTimestamp ?? nextEventTimestamp(db);
   const git: ResolvedGitContext = context?.git ?? resolveGitContext(cwd, now);
+  const eventId: string = randomUUID();
 
   persistGitContext(db, git, now);
 
@@ -91,7 +92,7 @@ export function appendEventWithGitContext(
     ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 1);
     `,
   ).run(
-    randomUUID(),
+    eventId,
     input.entityKind,
     input.entityId,
     input.operation,
@@ -101,4 +102,6 @@ export function appendEventWithGitContext(
     now,
     now,
   );
+
+  return eventId;
 }
