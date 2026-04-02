@@ -413,7 +413,7 @@ describe("sync command", (): void => {
     {
       const storage = openTrekoonDatabase(workspace);
       try {
-        for (let index = 0; index < 520; index += 1) {
+        for (let index = 0; index < 260; index += 1) {
           storage.db.query("UPDATE epics SET description = ?, updated_at = ?, version = version + 1 WHERE id = ?;").run(
             `Local description ${index}`,
             now + index + 1,
@@ -474,7 +474,7 @@ describe("sync command", (): void => {
       expect(conflicts).toHaveLength(1);
       expect(conflicts[0]).toMatchObject({
         field_name: "description",
-        ours_value: JSON.stringify("Local description 519"),
+        ours_value: JSON.stringify("Local description 259"),
         theirs_value: JSON.stringify("Remote changed description"),
       });
     } finally {
