@@ -594,6 +594,77 @@ describe("board routes", (): void => {
       expect(secondResponse.status).toBe(201);
       expect(secondBody.data.subtask.id).toBe(firstBody.data.subtask.id);
       expect(secondBody.data.snapshotDelta.subtasks.filter((subtask) => subtask.id === firstBody.data.subtask.id)).toHaveLength(1);
+
+      const deleteResponse = await handler(new Request(`http://board.test/api/subtasks/${firstBody.data.subtask.id}?token=secret-token`, {
+        method: "DELETE",
+      }));
+      expect(deleteResponse.status).toBe(200);
+
+      const replayResponse = await handler(new Request("http://board.test/api/subtasks?token=secret-token", {
+        method: "POST",
+        headers: {
+          "content-type": "application/json",
+        },
+        body: requestBody,
+      }));
+      const replayBody = await replayResponse.json() as { data: { subtask: { id: string }; snapshotDelta: { subtasks: Array<{ id: string }> } } };
+
+      expect(replayResponse.status).toBe(201);
+      expect(replayBody.data.subtask.id).toBe(firstBody.data.subtask.id);
+      expect(replayBody.data.snapshotDelta.subtasks).toContainEqual(expect.objectContaining({ id: firstBody.data.subtask.id }));
+
+      const snapshotResponse = await handler(new Request("http://board.test/api/snapshot?token=secret-token"));
+      const snapshotBody = await snapshotResponse.json() as { data: { snapshot: { subtasks: Array<{ id: string }> } } };
+      expect(snapshotBody.data.snapshot.subtasks.some((subtask) => subtask.id === firstBody.data.subtask.id)).toBeFalse();
+    } finally {
+      storage.close();
+    }
+  });
+
+  test("rejects reusing a subtask idempotency key for a different request", async (): Promise<void> => {
+    const cwd = createWorkspace();
+    const storage = openTrekoonDatabase(cwd);
+
+    try {
+      const mutations = new MutationService(storage.db, cwd);
+      const epic = mutations.createEpic({ title: "Roadmap", description: "Plan release" });
+      const task = mutations.createTask({ epicId: epic.id, title: "Implement", description: "Ship board" });
+      const handler = createBoardApiHandler({ db: storage.db, cwd, token: "secret-token" });
+
+      const requestHeaders = {
+        "content-type": "application/json",
+        "x-trekoon-idempotency-key": "create-subtask-header-1",
+      };
+
+      const firstResponse = await handler(new Request("http://board.test/api/subtasks?token=secret-token", {
+        method: "POST",
+        headers: requestHeaders,
+        body: JSON.stringify({
+          taskId: task.id,
+          title: "Write regression coverage",
+          description: "Add the board route tests",
+          status: "todo",
+        }),
+      }));
+      expect(firstResponse.status).toBe(201);
+
+      const secondResponse = await handler(new Request("http://board.test/api/subtasks?token=secret-token", {
+        method: "POST",
+        headers: requestHeaders,
+        body: JSON.stringify({
+          taskId: task.id,
+          title: "Different subtask",
+          description: "Should be rejected",
+          status: "todo",
+        }),
+      }));
+      const secondBody = await secondResponse.json() as { error: { code: string; message: string } };
+
+      expect(secondResponse.status).toBe(400);
+      expect(secondBody.error).toEqual(expect.objectContaining({
+        code: "invalid_input",
+        message: "Idempotency key cannot be reused for a different subtask request",
+      }));
     } finally {
       storage.close();
     }
@@ -670,6 +741,75 @@ describe("board routes", (): void => {
       expect(secondResponse.status).toBe(201);
       expect(secondBody.data.dependency.id).toBe(firstBody.data.dependency.id);
       expect(secondBody.data.snapshotDelta.dependencies.filter((dependency) => dependency.id === firstBody.data.dependency.id)).toHaveLength(1);
+
+      const deleteResponse = await handler(new Request(`http://board.test/api/dependencies?token=secret-token&sourceId=${encodeURIComponent(task.id)}&dependsOnId=${encodeURIComponent(blocker.id)}`, {
+        method: "DELETE",
+      }));
+      expect(deleteResponse.status).toBe(200);
+
+      const replayResponse = await handler(new Request("http://board.test/api/dependencies?token=secret-token", {
+        method: "POST",
+        headers: {
+          "content-type": "application/json",
+        },
+        body: requestBody,
+      }));
+      const replayBody = await replayResponse.json() as { data: { dependency: { id: string }; snapshotDelta: { dependencies: Array<{ id: string }> } } };
+
+      expect(replayResponse.status).toBe(201);
+      expect(replayBody.data.dependency.id).toBe(firstBody.data.dependency.id);
+      expect(replayBody.data.snapshotDelta.dependencies).toContainEqual(expect.objectContaining({ id: firstBody.data.dependency.id }));
+
+      const snapshotResponse = await handler(new Request("http://board.test/api/snapshot?token=secret-token"));
+      const snapshotBody = await snapshotResponse.json() as { data: { snapshot: { dependencies: Array<{ id: string }> } } };
+      expect(snapshotBody.data.snapshot.dependencies.some((dependency) => dependency.id === firstBody.data.dependency.id)).toBeFalse();
+    } finally {
+      storage.close();
+    }
+  });
+
+  test("rejects reusing a dependency idempotency key for a different request", async (): Promise<void> => {
+    const cwd = createWorkspace();
+    const storage = openTrekoonDatabase(cwd);
+
+    try {
+      const mutations = new MutationService(storage.db, cwd);
+      const epic = mutations.createEpic({ title: "Roadmap", description: "Plan release" });
+      const blocker = mutations.createTask({ epicId: epic.id, title: "Blocker", description: "Finish first" });
+      const task = mutations.createTask({ epicId: epic.id, title: "Implement", description: "Ship board" });
+      const otherBlocker = mutations.createTask({ epicId: epic.id, title: "Review", description: "Approve first" });
+      const handler = createBoardApiHandler({ db: storage.db, cwd, token: "secret-token" });
+
+      const requestHeaders = {
+        "content-type": "application/json",
+        "x-trekoon-idempotency-key": "dependency-header-1",
+      };
+
+      const firstResponse = await handler(new Request("http://board.test/api/dependencies?token=secret-token", {
+        method: "POST",
+        headers: requestHeaders,
+        body: JSON.stringify({
+          sourceId: task.id,
+          dependsOnId: blocker.id,
+        }),
+      }));
+      expect(firstResponse.status).toBe(201);
+
+      const secondResponse = await handler(new Request("http://board.test/api/dependencies?token=secret-token", {
+        method: "POST",
+        headers: requestHeaders,
+        body: JSON.stringify({
+          sourceId: task.id,
+          dependsOnId: otherBlocker.id,
+        }),
+      }));
+      const secondBody = await secondResponse.json() as { error: { code: string; message: string } };
+
+      expect(secondResponse.status).toBe(400);
+      expect(secondBody.error).toEqual(expect.objectContaining({
+        code: "invalid_input",
+        message: "Idempotency key cannot be reused for a different dependency request",
+      }));
     } finally {
       storage.close();
     }
