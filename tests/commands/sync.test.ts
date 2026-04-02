@@ -468,8 +468,8 @@ describe("sync command", (): void => {
     const storage = openTrekoonDatabase(workspace);
     try {
       const conflicts = storage.db
-        .query("SELECT field_name, ours_value, theirs_value FROM sync_conflicts WHERE resolution = 'pending' AND event_id IN (SELECT id FROM events WHERE git_branch = 'main' ORDER BY created_at DESC LIMIT 1);")
-        .all() as Array<{ field_name: string; ours_value: string; theirs_value: string }>;
+        .query("SELECT field_name, ours_value, theirs_value FROM sync_conflicts WHERE resolution = 'pending' AND entity_id = ? AND field_name = 'description';")
+        .all(epicId) as Array<{ field_name: string; ours_value: string; theirs_value: string }>;
 
       expect(conflicts).toHaveLength(1);
       expect(conflicts[0]).toMatchObject({
