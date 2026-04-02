@@ -385,7 +385,9 @@ describe("mutation conformance", (): void => {
 
       for (const [index, subtask] of createdSubtasks.entries()) {
         const dependencyId = dependencyIds[index];
-        expect(dependencyId).toBeString();
+        if (!dependencyId) {
+          throw new Error(`Missing dependency id for subtask ${subtask.id}`);
+        }
         storage.db
           .query("INSERT INTO subtasks (id, task_id, title, description, status, created_at, updated_at, version) VALUES (?, ?, ?, ?, 'todo', ?, ?, 1);")
           .run(subtask.id, task.id, subtask.title, "Coverage", now + index, now + index);
