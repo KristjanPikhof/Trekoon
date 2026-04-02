@@ -28,22 +28,6 @@ interface BoardRouteError {
   readonly details?: Record<string, unknown>;
 }
 
-interface IdempotentMutationRecord {
-  readonly kind: "subtask" | "dependency" | "deleted_subtask" | "deleted_dependency";
-  readonly entityId?: string;
-  readonly sourceId?: string;
-  readonly dependsOnId?: string;
-  readonly requestFingerprint?: string;
-  readonly responseData?: Record<string, unknown>;
-  readonly status?: number;
-}
-
-interface StoredIdempotencyRecordRow {
-  readonly request_fingerprint: string;
-  readonly response_status: number;
-  readonly response_body: string;
-}
-
 function buildCreateSubtaskFingerprint(body: Record<string, unknown>): string {
   return JSON.stringify({
     taskId: readRequiredString(body, "taskId"),
@@ -193,6 +177,47 @@ function buildMutationDeltaResponse(
   }, status);
 }
 
+function readRecordId(value: unknown): string | null {
+  if (!value || typeof value !== "object") {
+    return null;
+  }
+
+  const id = (value as { id?: unknown }).id;
+  return typeof id === "string" && id.length > 0 ? id : null;
+}
+
+function withFreshReplaySnapshotDelta(
+  domain: TrackerDomain,
+  responseData: Record<string, unknown>,
+  selection: SnapshotDeltaSelection,
+): Record<string, unknown> {
+  return {
+    ...responseData,
+    snapshotDelta: buildSnapshotDelta(domain, selection),
+  };
+}
+
+function readSnapshotDelta(responseData: Record<string, unknown>): Record<string, unknown> | null {
+  const snapshotDelta = responseData.snapshotDelta;
+  return snapshotDelta && typeof snapshotDelta === "object" ? snapshotDelta as Record<string, unknown> : null;
+}
+
+function readRecordIds(value: unknown): string[] {
+  if (!Array.isArray(value)) {
+    return [];
+  }
+
+  return value.map((item) => readRecordId(item)).filter((id): id is string => id !== null);
+}
+
+function readStringArray(value: unknown): string[] {
+  if (!Array.isArray(value)) {
+    return [];
+  }
+
+  return value.filter((item): item is string => typeof item === "string" && item.length > 0);
+}
+
 async function parseJsonBody(request: Request): Promise<Record<string, unknown>> {
   const contentType: string = request.headers.get("content-type") ?? "";
   if (!contentType.includes("application/json")) {
@@ -287,78 +312,6 @@ function readIdempotencyKey(request: Request, body: Record<string, unknown>): st
   return null;
 }
 
-function getStoredIdempotencyRecord(db: Database, scope: string, idempotencyKey: string): IdempotentMutationRecord | null {
-  const row = db
-    .query(
-      `
-      SELECT request_fingerprint, response_status, response_body
-      FROM board_idempotency_keys
-      WHERE scope = ? AND idempotency_key = ?
-      `,
-    )
-    .get(scope, idempotencyKey) as StoredIdempotencyRecordRow | null;
-
-  if (!row) {
-    return null;
-  }
-
-  return {
-    kind: scope as IdempotentMutationRecord["kind"],
-    requestFingerprint: row.request_fingerprint,
-    responseData: JSON.parse(row.response_body) as Record<string, unknown>,
-    status: row.response_status,
-  };
-}
-
-function storeIdempotencyRecord(
-  db: Database,
-  scope: IdempotentMutationRecord["kind"],
-  idempotencyKey: string,
-  requestFingerprint: string,
-  status: number,
-  responseData: Record<string, unknown>,
-): void {
-  db.query(
-    `
-    INSERT OR REPLACE INTO board_idempotency_keys (
-      scope,
-      idempotency_key,
-      request_fingerprint,
-      response_status,
-      response_body,
-      created_at
-    ) VALUES (?, ?, ?, ?, ?, ?)
-    `,
-  ).run(scope, idempotencyKey, requestFingerprint, status, JSON.stringify(responseData), Date.now());
-}
-
-function replayStoredIdempotencyRecord(
-  db: Database,
-  scope: IdempotentMutationRecord["kind"],
-  idempotencyKey: string | null,
-  requestFingerprint: string,
-  conflictMessage: string,
-): IdempotentMutationRecord | null {
-  if (!idempotencyKey) {
-    return null;
-  }
-
-  const stored = getStoredIdempotencyRecord(db, scope, idempotencyKey);
-  if (!stored) {
-    return null;
-  }
-
-  if (stored.requestFingerprint !== requestFingerprint) {
-    throw new DomainError({
-      code: "invalid_input",
-      message: conflictMessage,
-      details: { field: "clientRequestId" },
-    });
-  }
-
-  return stored;
-}
-
 export function createBoardApiHandler(context: BoardRouteContext): (request: Request) => Promise<Response> {
   return async (request: Request): Promise<Response> => {
     const url = new URL(request.url);
@@ -441,36 +394,58 @@ export function createBoardApiHandler(context: BoardRouteContext): (request: Req
         const body = await parseJsonBody(request);
         const idempotencyKey = readIdempotencyKey(request, body);
         const requestFingerprint = buildCreateSubtaskFingerprint(body);
-        const storedRecord = replayStoredIdempotencyRecord(
-          context.db,
-          "subtask",
-          idempotencyKey,
-          requestFingerprint,
-          "Idempotency key cannot be reused for a different subtask request",
-        );
-        if (storedRecord?.responseData) {
-          return buildMutationResponse(domain, storedRecord.responseData, storedRecord.status ?? 201);
+        if (!idempotencyKey) {
+          const subtask = mutations.createSubtask({
+            taskId: readRequiredString(body, "taskId"),
+            title: readRequiredString(body, "title"),
+            description: readOptionalString(body, "description"),
+            status: readOptionalString(body, "status"),
+          });
+          const task = domain.getTaskOrThrow(subtask.taskId);
+          const responseData = {
+            subtask,
+            snapshotDelta: buildSnapshotDelta(domain, {
+              epicIds: [task.epicId],
+              taskIds: [task.id],
+              subtaskIds: [subtask.id],
+            }),
+          };
+          return buildMutationResponse(domain, responseData, 201);
         }
 
-        const subtask = mutations.createSubtask({
+        const result = mutations.createSubtaskAtomicallyWithIdempotency({
           taskId: readRequiredString(body, "taskId"),
           title: readRequiredString(body, "title"),
           description: readOptionalString(body, "description"),
           status: readOptionalString(body, "status"),
+          claim: {
+            scope: "subtask",
+            idempotencyKey,
+            requestFingerprint,
+            conflictMessage: "Idempotency key cannot be reused for a different subtask request",
+          },
+          buildResponseData: ({ subtask, domain: transactionDomain }) => {
+            const task = transactionDomain.getTaskOrThrow(subtask.taskId);
+            return {
+              subtask,
+              snapshotDelta: buildSnapshotDelta(transactionDomain, {
+                epicIds: [task.epicId],
+                taskIds: [task.id],
+                subtaskIds: [subtask.id],
+              }),
+            };
+          },
         });
-        const task = domain.getTaskOrThrow(subtask.taskId);
-        const responseData = {
-          subtask,
-          snapshotDelta: buildSnapshotDelta(domain, {
-            epicIds: [task.epicId],
-            taskIds: [task.id],
-            subtaskIds: [subtask.id],
-          }),
-        };
-        if (idempotencyKey) {
-          storeIdempotencyRecord(context.db, "subtask", idempotencyKey, requestFingerprint, 201, responseData);
-        }
-        return buildMutationResponse(domain, responseData, 201);
+        const replaySubtaskId = readRecordId(result.responseData.subtask);
+        const replayTaskId = replaySubtaskId ? domain.getSubtask(replaySubtaskId)?.taskId ?? null : null;
+        const replayEpicId = replayTaskId ? domain.getTask(replayTaskId)?.epicId ?? null : null;
+        return buildMutationResponse(domain, result.state === "replay"
+          ? withFreshReplaySnapshotDelta(domain, result.responseData, {
+            epicIds: replayEpicId ? [replayEpicId] : [],
+            taskIds: replayTaskId ? [replayTaskId] : [],
+            subtaskIds: replaySubtaskId ? [replaySubtaskId] : [],
+          })
+          : result.responseData, result.status);
       }
 
         const deleteSubtaskMatch = request.method === "DELETE" ? url.pathname.match(/^\/api\/subtasks\/([^/]+)$/u) : null;
@@ -478,33 +453,51 @@ export function createBoardApiHandler(context: BoardRouteContext): (request: Req
           const subtaskId = deleteSubtaskMatch[1] ?? "";
           const idempotencyKey = request.headers.get("x-trekoon-idempotency-key")?.trim() || null;
           const requestFingerprint = buildDeleteSubtaskFingerprint(subtaskId);
-          const storedRecord = replayStoredIdempotencyRecord(
-            context.db,
-            "deleted_subtask",
-            idempotencyKey,
-            requestFingerprint,
-            "Idempotency key cannot be reused for a different subtask delete request",
-          );
-          if (storedRecord?.responseData) {
-            return buildMutationResponse(domain, storedRecord.responseData, storedRecord.status ?? 200);
+          if (!idempotencyKey) {
+            const existingSubtask = domain.getSubtaskOrThrow(subtaskId);
+            const task = domain.getTaskOrThrow(existingSubtask.taskId);
+            const { deletedDependencyIds } = mutations.deleteSubtask(subtaskId);
+            const responseData = {
+              subtaskId,
+              deleted: true,
+              snapshotDelta: buildSnapshotDelta(domain, {
+                epicIds: [task.epicId],
+                taskIds: [task.id],
+                deletedSubtaskIds: [subtaskId],
+                deletedDependencyIds,
+              }),
+            };
+            return buildMutationResponse(domain, responseData, 200);
           }
-          const existingSubtask = domain.getSubtaskOrThrow(subtaskId);
-          const task = domain.getTaskOrThrow(existingSubtask.taskId);
-          const { deletedDependencyIds } = mutations.deleteSubtask(subtaskId);
-          const responseData = {
-            subtaskId,
-            deleted: true,
-            snapshotDelta: buildSnapshotDelta(domain, {
-              epicIds: [task.epicId],
-              taskIds: [task.id],
-              deletedSubtaskIds: [subtaskId],
-              deletedDependencyIds,
+
+          const result = mutations.deleteSubtaskAtomicallyWithIdempotency({
+            id: subtaskId,
+            claim: {
+              scope: "deleted_subtask",
+              idempotencyKey,
+              requestFingerprint,
+              conflictMessage: "Idempotency key cannot be reused for a different subtask delete request",
+            },
+            buildResponseData: ({ subtaskId: deletedSubtaskId, deletedDependencyIds, domain: transactionDomain, taskId, epicId }) => ({
+              subtaskId: deletedSubtaskId,
+              deleted: true,
+              snapshotDelta: buildSnapshotDelta(transactionDomain, {
+                epicIds: [epicId],
+                taskIds: [taskId],
+                deletedSubtaskIds: [deletedSubtaskId],
+                deletedDependencyIds,
+              }),
             }),
-          };
-          if (idempotencyKey) {
-            storeIdempotencyRecord(context.db, "deleted_subtask", idempotencyKey, requestFingerprint, 200, responseData);
-          }
-          return buildMutationResponse(domain, responseData, 200);
+          });
+          const replaySnapshotDelta = readSnapshotDelta(result.responseData);
+          return buildMutationResponse(domain, result.state === "replay"
+            ? withFreshReplaySnapshotDelta(domain, result.responseData, {
+              epicIds: readRecordIds(replaySnapshotDelta?.epics),
+              taskIds: readRecordIds(replaySnapshotDelta?.tasks),
+              deletedSubtaskIds: readStringArray(replaySnapshotDelta?.deletedSubtaskIds),
+              deletedDependencyIds: readStringArray(replaySnapshotDelta?.deletedDependencyIds),
+            })
+            : result.responseData, result.status);
         }
 
       if (request.method === "POST" && url.pathname === "/api/dependencies") {
@@ -513,30 +506,63 @@ export function createBoardApiHandler(context: BoardRouteContext): (request: Req
         const dependsOnId = readRequiredString(body, "dependsOnId");
         const idempotencyKey = readIdempotencyKey(request, body);
         const requestFingerprint = buildCreateDependencyFingerprint(sourceId, dependsOnId);
-        const storedRecord = replayStoredIdempotencyRecord(
-          context.db,
-          "dependency",
-          idempotencyKey,
-          requestFingerprint,
-          "Idempotency key cannot be reused for a different dependency request",
-        );
-        if (storedRecord?.responseData) {
-          return buildMutationResponse(domain, storedRecord.responseData, storedRecord.status ?? 201);
+        if (!idempotencyKey) {
+          const dependency = mutations.addDependency(sourceId, dependsOnId);
+          const responseData = {
+            dependency,
+            snapshotDelta: buildSnapshotDelta(domain, {
+              taskIds: compactIds([dependency.sourceKind === "task" ? dependency.sourceId : "", dependency.dependsOnKind === "task" ? dependency.dependsOnId : ""]),
+              subtaskIds: compactIds([dependency.sourceKind === "subtask" ? dependency.sourceId : "", dependency.dependsOnKind === "subtask" ? dependency.dependsOnId : ""]),
+              dependencyIds: [dependency.id],
+            }),
+          };
+          return buildMutationResponse(domain, responseData, 201);
         }
 
-        const dependency = mutations.addDependency(sourceId, dependsOnId);
-        const responseData = {
-          dependency,
-          snapshotDelta: buildSnapshotDelta(domain, {
-            taskIds: compactIds([dependency.sourceKind === "task" ? dependency.sourceId : "", dependency.dependsOnKind === "task" ? dependency.dependsOnId : ""]),
-            subtaskIds: compactIds([dependency.sourceKind === "subtask" ? dependency.sourceId : "", dependency.dependsOnKind === "subtask" ? dependency.dependsOnId : ""]),
-            dependencyIds: [dependency.id],
-          }),
-        };
-        if (idempotencyKey) {
-          storeIdempotencyRecord(context.db, "dependency", idempotencyKey, requestFingerprint, 201, responseData);
-        }
-        return buildMutationResponse(domain, responseData, 201);
+        const result = mutations.addDependencyAtomicallyWithIdempotency({
+          sourceId,
+          dependsOnId,
+          claim: {
+            scope: "dependency",
+            idempotencyKey,
+            requestFingerprint,
+            conflictMessage: "Idempotency key cannot be reused for a different dependency request",
+          },
+          buildResponseData: ({ dependency, domain: transactionDomain }) => ({
+            dependency,
+            snapshotDelta: buildSnapshotDelta(transactionDomain, {
+              taskIds: compactIds([dependency.sourceKind === "task" ? dependency.sourceId : "", dependency.dependsOnKind === "task" ? dependency.dependsOnId : ""]),
+              subtaskIds: compactIds([dependency.sourceKind === "subtask" ? dependency.sourceId : "", dependency.dependsOnKind === "subtask" ? dependency.dependsOnId : ""]),
+              dependencyIds: [dependency.id],
+            }),
+            }),
+        });
+        const replayDependency = result.responseData.dependency;
+        const replayDependencyId = readRecordId(replayDependency);
+        const replaySelection = replayDependency && typeof replayDependency === "object"
+          ? {
+            taskIds: compactIds([
+              (replayDependency as { sourceKind?: unknown; sourceId?: unknown }).sourceKind === "task"
+                ? ((replayDependency as { sourceId?: unknown }).sourceId as string ?? "")
+                : "",
+              (replayDependency as { dependsOnKind?: unknown; dependsOnId?: unknown }).dependsOnKind === "task"
+                ? ((replayDependency as { dependsOnId?: unknown }).dependsOnId as string ?? "")
+                : "",
+            ]),
+            subtaskIds: compactIds([
+              (replayDependency as { sourceKind?: unknown; sourceId?: unknown }).sourceKind === "subtask"
+                ? ((replayDependency as { sourceId?: unknown }).sourceId as string ?? "")
+                : "",
+              (replayDependency as { dependsOnKind?: unknown; dependsOnId?: unknown }).dependsOnKind === "subtask"
+                ? ((replayDependency as { dependsOnId?: unknown }).dependsOnId as string ?? "")
+                : "",
+            ]),
+            dependencyIds: replayDependencyId ? [replayDependencyId] : [],
+          }
+          : { dependencyIds: [] };
+        return buildMutationResponse(domain, result.state === "replay"
+          ? withFreshReplaySnapshotDelta(domain, result.responseData, replaySelection)
+          : result.responseData, result.status);
       }
 
       if (request.method === "DELETE" && url.pathname === "/api/dependencies") {
@@ -544,44 +570,62 @@ export function createBoardApiHandler(context: BoardRouteContext): (request: Req
         const dependsOnId = url.searchParams.get("dependsOnId") ?? "";
         const idempotencyKey = request.headers.get("x-trekoon-idempotency-key")?.trim() || null;
         const requestFingerprint = buildDeleteDependencyFingerprint(sourceId, dependsOnId);
-        const storedRecord = replayStoredIdempotencyRecord(
-          context.db,
-          "deleted_dependency",
-          idempotencyKey,
-          requestFingerprint,
-          "Idempotency key cannot be reused for a different dependency delete request",
-        );
-        if (storedRecord?.responseData) {
-          return buildMutationResponse(domain, storedRecord.responseData, storedRecord.status ?? 200);
+        if (!idempotencyKey) {
+          const existingDependencyIds = domain.listDependencies(sourceId)
+            .filter((dependency) => dependency.dependsOnId === dependsOnId)
+            .map((dependency) => dependency.id);
+          const removed = mutations.removeDependency(sourceId, dependsOnId);
+          if (removed === 0) {
+            throw new DomainError({
+              code: "not_found",
+              message: "Dependency edge not found",
+              details: {
+                sourceId,
+                dependsOnId,
+              },
+            });
+          }
+          const responseData = {
+            sourceId,
+            dependsOnId,
+            removed,
+            snapshotDelta: buildSnapshotDelta(domain, {
+              taskIds: compactIds([domain.getTask(sourceId)?.id ?? "", domain.getTask(dependsOnId)?.id ?? ""]),
+              subtaskIds: compactIds([domain.getSubtask(sourceId)?.id ?? "", domain.getSubtask(dependsOnId)?.id ?? ""]),
+              deletedDependencyIds: existingDependencyIds,
+            }),
+          };
+          return buildMutationResponse(domain, responseData, 200);
         }
-        const existingDependencyIds = domain.listDependencies(sourceId)
-          .filter((dependency) => dependency.dependsOnId === dependsOnId)
-          .map((dependency) => dependency.id);
-        const removed = mutations.removeDependency(sourceId, dependsOnId);
-        if (removed === 0) {
-          throw new DomainError({
-            code: "not_found",
-            message: "Dependency edge not found",
-            details: {
-              sourceId,
-              dependsOnId,
-            },
-          });
-        }
-        const responseData = {
+
+        const result = mutations.removeDependencyAtomicallyWithIdempotency({
           sourceId,
           dependsOnId,
-          removed,
-          snapshotDelta: buildSnapshotDelta(domain, {
+          claim: {
+            scope: "deleted_dependency",
+            idempotencyKey,
+            requestFingerprint,
+            conflictMessage: "Idempotency key cannot be reused for a different dependency delete request",
+          },
+          buildResponseData: ({ sourceId: deletedSourceId, dependsOnId: deletedDependsOnId, removed, existingDependencyIds, domain: transactionDomain }) => ({
+            sourceId: deletedSourceId,
+            dependsOnId: deletedDependsOnId,
+            removed,
+            snapshotDelta: buildSnapshotDelta(transactionDomain, {
+              taskIds: compactIds([transactionDomain.getTask(deletedSourceId)?.id ?? "", transactionDomain.getTask(deletedDependsOnId)?.id ?? ""]),
+              subtaskIds: compactIds([transactionDomain.getSubtask(deletedSourceId)?.id ?? "", transactionDomain.getSubtask(deletedDependsOnId)?.id ?? ""]),
+              deletedDependencyIds: existingDependencyIds,
+            }),
+          }),
+        });
+        const replaySnapshotDelta = readSnapshotDelta(result.responseData);
+        return buildMutationResponse(domain, result.state === "replay"
+          ? withFreshReplaySnapshotDelta(domain, result.responseData, {
             taskIds: compactIds([domain.getTask(sourceId)?.id ?? "", domain.getTask(dependsOnId)?.id ?? ""]),
             subtaskIds: compactIds([domain.getSubtask(sourceId)?.id ?? "", domain.getSubtask(dependsOnId)?.id ?? ""]),
-            deletedDependencyIds: existingDependencyIds,
-          }),
-        };
-        if (idempotencyKey) {
-          storeIdempotencyRecord(context.db, "deleted_dependency", idempotencyKey, requestFingerprint, 200, responseData);
-        }
-        return buildMutationResponse(domain, responseData, 200);
+            deletedDependencyIds: readStringArray(replaySnapshotDelta?.deletedDependencyIds),
+          })
+          : result.responseData, result.status);
       }
 
       return jsonResponse(404, {
