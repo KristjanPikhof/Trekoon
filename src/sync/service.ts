@@ -144,6 +144,15 @@ function isObjectRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
 }
 
+function parseJsonObject(rawPayload: string): Record<string, unknown> | null {
+  try {
+    const parsed: unknown = JSON.parse(rawPayload);
+    return isObjectRecord(parsed) ? parsed : null;
+  } catch {
+    return null;
+  }
+}
+
 function parsePayload(rawPayload: string): PayloadValidation {
   try {
     const parsed: unknown = JSON.parse(rawPayload);
@@ -495,14 +504,14 @@ function createConflict(
 }
 
 function applyIncomingResolutionEvent(db: Database, event: StoredEvent): boolean {
-  const payloadValidation = parsePayload(event.payload);
-  if (!payloadValidation.ok) {
+  const parsed = parseJsonObject(event.payload);
+  if (!parsed) {
     return false;
   }
 
-  const conflictId = payloadValidation.fields.conflict_id;
-  const fieldName = payloadValidation.fields.field;
-  const resolution = payloadValidation.fields.resolution;
+  const conflictId = parsed.conflict_id;
+  const fieldName = parsed.field;
+  const resolution = parsed.resolution;
 
   if (
     typeof conflictId !== "string" ||
