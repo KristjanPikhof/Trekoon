@@ -105,6 +105,14 @@ const BOARD_IDEMPOTENCY_MIGRATION_DOWN_STATEMENTS: readonly string[] = [
   "DROP TABLE IF EXISTS board_idempotency_keys;",
 ];
 
+const BOARD_IDEMPOTENCY_RETENTION_INDEX_UP_STATEMENTS: readonly string[] = [
+  "CREATE INDEX IF NOT EXISTS idx_board_idempotency_state_created_at ON board_idempotency_keys(state, created_at);",
+];
+
+const BOARD_IDEMPOTENCY_RETENTION_INDEX_DOWN_STATEMENTS: readonly string[] = [
+  "DROP INDEX IF EXISTS idx_board_idempotency_state_created_at;",
+];
+
 function tableHasColumn(db: Database, tableName: string, columnName: string): boolean {
   const columns = db.query(`PRAGMA table_info(${tableName});`).all() as Array<{ name: string }>;
   return columns.some((column) => column.name === columnName);
@@ -355,6 +363,20 @@ const MIGRATIONS: readonly Migration[] = [
     },
     down(db: Database): void {
       for (const statement of BOARD_IDEMPOTENCY_MIGRATION_DOWN_STATEMENTS) {
+        db.exec(statement);
+      }
+    },
+  },
+  {
+    version: 10,
+    name: "0010_board_idempotency_retention_index",
+    up(db: Database): void {
+      for (const statement of BOARD_IDEMPOTENCY_RETENTION_INDEX_UP_STATEMENTS) {
+        db.exec(statement);
+      }
+    },
+    down(db: Database): void {
+      for (const statement of BOARD_IDEMPOTENCY_RETENTION_INDEX_DOWN_STATEMENTS) {
         db.exec(statement);
       }
     },
