@@ -5,6 +5,10 @@ Teams — real parallel Claude Code instances coordinated via TeamCreate,
 TaskCreate, SendMessage, and shared task lists. Each teammate runs in its own
 tmux pane.
 
+**Execute mode contract:** team execution is complete only when the epic is
+marked `done`, all remaining work is blocked with recorded reasons, or user
+input is required to continue.
+
 **Prerequisite:** Agent Teams requires the Claude Code environment variable
 `CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS` set to `"true"`. This feature is Claude
 Code only — it is not available in OpenCode or other harnesses.
@@ -82,13 +86,9 @@ TaskCreate:
     - set status: trekoon --toon task update <id> --status blocked
     - notify team lead via SendMessage with blocker details
 
-    Commit after each edit tool usage.
-    Report: files changed, test results
-
-    **Commit format**:
-      <imperative verb> <what changed>     <- Line 1: max 50 chars
-      <blank line>                         <- Line 2: blank
-      <why/context, one point per line>    <- Body: max 72 chars per line
+    Only create branches, commits, or PRs if the user explicitly requested
+    them and the current harness policy allows it.
+    Report: files changed, verification results, blockers
 ```
 
 Use `blockedBy` via TaskUpdate to set dependencies between tasks that require
@@ -197,10 +197,8 @@ After all work is verified:
 
 4. **Shutdown teammates** — send `shutdown_request` via SendMessage to each.
 5. **Delete the team** — use TeamDelete to clean up team and task directories.
-6. Merge branch to main (if using branches).
-7. Remove worktree (if using worktrees).
-8. Return final execution summary: completed tasks, remaining blockers,
-   dependency state.
+6. Return final execution summary: completed tasks, remaining blockers,
+    dependency state.
 
 ## Team orchestration tools
 

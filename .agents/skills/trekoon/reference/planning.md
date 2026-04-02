@@ -3,6 +3,10 @@
 Write implementation plans directly into Trekoon as epics with task/subtask
 DAGs. Plans must be directly executable without re-interpretation.
 
+**Plan mode contract:** planning is complete only when the epic exists in
+Trekoon, the dependency graph is validated, and the user can immediately run
+`trekoon <epic-id> execute`.
+
 **Clarify ambiguity upfront.** If the plan has unclear requirements or meaningful
 tradeoffs, ask the user before writing. Present options with clear tradeoffs.
 Use multi-select for independent features that can be combined; use single-select
@@ -173,6 +177,9 @@ second-wave tasks appear as blocked with the right dependencies.
 After creating the epic and validating, present a summary to the user. This
 summary is the primary handoff artifact — it must be self-contained and
 actionable.
+
+Do not stop at a prose-only design. The final handoff must reference the actual
+Trekoon epic and the first execution wave.
 
 ### ID rules
 

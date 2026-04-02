@@ -5,8 +5,24 @@ Spawn and coordinate sub-agents based on the task dependency graph and subsystem
 grouping so independent lanes run in parallel and dependent lanes run
 sequentially.
 
+**Execute mode contract:** execution is complete only when the epic is marked
+`done`, all remaining work is blocked with recorded reasons, or user input is
+required to continue.
+
 **Clarify ambiguity upfront.** If the plan has unclear requirements or meaningful
 tradeoffs, ask the user before starting.
+
+## Choose execution shape first
+
+Use the lightest shape that still preserves momentum:
+
+- **Single-agent execution**: one ready task, narrow scope, or strongly coupled
+  work. Use the `session → claim → work → task done → repeat` loop from
+  `SKILL.md`.
+- **Orchestrated execution**: multiple ready tasks across separable lanes. This
+  file focuses on that path.
+
+Do not stop at status reporting when ready work exists.
 
 ## Build the execution graph
 
@@ -98,7 +114,9 @@ If blocked:
 Use --compact to reduce output noise:
   trekoon --toon --compact task show <id>
 
-Commit after each edit. Report: files changed, test results.
+Only create branches, commits, or PRs if the user explicitly requested them and
+the current harness policy allows it. Always report files changed, verification
+results, and blockers.
 ```
 
 ## Use task done response for orchestration
@@ -148,8 +166,10 @@ Run the full test suite. All tests must pass.
 
 Automated tests aren't sufficient. Actually exercise the changes:
 
-- **API changes:** Curl endpoints with realistic payloads.
-- **External integrations:** Test against real services.
+- **API changes:** Curl endpoints with realistic payloads when the environment
+  allows it.
+- **External integrations:** Test against real services when credentials and
+  safe access are available; otherwise record the gap.
 - **CLI changes:** Run actual commands, verify output.
 - **Parser changes:** Feed real data, not just fixtures.
 
@@ -198,11 +218,8 @@ After committing and verifying:
    ```
    Should return no actionable suggestions if the epic is cleanly closed.
 
-4. **Create a branch** for the work unless trivial. Merge branch to main when
-   done.
-
-5. **Return final execution summary:** completed tasks, remaining blockers,
-   dependency state.
+4. **Return final execution summary:** completed tasks, remaining blockers,
+    dependency state.
 
 ## Architectural fit
 

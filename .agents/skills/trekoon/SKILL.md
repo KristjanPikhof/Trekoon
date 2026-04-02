@@ -633,38 +633,16 @@ Trekoon stores local state in `.trekoon/trekoon.db`. In git repos and
 worktrees, storage resolves from the shared repository root rather than each
 worktree independently.
 
-## Tool selection
+## Tool capability guidance
 
-Check your available tool list to determine which harness you are running in.
+Inspect your available tools before assuming names. Prefer capability-based
+selection over harness-specific tool names.
 
-### Core tools (both harnesses)
-
-| Purpose | Claude Code | OpenCode |
-|---------|------------|----------|
-| File search | `Glob` | `glob` |
-| Content search | `Grep` | `grep` |
-| Read files | `Read` | `read` |
-| Edit files | `Edit` | `edit` |
-| Write files | `Write` | `write` |
-| Shell commands | `Bash` | `bash` |
-| Ask user | `AskUserQuestion` | `question` |
-| Web fetch | `WebFetch` | `webfetch` |
-| Web search | `WebSearch` | `websearch` |
-| Directory listing | `Bash(ls)` | `list` |
-
-### LSP tools (OpenCode only — use if available)
-
-- `lsp goToDefinition`/`lsp findReferences`: navigate symbols safely.
-- `lsp hover`: inspect type signatures.
-- `lsp documentSymbol`/`lsp workspaceSymbol`: search symbols.
-- `lsp goToImplementation`: find interface implementations.
-
-**Fallbacks:** use `Grep`/`grep` for symbols, `Bash`/`bash` for compiler
-diagnostics.
-
-### General guidance
-
-- Do not overuse bash for searching/reading; prefer dedicated tools.
-- Use LSP over grep for symbol navigation when available.
-- Run Trekoon, git, build/lint/test, and verification commands via `Bash`/`bash`.
-- Use `--compact` on Trekoon commands in sub-agent prompts to reduce token usage.
+- Use your harness's structured file search and file read tools instead of shell
+  commands for code inspection whenever possible.
+- Use symbol-aware tools when available; fall back to content search when they
+  are not.
+- Run Trekoon commands, build/lint/test flows, and explicit git operations via
+  your shell tool.
+- Use `--compact` on Trekoon commands in sub-agent prompts to reduce token
+  usage.
