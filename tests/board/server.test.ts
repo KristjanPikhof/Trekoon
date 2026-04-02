@@ -136,11 +136,32 @@ describe("board server", (): void => {
       const body = await response.text();
 
       expect(boardServer.url).toBe(`${boardServer.origin}/?token=overlay%20token`);
-      expect(boardServer.fallbackUrl).toBe(boardServer.url);
+      expect(boardServer.fallbackUrl).toBe(boardServer.origin);
       expect(response.status).toBe(200);
       expect(response.headers.get("cache-control")).toBe("no-store");
       expect(response.headers.get("content-type")).toContain("text/html");
       expect(body).toContain("board");
+      expect(body).toContain("trekoon-board-bootstrap");
+      expect(body).toContain('"token":"overlay token"');
+    } finally {
+      boardServer.stop();
+    }
+  });
+
+  test("embeds bootstrap auth and snapshot payloads for manual opens", async (): Promise<void> => {
+    const workspace: string = createWorkspace();
+    prepareBoardAssets(workspace);
+
+    const boardServer = startBoardServer({ cwd: workspace, token: "manual-open-token" });
+
+    try {
+      const response = await fetch(boardServer.fallbackUrl);
+      const body = await response.text();
+
+      expect(response.status).toBe(200);
+      expect(body).toContain("trekoon-board-bootstrap");
+      expect(body).toContain('"token":"manual-open-token"');
+      expect(body).toContain('"snapshot":');
     } finally {
       boardServer.stop();
     }
