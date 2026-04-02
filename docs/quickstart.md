@@ -2,6 +2,27 @@
 
 Shortest path from zero to a working Trekoon workflow.
 
+## Recommended human workflow
+
+If you are driving Trekoon with an AI agent, the usual path is:
+
+```bash
+trekoon plan <goal>
+trekoon <epic-id>
+trekoon <epic-id> execute
+```
+
+- Use `plan` after you already have enough context from discussion,
+  brainstorming, or research. Trekoon should turn that context into an
+  execution-ready epic.
+- Use `trekoon <epic-id>` to inspect the created epic, next ready work, and any
+  blockers before starting execution.
+- Use `execute` when you want the agent to keep working through the epic until
+  it is done, all remaining work is blocked, or it needs your input.
+
+The rest of this page is mostly the lower-level command surface that agents and
+power users rely on.
+
 ## How storage works
 
 Trekoon keeps one SQLite database per repository at `.trekoon/trekoon.db`. In

@@ -30,25 +30,45 @@ trekoon quickstart    # walkthrough of the basics
 Trekoon gives agents two modes: **plan** and **execute**. You can run them
 separately or back to back.
 
+For a human driving the workflow, the recommended path is:
+
+```bash
+trekoon plan <goal>
+trekoon <epic-id>
+trekoon <epic-id> execute
+```
+
+- Use `plan` after you already have enough context from discussion,
+  brainstorming, or research.
+- Use `trekoon <epic-id>` to inspect the created epic, review the next ready
+  work, and decide whether anything needs refinement.
+- Use `execute` when you want the agent to keep working through the epic until
+  it is done, all remaining work is blocked, or it needs your input.
+
 ### Plan
 
-Tell the agent what you want to build or find and fix bugs in your code. Then ask Trekoon to
-create plan and decomposes the plan into an epic with tasks, subtasks, and dependency edges,
-then writes the whole graph into Trekoon in a single transaction.
+Tell the agent what you want to build or what problem you want fixed. If you
+already did brainstorming or research, Trekoon should use that context instead
+of starting from zero. Planning decomposes the work into an epic with tasks,
+subtasks, and dependency edges, then writes the whole graph into Trekoon.
 
-```
-/trekoon plan <description>
+```bash
+trekoon plan <description>
 ```
 
 What the agent does during planning:
 
-1. Asks clarifying questions if requirements are ambiguous
-2. Creates an epic with outcome-oriented title and scoped description
-3. Breaks it into tasks grouped by subsystem (auth, billing, UI, etc.)
-4. Adds subtasks with concrete file paths, acceptance criteria, and test commands
-5. Wires dependency edges so the execution order is explicit
-6. Assigns lane owners when multiple agents will work in parallel
-7. Validates the graph with `epic progress` and `suggest` before handing off
+1. Reuses the current conversation, prior research, and existing constraints
+2. Asks clarifying questions if requirements are ambiguous
+3. Creates an epic with outcome-oriented title and scoped description
+4. Breaks it into tasks grouped by subsystem (auth, billing, UI, etc.)
+5. Adds subtasks with concrete file paths, acceptance criteria, and test commands
+6. Wires dependency edges so the execution order is explicit
+7. Assigns lane owners when multiple agents will work in parallel
+8. Validates the graph with `epic progress` and `suggest` before handing off
+
+For humans: use `plan` when you want Trekoon to turn a feature request or bug
+investigation into a tracked, execution-ready backlog.
 
 Each task description includes target files, read-first files, do-not-touch
 paths, and verification commands. Another agent (or a human) can pick up any
@@ -59,8 +79,8 @@ task and execute it without re-reading the codebase to figure out what to do.
 Point the agent at an epic and it works through the dependency graph
 automatically. It is recommended to do it with clean context window.
 
-```
-/trekoon <id> execute
+```bash
+trekoon <id> execute
 ```
 
 What the agent does during execution:
@@ -81,6 +101,11 @@ What the agent does during execution:
 
 The orchestrator uses `task done` responses to drive the whole loop. No polling,
 no guessing. When a task finishes, Trekoon tells you exactly what's ready next.
+
+For humans: use `execute` when the plan looks good and you want the agent to own
+the epic end to end. It should keep going until the epic is complete, all
+remaining work is blocked with recorded reasons, or it needs a product or
+technical decision from you.
 
 ## Install the skill
 
