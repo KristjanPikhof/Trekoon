@@ -76,11 +76,9 @@ const SYNC_SCALING_MIGRATION_UP_STATEMENTS: readonly string[] = [
   "CREATE INDEX IF NOT EXISTS idx_events_branch_cursor ON events(git_branch, created_at, id);",
   "CREATE INDEX IF NOT EXISTS idx_events_entity_branch_cursor ON events(entity_kind, entity_id, git_branch, created_at, id);",
   "CREATE INDEX IF NOT EXISTS idx_conflicts_resolution_entity_field_id ON sync_conflicts(resolution, entity_id, field_name, id);",
-  "CREATE UNIQUE INDEX IF NOT EXISTS idx_conflicts_event_field ON sync_conflicts(event_id, field_name);",
 ];
 
 const SYNC_SCALING_MIGRATION_DOWN_STATEMENTS: readonly string[] = [
-  "DROP INDEX IF EXISTS idx_conflicts_event_field;",
   "DROP INDEX IF EXISTS idx_conflicts_resolution_entity_field_id;",
   "DROP INDEX IF EXISTS idx_events_entity_branch_cursor;",
   "DROP INDEX IF EXISTS idx_events_branch_cursor;",
