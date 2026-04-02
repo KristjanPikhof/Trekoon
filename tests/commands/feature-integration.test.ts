@@ -389,6 +389,23 @@ describe("owner field roundtrip", (): void => {
       storage.close();
     }
   });
+
+  test("owner can be cleared back to null via domain update", (): void => {
+    const cwd = createWorkspace();
+    const storage = openTrekoonDatabase(cwd);
+
+    try {
+      const domain = new TrackerDomain(storage.db);
+      const epic = domain.createEpic({ title: "Owner Epic", description: "desc" });
+      const task = domain.createTask({ epicId: epic.id, title: "Owned task", description: "desc" });
+
+      expect(domain.updateTask(task.id, { owner: "alice" }).owner).toBe("alice");
+      expect(domain.updateTask(task.id, { owner: null }).owner).toBeNull();
+      expect(domain.getTask(task.id)?.owner).toBeNull();
+    } finally {
+      storage.close();
+    }
+  });
 });
 
 // ---------------------------------------------------------------------------
@@ -873,6 +890,24 @@ describe("subtask owner field", (): void => {
       const subtask = domain.getSubtask(subtaskId);
       expect(subtask).not.toBeNull();
       expect(subtask!.owner).toBe("bob");
+    } finally {
+      storage.close();
+    }
+  });
+
+  test("owner can be cleared back to null via domain update", (): void => {
+    const cwd = createWorkspace();
+    const storage = openTrekoonDatabase(cwd);
+
+    try {
+      const domain = new TrackerDomain(storage.db);
+      const epic = domain.createEpic({ title: "Subtask Owner Epic", description: "desc" });
+      const task = domain.createTask({ epicId: epic.id, title: "Parent task", description: "desc" });
+      const subtask = domain.createSubtask({ taskId: task.id, title: "Owned subtask" });
+
+      expect(domain.updateSubtask(subtask.id, { owner: "bob" }).owner).toBe("bob");
+      expect(domain.updateSubtask(subtask.id, { owner: null }).owner).toBeNull();
+      expect(domain.getSubtask(subtask.id)?.owner).toBeNull();
     } finally {
       storage.close();
     }
