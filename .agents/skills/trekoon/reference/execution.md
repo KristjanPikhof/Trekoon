@@ -199,7 +199,7 @@ are all 0.
 
 ## Cleanup
 
-After committing and verifying:
+After verification is complete:
 
 1. **Verify all tasks are done:**
    ```bash
