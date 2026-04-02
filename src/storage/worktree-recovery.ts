@@ -36,6 +36,7 @@ export interface WorktreeRecoveryDiagnostics {
 
 interface WorktreeRecoveryOptions {
   readonly applyRecovery?: boolean;
+  readonly worktreeRoots?: readonly string[];
 }
 
 function readGitLines(workingDirectory: string, args: readonly string[]): string[] {
@@ -89,14 +90,18 @@ function listWorktreeRoots(paths: StoragePaths): string[] {
   return [...worktreeRoots];
 }
 
-function listTrackedStorageFiles(paths: StoragePaths): string[] {
+function resolveRecoveryWorktreeRoots(paths: StoragePaths, options: WorktreeRecoveryOptions): readonly string[] {
+  return options.worktreeRoots ?? listWorktreeRoots(paths);
+}
+
+function listTrackedStorageFiles(paths: StoragePaths, worktreeRoots: readonly string[]): string[] {
   if (paths.repoCommonDir === null) {
     return [];
   }
 
   const trackedFiles = new Set<string>();
 
-  for (const worktreeRoot of listWorktreeRoots(paths)) {
+  for (const worktreeRoot of worktreeRoots) {
     for (const entry of readGitLines(worktreeRoot, ["ls-files", "--cached", "--", ".trekoon"])) {
       trackedFiles.add(resolve(worktreeRoot, entry));
     }
@@ -105,10 +110,10 @@ function listTrackedStorageFiles(paths: StoragePaths): string[] {
   return [...trackedFiles].sort();
 }
 
-function listLegacyDatabaseFiles(paths: StoragePaths): string[] {
+function listLegacyDatabaseFiles(paths: StoragePaths, worktreeRoots: readonly string[]): string[] {
   const files = new Set<string>();
 
-  for (const worktreeRoot of listWorktreeRoots(paths)) {
+  for (const worktreeRoot of worktreeRoots) {
     const legacyDatabaseFile: string = resolveLegacyWorktreeDatabaseFile(worktreeRoot);
     if (legacyDatabaseFile === paths.databaseFile || !existsSync(legacyDatabaseFile)) {
       continue;
@@ -278,8 +283,9 @@ export function inspectWorktreeDatabaseState(
   options: WorktreeRecoveryOptions = {},
 ): WorktreeRecoveryDiagnostics {
   const applyRecovery: boolean = options.applyRecovery ?? false;
-  const trackedStorageFiles: string[] = listTrackedStorageFiles(paths);
-  const legacyDatabaseFiles: string[] = listLegacyDatabaseFiles(paths);
+  const worktreeRoots: readonly string[] = resolveRecoveryWorktreeRoots(paths, options);
+  const trackedStorageFiles: string[] = listTrackedStorageFiles(paths, worktreeRoots);
+  const legacyDatabaseFiles: string[] = listLegacyDatabaseFiles(paths, worktreeRoots);
 
   if (trackedStorageFiles.length > 0) {
     throw new DomainError({
