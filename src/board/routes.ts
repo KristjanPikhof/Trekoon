@@ -4,7 +4,7 @@ import { safeErrorMessage } from "../commands/error-utils";
 import { MutationService } from "../domain/mutation-service";
 import { TrackerDomain } from "../domain/tracker-domain";
 import { DomainError } from "../domain/types";
-import { buildBoardSnapshot } from "./snapshot";
+import { buildBoardSnapshot, buildBoardSnapshotDelta } from "./snapshot";
 
 interface SnapshotDeltaSelection {
   readonly epicIds?: readonly string[];
@@ -63,6 +63,25 @@ function jsonResponse(status: number, data: unknown): Response {
   });
 }
 
+function readCookieToken(request: Request): string | null {
+  const rawCookie = request.headers.get("cookie");
+  if (!rawCookie) {
+    return null;
+  }
+
+  for (const part of rawCookie.split(";")) {
+    const [name, ...valueParts] = part.split("=");
+    if (name?.trim() !== "trekoon_board_session") {
+      continue;
+    }
+
+    const value = valueParts.join("=").trim();
+    return value.length > 0 ? decodeURIComponent(value) : null;
+  }
+
+  return null;
+}
+
 function extractToken(request: Request, url: URL): string | null {
   const authorization: string | null = request.headers.get("authorization");
   if (authorization?.startsWith("Bearer ")) {
@@ -79,7 +98,7 @@ function extractToken(request: Request, url: URL): string | null {
     return queryToken.trim();
   }
 
-  return null;
+  return readCookieToken(request);
 }
 
 function isSqliteBusyMessage(message: string): boolean {
@@ -147,23 +166,7 @@ function buildMutationResponse(_domain: TrackerDomain, data: Record<string, unkn
   });
 }
 
-function buildSnapshotDelta(domain: TrackerDomain, selection: SnapshotDeltaSelection): Record<string, unknown> {
-  const snapshot = buildBoardSnapshot(domain);
-  const epicIdSet = new Set(selection.epicIds ?? []);
-  const taskIdSet = new Set(selection.taskIds ?? []);
-  const subtaskIdSet = new Set(selection.subtaskIds ?? []);
-  const dependencyIdSet = new Set(selection.dependencyIds ?? []);
-
-  return {
-    generatedAt: snapshot.generatedAt,
-    epics: snapshot.epics.filter((epic) => epicIdSet.has(epic.id)),
-    tasks: snapshot.tasks.filter((task) => taskIdSet.has(task.id)),
-    subtasks: snapshot.subtasks.filter((subtask) => subtaskIdSet.has(subtask.id)),
-    dependencies: snapshot.dependencies.filter((dependency) => dependencyIdSet.has(dependency.id)),
-    deletedSubtaskIds: [...(selection.deletedSubtaskIds ?? [])],
-    deletedDependencyIds: [...(selection.deletedDependencyIds ?? [])],
-  };
-}
+const buildSnapshotDelta = buildBoardSnapshotDelta;
 
 function buildMutationDeltaResponse(
   domain: TrackerDomain,
