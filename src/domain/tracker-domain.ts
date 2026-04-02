@@ -128,6 +128,14 @@ interface TaskDeletionPlan {
   readonly touchingDependencies: readonly DependencyRecord[];
 }
 
+function chunkValues<T>(values: readonly T[], chunkSize: number): T[][] {
+  const chunks: T[][] = [];
+  for (let offset = 0; offset < values.length; offset += chunkSize) {
+    chunks.push([...values.slice(offset, offset + chunkSize)]);
+  }
+  return chunks;
+}
+
 function assertNonEmpty(field: string, value: string | undefined | null): string {
   const normalized: string = (value ?? "").trim();
   if (!normalized) {
@@ -534,13 +542,17 @@ export class TrackerDomain {
     this.getTaskOrThrow(normalizedTaskId);
 
     const plan = this.planTaskDeletion(normalizedTaskId);
-    for (const dependency of plan.touchingDependencies) {
-      this.#db.query("DELETE FROM dependencies WHERE id = ?;").run(dependency.id);
+    for (const dependencyIdChunk of chunkValues(
+      plan.touchingDependencies.map((dependency) => dependency.id),
+      SQLITE_MAX_VARIABLES,
+    )) {
+      const placeholders = dependencyIdChunk.map(() => "?").join(", ");
+      this.#db.query(`DELETE FROM dependencies WHERE id IN (${placeholders});`).run(...dependencyIdChunk);
     }
 
-    if (plan.subtaskIds.length > 0) {
-      const placeholders = plan.subtaskIds.map(() => "?").join(", ");
-      this.#db.query(`DELETE FROM subtasks WHERE id IN (${placeholders});`).run(...plan.subtaskIds);
+    for (const subtaskIdChunk of chunkValues(plan.subtaskIds, SQLITE_MAX_VARIABLES)) {
+      const placeholders = subtaskIdChunk.map(() => "?").join(", ");
+      this.#db.query(`DELETE FROM subtasks WHERE id IN (${placeholders});`).run(...subtaskIdChunk);
     }
 
     this.#db.query("DELETE FROM tasks WHERE id = ?;").run(normalizedTaskId);
@@ -804,15 +816,24 @@ export class TrackerDomain {
       .all(normalizedTaskId) as Array<{ id: string }>;
     const subtaskIds: string[] = subtaskRows.map((row) => row.id);
     const nodeIds: string[] = [normalizedTaskId, ...subtaskIds];
-    const placeholders = nodeIds.map(() => "?").join(", ");
-    const rows = this.#db
-      .query(
-        `SELECT id, source_id, source_kind, depends_on_id, depends_on_kind, created_at, updated_at
-         FROM dependencies
-         WHERE source_id IN (${placeholders}) OR depends_on_id IN (${placeholders})
-         ORDER BY created_at ASC, id ASC;`,
-      )
-      .all(...nodeIds, ...nodeIds) as DependencyRow[];
+    const dependencyRows: DependencyRow[] = [];
+    const nodeIdChunks = chunkValues(nodeIds, Math.floor(SQLITE_MAX_VARIABLES / 2));
+    for (const nodeIdChunk of nodeIdChunks) {
+      const placeholders = nodeIdChunk.map(() => "?").join(", ");
+      const rows = this.#db
+        .query(
+          `SELECT id, source_id, source_kind, depends_on_id, depends_on_kind, created_at, updated_at
+           FROM dependencies
+           WHERE source_id IN (${placeholders}) OR depends_on_id IN (${placeholders})
+           ORDER BY created_at ASC, id ASC;`,
+        )
+        .all(...nodeIdChunk, ...nodeIdChunk) as DependencyRow[];
+      dependencyRows.push(...rows);
+    }
+
+    const rows: DependencyRow[] = [...new Map(dependencyRows.map((row) => [row.id, row])).values()].sort(
+      (left, right) => left.created_at - right.created_at || left.id.localeCompare(right.id),
+    );
 
     return {
       subtaskIds,

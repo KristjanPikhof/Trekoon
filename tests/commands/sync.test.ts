@@ -1409,6 +1409,133 @@ describe("sync command", (): void => {
     }
   });
 
+  test("pull applies nullable owner updates without stringifying null", async (): Promise<void> => {
+    const workspace: string = createWorkspace();
+    initializeRepository(workspace);
+
+    const epicId = randomUUID();
+    const taskId = randomUUID();
+    const subtaskId = randomUUID();
+    const now = Date.now();
+
+    {
+      const storage = openTrekoonDatabase(workspace);
+      try {
+        storage.db
+          .query("INSERT INTO epics (id, title, description, status, created_at, updated_at, version) VALUES (?, ?, ?, ?, ?, ?, 1);")
+          .run(epicId, "Epic", "seed", "todo", now, now);
+        storage.db
+          .query("INSERT INTO tasks (id, epic_id, title, description, status, owner, created_at, updated_at, version) VALUES (?, ?, ?, ?, ?, ?, ?, ?, 1);")
+          .run(taskId, epicId, "Task", "seed", "todo", "alice", now, now);
+        storage.db
+          .query("INSERT INTO subtasks (id, task_id, title, description, status, owner, created_at, updated_at, version) VALUES (?, ?, ?, ?, ?, ?, ?, ?, 1);")
+          .run(subtaskId, taskId, "Subtask", "seed", "todo", "bob", now, now);
+
+        storage.db
+          .query(
+            "INSERT INTO events (id, entity_kind, entity_id, operation, payload, git_branch, git_head, created_at, updated_at, version) VALUES (?, 'task', ?, 'task.updated', ?, 'main', NULL, ?, ?, 1);",
+          )
+          .run(
+            randomUUID(),
+            taskId,
+            JSON.stringify({ fields: { epic_id: epicId, title: "Task", description: "seed", status: "todo", owner: null } }),
+            now + 1,
+            now + 1,
+          );
+        storage.db
+          .query(
+            "INSERT INTO events (id, entity_kind, entity_id, operation, payload, git_branch, git_head, created_at, updated_at, version) VALUES (?, 'subtask', ?, 'subtask.updated', ?, 'main', NULL, ?, ?, 1);",
+          )
+          .run(
+            randomUUID(),
+            subtaskId,
+            JSON.stringify({ fields: { task_id: taskId, title: "Subtask", description: "seed", status: "todo", owner: null } }),
+            now + 2,
+            now + 2,
+          );
+      } finally {
+        storage.close();
+      }
+    }
+
+    runGit(workspace, ["checkout", "-b", "feature/null-owner-sync"]);
+
+    const pullResult = await runSync({
+      args: ["pull", "--from", "main"],
+      cwd: workspace,
+      mode: "toon",
+    });
+
+    expect(pullResult.ok).toBe(true);
+    expect((pullResult.data as { appliedEvents: number }).appliedEvents).toBe(2);
+
+    const storage = openTrekoonDatabase(workspace);
+    try {
+      const task = storage.db.query("SELECT owner FROM tasks WHERE id = ? LIMIT 1;").get(taskId) as { owner: string | null } | null;
+      const subtask = storage.db.query("SELECT owner FROM subtasks WHERE id = ? LIMIT 1;").get(subtaskId) as { owner: string | null } | null;
+
+      expect(task?.owner).toBeNull();
+      expect(subtask?.owner).toBeNull();
+    } finally {
+      storage.close();
+    }
+  });
+
+  test("resolving owner conflicts writes sql null instead of text null", async (): Promise<void> => {
+    const workspace: string = createWorkspace();
+    initializeRepository(workspace);
+
+    const epicId = randomUUID();
+    const taskId = randomUUID();
+    const now = Date.now();
+    const conflictId = randomUUID();
+    const eventId = randomUUID();
+
+    {
+      const storage = openTrekoonDatabase(workspace);
+      try {
+        storage.db
+          .query("INSERT INTO epics (id, title, description, status, created_at, updated_at, version) VALUES (?, ?, ?, ?, ?, ?, 1);")
+          .run(epicId, "Epic", "seed", "todo", now, now);
+        storage.db
+          .query("INSERT INTO tasks (id, epic_id, title, description, status, owner, created_at, updated_at, version) VALUES (?, ?, ?, ?, ?, ?, ?, ?, 1);")
+          .run(taskId, epicId, "Task", "seed", "todo", "alice", now, now);
+        storage.db
+          .query(
+            "INSERT INTO events (id, entity_kind, entity_id, operation, payload, git_branch, git_head, created_at, updated_at, version) VALUES (?, 'task', ?, 'task.updated', ?, 'main', NULL, ?, ?, 1);",
+          )
+          .run(eventId, taskId, JSON.stringify({ fields: { owner: null } }), now + 1, now + 1);
+        storage.db
+          .query(
+            "INSERT INTO sync_conflicts (id, event_id, entity_kind, entity_id, field_name, ours_value, theirs_value, resolution, created_at, updated_at, version) VALUES (?, ?, 'task', ?, 'owner', ?, ?, 'pending', ?, ?, 1);",
+          )
+          .run(conflictId, eventId, taskId, JSON.stringify("alice"), JSON.stringify(null), now + 2, now + 2);
+      } finally {
+        storage.close();
+      }
+    }
+
+    runGit(workspace, ["checkout", "-b", "feature/resolve-null-owner"]);
+    const result = syncResolve(workspace, conflictId, "theirs");
+    expect(result.resolution).toBe("theirs");
+
+    const storage = openTrekoonDatabase(workspace);
+    try {
+      const task = storage.db.query("SELECT owner FROM tasks WHERE id = ? LIMIT 1;").get(taskId) as { owner: string | null } | null;
+      const resolutionEvent = storage.db
+        .query("SELECT payload FROM events WHERE entity_kind = 'task' AND entity_id = ? AND operation = 'resolve_conflict' ORDER BY created_at DESC, id DESC LIMIT 1;")
+        .get(taskId) as { payload: string } | null;
+
+      expect(task?.owner).toBeNull();
+      expect(resolutionEvent).not.toBeNull();
+      expect(JSON.parse(resolutionEvent!.payload)).toEqual(
+        expect.objectContaining({ field: "owner", resolution: "theirs", value: "null" }),
+      );
+    } finally {
+      storage.close();
+    }
+  });
+
   test("replaying dependency.added for an already-existing edge is idempotent", async (): Promise<void> => {
     const workspace: string = createWorkspace();
     initializeRepository(workspace);

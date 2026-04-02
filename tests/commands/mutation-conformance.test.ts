@@ -365,6 +365,41 @@ describe("mutation conformance", (): void => {
     }
   });
 
+  test("task delete scales across sqlite variable chunk limits", async (): Promise<void> => {
+    const cwd = createWorkspace();
+    const storage = openTrekoonDatabase(cwd);
+
+    try {
+      const mutations = new MutationService(storage.db, cwd);
+      const epic = mutations.createEpic({ title: "Roadmap", description: "Scope" });
+      const blocker = mutations.createTask({ epicId: epic.id, title: "Blocker", description: "First" });
+      const task = mutations.createTask({ epicId: epic.id, title: "Implement", description: "Code" });
+
+      const createdSubtasks = Array.from({ length: 1200 }, (_, index) =>
+        mutations.createSubtask({ taskId: task.id, title: `Subtask ${index + 1}`, description: "Coverage" })
+      );
+
+      const dependencyIds = createdSubtasks.map((subtask) => mutations.addDependency(subtask.id, blocker.id).id);
+
+      const result = mutations.deleteTask(task.id);
+
+      expect(result.deletedSubtaskIds).toHaveLength(createdSubtasks.length);
+      expect(result.deletedDependencyIds).toHaveLength(dependencyIds.length);
+
+      const deletedTask = storage.db.query("SELECT id FROM tasks WHERE id = ?;").get(task.id) as { id: string } | null;
+      const deletedSubtasks = storage.db.query("SELECT id FROM subtasks WHERE task_id = ?;").all(task.id) as Array<{ id: string }>;
+      const deletedDependencies = storage.db
+        .query("SELECT id FROM dependencies WHERE source_id = ? OR depends_on_id = ? OR depends_on_id = ?;")
+        .all(task.id, task.id, blocker.id) as Array<{ id: string }>;
+
+      expect(deletedTask).toBeNull();
+      expect(deletedSubtasks).toEqual([]);
+      expect(deletedDependencies).toEqual([]);
+    } finally {
+      storage.close();
+    }
+  });
+
   test("batch create and dependency add-many append canonical events atomically", async (): Promise<void> => {
     const cwd = createWorkspace();
 

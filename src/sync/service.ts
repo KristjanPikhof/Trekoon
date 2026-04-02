@@ -24,10 +24,22 @@ import {
 
 const SYNC_ALLOWED_FIELDS: Readonly<Record<string, readonly string[]>> = {
   epics: ["title", "description", "status"],
-  tasks: ["epic_id", "title", "description", "status"],
-  subtasks: ["task_id", "title", "description", "status"],
+  tasks: ["epic_id", "title", "description", "status", "owner"],
+  subtasks: ["task_id", "title", "description", "status", "owner"],
   dependencies: ["source_id", "source_kind", "depends_on_id", "depends_on_kind"],
 };
+
+function isSyncNullableStringField(tableName: string, fieldName: string): boolean {
+  return (tableName === "tasks" || tableName === "subtasks") && fieldName === "owner";
+}
+
+function isSyncFieldValueSupported(tableName: string, fieldName: string, value: unknown): boolean {
+  if (typeof value === "string") {
+    return true;
+  }
+
+  return value === null && isSyncNullableStringField(tableName, fieldName);
+}
 
 function isCursorStale(db: Database, cursorToken: string, sourceBranch: string): boolean {
   if (cursorToken === "0:") {
@@ -368,7 +380,7 @@ function currentEntityFieldValue(db: Database, entityKind: string, entityId: str
   }
 
   const row = db.query(`SELECT ${fieldName} AS value FROM ${tableName} WHERE id = ? LIMIT 1;`).get(entityId) as
-    | { value: string }
+    | { value: string | null }
     | null;
 
   return row?.value;
@@ -744,19 +756,21 @@ function applyCreate(db: Database, event: StoredEvent, fields: Record<string, un
     }
 
     const description = typeof fields.description === "string" ? fields.description : "";
+    const owner = isSyncFieldValueSupported(tableName, "owner", fields.owner) ? (fields.owner as string | null) : null;
     db.query(
       `
-      INSERT INTO tasks (id, epic_id, title, description, status, created_at, updated_at, version)
-      VALUES (?, ?, ?, ?, ?, ?, ?, 1)
+      INSERT INTO tasks (id, epic_id, title, description, status, owner, created_at, updated_at, version)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, 1)
       ON CONFLICT(id) DO UPDATE SET
         epic_id = excluded.epic_id,
         title = excluded.title,
         description = excluded.description,
         status = excluded.status,
+        owner = excluded.owner,
         updated_at = excluded.updated_at,
         version = tasks.version + 1;
       `,
-    ).run(event.entity_id, epicId, title, description, status, now, now);
+    ).run(event.entity_id, epicId, title, description, status, owner, now, now);
 
     return true;
   }
@@ -770,19 +784,21 @@ function applyCreate(db: Database, event: StoredEvent, fields: Record<string, un
     }
 
     const description = typeof fields.description === "string" ? fields.description : "";
+    const owner = isSyncFieldValueSupported(tableName, "owner", fields.owner) ? (fields.owner as string | null) : null;
     db.query(
       `
-      INSERT INTO subtasks (id, task_id, title, description, status, created_at, updated_at, version)
-      VALUES (?, ?, ?, ?, ?, ?, ?, 1)
+      INSERT INTO subtasks (id, task_id, title, description, status, owner, created_at, updated_at, version)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, 1)
       ON CONFLICT(id) DO UPDATE SET
         task_id = excluded.task_id,
         title = excluded.title,
         description = excluded.description,
         status = excluded.status,
+        owner = excluded.owner,
         updated_at = excluded.updated_at,
         version = subtasks.version + 1;
       `,
-    ).run(event.entity_id, taskId, title, description, status, now, now);
+    ).run(event.entity_id, taskId, title, description, status, owner, now, now);
 
     return true;
   }
@@ -835,7 +851,9 @@ function applyUpdatePatch(db: Database, event: StoredEvent, fields: Record<strin
   }
 
   const allowed = new Set(SYNC_ALLOWED_FIELDS[tableName] ?? []);
-  const entries = Object.entries(fields).filter(([fieldName, value]) => allowed.has(fieldName) && typeof value === "string");
+  const entries = Object.entries(fields).filter(([fieldName, value]) =>
+    allowed.has(fieldName) && isSyncFieldValueSupported(tableName, fieldName, value)
+  );
 
   if (entries.length === 0) {
     return false;
@@ -857,7 +875,7 @@ function applyUpdatePatch(db: Database, event: StoredEvent, fields: Record<strin
 
   const now = Date.now();
   const setClause = entries.map(([field]) => `${field} = ?`).join(", ");
-  const values = entries.map(([, value]) => value as string);
+  const values = entries.map(([, value]) => value as string | null);
 
   db.query(`UPDATE ${tableName} SET ${setClause}, updated_at = ?, version = version + 1 WHERE id = ?;`).run(
     ...values,
@@ -1276,9 +1294,10 @@ function updateSingleField(db: Database, entityKind: string, entityId: string, f
   }
 
   const now: number = Date.now();
+  const normalizedValue = typeof value === "string" || value === null ? value : JSON.stringify(value);
   const result = db
     .query(`UPDATE ${tableName} SET ${fieldName} = ?, updated_at = ?, version = version + 1 WHERE id = ?;`)
-    .run(typeof value === "string" ? value : JSON.stringify(value), now, entityId);
+    .run(normalizedValue, now, entityId);
 
   if (result.changes === 0) {
     throw new DomainError({
