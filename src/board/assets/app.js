@@ -13,7 +13,6 @@ import { createConfirmDialog } from "./components/ConfirmDialog.js";
 import { createEpicsOverview } from "./components/EpicsOverview.js";
 import { panelClasses, renderIcon, sectionLabelClasses, escapeHtml } from "./components/helpers.js";
 
-const SESSION_TOKEN_STORAGE_KEY = "trekoon-board-session-token";
 const SEARCH_FOCUS_KEYS = new Set(["/", "s"]);
 const FOCUSABLE_SELECTOR = [
   "a[href]",
@@ -33,30 +32,15 @@ const FOCUSABLE_SELECTOR = [
 // Session token management
 // ---------------------------------------------------------------------------
 
-function readSessionTokenFromStorage() {
-  try {
-    return (sessionStorage.getItem(SESSION_TOKEN_STORAGE_KEY) || "").trim();
-  } catch {
-    return "";
-  }
-}
-
-function persistSessionToken(token) {
-  try {
-    sessionStorage.setItem(SESSION_TOKEN_STORAGE_KEY, token);
-    return true;
-  } catch {
-    return false;
-  }
-}
-
 function resolveRuntimeSession() {
   const url = new URL(window.location.href);
   const queryToken = (url.searchParams.get("token") || "").trim();
   if (queryToken.length > 0) {
-    return { token: queryToken, shouldScrubAddressBar: persistSessionToken(queryToken) };
+    return { token: queryToken, shouldScrubAddressBar: true };
   }
-  return { token: readSessionTokenFromStorage(), shouldScrubAddressBar: false };
+  const bootstrap = readJsonScript("trekoon-board-bootstrap") ?? {};
+  const bootstrapToken = typeof bootstrap?.token === "string" ? bootstrap.token.trim() : "";
+  return { token: bootstrapToken, shouldScrubAddressBar: false };
 }
 
 function scrubTokenFromAddressBar() {
@@ -149,11 +133,10 @@ export async function bootLegacyBoard(options = {}) {
     if (runtimeSession.shouldScrubAddressBar) scrubTokenFromAddressBar();
 
     // Fetch snapshot
-    let snapshotPayload = readJsonScript("trekoon-board-snapshot") ?? {};
-    if (runtimeSession.token.length > 0) {
-      const headers = new Headers();
-      headers.set("authorization", `Bearer ${runtimeSession.token}`);
-      const response = await fetch("/api/snapshot", { headers });
+    const bootstrap = readJsonScript("trekoon-board-bootstrap") ?? {};
+    let snapshotPayload = bootstrap?.snapshot ?? readJsonScript("trekoon-board-snapshot") ?? {};
+    if ((!snapshotPayload || typeof snapshotPayload !== "object") && runtimeSession.token.length > 0) {
+      const response = await fetch("/api/snapshot");
       const payload = await response.json();
       if (!payload?.ok) throw new Error(payload?.error?.message || "Board request failed");
       snapshotPayload = payload?.data?.snapshot ?? {};
