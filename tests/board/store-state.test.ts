@@ -229,4 +229,63 @@ describe("board state store reconciliation", () => {
     expect(Number.isFinite(store.getSnapshot().epics[0]?.createdAt)).toBeTrue();
     expect(Number.isFinite(store.getSnapshot().tasks[0]?.updatedAt)).toBeTrue();
   });
+
+  test("applySnapshotDelta recomputes derived snapshot state for optimistic-style canonical records", () => {
+    globalThis.localStorage = createMockStorage() as Storage;
+
+    const store = createStore({
+      epics: [
+        { id: "epic-1", title: "Epic 1", description: "Planning", status: "todo", createdAt: 100, updatedAt: 100 },
+      ],
+      tasks: [
+        { id: "task-1", epicId: "epic-1", title: "Task 1", description: "Original", status: "todo", createdAt: 100, updatedAt: 100 },
+      ],
+      subtasks: [
+        { id: "subtask-1", taskId: "task-1", title: "Old title", description: "Notes", status: "todo", createdAt: 100, updatedAt: 100 },
+      ],
+      dependencies: [
+        { id: "dep-1", sourceId: "subtask-1", sourceKind: "subtask", dependsOnId: "task-1", dependsOnKind: "task" },
+      ],
+    });
+
+    store.applySnapshotDelta({
+      subtasks: [
+        {
+          id: "subtask-1",
+          taskId: "task-1",
+          title: "Fresh title",
+          description: "Updated notes",
+          status: "in_progress",
+          createdAt: 100,
+          updatedAt: 200,
+          blockedBy: [],
+          blocks: [],
+          dependencyIds: [],
+          dependentIds: [],
+          searchText: "stale search text",
+        },
+      ],
+      deletedDependencyIds: ["dep-1"],
+    });
+
+    const snapshot = store.getSnapshot();
+    expect(snapshot.subtasks[0]).toEqual(expect.objectContaining({
+      id: "subtask-1",
+      title: "Fresh title",
+      blockedBy: [],
+      dependencyIds: [],
+      searchText: expect.stringContaining("fresh title updated notes in_progress"),
+    }));
+    expect(snapshot.tasks[0]).toEqual(expect.objectContaining({
+      id: "task-1",
+      subtasks: [expect.objectContaining({ id: "subtask-1", title: "Fresh title" })],
+      searchText: expect.stringContaining("fresh title updated notes in_progress"),
+    }));
+    expect(snapshot.epics[0]).toEqual(expect.objectContaining({
+      id: "epic-1",
+      counts: expect.objectContaining({ todo: 1, in_progress: 0 }),
+      searchText: expect.stringContaining("fresh title updated notes in_progress"),
+    }));
+    expect(snapshot.dependencies).toEqual([]);
+  });
 });
