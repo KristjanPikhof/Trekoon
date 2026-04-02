@@ -626,7 +626,7 @@ describe("board routes", (): void => {
       expect(response.status).toBe(200);
       expect(body.ok).toBeTrue();
       expect(body.data.task).toEqual(expect.objectContaining({ id: task.id, owner: null }));
-      expect(body.data.snapshot.tasks).toContainEqual(expect.objectContaining({ id: task.id, owner: null }));
+      expect(mutations.getTask(task.id)?.owner).toBeNull();
     } finally {
       storage.close();
     }
