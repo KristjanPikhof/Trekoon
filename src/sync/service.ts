@@ -128,6 +128,12 @@ interface EventPayload {
   readonly fields: Record<string, unknown>;
 }
 
+interface DeleteCascadeResolutionRow {
+  readonly id: string;
+  readonly source_id: string;
+  readonly depends_on_id: string;
+}
+
 interface ConflictOrderRow {
   readonly id: string;
 }
@@ -843,6 +849,23 @@ function applyDelete(db: Database, event: StoredEvent, fields: Record<string, un
 
   db.query(`DELETE FROM ${tableName} WHERE id = ?;`).run(event.entity_id);
   return true;
+}
+
+function hasPendingDeleteConflict(db: Database, sourceEventId: string): boolean {
+  const row = db
+    .query(
+      `
+      SELECT 1
+      FROM sync_conflicts
+      WHERE event_id = ?
+        AND field_name = '__delete__'
+        AND resolution = 'pending'
+      LIMIT 1;
+      `,
+    )
+    .get(sourceEventId);
+
+  return row !== null;
 }
 
 function applyEntityFields(db: Database, event: StoredEvent, fields: Record<string, unknown>): boolean {
