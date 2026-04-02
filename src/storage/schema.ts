@@ -124,5 +124,4 @@ export const BASE_SCHEMA_STATEMENTS: readonly string[] = [
   `CREATE INDEX IF NOT EXISTS idx_sync_cursors_owner ON sync_cursors(owner_scope, owner_worktree_path, source_branch);`,
   `CREATE INDEX IF NOT EXISTS idx_conflicts_resolution ON sync_conflicts(resolution);`,
   `CREATE INDEX IF NOT EXISTS idx_conflicts_resolution_entity_field_id ON sync_conflicts(resolution, entity_id, field_name, id);`,
-  `CREATE UNIQUE INDEX IF NOT EXISTS idx_conflicts_event_field ON sync_conflicts(event_id, field_name);`,
 ];
