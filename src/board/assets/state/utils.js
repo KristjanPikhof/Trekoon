@@ -38,6 +38,22 @@ function normalizeTimestamp(value, fallback) {
   return Number.isFinite(normalized) && normalized > 0 ? normalized : fallback;
 }
 
+function normalizeText(value, fallback = "") {
+  return String(value ?? fallback).replace(/\\n/g, "\n");
+}
+
+function isCanonicalTask(task) {
+  return task && typeof task === "object" && Array.isArray(task.subtasks) && typeof task.searchText === "string";
+}
+
+function isCanonicalSubtask(subtask) {
+  return subtask && typeof subtask === "object" && Array.isArray(subtask.blockedBy) && typeof subtask.searchText === "string";
+}
+
+function isCanonicalEpic(epic) {
+  return epic && typeof epic === "object" && epic.counts && typeof epic.searchText === "string";
+}
+
 /**
  * @param {any[]} tasks
  * @returns {Record<string, number>}
@@ -60,6 +76,17 @@ export function normalizeSnapshot(rawSnapshot) {
   const rawTasks = normalizeArray(rawSnapshot?.tasks);
   const rawSubtasks = normalizeArray(rawSnapshot?.subtasks);
   const rawDependencies = normalizeArray(rawSnapshot?.dependencies);
+
+   if (rawEpics.every(isCanonicalEpic) && rawTasks.every(isCanonicalTask) && rawSubtasks.every(isCanonicalSubtask)) {
+    return {
+      generatedAt: rawSnapshot?.generatedAt ?? null,
+      epics: rawEpics,
+      tasks: rawTasks,
+      subtasks: rawSubtasks,
+      dependencies: rawDependencies,
+    };
+  }
+
   const taskIndex = new Map();
   const subtaskIndex = new Map();
 
@@ -69,8 +96,8 @@ export function normalizeSnapshot(rawSnapshot) {
       id: getId(task),
       kind: "task",
       epicId: task.epicId ?? task.epic?.id ?? null,
-      title: String(task.title ?? "Untitled task"),
-      description: String(task.description ?? "").replace(/\\n/g, "\n"),
+      title: normalizeText(task.title, "Untitled task"),
+      description: normalizeText(task.description),
       status: normalizeStatus(task.status),
       createdAt,
       updatedAt: normalizeTimestamp(task.updatedAt, createdAt),
@@ -92,8 +119,8 @@ export function normalizeSnapshot(rawSnapshot) {
       id: getId(subtask),
       kind: "subtask",
       taskId: subtask.taskId ?? subtask.task?.id ?? null,
-      title: String(subtask.title ?? "Untitled subtask"),
-      description: String(subtask.description ?? "").replace(/\\n/g, "\n"),
+      title: normalizeText(subtask.title, "Untitled subtask"),
+      description: normalizeText(subtask.description),
       status: normalizeStatus(subtask.status),
       createdAt,
       updatedAt: normalizeTimestamp(subtask.updatedAt, createdAt),
@@ -150,7 +177,7 @@ export function normalizeSnapshot(rawSnapshot) {
     const normalizedEpic = {
       id: epicId,
       title: String(epic.title ?? "Untitled epic"),
-      description: String(epic.description ?? "").replace(/\\n/g, "\n"),
+      description: normalizeText(epic.description),
       status: normalizeStatus(String(epic.status ?? "todo")),
       createdAt,
       updatedAt: normalizeTimestamp(epic.updatedAt, createdAt),
@@ -200,6 +227,47 @@ export function normalizeSnapshot(rawSnapshot) {
     tasks,
     subtasks,
     dependencies,
+  };
+}
+
+function mergeRecordsById(existingRecords, incomingRecords, deletedIds = []) {
+  const deletedIdSet = new Set(deletedIds);
+  const nextRecords = existingRecords.filter((record) => !deletedIdSet.has(record.id));
+  const indexById = new Map(nextRecords.map((record, index) => [record.id, index]));
+
+  for (const record of incomingRecords) {
+    const existingIndex = indexById.get(record.id);
+    if (existingIndex === undefined) {
+      indexById.set(record.id, nextRecords.length);
+      nextRecords.push(record);
+      continue;
+    }
+
+    nextRecords[existingIndex] = record;
+  }
+
+  return nextRecords;
+}
+
+export function applySnapshotDelta(snapshot, delta) {
+  const baseSnapshot = snapshot && typeof snapshot === "object"
+    ? snapshot
+    : { generatedAt: null, epics: [], tasks: [], subtasks: [], dependencies: [] };
+
+  if (!delta || typeof delta !== "object") {
+    return baseSnapshot;
+  }
+
+  return {
+    generatedAt: delta.generatedAt ?? baseSnapshot.generatedAt ?? null,
+    epics: mergeRecordsById(baseSnapshot.epics ?? [], normalizeArray(delta.epics), normalizeArray(delta.deletedEpicIds)),
+    tasks: mergeRecordsById(baseSnapshot.tasks ?? [], normalizeArray(delta.tasks), normalizeArray(delta.deletedTaskIds)),
+    subtasks: mergeRecordsById(baseSnapshot.subtasks ?? [], normalizeArray(delta.subtasks), normalizeArray(delta.deletedSubtaskIds)),
+    dependencies: mergeRecordsById(
+      baseSnapshot.dependencies ?? [],
+      normalizeArray(delta.dependencies),
+      normalizeArray(delta.deletedDependencyIds),
+    ),
   };
 }
 
