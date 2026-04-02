@@ -422,6 +422,17 @@ export async function bootLegacyBoard(options = {}) {
       notice.update({
         notice: store.notice,
         onDismiss() { store.notice = null; rerender(); },
+        onRetry() {
+          const didRetry = api.retryLastFailedMutation();
+          if (!didRetry) {
+            store.notice = {
+              type: "error",
+              title: "Retry unavailable",
+              message: "The failed action is no longer available. Repeat the change from the board.",
+            };
+          }
+          rerender();
+        },
       });
 
       if (showTasks) {

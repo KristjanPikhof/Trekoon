@@ -47,6 +47,15 @@ function buildRequestError(method, path, response, payload) {
   return error;
 }
 
+const DEFAULT_REQUEST_TIMEOUT_MS = 10000;
+
+function createTimeoutError(method, path, timeoutMs) {
+  const error = new Error(`${method} ${path} timed out after ${timeoutMs}ms. Retry your change.`);
+  error.code = "request_timeout";
+  error.timeoutMs = timeoutMs;
+  return error;
+}
+
 /**
  * Create a serial mutation queue.
  *
@@ -64,6 +73,7 @@ export function createMutationQueue(model, rerender) {
   /** @type {Array<{ optimistic?: function, request: function, onSuccess?: function, onError?: function, successMessage?: string }>} */
   const queue = [];
   let processing = false;
+  let nextMutationId = 1;
   /** @type {Array<() => void>} */
   let flushResolvers = [];
 
@@ -85,7 +95,9 @@ export function createMutationQueue(model, rerender) {
     while (queue.length > 0) {
       const mutation = queue.shift();
       const previousSnapshot = cloneSnapshot(model.store.snapshot);
-      model.store.notice = null;
+      if (model.store.notice?.retryMutationId !== mutation.id) {
+        model.store.notice = null;
+      }
 
       // Apply optimistic update
       if (typeof mutation.optimistic === "function") {
@@ -112,14 +124,17 @@ export function createMutationQueue(model, rerender) {
         model.replaceSnapshot(previousSnapshot);
 
         const message = error instanceof Error ? error.message : String(error);
-        model.store.notice = { type: "error", message };
+        model.store.notice = {
+          type: "error",
+          title: "Action failed",
+          message,
+          retryLabel: "Retry",
+          retryMutationId: mutation.id,
+        };
 
         if (typeof mutation.onError === "function") {
           mutation.onError(error);
         }
-
-        // Clear remaining queue on error to prevent cascading failures
-        queue.length = 0;
       }
     }
 
@@ -131,7 +146,7 @@ export function createMutationQueue(model, rerender) {
 
   return {
     enqueue(mutation) {
-      queue.push(mutation);
+      queue.push({ ...mutation, id: nextMutationId += 1 });
       processNext();
     },
 
@@ -159,10 +174,34 @@ export function createMutationQueue(model, rerender) {
  */
 export function createApi(model, options) {
   const { sessionToken, rerender } = options;
+  let lastFailedMutation = null;
+
+  function enqueueMutation(definition) {
+    queue.enqueue({
+      ...definition,
+      onSuccess(data) {
+        if (lastFailedMutation?.request === definition.request) {
+          lastFailedMutation = null;
+        }
+        if (typeof definition.onSuccess === "function") {
+          definition.onSuccess(data);
+        }
+      },
+      onError(error) {
+        lastFailedMutation = definition;
+        if (typeof definition.onError === "function") {
+          definition.onError(error);
+        }
+      },
+    });
+  }
 
   async function request(path, requestOptions = {}) {
     const method = typeof requestOptions.method === "string" ? requestOptions.method.toUpperCase() : "GET";
     const headers = new Headers(requestOptions.headers || {});
+    const timeoutMs = Number.isFinite(requestOptions.timeoutMs) && requestOptions.timeoutMs > 0
+      ? requestOptions.timeoutMs
+      : DEFAULT_REQUEST_TIMEOUT_MS;
     if (sessionToken.length > 0) {
       headers.set("authorization", `Bearer ${sessionToken}`);
     }
@@ -171,14 +210,26 @@ export function createApi(model, options) {
     }
 
     let response;
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => {
+      controller.abort(createTimeoutError(method, path, timeoutMs));
+    }, timeoutMs);
+
     try {
-      response = await fetch(path, { ...requestOptions, headers });
+      response = await fetch(path, { ...requestOptions, headers, signal: controller.signal });
     } catch (error) {
+      if (controller.signal.aborted) {
+        throw controller.signal.reason instanceof Error
+          ? controller.signal.reason
+          : createTimeoutError(method, path, timeoutMs);
+      }
       const message = error instanceof Error ? error.message : String(error);
       const requestError = new Error(`${method} ${path} failed before a response was received: ${message}`);
       requestError.code = "network_error";
       requestError.cause = error;
       throw requestError;
+    } finally {
+      clearTimeout(timeoutId);
     }
 
     const payload = await readJsonPayload(response);
@@ -192,8 +243,16 @@ export function createApi(model, options) {
   const queue = createMutationQueue(model, rerender);
 
   return {
+    retryLastFailedMutation() {
+      if (!lastFailedMutation) {
+        return false;
+      }
+      enqueueMutation(lastFailedMutation);
+      return true;
+    },
+
     patchEpic(epicId, updates, optimistic) {
-      queue.enqueue({
+      enqueueMutation({
         optimistic,
         successMessage: "Epic saved.",
         request: () => request(`/api/epics/${encodeURIComponent(epicId)}`, {
@@ -204,7 +263,7 @@ export function createApi(model, options) {
     },
 
     patchTask(taskId, updates, optimistic) {
-      queue.enqueue({
+      enqueueMutation({
         optimistic,
         successMessage: "Task saved.",
         request: () => request(`/api/tasks/${encodeURIComponent(taskId)}`, {
@@ -215,7 +274,7 @@ export function createApi(model, options) {
     },
 
     patchSubtask(subtaskId, updates, optimistic) {
-      queue.enqueue({
+      enqueueMutation({
         optimistic,
         successMessage: "Subtask saved.",
         request: () => request(`/api/subtasks/${encodeURIComponent(subtaskId)}`, {
@@ -226,7 +285,7 @@ export function createApi(model, options) {
     },
 
     cascadeEpicStatus(epicId, status, optimistic) {
-      queue.enqueue({
+      enqueueMutation({
         optimistic,
         successMessage: "Epic cascade status updated.",
         request: () => request(`/api/epics/${encodeURIComponent(epicId)}/cascade`, {
@@ -237,7 +296,7 @@ export function createApi(model, options) {
     },
 
     createSubtask(input, optimistic) {
-      queue.enqueue({
+      enqueueMutation({
         optimistic,
         successMessage: "Subtask added.",
         request: () => request("/api/subtasks", {
@@ -248,7 +307,7 @@ export function createApi(model, options) {
     },
 
     deleteSubtask(subtaskId, optimistic) {
-      queue.enqueue({
+      enqueueMutation({
         optimistic,
         successMessage: "Subtask removed.",
         request: () => request(`/api/subtasks/${encodeURIComponent(subtaskId)}`, {
@@ -258,7 +317,7 @@ export function createApi(model, options) {
     },
 
     addDependency(sourceId, dependsOnId, optimistic) {
-      queue.enqueue({
+      enqueueMutation({
         optimistic,
         successMessage: "Dependency added.",
         request: () => request("/api/dependencies", {
@@ -269,7 +328,7 @@ export function createApi(model, options) {
     },
 
     removeDependency(sourceId, dependsOnId, optimistic) {
-      queue.enqueue({
+      enqueueMutation({
         optimistic,
         successMessage: "Dependency removed.",
         request: () => request(`/api/dependencies?sourceId=${encodeURIComponent(sourceId)}&dependsOnId=${encodeURIComponent(dependsOnId)}`, {

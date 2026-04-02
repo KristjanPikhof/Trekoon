@@ -26,11 +26,11 @@ export function createNotice() {
     },
 
     /**
-     * @param {{ notice: { type: string, message: string, title?: string } | null, onDismiss?: () => void }} props
+     * @param {{ notice: { type: string, message: string, title?: string, retryLabel?: string } | null, onDismiss?: () => void, onRetry?: () => void }} props
      */
     update(props) {
       if (!container) return;
-      const { notice, onDismiss } = props;
+      const { notice, onDismiss, onRetry } = props;
 
       if (!notice) {
         if (lastNotice) {
@@ -61,6 +61,9 @@ export function createNotice() {
             <div class="board-toast__content">
               <p class="board-toast__title" id="board-notice-title">${escapeHtml(noticeTitle)}</p>
               <p class="board-toast__message">${escapeHtml(notice.message)}</p>
+              ${typeof notice.retryLabel === "string" && notice.retryLabel.trim().length > 0
+    ? `<button type="button" class="mt-3 inline-flex items-center gap-2 rounded-lg border border-[var(--board-border-strong)] bg-[var(--board-surface-2)] px-3 py-2 text-sm font-medium text-[var(--board-text)] transition hover:border-[var(--board-accent)] hover:text-[var(--board-accent)]" data-board-notice-retry>${escapeHtml(notice.retryLabel.trim())}</button>`
+    : ""}
             </div>
           </section>
         </div>
@@ -69,6 +72,10 @@ export function createNotice() {
 
       // Auto-dismiss after 4 s
       clearTimer();
+      const retryButton = container.querySelector("[data-board-notice-retry]");
+      if (retryButton instanceof HTMLButtonElement && typeof onRetry === "function") {
+        retryButton.addEventListener("click", onRetry, { once: true });
+      }
       if (typeof onDismiss === "function") {
         dismissTimer = setTimeout(() => {
           onDismiss();
