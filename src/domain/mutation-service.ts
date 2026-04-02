@@ -377,13 +377,19 @@ export class MutationService {
     return this.#writeTransaction((): { deletedDependencyIds: string[] } => {
       const touchingDependencies = this.#domain.listDependenciesTouchingNode(id);
       this.#domain.deleteSubtask(id);
+      const subtaskDeleteEventId = this.#appendEntityEvent("subtask", id, ENTITY_OPERATIONS.subtask.deleted, {});
       for (const dependency of touchingDependencies) {
-        this.#appendEntityEvent("dependency", `${dependency.sourceId}->${dependency.dependsOnId}`, ENTITY_OPERATIONS.dependency.removed, {
-          source_id: dependency.sourceId,
-          depends_on_id: dependency.dependsOnId,
-        });
+        this.#appendEntityEvent(
+          "dependency",
+          `${dependency.sourceId}->${dependency.dependsOnId}`,
+          ENTITY_OPERATIONS.dependency.removed,
+          {
+            source_id: dependency.sourceId,
+            depends_on_id: dependency.dependsOnId,
+            source_event_id: subtaskDeleteEventId,
+          },
+        );
       }
-      this.#appendEntityEvent("subtask", id, ENTITY_OPERATIONS.subtask.deleted, {});
       return {
         deletedDependencyIds: touchingDependencies.map((dependency) => dependency.id),
       };
@@ -537,8 +543,8 @@ export class MutationService {
     entityId: string,
     operation: string,
     fields: Record<string, unknown>,
-  ): void {
-    appendEventWithGitContext(this.#db, this.#cwd, {
+  ): string {
+    return appendEventWithGitContext(this.#db, this.#cwd, {
       entityKind,
       entityId,
       operation,
