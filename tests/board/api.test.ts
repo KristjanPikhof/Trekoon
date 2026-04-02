@@ -218,8 +218,10 @@ describe("mutation queue", () => {
     expect(didRetry).toBe(false);
     expect(fetchMock).toHaveBeenCalledTimes(1);
 
-    const [, firstOptions] = fetchMock.mock.calls[0] as [string, RequestInit];
+    const firstCall = fetchMock.mock.calls[0] as unknown as [string, RequestInit];
+    const [, firstOptions] = firstCall;
     const firstBody = JSON.parse(String(firstOptions.body)) as { clientRequestId: string };
-    expect(firstOptions.headers).toEqual(expect.objectContaining({ "x-trekoon-idempotency-key": firstBody.clientRequestId }));
+    const headers = new Headers(firstOptions.headers);
+    expect(headers.get("x-trekoon-idempotency-key")).toBe(firstBody.clientRequestId);
   });
 });
