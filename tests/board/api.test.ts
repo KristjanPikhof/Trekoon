@@ -224,4 +224,50 @@ describe("mutation queue", () => {
     const headers = new Headers(firstOptions.headers);
     expect(headers.get("x-trekoon-idempotency-key")).toBe(firstBody.clientRequestId);
   });
+
+  test("uses stable idempotency keys for delete retries", async () => {
+    const fetchMock = mock(() => Promise.resolve(new Response(JSON.stringify({
+      ok: true,
+      data: {
+        snapshotDelta: {
+          deletedSubtaskIds: [],
+          deletedDependencyIds: [],
+        },
+      },
+    }), {
+      status: 200,
+      headers: {
+        "content-type": "application/json",
+      },
+    })));
+    globalThis.fetch = fetchMock as unknown as typeof fetch;
+
+    const emptySnapshot: Snapshot = { epics: [], tasks: [], subtasks: [], dependencies: [] };
+    const model = {
+      store: {
+        snapshot: emptySnapshot,
+        notice: null as Notice,
+        isMutating: false,
+      },
+      replaceSnapshot(snapshot: Snapshot) {
+        this.store.snapshot = snapshot;
+      },
+      applySnapshotDelta(delta: Snapshot) {
+        this.store.snapshot = { ...this.store.snapshot, ...delta };
+      },
+    };
+    const api = createApi(model, { sessionToken: "", rerender: () => {} });
+
+    api.deleteSubtask("subtask-1", (snapshot: Snapshot) => snapshot);
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    api.removeDependency("task-1", "task-2", (snapshot: Snapshot) => snapshot);
+    await new Promise((resolve) => setTimeout(resolve, 0));
+
+    const deleteHeaders = new Headers((fetchMock.mock.calls[0] as unknown as [string, RequestInit])[1].headers);
+    const removeHeaders = new Headers((fetchMock.mock.calls[1] as unknown as [string, RequestInit])[1].headers);
+
+    expect(deleteHeaders.get("x-trekoon-idempotency-key")).toBeString();
+    expect(removeHeaders.get("x-trekoon-idempotency-key")).toBeString();
+    expect(deleteHeaders.get("x-trekoon-idempotency-key")).not.toBe(removeHeaders.get("x-trekoon-idempotency-key"));
+  });
 });
