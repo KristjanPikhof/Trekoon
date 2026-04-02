@@ -124,13 +124,12 @@ export function createMutationQueue(model, rerender) {
         model.store.notice = null;
       }
 
-      // Apply optimistic update
-      if (typeof mutation.optimistic === "function") {
-        model.store.snapshot = mutation.optimistic(cloneSnapshot(model.store.snapshot));
-        rerender();
-      }
-
       try {
+        if (typeof mutation.optimistic === "function") {
+          model.store.snapshot = mutation.optimistic(cloneSnapshot(model.store.snapshot));
+          rerender();
+        }
+
         const data = await mutation.request();
 
         if (data?.snapshot) {
