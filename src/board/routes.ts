@@ -38,6 +38,12 @@ interface IdempotentMutationRecord {
   readonly status?: number;
 }
 
+interface StoredIdempotencyRecordRow {
+  readonly request_fingerprint: string;
+  readonly response_status: number;
+  readonly response_body: string;
+}
+
 function buildCreateSubtaskFingerprint(body: Record<string, unknown>): string {
   return JSON.stringify({
     taskId: readRequiredString(body, "taskId"),
@@ -48,6 +54,14 @@ function buildCreateSubtaskFingerprint(body: Record<string, unknown>): string {
 }
 
 function buildCreateDependencyFingerprint(sourceId: string, dependsOnId: string): string {
+  return JSON.stringify({ sourceId, dependsOnId });
+}
+
+function buildDeleteSubtaskFingerprint(subtaskId: string): string {
+  return JSON.stringify({ subtaskId });
+}
+
+function buildDeleteDependencyFingerprint(sourceId: string, dependsOnId: string): string {
   return JSON.stringify({ sourceId, dependsOnId });
 }
 
@@ -273,9 +287,79 @@ function readIdempotencyKey(request: Request, body: Record<string, unknown>): st
   return null;
 }
 
-export function createBoardApiHandler(context: BoardRouteContext): (request: Request) => Promise<Response> {
-  const idempotentMutations = new Map<string, IdempotentMutationRecord>();
+function getStoredIdempotencyRecord(db: Database, scope: string, idempotencyKey: string): IdempotentMutationRecord | null {
+  const row = db
+    .query(
+      `
+      SELECT request_fingerprint, response_status, response_body
+      FROM board_idempotency_keys
+      WHERE scope = ? AND idempotency_key = ?
+      `,
+    )
+    .get(scope, idempotencyKey) as StoredIdempotencyRecordRow | null;
 
+  if (!row) {
+    return null;
+  }
+
+  return {
+    kind: scope as IdempotentMutationRecord["kind"],
+    requestFingerprint: row.request_fingerprint,
+    responseData: JSON.parse(row.response_body) as Record<string, unknown>,
+    status: row.response_status,
+  };
+}
+
+function storeIdempotencyRecord(
+  db: Database,
+  scope: IdempotentMutationRecord["kind"],
+  idempotencyKey: string,
+  requestFingerprint: string,
+  status: number,
+  responseData: Record<string, unknown>,
+): void {
+  db.query(
+    `
+    INSERT OR REPLACE INTO board_idempotency_keys (
+      scope,
+      idempotency_key,
+      request_fingerprint,
+      response_status,
+      response_body,
+      created_at
+    ) VALUES (?, ?, ?, ?, ?, ?)
+    `,
+  ).run(scope, idempotencyKey, requestFingerprint, status, JSON.stringify(responseData), Date.now());
+}
+
+function replayStoredIdempotencyRecord(
+  db: Database,
+  scope: IdempotentMutationRecord["kind"],
+  idempotencyKey: string | null,
+  requestFingerprint: string,
+  conflictMessage: string,
+): IdempotentMutationRecord | null {
+  if (!idempotencyKey) {
+    return null;
+  }
+
+  const stored = getStoredIdempotencyRecord(db, scope, idempotencyKey);
+  if (!stored) {
+    return null;
+  }
+
+  if (stored.requestFingerprint !== requestFingerprint) {
+    throw new DomainError({
+      code: "invalid_input",
+      message: conflictMessage,
+      details: { field: "clientRequestId" },
+    });
+  }
+
+  return stored;
+}
+
+export function createBoardApiHandler(context: BoardRouteContext): (request: Request) => Promise<Response> {
   return async (request: Request): Promise<Response> => {
     const url = new URL(request.url);
     const requestLabel = `${request.method} ${url.pathname}`;
@@ -357,20 +441,15 @@ export function createBoardApiHandler(context: BoardRouteContext): (request: Req
         const body = await parseJsonBody(request);
         const idempotencyKey = readIdempotencyKey(request, body);
         const requestFingerprint = buildCreateSubtaskFingerprint(body);
-        if (idempotencyKey) {
-          const cached = idempotentMutations.get(`subtask:${idempotencyKey}`);
-          if (cached?.kind === "subtask") {
-            if (cached.requestFingerprint !== requestFingerprint) {
-              throw new DomainError({
-                code: "invalid_input",
-                message: "Idempotency key cannot be reused for a different subtask request",
-                details: { field: "clientRequestId" },
-              });
-            }
-            if (cached.responseData) {
-              return buildMutationResponse(domain, cached.responseData, cached.status ?? 201);
-            }
-          }
+        const storedRecord = replayStoredIdempotencyRecord(
+          context.db,
+          "subtask",
+          idempotencyKey,
+          requestFingerprint,
+          "Idempotency key cannot be reused for a different subtask request",
+        );
+        if (storedRecord?.responseData) {
+          return buildMutationResponse(domain, storedRecord.responseData, storedRecord.status ?? 201);
         }
 
         const subtask = mutations.createSubtask({
@@ -389,13 +468,7 @@ export function createBoardApiHandler(context: BoardRouteContext): (request: Req
           }),
         };
         if (idempotencyKey) {
-          idempotentMutations.set(`subtask:${idempotencyKey}`, {
-            kind: "subtask",
-            entityId: subtask.id,
-            requestFingerprint,
-            responseData,
-            status: 201,
-          });
+          storeIdempotencyRecord(context.db, "subtask", idempotencyKey, requestFingerprint, 201, responseData);
         }
         return buildMutationResponse(domain, responseData, 201);
       }
@@ -404,11 +477,16 @@ export function createBoardApiHandler(context: BoardRouteContext): (request: Req
         if (deleteSubtaskMatch) {
           const subtaskId = deleteSubtaskMatch[1] ?? "";
           const idempotencyKey = request.headers.get("x-trekoon-idempotency-key")?.trim() || null;
-          if (idempotencyKey) {
-            const cached = idempotentMutations.get(`deleted_subtask:${idempotencyKey}`);
-            if (cached?.kind === "deleted_subtask" && cached.responseData) {
-              return buildMutationResponse(domain, cached.responseData, cached.status ?? 200);
-            }
+          const requestFingerprint = buildDeleteSubtaskFingerprint(subtaskId);
+          const storedRecord = replayStoredIdempotencyRecord(
+            context.db,
+            "deleted_subtask",
+            idempotencyKey,
+            requestFingerprint,
+            "Idempotency key cannot be reused for a different subtask delete request",
+          );
+          if (storedRecord?.responseData) {
+            return buildMutationResponse(domain, storedRecord.responseData, storedRecord.status ?? 200);
           }
           const existingSubtask = domain.getSubtaskOrThrow(subtaskId);
           const task = domain.getTaskOrThrow(existingSubtask.taskId);
@@ -424,12 +502,7 @@ export function createBoardApiHandler(context: BoardRouteContext): (request: Req
             }),
           };
           if (idempotencyKey) {
-            idempotentMutations.set(`deleted_subtask:${idempotencyKey}`, {
-              kind: "deleted_subtask",
-              entityId: subtaskId,
-              responseData,
-              status: 200,
-            });
+            storeIdempotencyRecord(context.db, "deleted_subtask", idempotencyKey, requestFingerprint, 200, responseData);
           }
           return buildMutationResponse(domain, responseData, 200);
         }
@@ -440,20 +513,15 @@ export function createBoardApiHandler(context: BoardRouteContext): (request: Req
         const dependsOnId = readRequiredString(body, "dependsOnId");
         const idempotencyKey = readIdempotencyKey(request, body);
         const requestFingerprint = buildCreateDependencyFingerprint(sourceId, dependsOnId);
-        if (idempotencyKey) {
-          const cached = idempotentMutations.get(`dependency:${idempotencyKey}`);
-          if (cached?.kind === "dependency") {
-            if (cached.requestFingerprint !== requestFingerprint) {
-              throw new DomainError({
-                code: "invalid_input",
-                message: "Idempotency key cannot be reused for a different dependency request",
-                details: { field: "clientRequestId" },
-              });
-            }
-            if (cached.responseData) {
-              return buildMutationResponse(domain, cached.responseData, cached.status ?? 201);
-            }
-          }
+        const storedRecord = replayStoredIdempotencyRecord(
+          context.db,
+          "dependency",
+          idempotencyKey,
+          requestFingerprint,
+          "Idempotency key cannot be reused for a different dependency request",
+        );
+        if (storedRecord?.responseData) {
+          return buildMutationResponse(domain, storedRecord.responseData, storedRecord.status ?? 201);
         }
 
         const dependency = mutations.addDependency(sourceId, dependsOnId);
@@ -466,15 +534,7 @@ export function createBoardApiHandler(context: BoardRouteContext): (request: Req
           }),
         };
         if (idempotencyKey) {
-          idempotentMutations.set(`dependency:${idempotencyKey}`, {
-            kind: "dependency",
-            entityId: dependency.id,
-            sourceId: dependency.sourceId,
-            dependsOnId: dependency.dependsOnId,
-            requestFingerprint,
-            responseData,
-            status: 201,
-          });
+          storeIdempotencyRecord(context.db, "dependency", idempotencyKey, requestFingerprint, 201, responseData);
         }
         return buildMutationResponse(domain, responseData, 201);
       }
@@ -483,11 +543,16 @@ export function createBoardApiHandler(context: BoardRouteContext): (request: Req
         const sourceId = url.searchParams.get("sourceId") ?? "";
         const dependsOnId = url.searchParams.get("dependsOnId") ?? "";
         const idempotencyKey = request.headers.get("x-trekoon-idempotency-key")?.trim() || null;
-        if (idempotencyKey) {
-          const cached = idempotentMutations.get(`deleted_dependency:${idempotencyKey}`);
-          if (cached?.kind === "deleted_dependency" && cached.responseData) {
-            return buildMutationResponse(domain, cached.responseData, cached.status ?? 200);
-          }
+        const requestFingerprint = buildDeleteDependencyFingerprint(sourceId, dependsOnId);
+        const storedRecord = replayStoredIdempotencyRecord(
+          context.db,
+          "deleted_dependency",
+          idempotencyKey,
+          requestFingerprint,
+          "Idempotency key cannot be reused for a different dependency delete request",
+        );
+        if (storedRecord?.responseData) {
+          return buildMutationResponse(domain, storedRecord.responseData, storedRecord.status ?? 200);
         }
         const existingDependencyIds = domain.listDependencies(sourceId)
           .filter((dependency) => dependency.dependsOnId === dependsOnId)
@@ -514,13 +579,7 @@ export function createBoardApiHandler(context: BoardRouteContext): (request: Req
           }),
         };
         if (idempotencyKey) {
-          idempotentMutations.set(`deleted_dependency:${idempotencyKey}`, {
-            kind: "deleted_dependency",
-            sourceId,
-            dependsOnId,
-            responseData,
-            status: 200,
-          });
+          storeIdempotencyRecord(context.db, "deleted_dependency", idempotencyKey, requestFingerprint, 200, responseData);
         }
         return buildMutationResponse(domain, responseData, 200);
       }
