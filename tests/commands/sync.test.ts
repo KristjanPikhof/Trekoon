@@ -611,6 +611,25 @@ describe("sync command", (): void => {
     const primary = createBranchWorktree(workspace, "feature/primary-resolution");
     const secondary = createBranchWorktree(workspace, "feature/secondary-resolution");
 
+    {
+      const storage = openTrekoonDatabase(workspace);
+      try {
+        storage.db
+          .query(
+            "INSERT INTO events (id, entity_kind, entity_id, operation, payload, git_branch, git_head, created_at, updated_at, version) VALUES (?, 'epic', ?, 'epic.updated', ?, 'main', NULL, ?, ?, 1);",
+          )
+          .run(
+            "source-update-event",
+            epicId,
+            JSON.stringify({ fields: { title: "Remote title" } }),
+            now + 20,
+            now + 20,
+          );
+      } finally {
+        storage.close();
+      }
+    }
+
     for (const cwd of [primary, secondary]) {
       const bootstrapPull = await runSync({ args: ["pull", "--from", "main"], cwd, mode: "toon" });
       expect(bootstrapPull.ok).toBe(true);
@@ -631,25 +650,6 @@ describe("sync command", (): void => {
       const pull = await runSync({ args: ["pull", "--from", "main"], cwd, mode: "toon" });
       expect(pull.ok).toBe(true);
       expect((pull.data as { createdConflicts: number }).createdConflicts).toBe(1);
-    }
-
-    {
-      const storage = openTrekoonDatabase(workspace);
-      try {
-        storage.db
-          .query(
-            "INSERT INTO events (id, entity_kind, entity_id, operation, payload, git_branch, git_head, created_at, updated_at, version) VALUES (?, 'epic', ?, 'epic.updated', ?, 'main', NULL, ?, ?, 1);",
-          )
-          .run(
-            "source-update-event",
-            epicId,
-            JSON.stringify({ fields: { title: "Remote title" } }),
-            now + 20,
-            now + 20,
-          );
-      } finally {
-        storage.close();
-      }
     }
 
     const primaryStorage = openTrekoonDatabase(primary);
