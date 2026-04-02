@@ -30,6 +30,8 @@ const SYNC_ALLOWED_FIELDS: Readonly<Record<string, readonly string[]>> = {
   dependencies: ["source_id", "source_kind", "depends_on_id", "depends_on_kind"],
 };
 
+const SYNC_EVENT_METADATA_FIELDS = new Set(["dependency_id", "source_event_id"]);
+
 function isSyncNullableStringField(tableName: string, fieldName: string): boolean {
   return (tableName === "tasks" || tableName === "subtasks") && fieldName === "owner";
 }
@@ -1395,6 +1397,10 @@ export function syncPull(cwd: string, sourceBranch: string): PullSummary {
           let withheldConflictCount = 0;
 
           for (const [fieldName, value] of Object.entries(payload.fields)) {
+            if (SYNC_EVENT_METADATA_FIELDS.has(fieldName)) {
+              continue;
+            }
+
             const conflict = entityFieldConflict(storage.db, sourceBranch, incoming, fieldName, value);
 
             if (conflict) {
