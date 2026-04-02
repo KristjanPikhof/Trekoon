@@ -10,6 +10,13 @@ type Snapshot = {
   dependencies: unknown[];
 };
 
+type TaskSnapshot = {
+  epics: unknown[];
+  tasks: Array<{ id: string; title: string }>;
+  subtasks: unknown[];
+  dependencies: unknown[];
+};
+
 type Notice = {
   type: string;
   message: string;
@@ -75,26 +82,28 @@ describe("mutation queue", () => {
 
   test("keeps later queued actions after one mutation fails", async () => {
     let firstResolved = false;
+    const initialSnapshot: TaskSnapshot = {
+      epics: [],
+      tasks: [{ id: "task-1", title: "Original" }],
+      subtasks: [],
+      dependencies: [],
+    };
     const model = {
       store: {
-        snapshot: {
-          epics: [],
-          tasks: [{ id: "task-1", title: "Original" }],
-          subtasks: [],
-          dependencies: [],
-        },
+        snapshot: initialSnapshot,
         notice: null as Notice,
         isMutating: false,
       },
-      replaceSnapshot(snapshot: Snapshot & { tasks: Array<{ id: string; title: string }> }) {
+       replaceSnapshot(snapshot: TaskSnapshot) {
         this.store.snapshot = snapshot;
       },
     };
     const queue = createMutationQueue(model, () => {});
 
     queue.enqueue({
-      optimistic(snapshot: Snapshot & { tasks: Array<{ id: string; title: string }> }) {
-        snapshot.tasks[0].title = "First optimistic";
+      optimistic(snapshot: TaskSnapshot) {
+        const [task] = snapshot.tasks;
+        if (task) task.title = "First optimistic";
         return snapshot;
       },
       request: async () => {
@@ -103,8 +112,9 @@ describe("mutation queue", () => {
       },
     });
     queue.enqueue({
-      optimistic(snapshot: Snapshot & { tasks: Array<{ id: string; title: string }> }) {
-        snapshot.tasks[0].title = "Second optimistic";
+      optimistic(snapshot: TaskSnapshot) {
+        const [task] = snapshot.tasks;
+        if (task) task.title = "Second optimistic";
         return snapshot;
       },
       request: async () => ({
@@ -131,11 +141,12 @@ describe("mutation queue", () => {
         reject(options.signal?.reason ?? new Error("aborted"));
       }, { once: true });
     }));
-    globalThis.fetch = fetchMock as typeof fetch;
+    globalThis.fetch = fetchMock as unknown as typeof fetch;
 
+    const emptySnapshot: Snapshot = { epics: [], tasks: [], subtasks: [], dependencies: [] };
     const model = {
       store: {
-        snapshot: { epics: [], tasks: [], subtasks: [], dependencies: [] },
+        snapshot: emptySnapshot,
         notice: null as Notice,
         isMutating: false,
       },
