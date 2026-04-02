@@ -611,6 +611,11 @@ describe("sync command", (): void => {
     const primary = createBranchWorktree(workspace, "feature/primary-resolution");
     const secondary = createBranchWorktree(workspace, "feature/secondary-resolution");
 
+    for (const cwd of [primary, secondary]) {
+      const bootstrapPull = await runSync({ args: ["pull", "--from", "main"], cwd, mode: "toon" });
+      expect(bootstrapPull.ok).toBe(true);
+    }
+
     {
       const storage = openTrekoonDatabase(workspace);
       try {
@@ -631,9 +636,6 @@ describe("sync command", (): void => {
     }
 
     for (const cwd of [primary, secondary]) {
-      const bootstrapPull = await runSync({ args: ["pull", "--from", "main"], cwd, mode: "toon" });
-      expect(bootstrapPull.ok).toBe(true);
-
       const storage = openTrekoonDatabase(cwd);
       try {
         storage.db.query("UPDATE epics SET title = ?, updated_at = ?, version = version + 1 WHERE id = ?;").run("Local title", now + 10, epicId);
