@@ -2,6 +2,12 @@ import { afterEach, describe, expect, mock, test } from "bun:test";
 
 // @ts-expect-error Untyped browser asset module is exercised directly in tests.
 import { createApi, createMutationQueue } from "../../src/board/assets/state/api.js";
+// @ts-expect-error Untyped browser asset module is exercised directly in tests.
+import { addDependencyInSnapshot, createSubtaskInSnapshot } from "../../src/board/assets/state/actions.js";
+// @ts-expect-error Untyped browser asset module is exercised directly in tests.
+import { createStore } from "../../src/board/assets/state/store.js";
+// @ts-expect-error Untyped browser asset module is exercised directly in tests.
+import { normalizeSnapshot } from "../../src/board/assets/state/utils.js";
 
 type Snapshot = {
   epics: unknown[];
@@ -35,6 +41,10 @@ afterEach(() => {
 
   globalThis.fetch = originalFetch;
 });
+
+function waitForQueueTurn() {
+  return new Promise((resolve) => setTimeout(resolve, 5));
+}
 
 describe("mutation queue", () => {
   test("flush resolves after the pending mutation queue drains", async () => {
@@ -312,5 +322,103 @@ describe("mutation queue", () => {
     expect(firstHeaders.get("x-trekoon-idempotency-key")).toBe(firstBody.clientRequestId);
     expect(secondHeaders.get("x-trekoon-idempotency-key")).toBe(secondBody.clientRequestId);
     expect(firstBody).toEqual(secondBody);
+  });
+
+  test("createSubtask removes the optimistic ghost row when canonical delta arrives", async () => {
+    const fetchMock = mock(() => Promise.resolve(new Response(JSON.stringify({
+      ok: true,
+      data: {
+        snapshotDelta: {
+          subtasks: [
+            {
+              id: "subtask-server-1",
+              taskId: "task-1",
+              title: "Write tests",
+              description: "Regression coverage",
+              status: "todo",
+              createdAt: 200,
+              updatedAt: 200,
+            },
+          ],
+        },
+      },
+    }), {
+      status: 201,
+      headers: { "content-type": "application/json" },
+    })));
+    globalThis.fetch = fetchMock as unknown as typeof fetch;
+
+    const store = createStore({
+      epics: [{ id: "epic-1", title: "Epic 1" }],
+      tasks: [{ id: "task-1", epicId: "epic-1", title: "Task 1", status: "todo" }],
+      subtasks: [],
+      dependencies: [],
+    });
+    const api = createApi(store, { sessionToken: "", rerender: () => {} });
+    const input = { taskId: "task-1", title: "Write tests", description: "Regression coverage", status: "todo" };
+
+    api.createSubtask(input, (snapshot: Snapshot, optimisticId?: string) => (
+      createSubtaskInSnapshot(snapshot, input, normalizeSnapshot, optimisticId ?? null)
+    ));
+
+    await waitForQueueTurn();
+
+    const snapshot = store.getSnapshot();
+    expect(snapshot.subtasks).toHaveLength(1);
+    expect(snapshot.subtasks[0]).toEqual(expect.objectContaining({
+      id: "subtask-server-1",
+      title: "Write tests",
+      description: "Regression coverage",
+    }));
+    expect(snapshot.subtasks.some((subtask: { id: string }) => subtask.id.startsWith("optimistic:subtask:"))).toBe(false);
+  });
+
+  test("addDependency removes the optimistic ghost row when canonical delta arrives", async () => {
+    const fetchMock = mock(() => Promise.resolve(new Response(JSON.stringify({
+      ok: true,
+      data: {
+        snapshotDelta: {
+          dependencies: [
+            {
+              id: "dep-server-1",
+              sourceId: "task-1",
+              sourceKind: "task",
+              dependsOnId: "task-2",
+              dependsOnKind: "task",
+            },
+          ],
+        },
+      },
+    }), {
+      status: 201,
+      headers: { "content-type": "application/json" },
+    })));
+    globalThis.fetch = fetchMock as unknown as typeof fetch;
+
+    const store = createStore({
+      epics: [{ id: "epic-1", title: "Epic 1" }],
+      tasks: [
+        { id: "task-1", epicId: "epic-1", title: "Task 1", status: "todo" },
+        { id: "task-2", epicId: "epic-1", title: "Task 2", status: "todo" },
+      ],
+      subtasks: [],
+      dependencies: [],
+    });
+    const api = createApi(store, { sessionToken: "", rerender: () => {} });
+
+    api.addDependency("task-1", "task-2", (snapshot: Snapshot, optimisticId?: string) => (
+      addDependencyInSnapshot(snapshot, "task-1", "task-2", normalizeSnapshot, optimisticId ?? null)
+    ));
+
+    await waitForQueueTurn();
+
+    const snapshot = store.getSnapshot();
+    expect(snapshot.dependencies).toHaveLength(1);
+    expect(snapshot.dependencies[0]).toEqual(expect.objectContaining({
+      id: "dep-server-1",
+      sourceId: "task-1",
+      dependsOnId: "task-2",
+    }));
+    expect(snapshot.dependencies.some((dependency: { id: string }) => dependency.id.startsWith("optimistic:dependency:"))).toBe(false);
   });
 });
