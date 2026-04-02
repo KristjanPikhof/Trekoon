@@ -180,7 +180,7 @@ describe("mutation conformance", (): void => {
     const removed = await runDep({ cwd, mode: "toon", args: ["remove", taskAId, taskBId] });
     expect(removed.ok).toBeTrue();
 
-    const dependencyEventId = `${taskAId}->${taskBId}`;
+    const dependencyEventId = `task:${taskAId}->task:${taskBId}`;
     expect(eventOperationsForEntity(cwd, "dependency", dependencyEventId)).toEqual([
       ENTITY_OPERATIONS.dependency.removed,
     ]);
@@ -280,10 +280,10 @@ describe("mutation conformance", (): void => {
       const result = mutations.deleteSubtask(subtask.id);
 
       expect(result.deletedDependencyIds).toHaveLength(2);
-      expect(eventOperationsForEntity(cwd, "dependency", `${subtask.id}->${blocker.id}`)).toEqual([
+      expect(eventOperationsForEntity(cwd, "dependency", `subtask:${subtask.id}->task:${blocker.id}`)).toEqual([
         ENTITY_OPERATIONS.dependency.removed,
       ]);
-      expect(eventOperationsForEntity(cwd, "dependency", `${helper.id}->${subtask.id}`)).toEqual([
+      expect(eventOperationsForEntity(cwd, "dependency", `subtask:${helper.id}->subtask:${subtask.id}`)).toEqual([
         ENTITY_OPERATIONS.dependency.removed,
       ]);
     } finally {
@@ -350,7 +350,11 @@ describe("mutation conformance", (): void => {
       });
       expect(taskDeleteEventIdRow?.id).toBeString();
 
-      for (const dependencyEventId of [`${task.id}->${blocker.id}`, `${subtaskA.id}->${blocker.id}`, `${blocker.id}->${subtaskB.id}`]) {
+      for (const dependencyEventId of [
+        `task:${task.id}->task:${blocker.id}`,
+        `subtask:${subtaskA.id}->task:${blocker.id}`,
+        `task:${blocker.id}->subtask:${subtaskB.id}`,
+      ]) {
         const rows = eventRowsForEntity(cwd, "dependency", dependencyEventId);
         expect(rows.at(-1)).toEqual({
           operation: ENTITY_OPERATIONS.dependency.removed,
@@ -1025,14 +1029,14 @@ describe("mutation conformance", (): void => {
       ENTITY_OPERATIONS.subtask.updated,
     ]);
 
-    const dependencyRows = eventRowsForEntity(cwd, "dependency", `${taskId}->${blockerTaskId}`);
+    const dependencyRows = eventRowsForEntity(cwd, "dependency", `task:${taskId}->task:${blockerTaskId}`);
     expect(dependencyRows.at(-1)).toEqual({
       operation: ENTITY_OPERATIONS.dependency.removed,
       payload: {
-        fields: {
+        fields: expect.objectContaining({
           source_id: taskId,
           depends_on_id: blockerTaskId,
-        },
+        }),
       },
     });
 
