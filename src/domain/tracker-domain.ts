@@ -1124,6 +1124,76 @@ export class TrackerDomain {
     return rows.map(mapDependency);
   }
 
+  listDependenciesBySourceIds(sourceIds: readonly string[]): Map<string, readonly DependencyRecord[]> {
+    const dependencyMap = new Map<string, DependencyRecord[]>();
+
+    if (sourceIds.length === 0) {
+      return dependencyMap;
+    }
+
+    const normalizedIds = sourceIds.map((sourceId) => assertNonEmpty("sourceId", sourceId));
+    for (const sourceId of normalizedIds) {
+      this.resolveNodeKind(sourceId);
+      dependencyMap.set(sourceId, []);
+    }
+
+    for (let offset = 0; offset < normalizedIds.length; offset += SQLITE_MAX_VARIABLES) {
+      const chunkIds = normalizedIds.slice(offset, offset + SQLITE_MAX_VARIABLES);
+      const inPlaceholders: string = chunkIds.map(() => "?").join(", ");
+      const rows = this.#db
+        .query(
+          `SELECT id, source_id, source_kind, depends_on_id, depends_on_kind, created_at, updated_at
+           FROM dependencies
+           WHERE source_id IN (${inPlaceholders})
+           ORDER BY created_at ASC, id ASC;`,
+        )
+        .all(...chunkIds) as DependencyRow[];
+
+      for (const row of rows) {
+        const existing = dependencyMap.get(row.source_id) ?? [];
+        existing.push(mapDependency(row));
+        dependencyMap.set(row.source_id, existing);
+      }
+    }
+
+    return dependencyMap;
+  }
+
+  listSubtasksByTaskIds(taskIds: readonly string[]): Map<string, readonly SubtaskRecord[]> {
+    const subtaskMap = new Map<string, SubtaskRecord[]>();
+
+    if (taskIds.length === 0) {
+      return subtaskMap;
+    }
+
+    const normalizedIds = taskIds.map((taskId) => assertNonEmpty("taskId", taskId));
+    for (const taskId of normalizedIds) {
+      this.getTaskOrThrow(taskId);
+      subtaskMap.set(taskId, []);
+    }
+
+    for (let offset = 0; offset < normalizedIds.length; offset += SQLITE_MAX_VARIABLES) {
+      const chunkIds = normalizedIds.slice(offset, offset + SQLITE_MAX_VARIABLES);
+      const inPlaceholders: string = chunkIds.map(() => "?").join(", ");
+      const rows = this.#db
+        .query(
+          `SELECT id, task_id, title, description, status, owner, created_at, updated_at
+           FROM subtasks
+           WHERE task_id IN (${inPlaceholders})
+           ORDER BY created_at ASC, id ASC;`,
+        )
+        .all(...chunkIds) as SubtaskRow[];
+
+      for (const row of rows) {
+        const existing = subtaskMap.get(row.task_id) ?? [];
+        existing.push(mapSubtask(row));
+        subtaskMap.set(row.task_id, existing);
+      }
+    }
+
+    return subtaskMap;
+  }
+
   /**
    * Resolves dependency statuses for multiple tasks using a single prepared
    * statement executed once per task ID.  This avoids the previous N+1 pattern
