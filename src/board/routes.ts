@@ -283,24 +283,30 @@ export function createBoardApiHandler(context: BoardRouteContext): (request: Req
         });
       }
 
-      const epicCascadeMatch = request.method === "PATCH" ? url.pathname.match(/^\/api\/epics\/([^/]+)\/cascade$/u) : null;
-      if (epicCascadeMatch) {
-        const body = await parseJsonBody(request);
-        const status = readRequiredString(body, "status");
-        const plan = mutations.updateEpicStatusCascade(epicCascadeMatch[1] ?? "", status);
-        return buildMutationResponse(domain, { plan });
-      }
+        const epicCascadeMatch = request.method === "PATCH" ? url.pathname.match(/^\/api\/epics\/([^/]+)\/cascade$/u) : null;
+        if (epicCascadeMatch) {
+          const body = await parseJsonBody(request);
+          const status = readRequiredString(body, "status");
+          const plan = mutations.updateEpicStatusCascade(epicCascadeMatch[1] ?? "", status);
+          return buildMutationDeltaResponse(domain, {
+            plan,
+          }, {
+            epicIds: [epicCascadeMatch[1] ?? ""],
+            taskIds: plan.orderedChanges.filter((change) => change.kind === "task").map((change) => change.id),
+            subtaskIds: plan.orderedChanges.filter((change) => change.kind === "subtask").map((change) => change.id),
+          });
+        }
 
       const epicMatch = request.method === "PATCH" ? url.pathname.match(/^\/api\/epics\/([^/]+)$/u) : null;
-      if (epicMatch) {
+        if (epicMatch) {
         const body = await parseJsonBody(request);
         const epic = mutations.updateEpic(epicMatch[1] ?? "", {
           title: readOptionalString(body, "title"),
           description: readOptionalString(body, "description"),
           status: readOptionalString(body, "status"),
         });
-        return buildMutationResponse(domain, { epic });
-      }
+          return buildMutationDeltaResponse(domain, { epic }, { epicIds: [epic.id] });
+        }
 
       const taskMatch = request.method === "PATCH" ? url.pathname.match(/^\/api\/tasks\/([^/]+)$/u) : null;
       if (taskMatch) {
@@ -311,7 +317,7 @@ export function createBoardApiHandler(context: BoardRouteContext): (request: Req
             status: readOptionalString(body, "status"),
             owner: readOptionalNullableString(body, "owner"),
           });
-          return buildMutationResponse(domain, { task });
+          return buildMutationDeltaResponse(domain, { task }, { epicIds: [task.epicId], taskIds: [task.id] });
         }
 
       const subtaskMatch = request.method === "PATCH" ? url.pathname.match(/^\/api\/subtasks\/([^/]+)$/u) : null;
@@ -323,7 +329,8 @@ export function createBoardApiHandler(context: BoardRouteContext): (request: Req
             status: readOptionalString(body, "status"),
             owner: readOptionalNullableString(body, "owner"),
           });
-          return buildMutationResponse(domain, { subtask });
+          const task = domain.getTaskOrThrow(subtask.taskId);
+          return buildMutationDeltaResponse(domain, { subtask }, { epicIds: [task.epicId], taskIds: [task.id], subtaskIds: [subtask.id] });
         }
 
       if (request.method === "POST" && url.pathname === "/api/subtasks") {
@@ -331,11 +338,12 @@ export function createBoardApiHandler(context: BoardRouteContext): (request: Req
         const idempotencyKey = readIdempotencyKey(request, body);
         if (idempotencyKey) {
           const cached = idempotentMutations.get(`subtask:${idempotencyKey}`);
-          if (cached?.kind === "subtask") {
-            const subtask = domain.getSubtaskOrThrow(cached.entityId);
-            return buildMutationResponse(domain, { subtask }, 201);
+            if (cached?.kind === "subtask") {
+              const subtask = domain.getSubtaskOrThrow(cached.entityId);
+              const task = domain.getTaskOrThrow(subtask.taskId);
+              return buildMutationDeltaResponse(domain, { subtask }, { epicIds: [task.epicId], taskIds: [task.id], subtaskIds: [subtask.id] }, 201);
+            }
           }
-        }
 
         const subtask = mutations.createSubtask({
           taskId: readRequiredString(body, "taskId"),
@@ -349,15 +357,25 @@ export function createBoardApiHandler(context: BoardRouteContext): (request: Req
             entityId: subtask.id,
           });
         }
-        return buildMutationResponse(domain, { subtask }, 201);
+        const task = domain.getTaskOrThrow(subtask.taskId);
+        return buildMutationDeltaResponse(domain, { subtask }, { epicIds: [task.epicId], taskIds: [task.id], subtaskIds: [subtask.id] }, 201);
       }
 
-      const deleteSubtaskMatch = request.method === "DELETE" ? url.pathname.match(/^\/api\/subtasks\/([^/]+)$/u) : null;
-      if (deleteSubtaskMatch) {
-        const subtaskId = deleteSubtaskMatch[1] ?? "";
-        mutations.deleteSubtask(subtaskId);
-        return buildMutationResponse(domain, { subtaskId, deleted: true });
-      }
+        const deleteSubtaskMatch = request.method === "DELETE" ? url.pathname.match(/^\/api\/subtasks\/([^/]+)$/u) : null;
+        if (deleteSubtaskMatch) {
+          const subtaskId = deleteSubtaskMatch[1] ?? "";
+          const existingSubtask = domain.getSubtaskOrThrow(subtaskId);
+          const task = domain.getTaskOrThrow(existingSubtask.taskId);
+          mutations.deleteSubtask(subtaskId);
+          return buildMutationDeltaResponse(domain, { subtaskId, deleted: true }, {
+            epicIds: [task.epicId],
+            taskIds: [task.id],
+            deletedSubtaskIds: [subtaskId],
+            deletedDependencyIds: buildBoardSnapshot(domain).dependencies
+              .filter((dependency) => dependency.sourceId === subtaskId || dependency.dependsOnId === subtaskId)
+              .map((dependency) => dependency.id),
+          });
+        }
 
       if (request.method === "POST" && url.pathname === "/api/dependencies") {
         const body = await parseJsonBody(request);
@@ -366,13 +384,17 @@ export function createBoardApiHandler(context: BoardRouteContext): (request: Req
         const idempotencyKey = readIdempotencyKey(request, body);
         if (idempotencyKey) {
           const cached = idempotentMutations.get(`dependency:${idempotencyKey}`);
-          if (cached?.kind === "dependency" && cached.sourceId && cached.dependsOnId) {
-            const dependency = domain.listDependencies(cached.sourceId).find((candidate) => candidate.dependsOnId === cached.dependsOnId);
-            if (dependency) {
-              return buildMutationResponse(domain, { dependency }, 201);
+            if (cached?.kind === "dependency" && cached.sourceId && cached.dependsOnId) {
+              const dependency = domain.listDependencies(cached.sourceId).find((candidate) => candidate.dependsOnId === cached.dependsOnId);
+              if (dependency) {
+                return buildMutationDeltaResponse(domain, { dependency }, {
+                  taskIds: [dependency.sourceKind === "task" ? dependency.sourceId : "", dependency.dependsOnKind === "task" ? dependency.dependsOnId : ""].filter(Boolean),
+                  subtaskIds: [dependency.sourceKind === "subtask" ? dependency.sourceId : "", dependency.dependsOnKind === "subtask" ? dependency.dependsOnId : ""].filter(Boolean),
+                  dependencyIds: [dependency.id],
+                }, 201);
+              }
             }
           }
-        }
 
         const dependency = mutations.addDependency(sourceId, dependsOnId);
         if (idempotencyKey) {
@@ -383,7 +405,11 @@ export function createBoardApiHandler(context: BoardRouteContext): (request: Req
             dependsOnId: dependency.dependsOnId,
           });
         }
-        return buildMutationResponse(domain, { dependency }, 201);
+        return buildMutationDeltaResponse(domain, { dependency }, {
+          taskIds: [dependency.sourceKind === "task" ? dependency.sourceId : "", dependency.dependsOnKind === "task" ? dependency.dependsOnId : ""].filter(Boolean),
+          subtaskIds: [dependency.sourceKind === "subtask" ? dependency.sourceId : "", dependency.dependsOnKind === "subtask" ? dependency.dependsOnId : ""].filter(Boolean),
+          dependencyIds: [dependency.id],
+        }, 201);
       }
 
       if (request.method === "DELETE" && url.pathname === "/api/dependencies") {
@@ -401,7 +427,14 @@ export function createBoardApiHandler(context: BoardRouteContext): (request: Req
           });
         }
 
-        return buildMutationResponse(domain, { sourceId, dependsOnId, removed });
+        const existingDependencyIds = domain.listDependencies(sourceId)
+          .filter((dependency) => dependency.dependsOnId === dependsOnId)
+          .map((dependency) => dependency.id);
+        return buildMutationDeltaResponse(domain, { sourceId, dependsOnId, removed }, {
+          taskIds: [domain.getTask(sourceId)?.id ?? "", domain.getTask(dependsOnId)?.id ?? ""].filter(Boolean),
+          subtaskIds: [domain.getSubtask(sourceId)?.id ?? "", domain.getSubtask(dependsOnId)?.id ?? ""].filter(Boolean),
+          deletedDependencyIds: existingDependencyIds,
+        });
       }
 
       return jsonResponse(404, {
