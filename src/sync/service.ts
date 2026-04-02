@@ -363,46 +363,68 @@ function entityFieldConflict(
     return null;
   }
 
-  // Note: loads all matching events into memory. For entities with very large
-  // event histories, consider a cursor-based scan. The idx_events_entity index
-  // keeps the scan narrow by (entity_kind, entity_id).
-  const rows = localDb
+  let beforeCreatedAt = event.created_at + 1;
+  let beforeId = "\uffff";
+
+  while (true) {
+    const rows = localDb
     .query(
       `
-      SELECT payload, git_branch
+      SELECT payload, created_at, id
       FROM events
-      WHERE entity_kind = ? AND entity_id = ? AND git_branch != ?
+      WHERE entity_kind = ?
+        AND entity_id = ?
+        AND (git_branch IS NULL OR git_branch != ?)
+        AND (
+          created_at < ?
+          OR (created_at = ? AND id < ?)
+        )
       ORDER BY created_at DESC, id DESC
-      LIMIT 500;
+      LIMIT ?;
 `,
     )
-    .all(event.entity_kind, event.entity_id, sourceBranch) as Array<{ payload: string; git_branch: string | null }>;
+      .all(
+        event.entity_kind,
+        event.entity_id,
+        sourceBranch,
+        beforeCreatedAt,
+        beforeCreatedAt,
+        beforeId,
+        CONFLICT_HISTORY_SCAN_BATCH_SIZE,
+      ) as LocalEntityEventRow[];
 
-  for (const row of rows) {
-    const payloadValidation = parsePayload(row.payload);
-    if (!payloadValidation.ok) {
-      continue;
+    if (rows.length === 0) {
+      return null;
     }
 
-    const payload: EventPayload = { fields: payloadValidation.fields };
-    const localValue: unknown = readFieldValue(payload, fieldName);
+    for (const row of rows) {
+      const payloadValidation = parsePayload(row.payload);
+      if (!payloadValidation.ok) {
+        continue;
+      }
 
-    if (typeof localValue === "undefined") {
-      continue;
+      const payload: EventPayload = { fields: payloadValidation.fields };
+      const localValue: unknown = readFieldValue(payload, fieldName);
+
+      if (typeof localValue === "undefined") {
+        continue;
+      }
+
+      const oursValue = serializeValue(localValue);
+      const theirsValue = serializeValue(incomingValue);
+
+      if (oursValue !== theirsValue) {
+        return {
+          oursValue,
+          theirsValue,
+        };
+      }
     }
 
-    const oursValue = serializeValue(localValue);
-    const theirsValue = serializeValue(incomingValue);
-
-    if (oursValue !== theirsValue) {
-      return {
-        oursValue,
-        theirsValue,
-      };
-    }
+    const lastRow = rows.at(-1)!;
+    beforeCreatedAt = lastRow.created_at;
+    beforeId = lastRow.id;
   }
-
-  return null;
 }
 
 function createConflict(
