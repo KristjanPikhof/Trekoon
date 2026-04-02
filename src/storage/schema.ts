@@ -118,7 +118,11 @@ export const BASE_SCHEMA_STATEMENTS: readonly string[] = [
   `CREATE INDEX IF NOT EXISTS idx_tasks_epic_id ON tasks(epic_id);`,
   `CREATE INDEX IF NOT EXISTS idx_subtasks_task_id ON subtasks(task_id);`,
   `CREATE INDEX IF NOT EXISTS idx_events_entity ON events(entity_kind, entity_id);`,
+  `CREATE INDEX IF NOT EXISTS idx_events_branch_cursor ON events(git_branch, created_at, id);`,
+  `CREATE INDEX IF NOT EXISTS idx_events_entity_branch_cursor ON events(entity_kind, entity_id, git_branch, created_at, id);`,
   `CREATE INDEX IF NOT EXISTS idx_git_context_scope_path ON git_context(metadata_scope, worktree_path);`,
   `CREATE INDEX IF NOT EXISTS idx_sync_cursors_owner ON sync_cursors(owner_scope, owner_worktree_path, source_branch);`,
   `CREATE INDEX IF NOT EXISTS idx_conflicts_resolution ON sync_conflicts(resolution);`,
+  `CREATE INDEX IF NOT EXISTS idx_conflicts_resolution_entity_field_id ON sync_conflicts(resolution, entity_id, field_name, id);`,
+  `CREATE UNIQUE INDEX IF NOT EXISTS idx_conflicts_event_field ON sync_conflicts(event_id, field_name);`,
 ];
