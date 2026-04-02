@@ -109,7 +109,7 @@ export class MutationService {
   }
 
   createEpic(input: { title: string; description: string; status?: string | undefined }): EpicRecord {
-    return writeTransaction(this.#db, (): EpicRecord => {
+    return this.#writeTransaction((): EpicRecord => {
       const epic = this.#domain.createEpic(input);
       this.#appendEntityEvent("epic", epic.id, ENTITY_OPERATIONS.epic.created, {
         title: epic.title,
@@ -128,7 +128,7 @@ export class MutationService {
     subtaskSpecs: readonly CompactSubtaskSpec[];
     dependencySpecs: readonly CompactDependencySpec[];
   }): CompactEpicCreateResult {
-    return writeTransaction(this.#db, (): CompactEpicCreateResult => {
+    return this.#writeTransaction((): CompactEpicCreateResult => {
       const epic = this.#domain.createEpic(input);
       const created = this.#domain.expandEpic({
         epicId: epic.id,
@@ -184,7 +184,7 @@ export class MutationService {
     id: string,
     input: { title?: string | undefined; description?: string | undefined; status?: string | undefined },
   ): EpicRecord {
-    return writeTransaction(this.#db, (): EpicRecord => {
+    return this.#writeTransaction((): EpicRecord => {
       if (input.status !== undefined) {
         const existing = this.#domain.getEpicOrThrow(id);
         validateStatusTransition(existing.status, input.status, "epic", id);
@@ -200,7 +200,7 @@ export class MutationService {
   }
 
   updateEpicStatusCascade(id: string, status: string): StatusCascadePlan {
-    return writeTransaction(this.#db, (): StatusCascadePlan => {
+    return this.#writeTransaction((): StatusCascadePlan => {
       const plan = this.#domain.planStatusCascade("epic", id, status);
       this.#assertCascadeNotBlocked(plan);
       this.#applyStatusCascadePlan(plan);
@@ -209,14 +209,14 @@ export class MutationService {
   }
 
   deleteEpic(id: string): void {
-    writeTransaction(this.#db, (): void => {
+    this.#writeTransaction((): void => {
       this.#domain.deleteEpic(id);
       this.#appendEntityEvent("epic", id, ENTITY_OPERATIONS.epic.deleted, {});
     });
   }
 
   createTask(input: { epicId: string; title: string; description: string; status?: string | undefined }): TaskRecord {
-    return writeTransaction(this.#db, (): TaskRecord => {
+    return this.#writeTransaction((): TaskRecord => {
       const task = this.#domain.createTask(input);
       this.#appendEntityEvent("task", task.id, ENTITY_OPERATIONS.task.created, {
         epic_id: task.epicId,
@@ -229,7 +229,7 @@ export class MutationService {
   }
 
   createTaskBatch(input: { epicId: string; specs: readonly CompactTaskSpec[] }): CompactTaskBatchCreateResult {
-    return writeTransaction(this.#db, (): CompactTaskBatchCreateResult => {
+    return this.#writeTransaction((): CompactTaskBatchCreateResult => {
       const created = this.#domain.createTaskBatch(input);
       for (const task of created.tasks) {
         this.#appendEntityEvent("task", task.id, ENTITY_OPERATIONS.task.created, {
@@ -249,7 +249,7 @@ export class MutationService {
     subtaskSpecs: readonly CompactSubtaskSpec[];
     dependencySpecs: readonly CompactDependencySpec[];
   }): CompactEpicExpandResult {
-    return writeTransaction(this.#db, (): CompactEpicExpandResult => {
+    return this.#writeTransaction((): CompactEpicExpandResult => {
       const created = this.#domain.expandEpic(input);
       for (const task of created.tasks) {
         this.#appendEntityEvent("task", task.id, ENTITY_OPERATIONS.task.created, {
@@ -286,7 +286,7 @@ export class MutationService {
     id: string,
     input: { title?: string | undefined; description?: string | undefined; status?: string | undefined; owner?: string | null | undefined },
   ): TaskRecord {
-    return writeTransaction(this.#db, (): TaskRecord => {
+    return this.#writeTransaction((): TaskRecord => {
       if (input.status !== undefined) {
         const existing = this.#domain.getTaskOrThrow(id);
         validateStatusTransition(existing.status, input.status, "task", id);
@@ -304,7 +304,7 @@ export class MutationService {
   }
 
   updateTaskStatusCascade(id: string, status: string): StatusCascadePlan {
-    return writeTransaction(this.#db, (): StatusCascadePlan => {
+    return this.#writeTransaction((): StatusCascadePlan => {
       const plan = this.#domain.planStatusCascade("task", id, status);
       this.#assertCascadeNotBlocked(plan);
       this.#applyStatusCascadePlan(plan);
@@ -313,7 +313,7 @@ export class MutationService {
   }
 
   deleteTask(id: string): void {
-    writeTransaction(this.#db, (): void => {
+    this.#writeTransaction((): void => {
       this.#domain.deleteTask(id);
       this.#appendEntityEvent("task", id, ENTITY_OPERATIONS.task.deleted, {});
     });
@@ -325,7 +325,7 @@ export class MutationService {
     description?: string | undefined;
     status?: string | undefined;
   }): SubtaskRecord {
-    return writeTransaction(this.#db, (): SubtaskRecord => {
+    return this.#writeTransaction((): SubtaskRecord => {
       const subtask = this.#domain.createSubtask(input);
       this.#appendEntityEvent("subtask", subtask.id, ENTITY_OPERATIONS.subtask.created, {
         task_id: subtask.taskId,
@@ -338,7 +338,7 @@ export class MutationService {
   }
 
   createSubtaskBatch(input: { taskId: string; specs: readonly CompactSubtaskSpec[] }): CompactSubtaskBatchCreateResult {
-    return writeTransaction(this.#db, (): CompactSubtaskBatchCreateResult => {
+    return this.#writeTransaction((): CompactSubtaskBatchCreateResult => {
       const created = this.#domain.createSubtaskBatch(input);
       for (const subtask of created.subtasks) {
         this.#appendEntityEvent("subtask", subtask.id, ENTITY_OPERATIONS.subtask.created, {
@@ -356,7 +356,7 @@ export class MutationService {
     id: string,
     input: { title?: string | undefined; description?: string | undefined; status?: string | undefined; owner?: string | null | undefined },
   ): SubtaskRecord {
-    return writeTransaction(this.#db, (): SubtaskRecord => {
+    return this.#writeTransaction((): SubtaskRecord => {
       if (input.status !== undefined) {
         const existing = this.#domain.getSubtaskOrThrow(id);
         validateStatusTransition(existing.status, input.status, "subtask", id);
@@ -374,14 +374,14 @@ export class MutationService {
   }
 
   deleteSubtask(id: string): void {
-    writeTransaction(this.#db, (): void => {
+    this.#writeTransaction((): void => {
       this.#domain.deleteSubtask(id);
       this.#appendEntityEvent("subtask", id, ENTITY_OPERATIONS.subtask.deleted, {});
     });
   }
 
   addDependency(sourceId: string, dependsOnId: string): DependencyRecord {
-    return writeTransaction(this.#db, (): DependencyRecord => {
+    return this.#writeTransaction((): DependencyRecord => {
       const dependency = this.#domain.addDependency(sourceId, dependsOnId);
       this.#appendEntityEvent("dependency", dependency.id, ENTITY_OPERATIONS.dependency.added, {
         source_id: dependency.sourceId,
@@ -394,7 +394,7 @@ export class MutationService {
   }
 
   addDependencyBatch(input: { specs: readonly CompactDependencySpec[] }): CompactDependencyBatchAddResult {
-    return writeTransaction(this.#db, (): CompactDependencyBatchAddResult => {
+    return this.#writeTransaction((): CompactDependencyBatchAddResult => {
       const created = this.#domain.addDependencyBatch(input);
       for (const dependency of created.dependencies) {
         this.#appendEntityEvent("dependency", dependency.id, ENTITY_OPERATIONS.dependency.added, {
@@ -409,7 +409,7 @@ export class MutationService {
   }
 
   removeDependency(sourceId: string, dependsOnId: string): number {
-    return writeTransaction(this.#db, (): number => {
+    return this.#writeTransaction((): number => {
       const removed = this.#domain.removeDependency(sourceId, dependsOnId);
       if (removed > 0) {
         this.#appendEntityEvent("dependency", `${sourceId}->${dependsOnId}`, ENTITY_OPERATIONS.dependency.removed, {
@@ -611,7 +611,7 @@ export class MutationService {
   ): ScopeReplacementResult {
     const result = this.#buildScopeReplacementResult(nodes, searchText, replacementText, fields, "apply");
 
-    writeTransaction(this.#db, (): void => {
+    this.#writeTransaction((): void => {
       for (const node of nodes) {
         const nextTitle = fields.includes("title") ? replaceMatches(node.title, searchText, replacementText) : node.title;
         const nextDescription = fields.includes("description")
