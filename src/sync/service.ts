@@ -906,6 +906,25 @@ function hasPendingDeleteConflict(db: Database, sourceEventId: string): boolean 
   return row !== null;
 }
 
+function pendingDeleteConflictSourceEventId(fields: Record<string, unknown>): string | null {
+  const sourceEventId = fields.source_event_id;
+  return typeof sourceEventId === "string" && sourceEventId.length > 0 ? sourceEventId : null;
+}
+
+function shouldWithholdDeleteCascadeEvent(db: Database, event: StoredEvent, fields: Record<string, unknown>): boolean {
+  const sourceEventId = pendingDeleteConflictSourceEventId(fields);
+  if (!sourceEventId) {
+    return false;
+  }
+
+  const isDeleteCascadeEvent = event.operation === "dependency.removed" || event.operation === "subtask.deleted";
+  if (!isDeleteCascadeEvent) {
+    return false;
+  }
+
+  return hasPendingDeleteConflict(db, sourceEventId);
+}
+
 function applyEntityFields(db: Database, event: StoredEvent, fields: Record<string, unknown>): boolean {
   if (event.operation.endsWith(".deleted") || event.operation === "dependency.removed") {
     return applyDelete(db, event, fields);
@@ -1129,14 +1148,11 @@ export function syncPull(cwd: string, sourceBranch: string): PullSummary {
 
           const payload: EventPayload = { fields: payloadValidation.fields };
 
-          if (incoming.operation === "dependency.removed") {
-            const sourceEventId = payload.fields.source_event_id;
-            if (typeof sourceEventId === "string" && hasPendingDeleteConflict(storage.db, sourceEventId)) {
-              storeEvent(storage.db, incoming);
-              lastToken = cursorTokenFromEvent(incoming);
-              lastEventAt = incoming.created_at;
-              continue;
-            }
+          if (shouldWithholdDeleteCascadeEvent(storage.db, incoming, payload.fields)) {
+            storeEvent(storage.db, incoming);
+            lastToken = cursorTokenFromEvent(incoming);
+            lastEventAt = incoming.created_at;
+            continue;
           }
 
           const isDeleteWithLocalEdits =
