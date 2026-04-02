@@ -6,7 +6,7 @@ import { join } from "node:path";
 import { afterEach, describe, expect, test } from "bun:test";
 
 import { type EventPruneSummary, pruneEvents, pruneResolvedConflicts } from "../../src/storage/events-retention";
-import { nextEventTimestamp } from "../../src/sync/event-writes";
+import { appendEventWithGitContext, nextEventTimestamp, withTransactionEventContext } from "../../src/sync/event-writes";
 import { openTrekoonDatabase } from "../../src/storage/database";
 
 const DAY_IN_MILLISECONDS = 24 * 60 * 60 * 1000;
@@ -412,6 +412,46 @@ describe("event retention", (): void => {
       const ts2: number = nextEventTimestamp(storage.db);
 
       expect(ts2).toBeGreaterThan(ts1);
+    } finally {
+      storage.close();
+    }
+  });
+
+  test("transaction-scoped event appends reuse git context and timestamps", (): void => {
+    const workspace: string = createWorkspace();
+    const storage = openTrekoonDatabase(workspace);
+
+    try {
+      withTransactionEventContext(storage.db, workspace, (): void => {
+        appendEventWithGitContext(storage.db, workspace, {
+          entityKind: "epic",
+          entityId: randomUUID(),
+          operation: "created",
+          fields: { title: "First" },
+        });
+        appendEventWithGitContext(storage.db, workspace, {
+          entityKind: "epic",
+          entityId: randomUUID(),
+          operation: "updated",
+          fields: { title: "Second" },
+        });
+      });
+
+      const gitContext = storage.db
+        .query("SELECT created_at, updated_at, version FROM git_context LIMIT 1;")
+        .get() as { created_at: number; updated_at: number; version: number } | null;
+      const events = storage.db
+        .query("SELECT created_at, updated_at FROM events ORDER BY created_at ASC, id ASC;")
+        .all() as Array<{ created_at: number; updated_at: number }>;
+
+      expect(events).toHaveLength(2);
+      expect(events[1]?.created_at).toBe((events[0]?.created_at ?? 0) + 1);
+      expect(events[0]?.updated_at).toBe(events[0]?.created_at);
+      expect(events[1]?.updated_at).toBe(events[1]?.created_at);
+      expect(gitContext).not.toBeNull();
+      expect(gitContext?.created_at).toBe(events[0]?.created_at);
+      expect(gitContext?.updated_at).toBe(events[1]?.created_at);
+      expect(gitContext?.version).toBe(2);
     } finally {
       storage.close();
     }
