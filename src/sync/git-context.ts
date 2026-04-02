@@ -3,6 +3,10 @@ import { type Database } from "bun:sqlite";
 import { resolveStoragePaths } from "../storage/path";
 import { type GitContextSnapshot } from "./types";
 
+export interface ResolvedGitContext extends GitContextSnapshot {
+  readonly persistedAt: number;
+}
+
 function runGit(args: readonly string[], cwd: string): string | null {
   const command = Bun.spawnSync({
     cmd: ["git", ...args],
@@ -19,7 +23,7 @@ function runGit(args: readonly string[], cwd: string): string | null {
   return output.length > 0 ? output : null;
 }
 
-export function resolveGitContext(cwd: string): GitContextSnapshot {
+export function resolveGitContext(cwd: string, persistedAt: number = Date.now()): ResolvedGitContext {
   const storagePaths = resolveStoragePaths(cwd);
   const branchName: string | null = runGit(["branch", "--show-current"], cwd);
   const headSha: string | null = runGit(["rev-parse", "HEAD"], cwd);
@@ -28,11 +32,11 @@ export function resolveGitContext(cwd: string): GitContextSnapshot {
     worktreePath: storagePaths.worktreeRoot,
     branchName,
     headSha,
+    persistedAt,
   };
 }
 
-export function persistGitContext(db: Database, git: GitContextSnapshot): void {
-  const now: number = Date.now();
+export function persistGitContext(db: Database, git: GitContextSnapshot, persistedAt: number = Date.now()): void {
 
   db.query(
     `
@@ -51,8 +55,8 @@ export function persistGitContext(db: Database, git: GitContextSnapshot): void {
       @worktreePath,
       @branchName,
       @headSha,
-      @now,
-      @now,
+      @persistedAt,
+      @persistedAt,
       1
     )
     ON CONFLICT(id) DO UPDATE SET
@@ -67,6 +71,6 @@ export function persistGitContext(db: Database, git: GitContextSnapshot): void {
     "@worktreePath": git.worktreePath,
     "@branchName": git.branchName,
     "@headSha": git.headSha,
-    "@now": now,
+    "@persistedAt": persistedAt,
   });
 }
