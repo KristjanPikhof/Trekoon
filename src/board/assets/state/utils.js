@@ -27,10 +27,10 @@ function normalizeArray(value) {
 
 /**
  * @param {{ id?: string }} record
- * @returns {string}
+ * @returns {string|null}
  */
 function getId(record) {
-  return typeof record?.id === "string" && record.id.length > 0 ? record.id : crypto.randomUUID();
+  return typeof record?.id === "string" && record.id.length > 0 ? record.id : null;
 }
 
 function normalizeTimestamp(value, fallback) {
@@ -40,6 +40,10 @@ function normalizeTimestamp(value, fallback) {
 
 function normalizeText(value, fallback = "") {
   return String(value ?? fallback).replace(/\\n/g, "\n");
+}
+
+function normalizeOwner(value) {
+  return typeof value === "string" ? value : null;
 }
 
 /**
@@ -68,15 +72,21 @@ export function normalizeSnapshot(rawSnapshot) {
   const taskIndex = new Map();
   const subtaskIndex = new Map();
 
-  const tasks = rawTasks.map((task) => {
+  const tasks = rawTasks.flatMap((task) => {
+    const taskId = getId(task);
+    if (!taskId) {
+      return [];
+    }
+
     const createdAt = normalizeTimestamp(task.createdAt, Date.now());
     const normalizedTask = {
-      id: getId(task),
+      id: taskId,
       kind: "task",
       epicId: task.epicId ?? task.epic?.id ?? null,
       title: normalizeText(task.title, "Untitled task"),
       description: normalizeText(task.description),
       status: normalizeStatus(task.status),
+      owner: normalizeOwner(task.owner),
       createdAt,
       updatedAt: normalizeTimestamp(task.updatedAt, createdAt),
       blockedBy: [],
@@ -88,18 +98,24 @@ export function normalizeSnapshot(rawSnapshot) {
     };
 
     taskIndex.set(normalizedTask.id, normalizedTask);
-    return normalizedTask;
+    return [normalizedTask];
   });
 
-  const subtasks = rawSubtasks.map((subtask) => {
+  const subtasks = rawSubtasks.flatMap((subtask) => {
+    const subtaskId = getId(subtask);
+    if (!subtaskId) {
+      return [];
+    }
+
     const createdAt = normalizeTimestamp(subtask.createdAt, Date.now());
     const normalizedSubtask = {
-      id: getId(subtask),
+      id: subtaskId,
       kind: "subtask",
       taskId: subtask.taskId ?? subtask.task?.id ?? null,
       title: normalizeText(subtask.title, "Untitled subtask"),
       description: normalizeText(subtask.description),
       status: normalizeStatus(subtask.status),
+      owner: normalizeOwner(subtask.owner),
       createdAt,
       updatedAt: normalizeTimestamp(subtask.updatedAt, createdAt),
       blockedBy: [],
@@ -110,7 +126,7 @@ export function normalizeSnapshot(rawSnapshot) {
     };
 
     subtaskIndex.set(normalizedSubtask.id, normalizedSubtask);
-    return normalizedSubtask;
+    return [normalizedSubtask];
   });
 
   for (const subtask of subtasks) {
@@ -120,13 +136,22 @@ export function normalizeSnapshot(rawSnapshot) {
     }
   }
 
-  const dependencies = rawDependencies.map((dependency) => ({
-    id: getId(dependency),
-    sourceId: String(dependency.sourceId ?? ""),
-    sourceKind: dependency.sourceKind === "subtask" ? "subtask" : "task",
-    dependsOnId: String(dependency.dependsOnId ?? ""),
-    dependsOnKind: dependency.dependsOnKind === "subtask" ? "subtask" : "task",
-  }));
+  const dependencies = rawDependencies.flatMap((dependency) => {
+    const dependencyId = getId(dependency);
+    const sourceId = typeof dependency?.sourceId === "string" && dependency.sourceId.length > 0 ? dependency.sourceId : null;
+    const dependsOnId = typeof dependency?.dependsOnId === "string" && dependency.dependsOnId.length > 0 ? dependency.dependsOnId : null;
+    if (!dependencyId || !sourceId || !dependsOnId) {
+      return [];
+    }
+
+    return [{
+      id: dependencyId,
+      sourceId,
+      sourceKind: dependency.sourceKind === "subtask" ? "subtask" : "task",
+      dependsOnId,
+      dependsOnKind: dependency.dependsOnKind === "subtask" ? "subtask" : "task",
+    }];
+  });
 
   const lookupNode = (kind, id) => {
     if (kind === "subtask") {
@@ -148,8 +173,12 @@ export function normalizeSnapshot(rawSnapshot) {
     }
   }
 
-  const epics = rawEpics.map((epic) => {
+  const epics = rawEpics.flatMap((epic) => {
     const epicId = getId(epic);
+    if (!epicId) {
+      return [];
+    }
+
     const epicTasks = tasks.filter((task) => task.epicId === epicId);
     const createdAt = normalizeTimestamp(epic.createdAt, Date.now());
     const normalizedEpic = {
@@ -165,7 +194,7 @@ export function normalizeSnapshot(rawSnapshot) {
     };
 
     normalizedEpic.searchText = [normalizedEpic.title, normalizedEpic.description, ...epicTasks.map((task) => task.title)].join(" ").toLowerCase();
-    return normalizedEpic;
+    return [normalizedEpic];
   });
 
   for (const subtask of subtasks) {
@@ -214,6 +243,10 @@ function mergeRecordsById(existingRecords, incomingRecords, deletedIds = []) {
   const indexById = new Map(nextRecords.map((record, index) => [record.id, index]));
 
   for (const record of incomingRecords) {
+    if (typeof record?.id !== "string" || record.id.length === 0) {
+      continue;
+    }
+
     const existingIndex = indexById.get(record.id);
     if (existingIndex === undefined) {
       indexById.set(record.id, nextRecords.length);
