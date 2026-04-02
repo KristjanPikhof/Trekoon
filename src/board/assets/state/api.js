@@ -53,6 +53,27 @@ function createClientRequestId() {
   return crypto.randomUUID();
 }
 
+function createOptimisticId(prefix, clientRequestId) {
+  return `optimistic:${prefix}:${clientRequestId}`;
+}
+
+function augmentSnapshotDeltaWithOptimisticDelete(snapshotDelta, key, optimisticId) {
+  if (!snapshotDelta || typeof snapshotDelta !== "object" || typeof optimisticId !== "string" || optimisticId.length === 0) {
+    return snapshotDelta;
+  }
+
+  const deletedKey = key === "subtasks" ? "deletedSubtaskIds" : "deletedDependencyIds";
+  const deletedIds = Array.isArray(snapshotDelta[deletedKey]) ? snapshotDelta[deletedKey] : [];
+  if (deletedIds.includes(optimisticId)) {
+    return snapshotDelta;
+  }
+
+  return {
+    ...snapshotDelta,
+    [deletedKey]: [...deletedIds, optimisticId],
+  };
+}
+
 function createTimeoutError(method, path, timeoutMs) {
   const error = new Error(`${method} ${path} timed out after ${timeoutMs}ms. Retry your change.`);
   error.code = "request_timeout";
@@ -304,16 +325,27 @@ export function createApi(model, options) {
 
     createSubtask(input, optimistic) {
       const clientRequestId = createClientRequestId();
+      const optimisticId = createOptimisticId("subtask", clientRequestId);
       enqueueMutation({
-        optimistic,
+        optimistic: typeof optimistic === "function"
+          ? (snapshot) => optimistic(snapshot, optimisticId)
+          : optimistic,
         successMessage: "Subtask added.",
-        request: () => request("/api/subtasks", {
-          method: "POST",
-          headers: {
-            "x-trekoon-idempotency-key": clientRequestId,
-          },
-          body: JSON.stringify({ ...input, clientRequestId }),
-        }),
+        request: async () => {
+          const data = await request("/api/subtasks", {
+            method: "POST",
+            headers: {
+              "x-trekoon-idempotency-key": clientRequestId,
+            },
+            body: JSON.stringify({ ...input, clientRequestId }),
+          });
+          return data?.snapshotDelta
+            ? {
+              ...data,
+              snapshotDelta: augmentSnapshotDeltaWithOptimisticDelete(data.snapshotDelta, "subtasks", optimisticId),
+            }
+            : data;
+        },
       });
     },
 
@@ -333,16 +365,27 @@ export function createApi(model, options) {
 
     addDependency(sourceId, dependsOnId, optimistic) {
       const clientRequestId = createClientRequestId();
+      const optimisticId = createOptimisticId("dependency", clientRequestId);
       enqueueMutation({
-        optimistic,
+        optimistic: typeof optimistic === "function"
+          ? (snapshot) => optimistic(snapshot, optimisticId)
+          : optimistic,
         successMessage: "Dependency added.",
-        request: () => request("/api/dependencies", {
-          method: "POST",
-          headers: {
-            "x-trekoon-idempotency-key": clientRequestId,
-          },
-          body: JSON.stringify({ sourceId, dependsOnId, clientRequestId }),
-        }),
+        request: async () => {
+          const data = await request("/api/dependencies", {
+            method: "POST",
+            headers: {
+              "x-trekoon-idempotency-key": clientRequestId,
+            },
+            body: JSON.stringify({ sourceId, dependsOnId, clientRequestId }),
+          });
+          return data?.snapshotDelta
+            ? {
+              ...data,
+              snapshotDelta: augmentSnapshotDeltaWithOptimisticDelete(data.snapshotDelta, "dependencies", optimisticId),
+            }
+            : data;
+        },
       });
     },
 
