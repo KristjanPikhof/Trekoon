@@ -182,6 +182,7 @@ describe("mutation conformance", (): void => {
 
     const dependencyEventId = `task:${taskAId}->task:${taskBId}`;
     expect(eventOperationsForEntity(cwd, "dependency", dependencyEventId)).toEqual([
+      ENTITY_OPERATIONS.dependency.added,
       ENTITY_OPERATIONS.dependency.removed,
     ]);
 
@@ -281,9 +282,11 @@ describe("mutation conformance", (): void => {
 
       expect(result.deletedDependencyIds).toHaveLength(2);
       expect(eventOperationsForEntity(cwd, "dependency", `subtask:${subtask.id}->task:${blocker.id}`)).toEqual([
+        ENTITY_OPERATIONS.dependency.added,
         ENTITY_OPERATIONS.dependency.removed,
       ]);
       expect(eventOperationsForEntity(cwd, "dependency", `subtask:${helper.id}->subtask:${subtask.id}`)).toEqual([
+        ENTITY_OPERATIONS.dependency.added,
         ENTITY_OPERATIONS.dependency.removed,
       ]);
     } finally {
@@ -529,9 +532,10 @@ describe("mutation conformance", (): void => {
         .all(ENTITY_OPERATIONS.dependency.added) as Array<{ entity_id: string; payload: string }>;
       expect(addedRows.map((row) => ({ entityId: row.entity_id, payload: JSON.parse(row.payload) }))).toEqual([
         {
-          entityId: dependencyIds[0] ?? "",
+          entityId: `task:${taskBId}->task:${taskAId}`,
           payload: {
             fields: {
+              dependency_id: dependencyIds[0] ?? "",
               source_id: taskBId,
               source_kind: "task",
               depends_on_id: taskAId,
@@ -540,9 +544,10 @@ describe("mutation conformance", (): void => {
           },
         },
         {
-          entityId: dependencyIds[1] ?? "",
+          entityId: `subtask:${subtaskBId}->subtask:${subtaskAId}`,
           payload: {
             fields: {
+              dependency_id: dependencyIds[1] ?? "",
               source_id: subtaskBId,
               source_kind: "subtask",
               depends_on_id: subtaskAId,
