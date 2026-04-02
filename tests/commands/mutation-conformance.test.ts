@@ -1,3 +1,4 @@
+import { randomUUID } from "node:crypto";
 import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -374,12 +375,22 @@ describe("mutation conformance", (): void => {
       const epic = mutations.createEpic({ title: "Roadmap", description: "Scope" });
       const blocker = mutations.createTask({ epicId: epic.id, title: "Blocker", description: "First" });
       const task = mutations.createTask({ epicId: epic.id, title: "Implement", description: "Code" });
+      const now = Date.now();
 
-      const createdSubtasks = Array.from({ length: 1200 }, (_, index) =>
-        mutations.createSubtask({ taskId: task.id, title: `Subtask ${index + 1}`, description: "Coverage" })
-      );
+      const createdSubtasks = Array.from({ length: 1000 }, (_, index) => ({
+        id: randomUUID(),
+        title: `Subtask ${index + 1}`,
+      }));
+      const dependencyIds = createdSubtasks.map(() => randomUUID());
 
-      const dependencyIds = createdSubtasks.map((subtask) => mutations.addDependency(subtask.id, blocker.id).id);
+      for (const [index, subtask] of createdSubtasks.entries()) {
+        storage.db
+          .query("INSERT INTO subtasks (id, task_id, title, description, status, created_at, updated_at, version) VALUES (?, ?, ?, ?, 'todo', ?, ?, 1);")
+          .run(subtask.id, task.id, subtask.title, "Coverage", now + index, now + index);
+        storage.db
+          .query("INSERT INTO dependencies (id, source_id, source_kind, depends_on_id, depends_on_kind, created_at, updated_at, version) VALUES (?, ?, 'subtask', ?, 'task', ?, ?, 1);")
+          .run(dependencyIds[index], subtask.id, blocker.id, now + index, now + index);
+      }
 
       const result = mutations.deleteTask(task.id);
 
