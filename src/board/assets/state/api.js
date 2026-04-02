@@ -332,12 +332,16 @@ export function createApi(model, options) {
     },
 
     addDependency(sourceId, dependsOnId, optimistic) {
+      const clientRequestId = createClientRequestId();
       enqueueMutation({
         optimistic,
         successMessage: "Dependency added.",
         request: () => request("/api/dependencies", {
           method: "POST",
-          body: JSON.stringify({ sourceId, dependsOnId }),
+          headers: {
+            "x-trekoon-idempotency-key": clientRequestId,
+          },
+          body: JSON.stringify({ sourceId, dependsOnId, clientRequestId }),
         }),
       });
     },
