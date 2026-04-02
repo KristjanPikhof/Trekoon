@@ -566,6 +566,19 @@ function removeDependenciesTouchingNode(db: Database, nodeId: string): void {
   db.query("DELETE FROM dependencies WHERE source_id = ? OR depends_on_id = ?;").run(nodeId, nodeId);
 }
 
+function removeTaskSubtree(db: Database, taskId: string): void {
+  const subtasks = db
+    .query("SELECT id FROM subtasks WHERE task_id = ? ORDER BY created_at ASC, id ASC;")
+    .all(taskId) as Array<{ id: string }>;
+
+  for (const subtask of subtasks) {
+    removeDependenciesTouchingNode(db, subtask.id);
+  }
+
+  db.query("DELETE FROM subtasks WHERE task_id = ?;").run(taskId);
+  removeDependenciesTouchingNode(db, taskId);
+}
+
 function applyPendingDeleteCascadeResolution(db: Database, conflict: ConflictRow): void {
   const rows = db
     .query(
@@ -590,7 +603,9 @@ function applyPendingDeleteCascadeResolution(db: Database, conflict: ConflictRow
 
 function applyConflictTheirsResolution(db: Database, conflict: ConflictRow): void {
   if (conflict.field_name === "__delete__") {
-    if (conflict.entity_kind === "subtask" || conflict.entity_kind === "task") {
+    if (conflict.entity_kind === "task") {
+      removeTaskSubtree(db, conflict.entity_id);
+    } else if (conflict.entity_kind === "subtask") {
       removeDependenciesTouchingNode(db, conflict.entity_id);
     }
     applyPendingDeleteCascadeResolution(db, conflict);
