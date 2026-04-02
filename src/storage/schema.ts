@@ -1,4 +1,4 @@
-export const SCHEMA_VERSION = 2;
+export const SCHEMA_VERSION = 3;
 
 export const BASE_SCHEMA_STATEMENTS: readonly string[] = [
   `PRAGMA foreign_keys = ON;`,
@@ -137,4 +137,5 @@ export const BASE_SCHEMA_STATEMENTS: readonly string[] = [
   `CREATE INDEX IF NOT EXISTS idx_conflicts_resolution ON sync_conflicts(resolution);`,
   `CREATE INDEX IF NOT EXISTS idx_conflicts_resolution_entity_field_id ON sync_conflicts(resolution, entity_id, field_name, id);`,
   `CREATE INDEX IF NOT EXISTS idx_board_idempotency_created_at ON board_idempotency_keys(created_at);`,
+  `CREATE INDEX IF NOT EXISTS idx_board_idempotency_state_created_at ON board_idempotency_keys(state, created_at);`,
 ];
