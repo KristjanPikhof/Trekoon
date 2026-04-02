@@ -578,6 +578,213 @@ describe("sync command", (): void => {
     }
   });
 
+  test("resolution replay converges across worktrees using stable source event identity", async (): Promise<void> => {
+    const workspace = createWorkspace();
+    initializeRepository(workspace);
+
+    const epicId = randomUUID();
+    const now = Date.now();
+
+    {
+      const storage = openTrekoonDatabase(workspace);
+      try {
+        storage.db
+          .query("INSERT INTO epics (id, title, description, status, created_at, updated_at, version) VALUES (?, ?, ?, ?, ?, ?, 1);")
+          .run(epicId, "Remote epic", "seed", "todo", now, now);
+
+        storage.db
+          .query(
+            "INSERT INTO events (id, entity_kind, entity_id, operation, payload, git_branch, git_head, created_at, updated_at, version) VALUES (?, 'epic', ?, 'epic.created', ?, 'main', NULL, ?, ?, 1);",
+          )
+          .run(
+            randomUUID(),
+            epicId,
+            JSON.stringify({ fields: { title: "Remote epic", description: "seed", status: "todo" } }),
+            now,
+            now,
+          );
+
+        storage.db
+          .query(
+            "INSERT INTO events (id, entity_kind, entity_id, operation, payload, git_branch, git_head, created_at, updated_at, version) VALUES (?, 'epic', ?, 'epic.updated', ?, 'main', NULL, ?, ?, 1);",
+          )
+          .run(
+            "source-update-event",
+            epicId,
+            JSON.stringify({ fields: { title: "Remote title" } }),
+            now + 5,
+            now + 5,
+          );
+      } finally {
+        storage.close();
+      }
+    }
+
+    const primary = createBranchWorktree(workspace, "feature/primary-resolution");
+    const secondary = createBranchWorktree(workspace, "feature/secondary-resolution");
+
+    for (const cwd of [primary, secondary]) {
+      const storage = openTrekoonDatabase(cwd);
+      try {
+        storage.db.query("UPDATE epics SET title = ?, updated_at = ?, version = version + 1 WHERE id = ?;").run("Local title", now + 10, epicId);
+        appendEventWithGitContext(storage.db, cwd, {
+          entityKind: "epic",
+          entityId: epicId,
+          operation: "epic.updated",
+          fields: { title: "Local title" },
+        });
+      } finally {
+        storage.close();
+      }
+
+      const pull = await runSync({ args: ["pull", "--from", "main"], cwd, mode: "toon" });
+      expect(pull.ok).toBe(true);
+      expect((pull.data as { createdConflicts: number }).createdConflicts).toBe(1);
+    }
+
+    const primaryStorage = openTrekoonDatabase(primary);
+    let primaryConflictId: string;
+    try {
+      primaryConflictId = (
+        primaryStorage.db.query("SELECT id FROM sync_conflicts WHERE entity_id = ? AND resolution = 'pending' LIMIT 1;").get(epicId) as
+          | { id: string }
+          | null
+      )!.id;
+    } finally {
+      primaryStorage.close();
+    }
+
+    const resolve = await runSync({ args: ["resolve", primaryConflictId, "--use", "theirs"], cwd: primary, mode: "toon" });
+    expect(resolve.ok).toBe(true);
+
+    const secondaryReplay = await runSync({ args: ["pull", "--from", "main"], cwd: secondary, mode: "toon" });
+    expect(secondaryReplay.ok).toBe(true);
+
+    const secondaryStorage = openTrekoonDatabase(secondary);
+    try {
+      const epic = secondaryStorage.db.query("SELECT title FROM epics WHERE id = ?;").get(epicId) as { title: string } | null;
+      const conflict = secondaryStorage.db
+        .query("SELECT resolution FROM sync_conflicts WHERE event_id = 'source-update-event' AND field_name = 'title' LIMIT 1;")
+        .get() as { resolution: string } | null;
+
+      expect(epic?.title).toBe("Remote title");
+      expect(conflict?.resolution).toBe("theirs");
+    } finally {
+      secondaryStorage.close();
+    }
+  });
+
+  test("conflicted subtask delete keeps dependency removals atomic until delete is resolved", async (): Promise<void> => {
+    const workspace = createWorkspace();
+    initializeRepository(workspace);
+
+    const epicId = randomUUID();
+    const taskId = randomUUID();
+    const subtaskId = randomUUID();
+    const blockerTaskId = randomUUID();
+    const helperSubtaskId = randomUUID();
+    const depAId = randomUUID();
+    const depBId = randomUUID();
+    const now = Date.now();
+
+    {
+      const storage = openTrekoonDatabase(workspace);
+      try {
+        storage.db.query("INSERT INTO epics (id, title, description, status, created_at, updated_at, version) VALUES (?, ?, ?, ?, ?, ?, 1);").run(epicId, "Epic", "seed", "todo", now, now);
+        storage.db.query("INSERT INTO tasks (id, epic_id, title, description, status, created_at, updated_at, version) VALUES (?, ?, ?, ?, ?, ?, ?, 1);").run(taskId, epicId, "Task", "seed", "todo", now, now);
+        storage.db.query("INSERT INTO tasks (id, epic_id, title, description, status, created_at, updated_at, version) VALUES (?, ?, ?, ?, ?, ?, ?, 1);").run(blockerTaskId, epicId, "Blocker", "seed", "todo", now, now);
+        storage.db.query("INSERT INTO subtasks (id, task_id, title, description, status, created_at, updated_at, version) VALUES (?, ?, ?, ?, ?, ?, ?, 1);").run(subtaskId, taskId, "Target", "seed", "todo", now, now);
+        storage.db.query("INSERT INTO subtasks (id, task_id, title, description, status, created_at, updated_at, version) VALUES (?, ?, ?, ?, ?, ?, ?, 1);").run(helperSubtaskId, taskId, "Helper", "seed", "todo", now, now);
+        storage.db.query("INSERT INTO dependencies (id, source_id, source_kind, depends_on_id, depends_on_kind, created_at, updated_at, version) VALUES (?, ?, 'subtask', ?, 'task', ?, ?, 1);").run(depAId, subtaskId, blockerTaskId, now, now);
+        storage.db.query("INSERT INTO dependencies (id, source_id, source_kind, depends_on_id, depends_on_kind, created_at, updated_at, version) VALUES (?, ?, 'subtask', ?, 'subtask', ?, ?, 1);").run(depBId, helperSubtaskId, subtaskId, now, now);
+
+        storage.db
+          .query("INSERT INTO events (id, entity_kind, entity_id, operation, payload, git_branch, git_head, created_at, updated_at, version) VALUES (?, 'epic', ?, 'epic.created', ?, 'main', NULL, ?, ?, 1);")
+          .run(randomUUID(), epicId, JSON.stringify({ fields: { title: "Epic", description: "seed", status: "todo" } }), now, now);
+        storage.db
+          .query("INSERT INTO events (id, entity_kind, entity_id, operation, payload, git_branch, git_head, created_at, updated_at, version) VALUES (?, 'task', ?, 'task.created', ?, 'main', NULL, ?, ?, 1);")
+          .run(randomUUID(), taskId, JSON.stringify({ fields: { epic_id: epicId, title: "Task", description: "seed", status: "todo" } }), now + 1, now + 1);
+        storage.db
+          .query("INSERT INTO events (id, entity_kind, entity_id, operation, payload, git_branch, git_head, created_at, updated_at, version) VALUES (?, 'task', ?, 'task.created', ?, 'main', NULL, ?, ?, 1);")
+          .run(randomUUID(), blockerTaskId, JSON.stringify({ fields: { epic_id: epicId, title: "Blocker", description: "seed", status: "todo" } }), now + 2, now + 2);
+        storage.db
+          .query("INSERT INTO events (id, entity_kind, entity_id, operation, payload, git_branch, git_head, created_at, updated_at, version) VALUES (?, 'subtask', ?, 'subtask.created', ?, 'main', NULL, ?, ?, 1);")
+          .run(randomUUID(), subtaskId, JSON.stringify({ fields: { task_id: taskId, title: "Target", description: "seed", status: "todo" } }), now + 3, now + 3);
+        storage.db
+          .query("INSERT INTO events (id, entity_kind, entity_id, operation, payload, git_branch, git_head, created_at, updated_at, version) VALUES (?, 'subtask', ?, 'subtask.created', ?, 'main', NULL, ?, ?, 1);")
+          .run(randomUUID(), helperSubtaskId, JSON.stringify({ fields: { task_id: taskId, title: "Helper", description: "seed", status: "todo" } }), now + 4, now + 4);
+
+        const deleteEventId = "subtask-delete-event";
+        storage.db
+          .query("INSERT INTO events (id, entity_kind, entity_id, operation, payload, git_branch, git_head, created_at, updated_at, version) VALUES (?, 'subtask', ?, 'subtask.deleted', ?, 'main', NULL, ?, ?, 1);")
+          .run(deleteEventId, subtaskId, JSON.stringify({ fields: {} }), now + 20, now + 20);
+        storage.db
+          .query("INSERT INTO events (id, entity_kind, entity_id, operation, payload, git_branch, git_head, created_at, updated_at, version) VALUES (?, 'dependency', ?, 'dependency.removed', ?, 'main', NULL, ?, ?, 1);")
+          .run(randomUUID(), `${subtaskId}->${blockerTaskId}`, JSON.stringify({ fields: { source_id: subtaskId, depends_on_id: blockerTaskId, source_event_id: deleteEventId } }), now + 21, now + 21);
+        storage.db
+          .query("INSERT INTO events (id, entity_kind, entity_id, operation, payload, git_branch, git_head, created_at, updated_at, version) VALUES (?, 'dependency', ?, 'dependency.removed', ?, 'main', NULL, ?, ?, 1);")
+          .run(randomUUID(), `${helperSubtaskId}->${subtaskId}`, JSON.stringify({ fields: { source_id: helperSubtaskId, depends_on_id: subtaskId, source_event_id: deleteEventId } }), now + 22, now + 22);
+      } finally {
+        storage.close();
+      }
+    }
+
+    runGit(workspace, ["checkout", "-b", "feature/conflicted-subtask-delete"]);
+
+    {
+      const storage = openTrekoonDatabase(workspace);
+      try {
+        storage.db.query("UPDATE subtasks SET title = ?, updated_at = ?, version = version + 1 WHERE id = ?;").run("Locally edited", now + 10, subtaskId);
+        appendEventWithGitContext(storage.db, workspace, {
+          entityKind: "subtask",
+          entityId: subtaskId,
+          operation: "subtask.updated",
+          fields: { title: "Locally edited" },
+        });
+      } finally {
+        storage.close();
+      }
+    }
+
+    const pull = await runSync({ args: ["pull", "--from", "main"], cwd: workspace, mode: "toon" });
+    expect(pull.ok).toBe(true);
+
+    let deleteConflictId: string;
+    const storage = openTrekoonDatabase(workspace);
+    try {
+      const pendingDelete = storage.db
+        .query("SELECT id FROM sync_conflicts WHERE event_id = 'subtask-delete-event' AND field_name = '__delete__' AND resolution = 'pending' LIMIT 1;")
+        .get() as { id: string } | null;
+      const remainingDeps = storage.db.query("SELECT source_id, depends_on_id FROM dependencies ORDER BY source_id ASC, depends_on_id ASC;").all() as Array<{ source_id: string; depends_on_id: string }>;
+      const subtask = storage.db.query("SELECT id, title FROM subtasks WHERE id = ?;").get(subtaskId) as { id: string; title: string } | null;
+
+      deleteConflictId = pendingDelete!.id;
+      expect(subtask?.title).toBe("Locally edited");
+      expect(remainingDeps).toEqual([
+        { source_id: helperSubtaskId, depends_on_id: subtaskId },
+        { source_id: subtaskId, depends_on_id: blockerTaskId },
+      ]);
+    } finally {
+      storage.close();
+    }
+
+    const resolve = await runSync({ args: ["resolve", deleteConflictId, "--use", "theirs"], cwd: workspace, mode: "toon" });
+    expect(resolve.ok).toBe(true);
+
+    const verifyStorage = openTrekoonDatabase(workspace);
+    try {
+      const subtask = verifyStorage.db.query("SELECT id FROM subtasks WHERE id = ?;").get(subtaskId) as { id: string } | null;
+      const remainingDeps = verifyStorage.db.query("SELECT id FROM dependencies WHERE source_id = ? OR depends_on_id = ?;").all(subtaskId, subtaskId) as Array<{ id: string }>;
+      const conflict = verifyStorage.db.query("SELECT resolution FROM sync_conflicts WHERE id = ?;").get(deleteConflictId) as { resolution: string } | null;
+
+      expect(subtask).toBeNull();
+      expect(remainingDeps).toEqual([]);
+      expect(conflict?.resolution).toBe("theirs");
+    } finally {
+      verifyStorage.close();
+    }
+  });
+
   test("replayed create conflicts do not also create invalid apply conflicts", async (): Promise<void> => {
     const workspace: string = createWorkspace();
     initializeRepository(workspace);
