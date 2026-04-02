@@ -35,6 +35,10 @@ interface IdempotentMutationRecord {
   readonly dependsOnId?: string;
 }
 
+function compactIds(ids: readonly string[]): string[] {
+  return ids.filter((id) => id.length > 0);
+}
+
 function jsonResponse(status: number, data: unknown): Response {
   return new Response(JSON.stringify(data), {
     status,
@@ -366,14 +370,15 @@ export function createBoardApiHandler(context: BoardRouteContext): (request: Req
           const subtaskId = deleteSubtaskMatch[1] ?? "";
           const existingSubtask = domain.getSubtaskOrThrow(subtaskId);
           const task = domain.getTaskOrThrow(existingSubtask.taskId);
+          const relatedDependencyIds = buildBoardSnapshot(domain).dependencies
+            .filter((dependency) => dependency.sourceId === subtaskId || dependency.dependsOnId === subtaskId)
+            .map((dependency) => dependency.id);
           mutations.deleteSubtask(subtaskId);
           return buildMutationDeltaResponse(domain, { subtaskId, deleted: true }, {
             epicIds: [task.epicId],
             taskIds: [task.id],
             deletedSubtaskIds: [subtaskId],
-            deletedDependencyIds: buildBoardSnapshot(domain).dependencies
-              .filter((dependency) => dependency.sourceId === subtaskId || dependency.dependsOnId === subtaskId)
-              .map((dependency) => dependency.id),
+            deletedDependencyIds: relatedDependencyIds,
           });
         }
 
@@ -388,8 +393,8 @@ export function createBoardApiHandler(context: BoardRouteContext): (request: Req
               const dependency = domain.listDependencies(cached.sourceId).find((candidate) => candidate.dependsOnId === cached.dependsOnId);
               if (dependency) {
                 return buildMutationDeltaResponse(domain, { dependency }, {
-                  taskIds: [dependency.sourceKind === "task" ? dependency.sourceId : "", dependency.dependsOnKind === "task" ? dependency.dependsOnId : ""].filter(Boolean),
-                  subtaskIds: [dependency.sourceKind === "subtask" ? dependency.sourceId : "", dependency.dependsOnKind === "subtask" ? dependency.dependsOnId : ""].filter(Boolean),
+                  taskIds: compactIds([dependency.sourceKind === "task" ? dependency.sourceId : "", dependency.dependsOnKind === "task" ? dependency.dependsOnId : ""]),
+                  subtaskIds: compactIds([dependency.sourceKind === "subtask" ? dependency.sourceId : "", dependency.dependsOnKind === "subtask" ? dependency.dependsOnId : ""]),
                   dependencyIds: [dependency.id],
                 }, 201);
               }
@@ -406,8 +411,8 @@ export function createBoardApiHandler(context: BoardRouteContext): (request: Req
           });
         }
         return buildMutationDeltaResponse(domain, { dependency }, {
-          taskIds: [dependency.sourceKind === "task" ? dependency.sourceId : "", dependency.dependsOnKind === "task" ? dependency.dependsOnId : ""].filter(Boolean),
-          subtaskIds: [dependency.sourceKind === "subtask" ? dependency.sourceId : "", dependency.dependsOnKind === "subtask" ? dependency.dependsOnId : ""].filter(Boolean),
+          taskIds: compactIds([dependency.sourceKind === "task" ? dependency.sourceId : "", dependency.dependsOnKind === "task" ? dependency.dependsOnId : ""]),
+          subtaskIds: compactIds([dependency.sourceKind === "subtask" ? dependency.sourceId : "", dependency.dependsOnKind === "subtask" ? dependency.dependsOnId : ""]),
           dependencyIds: [dependency.id],
         }, 201);
       }
@@ -431,8 +436,8 @@ export function createBoardApiHandler(context: BoardRouteContext): (request: Req
           .filter((dependency) => dependency.dependsOnId === dependsOnId)
           .map((dependency) => dependency.id);
         return buildMutationDeltaResponse(domain, { sourceId, dependsOnId, removed }, {
-          taskIds: [domain.getTask(sourceId)?.id ?? "", domain.getTask(dependsOnId)?.id ?? ""].filter(Boolean),
-          subtaskIds: [domain.getSubtask(sourceId)?.id ?? "", domain.getSubtask(dependsOnId)?.id ?? ""].filter(Boolean),
+          taskIds: compactIds([domain.getTask(sourceId)?.id ?? "", domain.getTask(dependsOnId)?.id ?? ""]),
+          subtaskIds: compactIds([domain.getSubtask(sourceId)?.id ?? "", domain.getSubtask(dependsOnId)?.id ?? ""]),
           deletedDependencyIds: existingDependencyIds,
         });
       }
