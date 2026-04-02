@@ -332,6 +332,22 @@ trekoon --toon task update <task-id> --append "Started implementation"
 trekoon --toon task update <task-id> --append "Blocked by <reason>" --status blocked
 ```
 
+### 3b. Work on subtasks explicitly when they matter
+
+Use the same status discipline for subtasks when a task depends on concrete
+subtask progress:
+
+```bash
+trekoon --toon subtask update <subtask-id> --status in_progress
+trekoon --toon subtask update <subtask-id> --append "Implemented parser branch"
+trekoon --toon subtask update <subtask-id> --append "Verified with fixture set" --status done
+trekoon --toon subtask update <subtask-id> --append "Blocked by <reason>" --status blocked
+```
+
+Use subtasks for real execution units, not filler. If a task has open subtasks
+when `task done` is called, treat the warning as a prompt to consciously decide
+whether the task is genuinely complete.
+
 ### 4. Finish or report a block
 
 When done, append a completion note then mark done:
