@@ -23,6 +23,10 @@ function readStatusFilter(raw) {
 
 export function readStoredState() {
   try {
+    if (typeof localStorage?.getItem !== "function") {
+      return {};
+    }
+
     return JSON.parse(localStorage.getItem(STATE_STORAGE_KEY) || "{}");
   } catch {
     return {};
@@ -30,17 +34,38 @@ export function readStoredState() {
 }
 
 export function writeStoredState(nextState) {
-  localStorage.setItem(STATE_STORAGE_KEY, JSON.stringify(nextState));
+  try {
+    if (typeof localStorage?.setItem !== "function") {
+      return false;
+    }
+
+    localStorage.setItem(STATE_STORAGE_KEY, JSON.stringify(nextState));
+    return true;
+  } catch {
+    return false;
+  }
 }
 
 export function readThemePreference() {
-  const storedTheme = localStorage.getItem(THEME_STORAGE_KEY);
-  return storedTheme === "light" || storedTheme === "dark" ? storedTheme : "dark";
+  try {
+    if (typeof localStorage?.getItem !== "function") {
+      return "dark";
+    }
+
+    const storedTheme = localStorage.getItem(THEME_STORAGE_KEY);
+    return storedTheme === "light" || storedTheme === "dark" ? storedTheme : "dark";
+  } catch {
+    return "dark";
+  }
 }
 
 export function applyTheme(theme) {
   document.documentElement.dataset.theme = theme;
-  localStorage.setItem(THEME_STORAGE_KEY, theme);
+  try {
+    localStorage?.setItem?.(THEME_STORAGE_KEY, theme);
+  } catch {
+    // Ignore storage failures so board rendering remains usable.
+  }
 
   const themeColor = theme === "light" ? "#f4f6fb" : "#0b0d12";
   const themeColorMeta = document.querySelector('meta[name="theme-color"][data-board-theme-color="active"]');
@@ -326,7 +351,7 @@ export function createStore(initialSnapshot, options = {}) {
   }
 
   function persist() {
-    writeStoredState({
+    return writeStoredState({
       screen: state.screen,
       selectedEpicId: state.selectedEpicId,
       search: state.search,
