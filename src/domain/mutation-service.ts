@@ -1,7 +1,7 @@
 import { type Database } from "bun:sqlite";
 
 import { writeTransaction } from "../storage/database";
-import { appendEventWithGitContext, withTransactionEventContext } from "../sync/event-writes";
+import { appendEventWithGitContext, prepareEventWriteContext, withTransactionEventContext } from "../sync/event-writes";
 import { ENTITY_OPERATIONS } from "./mutation-operations";
 import { TrackerDomain, validateStatusTransition } from "./tracker-domain";
 import {
@@ -48,6 +48,8 @@ interface AtomicIdempotencyCompletedResult {
 type AtomicIdempotentMutationResult =
   | AtomicIdempotencyReplayResult
   | AtomicIdempotencyCompletedResult;
+
+const BOARD_IDEMPOTENCY_RETENTION_MS = 7 * 24 * 60 * 60 * 1000;
 
 function countMatches(value: string, searchText: string): number {
   if (searchText.length === 0) {
@@ -128,7 +130,49 @@ export class MutationService {
   }
 
   #writeTransaction<T>(fn: () => T): T {
-    return writeTransaction(this.#db, (): T => withTransactionEventContext(this.#db, this.#cwd, fn));
+    const eventContext = prepareEventWriteContext(this.#db, this.#cwd);
+    return writeTransaction(this.#db, (): T => withTransactionEventContext(this.#db, eventContext, fn));
+  }
+
+  #dependencyEventEntityId(input: {
+    sourceId: string;
+    sourceKind: string;
+    dependsOnId: string;
+    dependsOnKind: string;
+  }): string {
+    return `${input.sourceKind}:${input.sourceId}->${input.dependsOnKind}:${input.dependsOnId}`;
+  }
+
+  #dependencyEventFields(input: {
+    dependencyId?: string | undefined;
+    sourceId: string;
+    sourceKind?: string | undefined;
+    dependsOnId: string;
+    dependsOnKind?: string | undefined;
+    sourceEventId?: string | undefined;
+  }): Record<string, string> {
+    const fields: Record<string, string> = {
+      source_id: input.sourceId,
+      depends_on_id: input.dependsOnId,
+    };
+
+    if (input.dependencyId) {
+      fields.dependency_id = input.dependencyId;
+    }
+
+    if (input.sourceKind) {
+      fields.source_kind = input.sourceKind;
+    }
+
+    if (input.dependsOnKind) {
+      fields.depends_on_kind = input.dependsOnKind;
+    }
+
+    if (input.sourceEventId) {
+      fields.source_event_id = input.sourceEventId;
+    }
+
+    return fields;
   }
 
   createEpic(input: { title: string; description: string; status?: string | undefined }): EpicRecord {
@@ -185,12 +229,18 @@ export class MutationService {
       }
 
       for (const dependency of created.dependencies) {
-        this.#appendEntityEvent("dependency", dependency.id, ENTITY_OPERATIONS.dependency.added, {
-          source_id: dependency.sourceId,
-          source_kind: dependency.sourceKind,
-          depends_on_id: dependency.dependsOnId,
-          depends_on_kind: dependency.dependsOnKind,
-        });
+        this.#appendEntityEvent(
+          "dependency",
+          this.#dependencyEventEntityId(dependency),
+          ENTITY_OPERATIONS.dependency.added,
+          this.#dependencyEventFields({
+            dependencyId: dependency.id,
+            sourceId: dependency.sourceId,
+            sourceKind: dependency.sourceKind,
+            dependsOnId: dependency.dependsOnId,
+            dependsOnKind: dependency.dependsOnKind,
+          }),
+        );
       }
 
       return {
@@ -293,12 +343,18 @@ export class MutationService {
       }
 
       for (const dependency of created.dependencies) {
-        this.#appendEntityEvent("dependency", dependency.id, ENTITY_OPERATIONS.dependency.added, {
-          source_id: dependency.sourceId,
-          source_kind: dependency.sourceKind,
-          depends_on_id: dependency.dependsOnId,
-          depends_on_kind: dependency.dependsOnKind,
-        });
+        this.#appendEntityEvent(
+          "dependency",
+          this.#dependencyEventEntityId(dependency),
+          ENTITY_OPERATIONS.dependency.added,
+          this.#dependencyEventFields({
+            dependencyId: dependency.id,
+            sourceId: dependency.sourceId,
+            sourceKind: dependency.sourceKind,
+            dependsOnId: dependency.dependsOnId,
+            dependsOnKind: dependency.dependsOnKind,
+          }),
+        );
       }
 
       return created;
@@ -349,16 +405,19 @@ export class MutationService {
       }
 
       for (const dependency of plan.touchingDependencies) {
-        this.#appendEntityEvent(
-          "dependency",
-          `${dependency.sourceId}->${dependency.dependsOnId}`,
-          ENTITY_OPERATIONS.dependency.removed,
-          {
-            source_id: dependency.sourceId,
-            depends_on_id: dependency.dependsOnId,
-            source_event_id: taskDeleteEventId,
-          },
-        );
+          this.#appendEntityEvent(
+            "dependency",
+            this.#dependencyEventEntityId(dependency),
+            ENTITY_OPERATIONS.dependency.removed,
+            this.#dependencyEventFields({
+              dependencyId: dependency.id,
+              sourceId: dependency.sourceId,
+              sourceKind: dependency.sourceKind,
+              dependsOnId: dependency.dependsOnId,
+              dependsOnKind: dependency.dependsOnKind,
+              sourceEventId: taskDeleteEventId,
+            }),
+          );
       }
 
       return {
@@ -454,13 +513,16 @@ export class MutationService {
       for (const dependency of touchingDependencies) {
         this.#appendEntityEvent(
           "dependency",
-          `${dependency.sourceId}->${dependency.dependsOnId}`,
+          this.#dependencyEventEntityId(dependency),
           ENTITY_OPERATIONS.dependency.removed,
-          {
-            source_id: dependency.sourceId,
-            depends_on_id: dependency.dependsOnId,
-            source_event_id: subtaskDeleteEventId,
-          },
+          this.#dependencyEventFields({
+            dependencyId: dependency.id,
+            sourceId: dependency.sourceId,
+            sourceKind: dependency.sourceKind,
+            dependsOnId: dependency.dependsOnId,
+            dependsOnKind: dependency.dependsOnKind,
+            sourceEventId: subtaskDeleteEventId,
+          }),
         );
       }
       return {
@@ -489,13 +551,16 @@ export class MutationService {
       for (const dependency of touchingDependencies) {
         this.#appendEntityEvent(
           "dependency",
-          `${dependency.sourceId}->${dependency.dependsOnId}`,
+          this.#dependencyEventEntityId(dependency),
           ENTITY_OPERATIONS.dependency.removed,
-          {
-            source_id: dependency.sourceId,
-            depends_on_id: dependency.dependsOnId,
-            source_event_id: subtaskDeleteEventId,
-          },
+          this.#dependencyEventFields({
+            dependencyId: dependency.id,
+            sourceId: dependency.sourceId,
+            sourceKind: dependency.sourceKind,
+            dependsOnId: dependency.dependsOnId,
+            dependsOnKind: dependency.dependsOnKind,
+            sourceEventId: subtaskDeleteEventId,
+          }),
         );
       }
 
@@ -516,12 +581,18 @@ export class MutationService {
   addDependency(sourceId: string, dependsOnId: string): DependencyRecord {
     return this.#writeTransaction((): DependencyRecord => {
       const dependency = this.#domain.addDependency(sourceId, dependsOnId);
-      this.#appendEntityEvent("dependency", dependency.id, ENTITY_OPERATIONS.dependency.added, {
-        source_id: dependency.sourceId,
-        source_kind: dependency.sourceKind,
-        depends_on_id: dependency.dependsOnId,
-        depends_on_kind: dependency.dependsOnKind,
-      });
+      this.#appendEntityEvent(
+        "dependency",
+        this.#dependencyEventEntityId(dependency),
+        ENTITY_OPERATIONS.dependency.added,
+        this.#dependencyEventFields({
+          dependencyId: dependency.id,
+          sourceId: dependency.sourceId,
+          sourceKind: dependency.sourceKind,
+          dependsOnId: dependency.dependsOnId,
+          dependsOnKind: dependency.dependsOnKind,
+        }),
+      );
       return dependency;
     });
   }
@@ -534,12 +605,18 @@ export class MutationService {
   }): AtomicIdempotentMutationResult {
     return this.#completeAtomicIdempotentMutation(input.claim, (): AtomicIdempotencyCompletedResult => {
       const dependency = this.#domain.addDependency(input.sourceId, input.dependsOnId);
-      this.#appendEntityEvent("dependency", dependency.id, ENTITY_OPERATIONS.dependency.added, {
-        source_id: dependency.sourceId,
-        source_kind: dependency.sourceKind,
-        depends_on_id: dependency.dependsOnId,
-        depends_on_kind: dependency.dependsOnKind,
-      });
+      this.#appendEntityEvent(
+        "dependency",
+        this.#dependencyEventEntityId(dependency),
+        ENTITY_OPERATIONS.dependency.added,
+        this.#dependencyEventFields({
+          dependencyId: dependency.id,
+          sourceId: dependency.sourceId,
+          sourceKind: dependency.sourceKind,
+          dependsOnId: dependency.dependsOnId,
+          dependsOnKind: dependency.dependsOnKind,
+        }),
+      );
       return {
         state: "completed",
         status: 201,
@@ -552,12 +629,18 @@ export class MutationService {
     return this.#writeTransaction((): CompactDependencyBatchAddResult => {
       const created = this.#domain.addDependencyBatch(input);
       for (const dependency of created.dependencies) {
-        this.#appendEntityEvent("dependency", dependency.id, ENTITY_OPERATIONS.dependency.added, {
-          source_id: dependency.sourceId,
-          source_kind: dependency.sourceKind,
-          depends_on_id: dependency.dependsOnId,
-          depends_on_kind: dependency.dependsOnKind,
-        });
+        this.#appendEntityEvent(
+          "dependency",
+          this.#dependencyEventEntityId(dependency),
+          ENTITY_OPERATIONS.dependency.added,
+          this.#dependencyEventFields({
+            dependencyId: dependency.id,
+            sourceId: dependency.sourceId,
+            sourceKind: dependency.sourceKind,
+            dependsOnId: dependency.dependsOnId,
+            dependsOnKind: dependency.dependsOnKind,
+          }),
+        );
       }
       return created;
     });
@@ -565,12 +648,22 @@ export class MutationService {
 
   removeDependency(sourceId: string, dependsOnId: string): number {
     return this.#writeTransaction((): number => {
+      const existingDependency = this.#domain.listDependencies(sourceId)
+        .find((dependency) => dependency.dependsOnId === dependsOnId);
       const removed = this.#domain.removeDependency(sourceId, dependsOnId);
       if (removed > 0) {
-        this.#appendEntityEvent("dependency", `${sourceId}->${dependsOnId}`, ENTITY_OPERATIONS.dependency.removed, {
-          source_id: sourceId,
-          depends_on_id: dependsOnId,
-        });
+        this.#appendEntityEvent("dependency", this.#dependencyEventEntityId({
+          sourceId,
+          sourceKind: existingDependency?.sourceKind ?? "task",
+          dependsOnId,
+          dependsOnKind: existingDependency?.dependsOnKind ?? "task",
+        }), ENTITY_OPERATIONS.dependency.removed, this.#dependencyEventFields({
+          dependencyId: existingDependency?.id,
+          sourceId,
+          sourceKind: existingDependency?.sourceKind,
+          dependsOnId,
+          dependsOnKind: existingDependency?.dependsOnKind,
+        }));
       }
       return removed;
     });
@@ -589,9 +682,10 @@ export class MutationService {
     }) => Record<string, unknown>;
   }): AtomicIdempotentMutationResult {
     return this.#completeAtomicIdempotentMutation(input.claim, (): AtomicIdempotencyCompletedResult => {
-      const existingDependencyIds = this.#domain.listDependencies(input.sourceId)
-        .filter((dependency) => dependency.dependsOnId === input.dependsOnId)
-        .map((dependency) => dependency.id);
+      const existingDependencies = this.#domain.listDependencies(input.sourceId)
+        .filter((dependency) => dependency.dependsOnId === input.dependsOnId);
+      const existingDependencyIds = existingDependencies.map((dependency) => dependency.id);
+      const existingDependency = existingDependencies[0];
       const removed = this.#domain.removeDependency(input.sourceId, input.dependsOnId);
       if (removed === 0) {
         throw new DomainError({
@@ -603,10 +697,18 @@ export class MutationService {
           },
         });
       }
-      this.#appendEntityEvent("dependency", `${input.sourceId}->${input.dependsOnId}`, ENTITY_OPERATIONS.dependency.removed, {
-        source_id: input.sourceId,
-        depends_on_id: input.dependsOnId,
-      });
+      this.#appendEntityEvent("dependency", this.#dependencyEventEntityId({
+        sourceId: input.sourceId,
+        sourceKind: existingDependency?.sourceKind ?? "task",
+        dependsOnId: input.dependsOnId,
+        dependsOnKind: existingDependency?.dependsOnKind ?? "task",
+      }), ENTITY_OPERATIONS.dependency.removed, this.#dependencyEventFields({
+        dependencyId: existingDependency?.id,
+        sourceId: input.sourceId,
+        sourceKind: existingDependency?.sourceKind,
+        dependsOnId: input.dependsOnId,
+        dependsOnKind: existingDependency?.dependsOnKind,
+      }));
       return {
         state: "completed",
         status: 200,
@@ -741,6 +843,7 @@ export class MutationService {
     mutate: () => AtomicIdempotencyCompletedResult,
   ): AtomicIdempotentMutationResult {
     return this.#writeTransaction((): AtomicIdempotentMutationResult => {
+      this.#pruneExpiredIdempotencyKeys();
       const inserted = this.#db.query(
         `
         INSERT INTO board_idempotency_keys (
@@ -814,6 +917,17 @@ export class MutationService {
       ).run(result.status, JSON.stringify(result.responseData), Date.now(), claim.scope, claim.idempotencyKey, claim.requestFingerprint);
       return result;
     });
+  }
+
+  #pruneExpiredIdempotencyKeys(now: number = Date.now()): void {
+    const cutoff: number = now - BOARD_IDEMPOTENCY_RETENTION_MS;
+    this.#db.query(
+      `
+      DELETE FROM board_idempotency_keys
+      WHERE state = 'completed'
+        AND created_at < ?;
+      `,
+    ).run(cutoff);
   }
 
   #previewScopeReplacement(
