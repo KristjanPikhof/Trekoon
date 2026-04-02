@@ -128,7 +128,7 @@ function describeBoardError(mutations: MutationService, error: unknown, requestL
   };
 }
 
-function buildMutationResponse(domain: TrackerDomain, data: Record<string, unknown>, status = 200): Response {
+function buildMutationResponse(_domain: TrackerDomain, data: Record<string, unknown>, status = 200): Response {
   return jsonResponse(status, {
     ok: true,
     data,
@@ -344,7 +344,7 @@ export function createBoardApiHandler(context: BoardRouteContext): (request: Req
         const idempotencyKey = readIdempotencyKey(request, body);
         if (idempotencyKey) {
           const cached = idempotentMutations.get(`subtask:${idempotencyKey}`);
-            if (cached?.kind === "subtask") {
+            if (cached?.kind === "subtask" && cached.entityId) {
               const subtask = domain.getSubtaskOrThrow(cached.entityId);
               const task = domain.getTaskOrThrow(subtask.taskId);
               return buildMutationDeltaResponse(domain, { subtask }, { epicIds: [task.epicId], taskIds: [task.id], subtaskIds: [subtask.id] }, 201);
