@@ -566,11 +566,34 @@ function removeDependenciesTouchingNode(db: Database, nodeId: string): void {
   db.query("DELETE FROM dependencies WHERE source_id = ? OR depends_on_id = ?;").run(nodeId, nodeId);
 }
 
+function applyPendingDeleteCascadeResolution(db: Database, conflict: ConflictRow): void {
+  const rows = db
+    .query(
+      `
+      SELECT e.id, json_extract(e.payload, '$.fields.source_id') AS source_id, json_extract(e.payload, '$.fields.depends_on_id') AS depends_on_id
+      FROM events e
+      WHERE e.operation = 'dependency.removed'
+        AND json_extract(e.payload, '$.fields.source_event_id') = ?
+      ORDER BY e.created_at ASC, e.id ASC;
+      `,
+    )
+    .all(conflict.event_id) as DeleteCascadeResolutionRow[];
+
+  for (const row of rows) {
+    if (typeof row.source_id !== "string" || typeof row.depends_on_id !== "string") {
+      continue;
+    }
+
+    db.query("DELETE FROM dependencies WHERE source_id = ? AND depends_on_id = ?;").run(row.source_id, row.depends_on_id);
+  }
+}
+
 function applyConflictTheirsResolution(db: Database, conflict: ConflictRow): void {
   if (conflict.field_name === "__delete__") {
     if (conflict.entity_kind === "subtask" || conflict.entity_kind === "task") {
       removeDependenciesTouchingNode(db, conflict.entity_id);
     }
+    applyPendingDeleteCascadeResolution(db, conflict);
     deleteSingleEntity(db, conflict.entity_kind, conflict.entity_id);
     return;
   }
