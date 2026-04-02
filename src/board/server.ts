@@ -102,7 +102,7 @@ function serializeInlineJson(value: unknown): string {
     .replace(/\u2029/g, "\\u2029");
 }
 
-function buildBoardBootstrapPayload(database: TrekoonDatabase, cwd: string, token: string): string {
+function buildBoardBootstrapPayload(database: TrekoonDatabase, token: string): string {
   const domain = new TrackerDomain(database.db);
   return serializeInlineJson({
     token,
@@ -157,7 +157,7 @@ export function startBoardServer(options: StartBoardServerOptions = {}): BoardSe
             return new Response("Board assets are not installed", { status: 500 });
           }
 
-          const html = injectBoardBootstrap(readFileSync(fallbackPath, "utf8"), buildBoardBootstrapPayload(database, cwd, token));
+          const html = injectBoardBootstrap(readFileSync(fallbackPath, "utf8"), buildBoardBootstrapPayload(database, token));
 
           return new Response(html, {
             headers: {
@@ -168,7 +168,7 @@ export function startBoardServer(options: StartBoardServerOptions = {}): BoardSe
         }
 
         if (assetPath.endsWith("/index.html")) {
-          const html = injectBoardBootstrap(readFileSync(assetPath, "utf8"), buildBoardBootstrapPayload(database, cwd, token));
+          const html = injectBoardBootstrap(readFileSync(assetPath, "utf8"), buildBoardBootstrapPayload(database, token));
           return new Response(html, {
             headers: {
               ...responseHeaders,
