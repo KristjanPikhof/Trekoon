@@ -27,7 +27,7 @@ afterEach((): void => {
 });
 
 describe("board routes", (): void => {
-  test("returns snapshot with hierarchy, dependency edges, counts, and search fields", async (): Promise<void> => {
+  test("returns snapshot with hierarchy, dependency edges, counts, search fields, and owners", async (): Promise<void> => {
     const cwd = createWorkspace();
     const storage = openTrekoonDatabase(cwd);
 
@@ -36,6 +36,8 @@ describe("board routes", (): void => {
       const epic = mutations.createEpic({ title: "Roadmap", description: "Plan release" });
       const task = mutations.createTask({ epicId: epic.id, title: "Implement", description: "Ship board" });
       const subtask = mutations.createSubtask({ taskId: task.id, title: "Write tests", description: "Cover API" });
+      mutations.updateTask(task.id, { owner: "alice" });
+      mutations.updateSubtask(subtask.id, { owner: "bob" });
       const dependency = mutations.addDependency(subtask.id, task.id);
 
       const handler = createBoardApiHandler({ db: storage.db, cwd, token: "secret-token" });
@@ -66,6 +68,7 @@ describe("board routes", (): void => {
       expect(body.data.snapshot.tasks).toEqual([
         expect.objectContaining({
           id: task.id,
+          owner: "alice",
           subtasks: [expect.objectContaining({ id: subtask.id })],
           dependencyIds: [],
           searchText: expect.stringContaining("implement ship board"),
@@ -74,6 +77,7 @@ describe("board routes", (): void => {
       expect(body.data.snapshot.subtasks).toEqual([
         expect.objectContaining({
           id: subtask.id,
+          owner: "bob",
           dependencyIds: [dependency.id],
           blockedBy: [task.id],
         }),
@@ -788,6 +792,7 @@ describe("board routes", (): void => {
       expect(response.status).toBe(200);
       expect(body.ok).toBeTrue();
       expect(body.data.task).toEqual(expect.objectContaining({ id: task.id, owner: null }));
+      expect(body.data.snapshotDelta.tasks).toContainEqual(expect.objectContaining({ id: task.id, owner: null }));
       expect(new TrackerDomain(storage.db).getTask(task.id)?.owner).toBeNull();
     } finally {
       storage.close();
