@@ -73,17 +73,23 @@ export async function runEvents(context: CliContext): Promise<CliResult> {
       archive,
     });
 
-    return okResult({
-      command: "events.prune",
-      human: [
-        dryRun ? "Dry run complete." : "Prune complete.",
-        `Retention days: ${summary.retentionDays}`,
-        `Candidates: ${summary.candidateCount}`,
-        `Archived: ${summary.archivedCount}`,
-        `Deleted: ${summary.deletedCount}`,
-      ].join("\n"),
-      data: summary,
-    });
+      return okResult({
+        command: "events.prune",
+        human: [
+          dryRun ? "Dry run complete." : "Prune complete.",
+          `Retention days: ${summary.retentionDays}`,
+          `Candidates: ${summary.candidateCount}`,
+          `Archived: ${summary.archivedCount}`,
+          `Deleted: ${summary.deletedCount}`,
+          summary.staleCursorCount > 0
+            ? `Sync guidance: ${summary.staleCursorCount} cursor(s) reference pruned history. Run 'trekoon sync pull --from <branch>' and rebuild if stale cursor hints persist.`
+            : "Sync guidance: pruning stayed within retained cursor history.",
+          archive
+            ? "Retention automation: archived copies were kept before deletion."
+            : "Retention automation: rerun with --archive to keep retained copies before deletion.",
+        ].join("\n"),
+        data: summary,
+      });
   } catch (error: unknown) {
     const busyFailure = sqliteBusyFailure("events.prune", error);
     if (busyFailure !== null) {
