@@ -622,11 +622,13 @@ function applyConflictTheirsResolution(db: Database, conflict: ConflictRow): voi
       removeDependenciesTouchingNode(db, conflict.entity_id);
     }
     applyPendingDeleteCascadeResolution(db, conflict);
-    deleteSingleEntity(db, conflict.entity_kind, conflict.entity_id);
+    deleteSingleEntity(db, conflict.entity_kind, conflict.entity_id, { allowMissing: true });
     return;
   }
 
-  updateSingleField(db, conflict.entity_kind, conflict.entity_id, conflict.field_name, parseConflictValue(conflict.theirs_value));
+  updateSingleField(db, conflict.entity_kind, conflict.entity_id, conflict.field_name, parseConflictValue(conflict.theirs_value), {
+    allowMissing: true,
+  });
 }
 
 function applyIncomingResolutionEvent(db: Database, event: StoredEvent): boolean {
@@ -1340,7 +1342,14 @@ function parseConflictValue(value: string | null): unknown {
   }
 }
 
-function updateSingleField(db: Database, entityKind: string, entityId: string, fieldName: string, value: unknown): void {
+function updateSingleField(
+  db: Database,
+  entityKind: string,
+  entityId: string,
+  fieldName: string,
+  value: unknown,
+  options: { allowMissing?: boolean } = {},
+): void {
   const tableName = tableForEntityKind(entityKind);
   if (!tableName) {
     throw new DomainError({
@@ -1365,7 +1374,7 @@ function updateSingleField(db: Database, entityKind: string, entityId: string, f
     .query(`UPDATE ${tableName} SET ${fieldName} = ?, updated_at = ?, version = version + 1 WHERE id = ?;`)
     .run(normalizedValue, now, entityId);
 
-  if (result.changes === 0) {
+  if (result.changes === 0 && !options.allowMissing) {
     throw new DomainError({
       code: "row_not_found",
       message: `No row updated: entity '${entityKind}' with id '${entityId}' not found in table '${tableName}'`,
@@ -1374,7 +1383,12 @@ function updateSingleField(db: Database, entityKind: string, entityId: string, f
   }
 }
 
-function deleteSingleEntity(db: Database, entityKind: string, entityId: string): void {
+function deleteSingleEntity(
+  db: Database,
+  entityKind: string,
+  entityId: string,
+  options: { allowMissing?: boolean } = {},
+): void {
   const tableName = tableForEntityKind(entityKind);
   if (!tableName) {
     throw new DomainError({
@@ -1386,7 +1400,7 @@ function deleteSingleEntity(db: Database, entityKind: string, entityId: string):
 
   const result = db.query(`DELETE FROM ${tableName} WHERE id = ?;`).run(entityId);
 
-  if (result.changes === 0) {
+  if (result.changes === 0 && !options.allowMissing) {
     throw new DomainError({
       code: "row_not_found",
       message: `No row deleted: entity '${entityKind}' with id '${entityId}' not found in table '${tableName}'`,
