@@ -159,6 +159,7 @@ interface LocalEntityEventRow {
 const SYNC_PULL_BATCH_SIZE = 250;
 const CONFLICT_HISTORY_SCAN_BATCH_SIZE = 250;
 const RESOLVE_ALL_CHUNK_SIZE = 200;
+const DELETE_CONFLICT_DEPENDENCY_SCAN_CHUNK_SIZE = 400;
 
 interface PayloadValidation {
   readonly ok: boolean;
@@ -689,6 +690,65 @@ function hasLocalEntityEdits(db: Database, entityKind: string, entityId: string,
   return row !== null;
 }
 
+function hasLocalDependencyEditsTouchingNodes(db: Database, nodeIds: readonly string[], sourceBranch: string): boolean {
+  if (nodeIds.length === 0) {
+    return false;
+  }
+
+  for (let offset = 0; offset < nodeIds.length; offset += DELETE_CONFLICT_DEPENDENCY_SCAN_CHUNK_SIZE) {
+    const chunk = nodeIds.slice(offset, offset + DELETE_CONFLICT_DEPENDENCY_SCAN_CHUNK_SIZE);
+    const placeholders = chunk.map(() => "?").join(", ");
+    const row = db
+      .query(
+        `
+        SELECT 1
+        FROM events
+        WHERE entity_kind = 'dependency'
+          AND (git_branch IS NULL OR git_branch != ?)
+          AND (
+            json_extract(payload, '$.fields.source_id') IN (${placeholders})
+            OR json_extract(payload, '$.fields.depends_on_id') IN (${placeholders})
+          )
+        LIMIT 1;
+        `,
+      )
+      .get(sourceBranch, ...chunk, ...chunk);
+
+    if (row !== null) {
+      return true;
+    }
+  }
+
+  return false;
+}
+
+function hasLocalDeleteCascadeEdits(db: Database, event: StoredEvent, sourceBranch: string): boolean {
+  if (hasLocalEntityEdits(db, event.entity_kind, event.entity_id, sourceBranch)) {
+    return true;
+  }
+
+  if (event.entity_kind === "subtask") {
+    return hasLocalDependencyEditsTouchingNodes(db, [event.entity_id], sourceBranch);
+  }
+
+  if (event.entity_kind !== "task") {
+    return false;
+  }
+
+  const subtaskRows = db
+    .query("SELECT id FROM subtasks WHERE task_id = ? ORDER BY created_at ASC, id ASC;")
+    .all(event.entity_id) as Array<{ id: string }>;
+  const subtaskIds = subtaskRows.map((row) => row.id);
+
+  for (const subtaskId of subtaskIds) {
+    if (hasLocalEntityEdits(db, "subtask", subtaskId, sourceBranch)) {
+      return true;
+    }
+  }
+
+  return hasLocalDependencyEditsTouchingNodes(db, [event.entity_id, ...subtaskIds], sourceBranch);
+}
+
 function rowExists(db: Database, tableName: string, id: string): boolean {
   const row = db.query(`SELECT id FROM ${tableName} WHERE id = ? LIMIT 1;`).get(id) as { id: string } | null;
   return row !== null;
@@ -901,6 +961,12 @@ function applyDelete(db: Database, event: StoredEvent, fields: Record<string, un
 
     db.query("DELETE FROM dependencies WHERE source_id = ? AND depends_on_id = ?;").run(sourceId, dependsOnId);
     return true;
+  }
+
+  if (event.entity_kind === "task") {
+    removeTaskSubtree(db, event.entity_id);
+  } else if (event.entity_kind === "subtask") {
+    removeDependenciesTouchingNode(db, event.entity_id);
   }
 
   db.query(`DELETE FROM ${tableName} WHERE id = ?;`).run(event.entity_id);
@@ -1175,7 +1241,7 @@ export function syncPull(cwd: string, sourceBranch: string): PullSummary {
 
           const isDeleteWithLocalEdits =
             incoming.operation.endsWith(".deleted") &&
-            hasLocalEntityEdits(storage.db, incoming.entity_kind, incoming.entity_id, sourceBranch);
+            hasLocalDeleteCascadeEdits(storage.db, incoming, sourceBranch);
           if (isDeleteWithLocalEdits) {
             createConflict(storage.db, incoming, "__delete__", null, "Entity deleted on source branch");
             createdConflicts += 1;
