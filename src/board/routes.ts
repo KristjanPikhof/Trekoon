@@ -420,6 +420,9 @@ export function createBoardApiHandler(context: BoardRouteContext): (request: Req
       if (request.method === "DELETE" && url.pathname === "/api/dependencies") {
         const sourceId = url.searchParams.get("sourceId") ?? "";
         const dependsOnId = url.searchParams.get("dependsOnId") ?? "";
+        const existingDependencyIds = domain.listDependencies(sourceId)
+          .filter((dependency) => dependency.dependsOnId === dependsOnId)
+          .map((dependency) => dependency.id);
         const removed = mutations.removeDependency(sourceId, dependsOnId);
         if (removed === 0) {
           throw new DomainError({
@@ -431,10 +434,6 @@ export function createBoardApiHandler(context: BoardRouteContext): (request: Req
             },
           });
         }
-
-        const existingDependencyIds = domain.listDependencies(sourceId)
-          .filter((dependency) => dependency.dependsOnId === dependsOnId)
-          .map((dependency) => dependency.id);
         return buildMutationDeltaResponse(domain, { sourceId, dependsOnId, removed }, {
           taskIds: compactIds([domain.getTask(sourceId)?.id ?? "", domain.getTask(dependsOnId)?.id ?? ""]),
           subtaskIds: compactIds([domain.getSubtask(sourceId)?.id ?? "", domain.getSubtask(dependsOnId)?.id ?? ""]),
