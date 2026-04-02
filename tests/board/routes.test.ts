@@ -59,25 +59,23 @@ describe("board routes", (): void => {
         expect.objectContaining({
           id: epic.id,
           taskIds: [task.id],
-          counts: {
-            tasks: expect.objectContaining({ total: 1, blocked: 0 }),
-            subtasks: expect.objectContaining({ total: 1 }),
-          },
-          search: expect.objectContaining({ text: "Roadmap\nPlan release" }),
+          counts: expect.objectContaining({ todo: 1, blocked: 0 }),
+          searchText: expect.stringContaining("roadmap plan release"),
         }),
       ]);
       expect(body.data.snapshot.tasks).toEqual([
         expect.objectContaining({
           id: task.id,
-          subtaskIds: [subtask.id],
-          search: expect.objectContaining({ text: "Implement\nShip board" }),
+          subtasks: [expect.objectContaining({ id: subtask.id })],
+          dependencyIds: [],
+          searchText: expect.stringContaining("implement ship board"),
         }),
       ]);
       expect(body.data.snapshot.subtasks).toEqual([
         expect.objectContaining({
           id: subtask.id,
           dependencyIds: [dependency.id],
-          counts: { dependencies: 1, dependents: 0 },
+          blockedBy: [task.id],
         }),
       ]);
       expect(body.data.snapshot.dependencies).toEqual([
