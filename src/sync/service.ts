@@ -156,6 +156,13 @@ interface LocalEntityEventRow {
   readonly id: string;
 }
 
+interface DependencyEventIdentity {
+  readonly sourceId: string;
+  readonly sourceKind: string;
+  readonly dependsOnId: string;
+  readonly dependsOnKind: string;
+}
+
 const SYNC_PULL_BATCH_SIZE = 250;
 const CONFLICT_HISTORY_SCAN_BATCH_SIZE = 250;
 const RESOLVE_ALL_CHUNK_SIZE = 200;
@@ -387,6 +394,37 @@ function currentEntityFieldValue(db: Database, entityKind: string, entityId: str
   return row?.value;
 }
 
+function dependencyEventIdentityFromFields(fields: Record<string, unknown>): DependencyEventIdentity | null {
+  const sourceId = validateRequiredStringField(fields, "source_id");
+  const sourceKind = validateRequiredStringField(fields, "source_kind");
+  const dependsOnId = validateRequiredStringField(fields, "depends_on_id");
+  const dependsOnKind = validateRequiredStringField(fields, "depends_on_kind");
+
+  if (!sourceId || !sourceKind || !dependsOnId || !dependsOnKind) {
+    return null;
+  }
+
+  return {
+    sourceId,
+    sourceKind,
+    dependsOnId,
+    dependsOnKind,
+  };
+}
+
+function dependencyEventIdentity(event: StoredEvent): DependencyEventIdentity | null {
+  if (event.entity_kind !== "dependency") {
+    return null;
+  }
+
+  const payloadValidation = parsePayload(event.payload);
+  if (!payloadValidation.ok) {
+    return null;
+  }
+
+  return dependencyEventIdentityFromFields(payloadValidation.fields);
+}
+
 function entityFieldConflict(
   localDb: Database,
   sourceBranch: string,
@@ -429,6 +467,8 @@ function entityFieldConflict(
         CONFLICT_HISTORY_SCAN_BATCH_SIZE,
       ) as LocalEntityEventRow[];
 
+    const incomingDependencyIdentity = dependencyEventIdentity(event);
+
     if (rows.length === 0) {
       return null;
     }
@@ -437,6 +477,19 @@ function entityFieldConflict(
       const payloadValidation = parsePayload(row.payload);
       if (!payloadValidation.ok) {
         continue;
+      }
+
+      if (incomingDependencyIdentity !== null) {
+        const localDependencyIdentity = dependencyEventIdentityFromFields(payloadValidation.fields);
+        if (
+          localDependencyIdentity === null ||
+          localDependencyIdentity.sourceId !== incomingDependencyIdentity.sourceId ||
+          localDependencyIdentity.sourceKind !== incomingDependencyIdentity.sourceKind ||
+          localDependencyIdentity.dependsOnId !== incomingDependencyIdentity.dependsOnId ||
+          localDependencyIdentity.dependsOnKind !== incomingDependencyIdentity.dependsOnKind
+        ) {
+          continue;
+        }
       }
 
       const payload: EventPayload = { fields: payloadValidation.fields };
@@ -724,6 +777,89 @@ function hasLocalDependencyEditsTouchingNodes(db: Database, nodeIds: readonly st
   return false;
 }
 
+function hasLocalDependencyEditsForIdentity(
+  db: Database,
+  sourceBranch: string,
+  identity: DependencyEventIdentity,
+): boolean {
+  const row = db
+    .query(
+      `
+      SELECT 1
+      FROM events
+      WHERE entity_kind = 'dependency'
+        AND (git_branch IS NULL OR git_branch != ?)
+        AND json_extract(payload, '$.fields.source_id') = ?
+        AND json_extract(payload, '$.fields.source_kind') = ?
+        AND json_extract(payload, '$.fields.depends_on_id') = ?
+        AND json_extract(payload, '$.fields.depends_on_kind') = ?
+      LIMIT 1;
+      `,
+    )
+    .get(sourceBranch, identity.sourceId, identity.sourceKind, identity.dependsOnId, identity.dependsOnKind);
+
+  return row !== null;
+}
+
+function dependencyRowExistsForIdentity(db: Database, identity: DependencyEventIdentity): boolean {
+  const row = db
+    .query(
+      `
+      SELECT 1
+      FROM dependencies
+      WHERE source_id = ?
+        AND source_kind = ?
+        AND depends_on_id = ?
+        AND depends_on_kind = ?
+      LIMIT 1;
+      `,
+    )
+    .get(identity.sourceId, identity.sourceKind, identity.dependsOnId, identity.dependsOnKind);
+
+  return row !== null;
+}
+
+function latestLocalDependencyOperationForIdentity(
+  db: Database,
+  sourceBranch: string,
+  identity: DependencyEventIdentity,
+): string | null {
+  const row = db
+    .query(
+      `
+      SELECT operation
+      FROM events
+      WHERE entity_kind = 'dependency'
+        AND (git_branch IS NULL OR git_branch != ?)
+        AND json_extract(payload, '$.fields.source_id') = ?
+        AND json_extract(payload, '$.fields.source_kind') = ?
+        AND json_extract(payload, '$.fields.depends_on_id') = ?
+        AND json_extract(payload, '$.fields.depends_on_kind') = ?
+      ORDER BY created_at DESC, id DESC
+      LIMIT 1;
+      `,
+    )
+    .get(sourceBranch, identity.sourceId, identity.sourceKind, identity.dependsOnId, identity.dependsOnKind) as
+    | { operation: string }
+    | null;
+
+  return row?.operation ?? null;
+}
+
+function hasLocalDependencyDeleteConflict(db: Database, event: StoredEvent, sourceBranch: string): boolean {
+  const identity = dependencyEventIdentity(event);
+  if (identity === null) {
+    return false;
+  }
+
+  const latestOperation = latestLocalDependencyOperationForIdentity(db, sourceBranch, identity);
+  if (latestOperation === ENTITY_OPERATIONS.dependency.removed && !dependencyRowExistsForIdentity(db, identity)) {
+    return false;
+  }
+
+  return hasLocalDependencyEditsForIdentity(db, sourceBranch, identity);
+}
+
 function hasLocalDeleteCascadeEdits(db: Database, event: StoredEvent, sourceBranch: string): boolean {
   if (hasLocalEntityEdits(db, event.entity_kind, event.entity_id, sourceBranch)) {
     return true;
@@ -869,6 +1005,7 @@ function applyCreate(db: Database, event: StoredEvent, fields: Record<string, un
   const sourceKind = validateRequiredStringField(fields, "source_kind");
   const dependsOnId = validateRequiredStringField(fields, "depends_on_id");
   const dependsOnKind = validateRequiredStringField(fields, "depends_on_kind");
+  const dependencyId = validateRequiredStringField(fields, "dependency_id") ?? event.entity_id;
 
   if (!sourceId || !sourceKind || !dependsOnId || !dependsOnKind) {
     return false;
@@ -891,13 +1028,12 @@ function applyCreate(db: Database, event: StoredEvent, fields: Record<string, un
       version
     ) VALUES (?, ?, ?, ?, ?, ?, ?, 1)
     ON CONFLICT(source_id, depends_on_id) DO UPDATE SET
-      id = excluded.id,
       source_kind = excluded.source_kind,
       depends_on_kind = excluded.depends_on_kind,
       updated_at = excluded.updated_at,
       version = dependencies.version + 1;
     `,
-  ).run(event.entity_id, sourceId, sourceKind, dependsOnId, dependsOnKind, now, now);
+  ).run(dependencyId, sourceId, sourceKind, dependsOnId, dependsOnKind, now, now);
 
   return true;
 }
@@ -1242,8 +1378,8 @@ export function syncPull(cwd: string, sourceBranch: string): PullSummary {
           }
 
           const isDeleteWithLocalEdits =
-            incoming.operation.endsWith(".deleted") &&
-            hasLocalDeleteCascadeEdits(storage.db, incoming, sourceBranch);
+            (incoming.operation.endsWith(".deleted") && hasLocalDeleteCascadeEdits(storage.db, incoming, sourceBranch)) ||
+            (incoming.operation === "dependency.removed" && hasLocalDependencyDeleteConflict(storage.db, incoming, sourceBranch));
           if (isDeleteWithLocalEdits) {
             createConflict(storage.db, incoming, "__delete__", null, "Entity deleted on source branch");
             createdConflicts += 1;
