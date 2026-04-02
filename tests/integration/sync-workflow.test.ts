@@ -654,6 +654,67 @@ describe("integration sync workflow", (): void => {
     expect(data.appliedEvents).toBeGreaterThanOrEqual(1);
   });
 
+  test("pull processes large histories in cursor batches", async (): Promise<void> => {
+    const workspace: string = createWorkspace();
+    seedRepository(workspace);
+
+    const initResult = await runInit({
+      args: [],
+      cwd: workspace,
+      mode: "human",
+    });
+    expect(initResult.ok).toBe(true);
+
+    runGit(workspace, ["checkout", "-b", "feature/large-batch-pull"]);
+    runGit(workspace, ["checkout", "main"]);
+
+    const created = await runEpic({
+      cwd: workspace,
+      mode: "toon",
+      args: ["create", "--title", "Batch epic", "--description", "large history"],
+    });
+    expect(created.ok).toBe(true);
+    const epicId = (created.data as { epic: { id: string } }).epic.id;
+
+    const storage = openTrekoonDatabase(workspace);
+    try {
+      for (let index = 0; index < 600; index += 1) {
+        storage.db.query("UPDATE epics SET description = ?, updated_at = ?, version = version + 1 WHERE id = ?;").run(
+          `description-${index}`,
+          Date.now() + index + 1,
+          epicId,
+        );
+
+        appendEventWithGitContext(storage.db, workspace, {
+          entityKind: "epic",
+          entityId: epicId,
+          operation: "upsert",
+          fields: { description: `description-${index}` },
+        });
+      }
+    } finally {
+      storage.close();
+    }
+
+    runGit(workspace, ["checkout", "feature/large-batch-pull"]);
+
+    const pullResult = await runSync({
+      args: ["pull", "--from", "main"],
+      cwd: workspace,
+      mode: "toon",
+    });
+    expect(pullResult.ok).toBe(true);
+    expect((pullResult.data as { scannedEvents: number }).scannedEvents).toBeGreaterThan(250);
+
+    const verifyStorage = openTrekoonDatabase(workspace);
+    try {
+      const epic = verifyStorage.db.query("SELECT description FROM epics WHERE id = ?;").get(epicId) as { description: string } | null;
+      expect(epic?.description).toBe("description-599");
+    } finally {
+      verifyStorage.close();
+    }
+  });
+
   test("fresh worktree sees shared tracker state and can pull main", async (): Promise<void> => {
     const workspace: string = createWorkspace();
     seedRepository(workspace);
