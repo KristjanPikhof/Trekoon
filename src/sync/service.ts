@@ -607,7 +607,7 @@ function applyIncomingResolutionEvent(db: Database, event: StoredEvent): boolean
     return false;
   }
 
-  const resolutionPayload = parsed as ResolutionEventPayload;
+  const resolutionPayload = parsed as unknown as ResolutionEventPayload;
   const fieldName = resolutionPayload.field;
   const resolution = resolutionPayload.resolution;
 
