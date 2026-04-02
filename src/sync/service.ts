@@ -363,7 +363,7 @@ function entityFieldConflict(
     return null;
   }
 
-  let beforeCreatedAt = event.created_at + 1;
+  let beforeCreatedAt = Number.MAX_SAFE_INTEGER;
   let beforeId = "\uffff";
 
   while (true) {
@@ -436,6 +436,45 @@ function createConflict(
   resolution: string = "pending",
 ): void {
   const now: number = Date.now();
+  const existing = db
+    .query(
+      `
+      SELECT id, resolution, ours_value, theirs_value
+      FROM sync_conflicts
+      WHERE event_id = ? AND entity_kind = ? AND entity_id = ? AND field_name = ?
+      ORDER BY CASE WHEN resolution = 'pending' THEN 0 ELSE 1 END, created_at ASC, id ASC
+      LIMIT 1;
+      `,
+    )
+    .get(event.id, event.entity_kind, event.entity_id, fieldName) as
+    | { id: string; resolution: string; ours_value: string | null; theirs_value: string | null }
+    | null;
+
+  if (existing) {
+    const nextResolution = existing.resolution === "pending" ? resolution : existing.resolution;
+    const unchanged =
+      existing.ours_value === oursValue &&
+      existing.theirs_value === theirsValue &&
+      existing.resolution === nextResolution;
+
+    if (unchanged) {
+      return;
+    }
+
+    db.query(
+      `
+      UPDATE sync_conflicts
+      SET ours_value = ?,
+          theirs_value = ?,
+          resolution = ?,
+          updated_at = ?,
+          version = version + 1
+      WHERE id = ?;
+      `,
+    ).run(oursValue, theirsValue, nextResolution, now, existing.id);
+    return;
+  }
+
   db.query(
     `
     INSERT INTO sync_conflicts (
@@ -450,34 +489,7 @@ function createConflict(
       created_at,
       updated_at,
       version
-    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1)
-    ON CONFLICT(event_id, field_name) DO UPDATE SET
-      ours_value = excluded.ours_value,
-      theirs_value = excluded.theirs_value,
-      resolution = CASE
-        WHEN sync_conflicts.resolution = 'pending' THEN excluded.resolution
-        ELSE sync_conflicts.resolution
-      END,
-      updated_at = CASE
-        WHEN sync_conflicts.ours_value IS excluded.ours_value
-         AND sync_conflicts.theirs_value IS excluded.theirs_value
-         AND sync_conflicts.resolution = CASE
-           WHEN sync_conflicts.resolution = 'pending' THEN excluded.resolution
-           ELSE sync_conflicts.resolution
-         END
-        THEN sync_conflicts.updated_at
-        ELSE excluded.updated_at
-      END,
-      version = CASE
-        WHEN sync_conflicts.ours_value IS excluded.ours_value
-         AND sync_conflicts.theirs_value IS excluded.theirs_value
-         AND sync_conflicts.resolution = CASE
-           WHEN sync_conflicts.resolution = 'pending' THEN excluded.resolution
-           ELSE sync_conflicts.resolution
-         END
-        THEN sync_conflicts.version
-        ELSE sync_conflicts.version + 1
-      END;
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1);
     `,
   ).run(randomUUID(), event.id, event.entity_kind, event.entity_id, fieldName, oursValue, theirsValue, resolution, now, now);
 }
