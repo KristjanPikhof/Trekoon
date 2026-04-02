@@ -450,9 +450,74 @@ function createConflict(
       created_at,
       updated_at,
       version
-    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1);
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1)
+    ON CONFLICT(event_id, field_name) DO UPDATE SET
+      ours_value = excluded.ours_value,
+      theirs_value = excluded.theirs_value,
+      resolution = CASE
+        WHEN sync_conflicts.resolution = 'pending' THEN excluded.resolution
+        ELSE sync_conflicts.resolution
+      END,
+      updated_at = CASE
+        WHEN sync_conflicts.ours_value IS excluded.ours_value
+         AND sync_conflicts.theirs_value IS excluded.theirs_value
+         AND sync_conflicts.resolution = excluded.resolution
+        THEN sync_conflicts.updated_at
+        ELSE excluded.updated_at
+      END,
+      version = CASE
+        WHEN sync_conflicts.ours_value IS excluded.ours_value
+         AND sync_conflicts.theirs_value IS excluded.theirs_value
+         AND sync_conflicts.resolution = excluded.resolution
+        THEN sync_conflicts.version
+        ELSE sync_conflicts.version + 1
+      END;
     `,
   ).run(randomUUID(), event.id, event.entity_kind, event.entity_id, fieldName, oursValue, theirsValue, resolution, now, now);
+}
+
+function applyIncomingResolutionEvent(db: Database, event: StoredEvent): boolean {
+  const payloadValidation = parsePayload(event.payload);
+  if (!payloadValidation.ok) {
+    return false;
+  }
+
+  const conflictId = payloadValidation.fields.conflict_id;
+  const fieldName = payloadValidation.fields.field;
+  const resolution = payloadValidation.fields.resolution;
+
+  if (
+    typeof conflictId !== "string" ||
+    typeof fieldName !== "string" ||
+    (resolution !== "ours" && resolution !== "theirs")
+  ) {
+    return false;
+  }
+
+  const now = nextEventTimestamp(db);
+  const updated = db
+    .query(
+      `
+      UPDATE sync_conflicts
+      SET resolution = CASE WHEN resolution = 'pending' THEN @resolution ELSE resolution END,
+          updated_at = CASE WHEN resolution = 'pending' THEN @now ELSE updated_at END,
+          version = CASE WHEN resolution = 'pending' THEN version + 1 ELSE version END
+      WHERE id = @conflictId
+        AND entity_kind = @entityKind
+        AND entity_id = @entityId
+        AND field_name = @fieldName;
+      `,
+    )
+    .run({
+      "@resolution": resolution,
+      "@now": now,
+      "@conflictId": conflictId,
+      "@entityKind": event.entity_kind,
+      "@entityId": event.entity_id,
+      "@fieldName": fieldName,
+    });
+
+  return updated.changes > 0;
 }
 
 function hasLocalEntityEdits(db: Database, entityKind: string, entityId: string, sourceBranch: string): boolean {
