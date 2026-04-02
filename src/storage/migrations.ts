@@ -90,6 +90,7 @@ const BOARD_IDEMPOTENCY_MIGRATION_UP_STATEMENTS: readonly string[] = [
     scope TEXT NOT NULL,
     idempotency_key TEXT NOT NULL,
     request_fingerprint TEXT NOT NULL,
+    state TEXT NOT NULL DEFAULT 'completed',
     response_status INTEGER NOT NULL,
     response_body TEXT NOT NULL,
     created_at INTEGER NOT NULL,
@@ -107,6 +108,13 @@ const BOARD_IDEMPOTENCY_MIGRATION_DOWN_STATEMENTS: readonly string[] = [
 function tableHasColumn(db: Database, tableName: string, columnName: string): boolean {
   const columns = db.query(`PRAGMA table_info(${tableName});`).all() as Array<{ name: string }>;
   return columns.some((column) => column.name === columnName);
+}
+
+function tableExists(db: Database, tableName: string): boolean {
+  const row = db
+    .query("SELECT COUNT(*) AS count FROM sqlite_master WHERE type = 'table' AND name = ?;")
+    .get(tableName) as { count: number } | null;
+  return (row?.count ?? 0) > 0;
 }
 
 function migrateWorktreeScopedSyncMetadata(db: Database): void {
@@ -139,6 +147,32 @@ function migrateWorktreeScopedSyncMetadata(db: Database): void {
   db.exec(
     "CREATE UNIQUE INDEX IF NOT EXISTS idx_sync_cursors_owner ON sync_cursors(owner_scope, owner_worktree_path, source_branch);",
   );
+}
+
+function migrateBoardIdempotencyState(db: Database): void {
+  if (!tableExists(db, "board_idempotency_keys")) {
+    return;
+  }
+
+  if (!tableHasColumn(db, "board_idempotency_keys", "state")) {
+    db.exec("ALTER TABLE board_idempotency_keys ADD COLUMN state TEXT NOT NULL DEFAULT 'completed';");
+    db.exec("UPDATE board_idempotency_keys SET state = 'completed' WHERE state IS NULL OR state = ''; ");
+    return;
+  }
+
+  const row = db
+    .query(
+      `
+      SELECT COUNT(*) AS count
+      FROM board_idempotency_keys
+      WHERE state IS NULL OR state = '';
+      `,
+    )
+    .get() as { count: number } | null;
+
+  if ((row?.count ?? 0) > 0) {
+    db.exec("UPDATE board_idempotency_keys SET state = 'completed' WHERE state IS NULL OR state = ''; ");
+  }
 }
 
 interface Migration {
@@ -515,6 +549,7 @@ export function migrateDatabase(db: Database): void {
   // This reduces startup lock contention while keeping the explicit
   // transactional migration path for non-current/legacy schemas.
   if (isSchemaCurrentFastPath(db, latestVersion)) {
+    migrateBoardIdempotencyState(db);
     return;
   }
 
@@ -532,12 +567,15 @@ export function migrateDatabase(db: Database): void {
       migration.up(db);
       recordMigration(db, migration);
     }
+
+    migrateBoardIdempotencyState(db);
   });
 }
 
 export function describeMigrations(db: Database): MigrationStatus {
   ensureMigrationTable(db);
   ensureMigrationVersionColumn(db);
+  migrateBoardIdempotencyState(db);
   validateMigrationPlan();
 
   const appliedRows: AppliedMigrationRow[] = listAppliedMigrations(db);
