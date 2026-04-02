@@ -19,6 +19,13 @@ interface BoardRouteError {
   readonly details?: Record<string, unknown>;
 }
 
+interface IdempotentMutationRecord {
+  readonly kind: "subtask" | "dependency";
+  readonly entityId: string;
+  readonly sourceId?: string;
+  readonly dependsOnId?: string;
+}
+
 function jsonResponse(status: number, data: unknown): Response {
   return new Response(JSON.stringify(data), {
     status,
@@ -175,7 +182,44 @@ function readRequiredString(body: Record<string, unknown>, field: string): strin
   return value;
 }
 
+function readOptionalNullableString(body: Record<string, unknown>, field: string): string | null | undefined {
+  const value = body[field];
+  if (value === undefined) {
+    return undefined;
+  }
+
+  if (value === null) {
+    return null;
+  }
+
+  if (typeof value !== "string") {
+    throw new DomainError({
+      code: "invalid_input",
+      message: `${field} must be a string or null`,
+      details: { field },
+    });
+  }
+
+  return value;
+}
+
+function readIdempotencyKey(request: Request, body: Record<string, unknown>): string | null {
+  const headerKey = request.headers.get("x-trekoon-idempotency-key");
+  if (typeof headerKey === "string" && headerKey.trim().length > 0) {
+    return headerKey.trim();
+  }
+
+  const bodyKey = body.clientRequestId;
+  if (typeof bodyKey === "string" && bodyKey.trim().length > 0) {
+    return bodyKey.trim();
+  }
+
+  return null;
+}
+
 export function createBoardApiHandler(context: BoardRouteContext): (request: Request) => Promise<Response> {
+  const idempotentMutations = new Map<string, IdempotentMutationRecord>();
+
   return async (request: Request): Promise<Response> => {
     const url = new URL(request.url);
     const requestLabel = `${request.method} ${url.pathname}`;
@@ -225,35 +269,50 @@ export function createBoardApiHandler(context: BoardRouteContext): (request: Req
       const taskMatch = request.method === "PATCH" ? url.pathname.match(/^\/api\/tasks\/([^/]+)$/u) : null;
       if (taskMatch) {
         const body = await parseJsonBody(request);
-        const task = mutations.updateTask(taskMatch[1] ?? "", {
-          title: readOptionalString(body, "title"),
-          description: readOptionalString(body, "description"),
-          status: readOptionalString(body, "status"),
-          owner: readOptionalString(body, "owner"),
-        });
-        return buildMutationResponse(domain, { task });
-      }
+          const task = mutations.updateTask(taskMatch[1] ?? "", {
+            title: readOptionalString(body, "title"),
+            description: readOptionalString(body, "description"),
+            status: readOptionalString(body, "status"),
+            owner: readOptionalNullableString(body, "owner"),
+          });
+          return buildMutationResponse(domain, { task });
+        }
 
       const subtaskMatch = request.method === "PATCH" ? url.pathname.match(/^\/api\/subtasks\/([^/]+)$/u) : null;
       if (subtaskMatch) {
         const body = await parseJsonBody(request);
-        const subtask = mutations.updateSubtask(subtaskMatch[1] ?? "", {
-          title: readOptionalString(body, "title"),
-          description: readOptionalString(body, "description"),
-          status: readOptionalString(body, "status"),
-          owner: readOptionalString(body, "owner"),
-        });
-        return buildMutationResponse(domain, { subtask });
-      }
+          const subtask = mutations.updateSubtask(subtaskMatch[1] ?? "", {
+            title: readOptionalString(body, "title"),
+            description: readOptionalString(body, "description"),
+            status: readOptionalString(body, "status"),
+            owner: readOptionalNullableString(body, "owner"),
+          });
+          return buildMutationResponse(domain, { subtask });
+        }
 
       if (request.method === "POST" && url.pathname === "/api/subtasks") {
         const body = await parseJsonBody(request);
+        const idempotencyKey = readIdempotencyKey(request, body);
+        if (idempotencyKey) {
+          const cached = idempotentMutations.get(`subtask:${idempotencyKey}`);
+          if (cached?.kind === "subtask") {
+            const subtask = domain.getSubtaskOrThrow(cached.entityId);
+            return buildMutationResponse(domain, { subtask }, 201);
+          }
+        }
+
         const subtask = mutations.createSubtask({
           taskId: readRequiredString(body, "taskId"),
           title: readRequiredString(body, "title"),
           description: readOptionalString(body, "description"),
           status: readOptionalString(body, "status"),
         });
+        if (idempotencyKey) {
+          idempotentMutations.set(`subtask:${idempotencyKey}`, {
+            kind: "subtask",
+            entityId: subtask.id,
+          });
+        }
         return buildMutationResponse(domain, { subtask }, 201);
       }
 
@@ -266,7 +325,28 @@ export function createBoardApiHandler(context: BoardRouteContext): (request: Req
 
       if (request.method === "POST" && url.pathname === "/api/dependencies") {
         const body = await parseJsonBody(request);
-        const dependency = mutations.addDependency(readRequiredString(body, "sourceId"), readRequiredString(body, "dependsOnId"));
+        const sourceId = readRequiredString(body, "sourceId");
+        const dependsOnId = readRequiredString(body, "dependsOnId");
+        const idempotencyKey = readIdempotencyKey(request, body);
+        if (idempotencyKey) {
+          const cached = idempotentMutations.get(`dependency:${idempotencyKey}`);
+          if (cached?.kind === "dependency" && cached.sourceId && cached.dependsOnId) {
+            const dependency = domain.listDependencies(cached.sourceId).find((candidate) => candidate.dependsOnId === cached.dependsOnId);
+            if (dependency) {
+              return buildMutationResponse(domain, { dependency }, 201);
+            }
+          }
+        }
+
+        const dependency = mutations.addDependency(sourceId, dependsOnId);
+        if (idempotencyKey) {
+          idempotentMutations.set(`dependency:${idempotencyKey}`, {
+            kind: "dependency",
+            entityId: dependency.id,
+            sourceId: dependency.sourceId,
+            dependsOnId: dependency.dependsOnId,
+          });
+        }
         return buildMutationResponse(domain, { dependency }, 201);
       }
 
