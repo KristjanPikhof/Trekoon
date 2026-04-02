@@ -7,6 +7,7 @@ import { afterEach, describe, expect, test } from "bun:test";
 import { createBoardApiHandler } from "../../src/board/routes";
 import { openTrekoonDatabase } from "../../src/storage/database";
 import { MutationService } from "../../src/domain/mutation-service";
+import { TrackerDomain } from "../../src/domain/tracker-domain";
 
 const tempDirs: string[] = [];
 
@@ -626,7 +627,7 @@ describe("board routes", (): void => {
       expect(response.status).toBe(200);
       expect(body.ok).toBeTrue();
       expect(body.data.task).toEqual(expect.objectContaining({ id: task.id, owner: null }));
-      expect(mutations.getTask(task.id)?.owner).toBeNull();
+      expect(new TrackerDomain(storage.db).getTask(task.id)?.owner).toBeNull();
     } finally {
       storage.close();
     }
