@@ -123,6 +123,11 @@ interface ResolvedCompactEntity {
   readonly kind: "task" | "subtask";
 }
 
+interface TaskDeletionPlan {
+  readonly subtaskIds: readonly string[];
+  readonly touchingDependencies: readonly DependencyRecord[];
+}
+
 function assertNonEmpty(field: string, value: string | undefined | null): string {
   const normalized: string = (value ?? "").trim();
   if (!normalized) {
@@ -525,8 +530,20 @@ export class TrackerDomain {
   }
 
   deleteTask(id: string): void {
-    this.getTaskOrThrow(id);
-    this.#db.query("DELETE FROM tasks WHERE id = ?;").run(id);
+    const normalizedTaskId: string = assertNonEmpty("id", id);
+    this.getTaskOrThrow(normalizedTaskId);
+
+    const plan = this.planTaskDeletion(normalizedTaskId);
+    for (const dependency of plan.touchingDependencies) {
+      this.#db.query("DELETE FROM dependencies WHERE id = ?;").run(dependency.id);
+    }
+
+    if (plan.subtaskIds.length > 0) {
+      const placeholders = plan.subtaskIds.map(() => "?").join(", ");
+      this.#db.query(`DELETE FROM subtasks WHERE id IN (${placeholders});`).run(...plan.subtaskIds);
+    }
+
+    this.#db.query("DELETE FROM tasks WHERE id = ?;").run(normalizedTaskId);
   }
 
   createSubtask(
@@ -776,6 +793,31 @@ export class TrackerDomain {
       .all(normalizedNodeId, normalizedNodeId) as DependencyRow[];
 
     return rows.map(mapDependency);
+  }
+
+  planTaskDeletion(taskId: string): TaskDeletionPlan {
+    const normalizedTaskId: string = assertNonEmpty("taskId", taskId);
+    this.getTaskOrThrow(normalizedTaskId);
+
+    const subtaskRows = this.#db
+      .query("SELECT id FROM subtasks WHERE task_id = ? ORDER BY created_at ASC, id ASC;")
+      .all(normalizedTaskId) as Array<{ id: string }>;
+    const subtaskIds: string[] = subtaskRows.map((row) => row.id);
+    const nodeIds: string[] = [normalizedTaskId, ...subtaskIds];
+    const placeholders = nodeIds.map(() => "?").join(", ");
+    const rows = this.#db
+      .query(
+        `SELECT id, source_id, source_kind, depends_on_id, depends_on_kind, created_at, updated_at
+         FROM dependencies
+         WHERE source_id IN (${placeholders}) OR depends_on_id IN (${placeholders})
+         ORDER BY created_at ASC, id ASC;`,
+      )
+      .all(...nodeIds, ...nodeIds) as DependencyRow[];
+
+    return {
+      subtaskIds,
+      touchingDependencies: rows.map(mapDependency),
+    };
   }
 
   buildEpicTree(epicId: string): EpicTree {
