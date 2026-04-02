@@ -1349,10 +1349,10 @@ export function syncResolvePreview(cwd: string, conflictId: string, resolution: 
   }
 }
 
-function queryPendingConflicts(
+function queryPendingConflictIds(
   db: Database,
   filters: ResolveAllQueryFilters,
-): readonly ConflictRow[] {
+): readonly string[] {
   const conditions: string[] = ["resolution = 'pending'"];
   const params: string[] = [];
 
@@ -1367,14 +1367,14 @@ function queryPendingConflicts(
   }
 
   const sql = `
-    SELECT c.id, c.event_id, c.entity_kind, c.entity_id, c.field_name, c.ours_value, c.theirs_value, c.resolution, c.created_at, c.updated_at
+    SELECT c.id
     FROM sync_conflicts c
     LEFT JOIN events e ON e.id = c.event_id
     WHERE ${conditions.map((condition) => condition.replaceAll("resolution", "c.resolution").replaceAll("entity_id", "c.entity_id").replaceAll("field_name", "c.field_name")).join(" AND ")}
     ORDER BY COALESCE(e.created_at, c.created_at) ASC, COALESCE(e.id, c.event_id) ASC, c.created_at ASC, c.id ASC;
   `;
 
-  return db.query(sql).all(...params) as ConflictRow[];
+  return (db.query(sql).all(...params) as ConflictOrderRow[]).map((row) => row.id);
 }
 
 function queryPendingConflictsByIds(db: Database, conflictIds: readonly string[]): readonly ConflictRow[] {
@@ -1416,11 +1416,9 @@ export function syncResolveAll(
 
     const resolvedIds: string[] = writeTransaction(storage.db, (): string[] => {
       const expectedConflictIds = options.expectedConflictIds;
-      const conflicts = expectedConflictIds
-        ? queryPendingConflictsByIds(storage.db, expectedConflictIds)
-        : queryPendingConflicts(storage.db, filters);
+      const orderedConflictIds = expectedConflictIds ?? queryPendingConflictIds(storage.db, filters);
 
-      if (conflicts.length === 0) {
+      if (orderedConflictIds.length === 0) {
         throw new DomainError({
           code: "no_matching_conflicts",
           message: "No pending conflicts match the given filters.",
@@ -1428,23 +1426,28 @@ export function syncResolveAll(
         });
       }
 
-      if (expectedConflictIds && conflicts.length !== expectedConflictIds.length) {
-        throw new DomainError({
-          code: "conflict_set_changed",
-          message: "Pending conflicts changed before batch resolution could be applied.",
-          details: {
-            filters: normalizedFilters,
-            expectedConflictIds,
-            availableConflictIds: conflicts.map((conflict) => conflict.id),
-          },
-        });
-      }
-
       const ids: string[] = [];
 
-      for (const conflict of conflicts) {
-        resolveConflictRow(storage.db, conflict, resolution, git);
-        ids.push(conflict.id);
+      for (let offset = 0; offset < orderedConflictIds.length; offset += RESOLVE_ALL_CHUNK_SIZE) {
+        const chunkIds = orderedConflictIds.slice(offset, offset + RESOLVE_ALL_CHUNK_SIZE);
+        const chunkConflicts = queryPendingConflictsByIds(storage.db, chunkIds);
+
+        if (chunkConflicts.length !== chunkIds.length) {
+          throw new DomainError({
+            code: "conflict_set_changed",
+            message: "Pending conflicts changed before batch resolution could be applied.",
+            details: {
+              filters: normalizedFilters,
+              expectedConflictIds: chunkIds,
+              availableConflictIds: chunkConflicts.map((conflict) => conflict.id),
+            },
+          });
+        }
+
+        for (const conflict of chunkConflicts) {
+          resolveConflictRow(storage.db, conflict, resolution, git);
+          ids.push(conflict.id);
+        }
       }
 
       return ids;
@@ -1470,9 +1473,9 @@ export function syncResolveAllPreview(
   const normalizedFilters: ResolveAllFilters = normalizeResolveAllFilters(filters);
 
   try {
-    const conflicts = queryPendingConflicts(storage.db, filters);
+    const conflictIds = queryPendingConflictIds(storage.db, filters);
 
-    if (conflicts.length === 0) {
+    if (conflictIds.length === 0) {
       throw new DomainError({
         code: "no_matching_conflicts",
         message: "No pending conflicts match the given filters.",
@@ -1482,8 +1485,8 @@ export function syncResolveAllPreview(
 
     return {
       resolution,
-      matchedCount: conflicts.length,
-      matchedIds: conflicts.map((c) => c.id),
+      matchedCount: conflictIds.length,
+      matchedIds: conflictIds,
       filters: normalizedFilters,
       dryRun: true,
     };
