@@ -75,14 +75,14 @@ export function cascadeEpicStatusInSnapshot(snapshot, epicId, status, normalizeS
   return normalizeSnapshot(nextSnapshot);
 }
 
-export function addDependencyInSnapshot(snapshot, sourceId, dependsOnId, normalizeSnapshot) {
+export function addDependencyInSnapshot(snapshot, sourceId, dependsOnId, normalizeSnapshot, optimisticId = null) {
   const nextSnapshot = cloneSnapshot(snapshot);
   const duplicate = normalizeArray(nextSnapshot.dependencies).some(
     (dependency) => dependency.sourceId === sourceId && dependency.dependsOnId === dependsOnId,
   );
   if (!duplicate) {
     normalizeArray(nextSnapshot.dependencies).push({
-      id: crypto.randomUUID(),
+      id: optimisticId ?? crypto.randomUUID(),
       sourceId,
       sourceKind: nextSnapshot.subtasks.some((subtask) => subtask.id === sourceId) ? "subtask" : "task",
       dependsOnId,
@@ -102,10 +102,10 @@ export function removeDependencyInSnapshot(snapshot, sourceId, dependsOnId, norm
   return normalizeSnapshot(nextSnapshot);
 }
 
-export function createSubtaskInSnapshot(snapshot, input, normalizeSnapshot) {
+export function createSubtaskInSnapshot(snapshot, input, normalizeSnapshot, optimisticId = null) {
   const nextSnapshot = cloneSnapshot(snapshot);
   normalizeArray(nextSnapshot.subtasks).push({
-    id: crypto.randomUUID(),
+    id: optimisticId ?? crypto.randomUUID(),
     taskId: input.taskId,
     title: input.title,
     description: input.description ?? "",
@@ -382,7 +382,7 @@ export function createBoardActions(options) {
         return;
       }
 
-      api.createSubtask(input, (snapshot) => createSubtaskInSnapshot(snapshot, input, normalizeSnapshot));
+      api.createSubtask(input, (snapshot, optimisticId) => createSubtaskInSnapshot(snapshot, input, normalizeSnapshot, optimisticId));
     },
     deleteSubtask(subtaskId) {
       if (!subtaskId) {
@@ -399,7 +399,7 @@ export function createBoardActions(options) {
         return;
       }
 
-      api.addDependency(sourceId, dependsOnId, (snapshot) => addDependencyInSnapshot(snapshot, sourceId, dependsOnId, normalizeSnapshot));
+      api.addDependency(sourceId, dependsOnId, (snapshot, optimisticId) => addDependencyInSnapshot(snapshot, sourceId, dependsOnId, normalizeSnapshot, optimisticId));
     },
     removeDependency(sourceId, dependsOnId) {
       api.removeDependency(sourceId, dependsOnId, (snapshot) => removeDependencyInSnapshot(snapshot, sourceId, dependsOnId, normalizeSnapshot));
