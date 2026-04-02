@@ -383,6 +383,229 @@ describe("sync command", (): void => {
     expect((pullResult.data as { appliedEvents: number }).appliedEvents).toBeGreaterThanOrEqual(1);
   });
 
+  test("sync pull detects conflicts beyond prior history scan limits", async (): Promise<void> => {
+    const workspace: string = createWorkspace();
+    initializeRepository(workspace);
+
+    const epicId = randomUUID();
+    const now = Date.now();
+
+    {
+      const storage = openTrekoonDatabase(workspace);
+      try {
+        storage.db
+          .query("INSERT INTO epics (id, title, description, status, created_at, updated_at, version) VALUES (?, ?, ?, ?, ?, ?, 1);")
+          .run(epicId, "Remote start", "seed", "todo", now, now);
+
+        appendEventWithGitContext(storage.db, workspace, {
+          entityKind: "epic",
+          entityId: epicId,
+          operation: "upsert",
+          fields: { title: "Remote start", description: "seed", status: "todo" },
+        });
+      } finally {
+        storage.close();
+      }
+    }
+
+    runGit(workspace, ["checkout", "-b", "feature/long-history-conflict"]);
+
+    {
+      const storage = openTrekoonDatabase(workspace);
+      try {
+        for (let index = 0; index < 520; index += 1) {
+          storage.db.query("UPDATE epics SET description = ?, updated_at = ?, version = version + 1 WHERE id = ?;").run(
+            `Local description ${index}`,
+            now + index + 1,
+            epicId,
+          );
+
+          appendEventWithGitContext(storage.db, workspace, {
+            entityKind: "epic",
+            entityId: epicId,
+            operation: "upsert",
+            fields: { description: `Local description ${index}` },
+          });
+        }
+      } finally {
+        storage.close();
+      }
+    }
+
+    runGit(workspace, ["checkout", "main"]);
+
+    {
+      const storage = openTrekoonDatabase(workspace);
+      try {
+        storage.db.query("UPDATE epics SET description = ?, updated_at = ?, version = version + 1 WHERE id = ?;").run(
+          "Remote changed description",
+          now + 10_000,
+          epicId,
+        );
+
+        appendEventWithGitContext(storage.db, workspace, {
+          entityKind: "epic",
+          entityId: epicId,
+          operation: "upsert",
+          fields: { description: "Remote changed description" },
+        });
+      } finally {
+        storage.close();
+      }
+    }
+
+    runGit(workspace, ["checkout", "feature/long-history-conflict"]);
+
+    const pullResult = await runSync({
+      args: ["pull", "--from", "main"],
+      cwd: workspace,
+      mode: "toon",
+    });
+
+    expect(pullResult.ok).toBe(true);
+    expect((pullResult.data as { createdConflicts: number }).createdConflicts).toBe(1);
+
+    const storage = openTrekoonDatabase(workspace);
+    try {
+      const conflicts = storage.db
+        .query("SELECT field_name, ours_value, theirs_value FROM sync_conflicts WHERE resolution = 'pending' AND event_id IN (SELECT id FROM events WHERE git_branch = 'main' ORDER BY created_at DESC LIMIT 1);")
+        .all() as Array<{ field_name: string; ours_value: string; theirs_value: string }>;
+
+      expect(conflicts).toHaveLength(1);
+      expect(conflicts[0]).toMatchObject({
+        field_name: "description",
+        ours_value: JSON.stringify("Local description 519"),
+        theirs_value: JSON.stringify("Remote changed description"),
+      });
+    } finally {
+      storage.close();
+    }
+  });
+
+  test("replayed conflicting events do not duplicate conflict rows", async (): Promise<void> => {
+    const workspace: string = createWorkspace();
+    initializeRepository(workspace);
+
+    const epicId = randomUUID();
+    const eventId = randomUUID();
+    const now = Date.now();
+
+    {
+      const storage = openTrekoonDatabase(workspace);
+      try {
+        storage.db
+          .query("INSERT INTO epics (id, title, description, status, created_at, updated_at, version) VALUES (?, ?, ?, ?, ?, ?, 1);")
+          .run(epicId, "Remote epic", "seed", "todo", now, now);
+
+        appendEventWithGitContext(storage.db, workspace, {
+          entityKind: "epic",
+          entityId: epicId,
+          operation: "upsert",
+          fields: { title: "Remote epic", description: "seed", status: "todo" },
+        });
+      } finally {
+        storage.close();
+      }
+    }
+
+    runGit(workspace, ["checkout", "-b", "feature/replayed-conflicts"]);
+
+    {
+      const storage = openTrekoonDatabase(workspace);
+      try {
+        storage.db.query("UPDATE epics SET title = ?, updated_at = ?, version = version + 1 WHERE id = ?;").run("Local epic", now + 1, epicId);
+        appendEventWithGitContext(storage.db, workspace, {
+          entityKind: "epic",
+          entityId: epicId,
+          operation: "upsert",
+          fields: { title: "Local epic" },
+        });
+        storage.db
+          .query(
+            "INSERT INTO events (id, entity_kind, entity_id, operation, payload, git_branch, git_head, created_at, updated_at, version) VALUES (?, 'epic', ?, 'upsert', ?, 'main', NULL, ?, ?, 1);",
+          )
+          .run(eventId, epicId, JSON.stringify({ fields: { title: "Remote epic v2" } }), now + 2, now + 2);
+      } finally {
+        storage.close();
+      }
+    }
+
+    const firstPull = await runSync({ args: ["pull", "--from", "main"], cwd: workspace, mode: "toon" });
+    expect(firstPull.ok).toBe(true);
+
+    {
+      const storage = openTrekoonDatabase(workspace);
+      try {
+        storage.db.query("UPDATE sync_cursors SET cursor_token = '0:', last_event_at = NULL;").run();
+      } finally {
+        storage.close();
+      }
+    }
+
+    const secondPull = await runSync({ args: ["pull", "--from", "main"], cwd: workspace, mode: "toon" });
+    expect(secondPull.ok).toBe(true);
+
+    const storage = openTrekoonDatabase(workspace);
+    try {
+      const count = storage.db
+        .query("SELECT COUNT(*) AS count FROM sync_conflicts WHERE event_id = ? AND field_name = 'title';")
+        .get(eventId) as { count: number };
+      expect(count.count).toBe(1);
+    } finally {
+      storage.close();
+    }
+  });
+
+  test("replayed resolution events are idempotent", async (): Promise<void> => {
+    const { workspace, conflictId } = await setupConflictWorkspace("feature/replayed-resolution-events");
+
+    const initial = await runSync({
+      args: ["resolve", conflictId, "--use", "ours"],
+      cwd: workspace,
+      mode: "toon",
+    });
+    expect(initial.ok).toBe(true);
+
+    const storage = openTrekoonDatabase(workspace);
+    let resolutionEventId: string;
+    let resolutionPayload: string;
+    let entityId: string;
+    try {
+      const row = storage.db
+        .query("SELECT id, entity_id, payload, created_at FROM events WHERE operation = 'resolve_conflict' ORDER BY created_at ASC LIMIT 1;")
+        .get() as { id: string; entity_id: string; payload: string; created_at: number };
+      resolutionEventId = row.id;
+      resolutionPayload = row.payload;
+      entityId = row.entity_id;
+
+      storage.db.query("UPDATE sync_conflicts SET resolution = 'pending', updated_at = ?, version = version + 1 WHERE id = ?;").run(Date.now(), conflictId);
+      storage.db.query("DELETE FROM events WHERE id = ?;").run(resolutionEventId);
+      storage.db
+        .query(
+          "INSERT INTO events (id, entity_kind, entity_id, operation, payload, git_branch, git_head, created_at, updated_at, version) VALUES (?, 'epic', ?, 'resolve_conflict', ?, 'main', NULL, ?, ?, 1);",
+        )
+        .run(resolutionEventId, entityId, resolutionPayload, Date.now() + 100, Date.now() + 100);
+      storage.db.query("UPDATE sync_cursors SET cursor_token = '0:', last_event_at = NULL;").run();
+    } finally {
+      storage.close();
+    }
+
+    const replayPullA = await runSync({ args: ["pull", "--from", "main"], cwd: workspace, mode: "toon" });
+    const replayPullB = await runSync({ args: ["pull", "--from", "main"], cwd: workspace, mode: "toon" });
+    expect(replayPullA.ok).toBe(true);
+    expect(replayPullB.ok).toBe(true);
+
+    const verifyStorage = openTrekoonDatabase(workspace);
+    try {
+      const conflict = verifyStorage.db
+        .query("SELECT resolution FROM sync_conflicts WHERE id = ?;")
+        .get(conflictId) as { resolution: string } | null;
+      expect(conflict?.resolution).toBe("ours");
+    } finally {
+      verifyStorage.close();
+    }
+  });
+
   test("replayed create conflicts do not also create invalid apply conflicts", async (): Promise<void> => {
     const workspace: string = createWorkspace();
     initializeRepository(workspace);
