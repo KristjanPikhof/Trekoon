@@ -791,3 +791,5 @@ selection over harness-specific tool names.
   your shell tool.
 - Use `--compact` on Trekoon commands in sub-agent prompts to reduce token
   usage.
+
+## User manual input:
