@@ -12,21 +12,62 @@ All notable changes to Trekoon are documented in this file.
 - Database migration v10 (base schema v3): a composite
   `(state, created_at)` index on `board_idempotency_keys` to keep retention
   pruning cheap as history grows.
-- Trekoon SKILL guidance for the front half of the loop: reuse existing
-  brainstorm and research context during planning, ask narrow clarifying
-  questions through interactive tools instead of narrating, mirror task-state
-  patterns on subtasks, and pause for human review before kicking off
-  execution. Plan/orient/execute routing is now explicit so agents pick up
-  tracked work without being told to.
-- Capability-based team execution guidance that drops harness-specific
-  naming, spells out blockers in handoffs, and scopes commit/branch actions
-  to what the user actually asked for.
+
+#### Trekoon skill rewrite (`.agents/skills/trekoon/`)
+
+The skill was substantially rewritten to treat Trekoon as a real execution
+harness with mode contracts, not just a CLI reference.
+
+- **Broader trigger guidance in `SKILL.md`.** The skill applies whenever the
+  user wants tracked planning or tracked implementation work in Trekoon,
+  even if they don't say "Trekoon" by name. Generic untracked coding is
+  explicitly out of scope.
+- **Operating contract and mode completion rules.** `trekoon plan`, `trekoon
+  <id>`, `trekoon <id> execute`, and `trekoon <id> team execute` each have
+  explicit stop conditions. Execute mode is complete only when the epic is
+  `done`, all remaining work is blocked with recorded reasons, or real user
+  input is required to continue. Orient mode is complete only when the user
+  has current state, ready work, blockers, and a suggested next command.
+- **Command router table** mapping command shape to mode, required reference
+  read, and completion target. Agents pick the mode first, then load the
+  minimum reference needed.
+- **Planning preflight and pre-plan synthesis** in both `SKILL.md` and
+  `reference/planning.md`. Agents must harvest existing brainstorming,
+  research, prior decisions, constraints, affected subsystems, and
+  verification expectations into a short internal brief before creating the
+  epic graph. Planning should build on prior thinking, not restart
+  discovery.
+- **Research-aware planning rules** in `reference/planning.md`. Task and
+  subtask descriptions should carry forward concrete patterns, file paths,
+  APIs, and constraints that were already discovered. Existing Trekoon
+  items should be expanded instead of duplicated into parallel tracking
+  state.
+- **Clarification tool rule.** When planning or execution needs user input,
+  route through the harness's interactive question tool (`question` in
+  OpenCode, `AskUserQuestion` in Claude Code) with narrow, decision-shaping
+  questions instead of burying questions in narration.
+- **Anti-stall rules.** Don't stop after `session`, `suggest`, or
+  `epic progress` when a clear next action exists. After each `task done`,
+  inspect `unblocked` and `next` and move immediately. Ask the user only
+  when work is genuinely blocked by ambiguity, approval, or missing
+  external access.
+- **Execution mode selection** table picking the lightest shape (single
+  agent, orchestrated sub-agents, or Agent Teams) that will still move the
+  work forward, plus a **delegation policy** that prefers one sub-agent per
+  lane over one per tiny task.
+- **Subtask status discipline.** New subsection in `SKILL.md` mirroring
+  task-state patterns on subtasks, with an explicit rule to treat the
+  open-subtask warning from `task done` as a real prompt rather than
+  noise.
+- **Plan handoff requirement** in `reference/planning.md`. Planning must
+  reference the actual Trekoon epic and first execution wave. Prose-only
+  designs are not a valid handoff.
 
 ### Changed
 
 - Board snapshot builders are shared between full and delta responses, and
-  owner fields round-trip consistently through both. Blank owner updates are
-  now explicit clears instead of no-ops.
+  owner fields round-trip consistently through both. Blank owner updates
+  are now explicit clears instead of no-ops.
 - Dependency mutation events carry canonical edge identities for add and
   remove, so conflict detection matches on stable IDs across branches.
   Write transactions reuse a prepared git context instead of re-resolving
@@ -36,6 +77,30 @@ All notable changes to Trekoon are documented in this file.
   transport-only.
 - Board idempotency keys are pruned before replay checks so stale entries
   don't confuse the dependency replay path.
+
+#### Trekoon skill rewrite (`.agents/skills/trekoon/`)
+
+- **Capability-based tool guidance** in `SKILL.md` replacing the previous
+  harness-specific tool tables. The skill now tells agents to inspect their
+  available tool list and select by capability (file search, symbol
+  navigation, shell) instead of naming Claude Code or OpenCode tools
+  directly.
+- **Git and PR defaults flipped across the skill and both execution
+  references.** Agents no longer commit after every edit, create branches,
+  merge to main, or remove worktrees automatically. Those actions only
+  happen when the user explicitly asks and the harness policy allows it.
+  The `execution-with-team.md` commit-format block is removed.
+- **Cleanup steps in `reference/execution.md` and
+  `reference/execution-with-team.md`** run after verification is complete,
+  without implying a commit or merge is required for the loop to finish.
+  Auto "create a branch", "merge to main", and "remove worktree" steps are
+  removed.
+- **Reporting expectations standardized** on files changed, verification
+  results, and blockers in sub-agent prompts across both execution
+  references.
+- **Manual verification wording in `reference/execution.md`** now
+  acknowledges environment constraints (no real credentials, no safe
+  external access) while still requiring the gap to be recorded.
 
 ### Fixed
 
