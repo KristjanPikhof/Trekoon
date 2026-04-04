@@ -668,7 +668,7 @@ describe("storage lifecycle", (): void => {
         .query("SELECT COALESCE(MAX(version), 0) AS version FROM schema_migrations;")
         .get() as { version: number };
 
-      expect(row.version).toBe(9);
+      expect(row.version).toBe(10);
     } finally {
       storage.close();
     }
