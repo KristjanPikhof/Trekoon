@@ -674,15 +674,15 @@ describe("storage lifecycle", (): void => {
     }
   });
 
-  test("rollback to v8 from v8 is a valid no-op", (): void => {
+  test("rollback to current version is a valid no-op", (): void => {
     const workspace: string = createWorkspace();
     const storage = openTrekoonDatabase(workspace);
 
     try {
-      const summary = rollbackDatabase(storage.db, 9);
+      const summary = rollbackDatabase(storage.db, 10);
 
-      expect(summary.fromVersion).toBe(9);
-      expect(summary.toVersion).toBe(9);
+      expect(summary.fromVersion).toBe(10);
+      expect(summary.toVersion).toBe(10);
       expect(summary.rolledBack).toBe(0);
       expect(summary.rolledBackMigrations).toEqual([]);
     } finally {
