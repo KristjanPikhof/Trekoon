@@ -13,10 +13,40 @@ All notable changes to Trekoon are documented in this file.
   `(state, created_at)` index on `board_idempotency_keys` to keep retention
   pruning cheap as history grows.
 
-#### Trekoon skill rewrite (`.agents/skills/trekoon/`)
+### Changed
 
-The skill was substantially rewritten to treat Trekoon as a real execution
-harness with mode contracts, not just a CLI reference.
+- Board snapshot builders are shared between full and delta responses, and
+  owner fields round-trip consistently through both. Blank owner updates
+  are now explicit clears instead of no-ops.
+- Dependency mutation events carry canonical edge identities for add and
+  remove, so conflict detection matches on stable IDs across branches.
+  Write transactions reuse a prepared git context instead of re-resolving
+  metadata on every call.
+- Sync pull keeps metadata fields in merge payloads for downstream
+  consumers but ignores them during conflict detection, since they're
+  transport-only.
+- Board idempotency keys are pruned before replay checks so stale entries
+  don't confuse the dependency replay path.
+
+### Fixed
+
+- Board session tokens no longer live in browser storage. Sessions come
+  from the server's bootstrap payload and ride along as HttpOnly cookies.
+- The optimistic mutation queue now resets when an update throws, so failed
+  mutations surface their error instead of stranding the board in a
+  mutating state.
+- Dependency delete conflicts no longer fire when the local row is already
+  gone, and stale remote deletes against a missing local row count as
+  agreement rather than conflict. Cascade deletes stop producing false
+  sync failures.
+- Snapshot normalization drops tasks and subtasks with missing or invalid
+  identifiers instead of inventing UUIDs for them, so replayed deltas can't
+  introduce bad links.
+
+### Trekoon skill rewrite (`.agents/skills/trekoon/`)
+
+The bundled skill was substantially rewritten to treat Trekoon as a real
+execution harness with mode contracts, not just a CLI reference.
 
 - **Broader trigger guidance in `SKILL.md`.** The skill applies whenever the
   user wants tracked planning or tracked implementation work in Trekoon,
@@ -62,24 +92,6 @@ harness with mode contracts, not just a CLI reference.
 - **Plan handoff requirement** in `reference/planning.md`. Planning must
   reference the actual Trekoon epic and first execution wave. Prose-only
   designs are not a valid handoff.
-
-### Changed
-
-- Board snapshot builders are shared between full and delta responses, and
-  owner fields round-trip consistently through both. Blank owner updates
-  are now explicit clears instead of no-ops.
-- Dependency mutation events carry canonical edge identities for add and
-  remove, so conflict detection matches on stable IDs across branches.
-  Write transactions reuse a prepared git context instead of re-resolving
-  metadata on every call.
-- Sync pull keeps metadata fields in merge payloads for downstream
-  consumers but ignores them during conflict detection, since they're
-  transport-only.
-- Board idempotency keys are pruned before replay checks so stale entries
-  don't confuse the dependency replay path.
-
-#### Trekoon skill rewrite (`.agents/skills/trekoon/`)
-
 - **Capability-based tool guidance** in `SKILL.md` replacing the previous
   harness-specific tool tables. The skill now tells agents to inspect their
   available tool list and select by capability (file search, symbol
@@ -101,21 +113,6 @@ harness with mode contracts, not just a CLI reference.
 - **Manual verification wording in `reference/execution.md`** now
   acknowledges environment constraints (no real credentials, no safe
   external access) while still requiring the gap to be recorded.
-
-### Fixed
-
-- Board session tokens no longer live in browser storage. Sessions come
-  from the server's bootstrap payload and ride along as HttpOnly cookies.
-- The optimistic mutation queue now resets when an update throws, so failed
-  mutations surface their error instead of stranding the board in a
-  mutating state.
-- Dependency delete conflicts no longer fire when the local row is already
-  gone, and stale remote deletes against a missing local row count as
-  agreement rather than conflict. Cascade deletes stop producing false
-  sync failures.
-- Snapshot normalization drops tasks and subtasks with missing or invalid
-  identifiers instead of inventing UUIDs for them, so replayed deltas can't
-  introduce bad links.
 
 ## 0.3.7
 
