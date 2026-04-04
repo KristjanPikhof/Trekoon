@@ -42,6 +42,7 @@ All notable changes to Trekoon are documented in this file.
 - Snapshot normalization drops tasks and subtasks with missing or invalid
   identifiers instead of inventing UUIDs for them, so replayed deltas can't
   introduce bad links.
+- Updated failing tests that expected migration version 9.
 
 ### Trekoon skill rewrite (`.agents/skills/trekoon/`)
 
