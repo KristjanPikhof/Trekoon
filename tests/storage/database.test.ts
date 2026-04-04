@@ -711,7 +711,7 @@ describe("storage lifecycle", (): void => {
     }
   });
 
-  test("rollback from v8 to v6 drops lookup and sync scaling indexes", (): void => {
+  test("rollback from current to v6 drops lookup, sync scaling, and idempotency indexes", (): void => {
     const workspace: string = createWorkspace();
     const storage = openTrekoonDatabase(workspace);
 
@@ -719,10 +719,11 @@ describe("storage lifecycle", (): void => {
       const summary = rollbackDatabase(storage.db, 6);
       const indexes: string[] = indexNames(storage.db);
 
-      expect(summary.fromVersion).toBe(9);
+      expect(summary.fromVersion).toBe(10);
       expect(summary.toVersion).toBe(6);
-      expect(summary.rolledBack).toBe(3);
+      expect(summary.rolledBack).toBe(4);
       expect(summary.rolledBackMigrations).toEqual([
+        "0010_board_idempotency_retention_index",
         "0009_board_idempotency_storage",
         "0008_sync_scaling_indexes",
         "0007_add_lookup_indexes",
@@ -732,6 +733,7 @@ describe("storage lifecycle", (): void => {
       expect(indexes).not.toContain("idx_tasks_owner");
       expect(indexes).not.toContain("idx_subtasks_owner");
       expect(indexes).not.toContain("idx_board_idempotency_created_at");
+      expect(indexes).not.toContain("idx_board_idempotency_state_created_at");
     } finally {
       storage.close();
     }
