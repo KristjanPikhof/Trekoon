@@ -2,6 +2,65 @@
 
 All notable changes to Trekoon are documented in this file.
 
+## 0.3.8
+
+### Added
+
+- Cookie-based board session bootstrap: manual `board open` flows now
+  authenticate via HttpOnly cookies and server-provided inline bootstrap data
+  instead of tokenized URLs. CLI output prints stable, shareable tokenless
+  board links.
+- Database migration v10 (base schema v3): composite
+  `idx_board_idempotency_state_created_at` index to keep completed-key pruning
+  cheap as board history grows.
+- Trekoon SKILL guidance: planning preflight that reuses existing brainstorm
+  and research context, narrow decision-shaping clarification questions routed
+  through interactive tools, explicit subtask status updates that mirror task
+  state transitions, human checkpoint review before execution begins, and
+  routing rules for plan/orient/execute modes so agents pick up tracked
+  implementation work without being asked.
+- Capability-based team execution guidance replacing harness-specific naming,
+  with explicit blocker reporting and completion criteria, and commit/branch
+  actions scoped to explicit user requests.
+- Test coverage for cookie-based board bootstrap and snapshot payloads,
+  optimistic mutation queue failure cleanup, malformed board state
+  reconciliation, owner fields on board route snapshots, sync dependency edge
+  conflicts, and idempotency pruning replay paths.
+
+### Changed
+
+- Board snapshot normalization shares reusable builders between full and delta
+  responses, preserves owner fields throughout, derives dependencies from
+  validated task/subtask entities, and treats blank owner updates as explicit
+  clears.
+- Dependency mutation events emit canonical edge identities for add/remove so
+  conflict detection matches on stable IDs; event write transactions reuse
+  prepared git metadata and timestamps instead of re-resolving per call.
+- Sync pull preserves metadata fields in merge payloads for downstream
+  processing while skipping those transport-only fields during conflict
+  detection, and sync mutation handling imports shared operation constants to
+  prevent drift.
+- Stale board idempotency keys are pruned before replay checks to keep
+  dependency event replays deterministic.
+- `TrackerDomain` now owns context initialization internally; the redundant
+  `cwd` argument is removed from its constructor and from board bootstrap
+  payload construction.
+
+### Fixed
+
+- Board session tokens are no longer persisted in browser storage; sessions
+  live in HttpOnly cookies sourced from the bootstrap payload.
+- Optimistic mutation queue resets its state when an optimistic update throws,
+  preventing the board from getting stuck in a "mutating" state and surfacing
+  the underlying error.
+- Local dependency delete conflict detection no longer reports a conflict when
+  the dependency row is already missing, and stale remote delete operations
+  against a missing local row are treated as non-conflicting — eliminating
+  false sync failures during dependency cascade deletes.
+- Board snapshot normalization drops tasks and subtasks with missing or
+  invalid identifiers instead of generating random UUIDs, avoiding bad links
+  in replayed deltas.
+
 ## 0.3.7
 
 ### Added
