@@ -579,6 +579,11 @@ export function migrateDatabase(db: Database): void {
     ensureMigrationTable(db);
     ensureMigrationVersionColumn(db);
 
+    // Backfill the legacy board_idempotency_keys.state column before running
+    // any migrations so that later migrations (e.g. 0010's state-scoped index)
+    // can assume the column exists on databases whose 0009 predates it.
+    migrateBoardIdempotencyState(db);
+
     const version: number = currentVersion(db);
 
     for (const migration of MIGRATIONS) {
@@ -589,8 +594,6 @@ export function migrateDatabase(db: Database): void {
       migration.up(db);
       recordMigration(db, migration);
     }
-
-    migrateBoardIdempotencyState(db);
   });
 }
 
