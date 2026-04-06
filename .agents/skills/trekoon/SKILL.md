@@ -1,6 +1,6 @@
 ---
 name: trekoon
-description: Use for Trekoon-based planning and execution: creating epics, tasks, and subtasks; breaking work into dependency-aware graphs; checking status and progress; planning backlog or sprint work; and coordinating agent execution from Trekoon. Prefer this whenever the user wants tracked implementation planning or Trekoon entity management, even if they do not explicitly say "Trekoon."
+description: "Use for Trekoon-based planning and execution: creating epics, tasks, and subtasks; breaking work into dependency-aware graphs; checking status and progress; planning backlog or sprint work; and coordinating agent execution from Trekoon. Prefer this whenever the user wants tracked implementation planning or Trekoon entity management, even if they do not explicitly say \"Trekoon\"."
 ---
 
 # Trekoon Skill
