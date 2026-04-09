@@ -70,6 +70,21 @@ For Bun/TypeScript code:
 - `updateTask(id, { status?, title?, description?, owner? })` takes positional ID + object
 - `addDependency(sourceId, dependsOnId)` takes positional strings
 
+## Documentation surfaces for new commands
+
+When adding a new CLI subcommand, all of these must be updated to stay in sync:
+
+1. `src/commands/help.ts` — the `*_HELP` constant for the parent command
+2. `src/commands/quickstart.ts` — human text section AND the structured data arrays (`powerUserCommands`, `machineExamples`)
+3. The `default` case usage string in the command handler (e.g., `src/commands/epic.ts`)
+4. `README.md` — commands table
+5. `CHANGELOG.md` — under the current version's Added section
+6. `docs/commands.md` — command reference
+7. `docs/quickstart.md` — if the command fits the getting-started flow
+8. `docs/ai-agents.md` — if agents are expected to use the command
+
+`quickstart.ts` is easy to miss because it has both a human-readable text block and separate structured arrays that serve different consumers.
+
 ## Export pipeline
 
 The export feature uses a format-agnostic bundle pattern:
