@@ -202,6 +202,23 @@ trekoon epic progress <epic-id>
 Returns status counts (`total`, `doneCount`, `inProgressCount`, `blockedCount`,
 `todoCount`), `readyCount`, and `nextCandidate`.
 
+## Epic export
+
+```bash
+trekoon epic export <epic-id> [--path <path>] [--overwrite]
+```
+
+Writes a Markdown snapshot of the epic including tasks, subtasks, dependencies,
+external node stubs, and warnings. The output is a point-in-time artifact; the
+database remains the source of truth.
+
+- Default path: `<worktree-root>/plans/<slugified-title>.md`
+- `--path` accepts a relative or absolute custom output path
+- `--overwrite` resaves when the file already exists
+
+Returns `epicId`, `path`, `overwritten`, and `summary` counts in structured
+output.
+
 ## Session scoping
 
 ```bash
