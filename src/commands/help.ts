@@ -103,7 +103,7 @@ const BOARD_HELP = [
 ].join("\n");
 
 const EPIC_HELP = [
-  "Usage: trekoon epic <create|expand|list|show|search|replace|update|delete|progress> [options]",
+  "Usage: trekoon epic <create|expand|list|show|search|replace|update|delete|progress|export> [options]",
   "",
   "Create:",
   "  trekoon epic create --title \"...\" --description \"...\" [--status <status>]",
@@ -149,6 +149,21 @@ const EPIC_HELP = [
   "Progress:",
   "  trekoon epic progress <epic-id>",
   "  Returns done/in_progress/blocked/todo counts, readyCount, and nextCandidate.",
+  "",
+  "Export:",
+  "  trekoon epic export <epic-id> [--path <path>] [--overwrite]",
+  "  Writes a Markdown snapshot of the epic including tasks, subtasks, dependencies,",
+  "  external node stubs, and warnings. The Markdown is a point-in-time artifact;",
+  "  the database remains the source of truth.",
+  "",
+  "  Default path: <worktree-root>/plans/<slugified-title>.md",
+  "  --path <path>  Custom output path (relative or absolute).",
+  "  --overwrite     Resave if the file already exists.",
+  "",
+  "  Examples:",
+  "    trekoon epic export abc-123",
+  "    trekoon epic export abc-123 --path plans/custom.md",
+  "    trekoon epic export abc-123 --overwrite",
 ].join("\n");
 
 const TASK_HELP = [
