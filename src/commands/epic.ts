@@ -36,7 +36,12 @@ import {
 import { formatHumanTable } from "../io/human-table";
 import { failResult, okResult } from "../io/output";
 import { type CliContext, type CliResult } from "../runtime/command-types";
+import { buildEpicExportBundle } from "../export/build-epic-export-bundle";
+import { resolveExportPath } from "../export/path";
+import { renderMarkdown } from "../export/render-markdown";
+import { atomicWrite, ExportWriteError } from "../export/write";
 import { openTrekoonDatabase, type TrekoonDatabase } from "../storage/database";
+import { resolveStoragePaths } from "../storage/path";
 
 function formatEpic(epic: EpicRecord): string {
   return `${epic.id} | ${epic.title} | ${epic.status}`;
@@ -53,6 +58,7 @@ const SEARCH_OPTIONS = ["fields", "preview"] as const;
 const REPLACE_OPTIONS = ["search", "replace", "fields", "preview", "apply"] as const;
 const EXPAND_OPTIONS = ["task", "subtask", "dep"] as const;
 const UPDATE_OPTIONS = ["all", "ids", "append", "description", "d", "status", "s", "title", "t"] as const;
+const EXPORT_OPTIONS = ["path", "overwrite"] as const;
 const STATUS_CASCADE_UPDATE_STATUSES = ["done", "todo"] as const;
 
 function parseStatusCsv(rawStatuses: string | undefined): string[] | undefined {
@@ -1472,10 +1478,70 @@ export async function runEpic(context: CliContext): Promise<CliResult> {
           data: { id: epicId },
         });
       }
+      case "export": {
+        const epicId: string = parsed.positional[1] ?? "";
+        const exportUnknown = findUnknownOption(parsed, EXPORT_OPTIONS);
+        if (exportUnknown !== undefined) {
+          return unknownOption("epic.export", exportUnknown, EXPORT_OPTIONS);
+        }
+
+        const missingExportOption = readMissingOptionValue(parsed.missingOptionValues, "path");
+        if (missingExportOption !== undefined) {
+          return failMissingOptionValue("epic.export", missingExportOption);
+        }
+
+        if (!epicId) {
+          return failResult({
+            command: "epic.export",
+            human: "Usage: trekoon epic export <epic-id> [--path <path>] [--overwrite]",
+            data: {},
+            error: { code: "invalid_input", message: "Missing epic ID" },
+          });
+        }
+
+        const bundle = buildEpicExportBundle(domain, epicId);
+        const markdown = renderMarkdown(bundle);
+        const storagePaths = resolveStoragePaths(context.cwd);
+        const customPath = readOption(parsed, "path");
+        const overwrite = hasFlag(parsed, "overwrite");
+
+        const exportPath = resolveExportPath({
+          customPath,
+          epicId: bundle.epic.id,
+          epicTitle: bundle.epic.title,
+          worktreeRoot: storagePaths.worktreeRoot,
+          cwd: context.cwd,
+        });
+
+        try {
+          const result = atomicWrite({ path: exportPath, content: markdown, overwrite });
+          const action = result.overwritten ? "Updated" : "Exported";
+          return okResult({
+            command: "epic.export",
+            human: `${action} epic to ${result.path}`,
+            data: {
+              epicId: bundle.epic.id,
+              path: result.path,
+              overwritten: result.overwritten,
+              summary: bundle.summary,
+            },
+          });
+        } catch (error: unknown) {
+          if (error instanceof ExportWriteError) {
+            return failResult({
+              command: "epic.export",
+              human: error.message,
+              data: { path: exportPath, epicId: bundle.epic.id },
+              error: { code: error.code, message: error.message },
+            });
+          }
+          throw error;
+        }
+      }
       default:
         return failResult({
           command: "epic",
-          human: "Usage: trekoon epic <create|expand|list|show|search|replace|update|delete|progress>",
+          human: "Usage: trekoon epic <create|expand|list|show|search|replace|update|delete|progress|export>",
           data: {
             args: context.args,
           },
