@@ -1,4 +1,4 @@
-import type { ExportBundle, ExportDependencyEdge, ExportExternalNode, ExportStatusCounts, ExportWarning } from "./types";
+import type { ExportBundle, ExportExternalNode, ExportStatusCounts, ExportWarning } from "./types";
 import type { SubtaskRecord, TaskRecord } from "../domain/types";
 
 export function renderMarkdown(bundle: ExportBundle): string {
@@ -18,6 +18,43 @@ export function renderMarkdown(bundle: ExportBundle): string {
   return lines.join("\n") + "\n";
 }
 
+// --- Markdown escaping helpers ---
+
+function escapeTableCell(text: string): string {
+  return text.replace(/\|/g, "\\|").replace(/\n/g, " ");
+}
+
+function escapeHeading(text: string): string {
+  return text.replace(/\n/g, " ").replace(/#+\s*/g, "");
+}
+
+function escapeInlineText(text: string): string {
+  return text.replace(/([[\]`*_~])/g, "\\$1").replace(/\n/g, " ");
+}
+
+function escapeBlockText(text: string): string {
+  // Descriptions are rendered as block content; preserve newlines but
+  // ensure lines that start with Markdown structural characters are safe.
+  return text
+    .split("\n")
+    .map((line) => {
+      if (/^#{1,6}\s/.test(line)) return `\\${line}`;
+      if (/^(\s*[-*+]|\s*\d+\.)\s/.test(line)) return line;
+      if (/^\s*\|/.test(line)) return `\\${line}`;
+      return line;
+    })
+    .join("\n");
+}
+
+function formatDescriptionIndented(text: string, indent: string): string {
+  return text
+    .split("\n")
+    .map((line) => `${indent}${line}`)
+    .join("\n");
+}
+
+// --- Render sections ---
+
 function renderFrontmatter(lines: string[], bundle: ExportBundle): void {
   lines.push("---");
   lines.push(`epic_id: ${bundle.epic.id}`);
@@ -29,7 +66,7 @@ function renderFrontmatter(lines: string[], bundle: ExportBundle): void {
 }
 
 function renderTitle(lines: string[], bundle: ExportBundle): void {
-  lines.push(`# ${bundle.epic.title}`);
+  lines.push(`# ${escapeHeading(bundle.epic.title)}`);
   lines.push("");
 }
 
@@ -75,7 +112,7 @@ function renderDescription(lines: string[], bundle: ExportBundle): void {
 
   lines.push("## Description");
   lines.push("");
-  lines.push(bundle.epic.description);
+  lines.push(escapeBlockText(bundle.epic.description));
   lines.push("");
 }
 
@@ -91,7 +128,7 @@ function renderTaskIndex(lines: string[], bundle: ExportBundle): void {
     const task = bundle.tasks[i];
     const subtaskCount = bundle.subtasks.filter((s) => s.taskId === task.id).length;
     const anchor = taskAnchor(task);
-    lines.push(`| ${i + 1} | [${task.title}](#${anchor}) | ${task.status} | ${subtaskCount} |`);
+    lines.push(`| ${i + 1} | [${escapeTableCell(escapeInlineText(task.title))}](#${anchor}) | ${task.status} | ${subtaskCount} |`);
   }
   lines.push("");
 }
@@ -108,21 +145,20 @@ function renderTaskDetails(lines: string[], bundle: ExportBundle): void {
 }
 
 function renderSingleTask(lines: string[], task: TaskRecord, bundle: ExportBundle): void {
-  lines.push(`### ${task.title}`);
+  lines.push(`### ${escapeHeading(task.title)}`);
   lines.push("");
   lines.push(`**ID:** \`${task.id}\`  `);
   lines.push(`**Status:** ${task.status}  `);
   if (task.owner) {
-    lines.push(`**Owner:** ${task.owner}  `);
+    lines.push(`**Owner:** ${escapeInlineText(task.owner)}  `);
   }
   lines.push("");
 
   if (task.description) {
-    lines.push(task.description);
+    lines.push(escapeBlockText(task.description));
     lines.push("");
   }
 
-  // Render blockedBy for this task
   const blockedBy = bundle.blockedBy.get(task.id) ?? [];
   if (blockedBy.length > 0) {
     lines.push("**Blocked by:**");
@@ -132,7 +168,6 @@ function renderSingleTask(lines: string[], task: TaskRecord, bundle: ExportBundl
     lines.push("");
   }
 
-  // Render blocks for this task
   const blocks = bundle.blocks.get(task.id) ?? [];
   if (blocks.length > 0) {
     lines.push("**Blocks:**");
@@ -142,7 +177,6 @@ function renderSingleTask(lines: string[], task: TaskRecord, bundle: ExportBundl
     lines.push("");
   }
 
-  // Subtasks
   const subtasks = bundle.subtasks.filter((s) => s.taskId === task.id);
   if (subtasks.length > 0) {
     lines.push("#### Subtasks");
@@ -155,10 +189,10 @@ function renderSingleTask(lines: string[], task: TaskRecord, bundle: ExportBundl
 
 function renderSingleSubtask(lines: string[], subtask: SubtaskRecord, bundle: ExportBundle): void {
   const statusIcon = subtask.status === "done" ? "x" : " ";
-  lines.push(`- [${statusIcon}] **${subtask.title}** — \`${subtask.id}\` (${subtask.status})`);
+  lines.push(`- [${statusIcon}] **${escapeInlineText(subtask.title)}** — \`${subtask.id}\` (${subtask.status})`);
 
   if (subtask.description) {
-    lines.push(`  ${subtask.description}`);
+    lines.push(formatDescriptionIndented(escapeBlockText(subtask.description), "  "));
   }
 
   const blockedBy = bundle.blockedBy.get(subtask.id) ?? [];
@@ -194,7 +228,8 @@ function renderExternalNodes(lines: string[], bundle: ExportBundle): void {
   lines.push("|----|------|-------|--------|---------|");
 
   for (const node of bundle.externalNodes) {
-    lines.push(`| \`${node.id}\` | ${node.kind} | ${node.title ?? "—"} | ${node.status ?? "—"} | ${node.epicId ?? "—"} |`);
+    const title = node.title !== null ? escapeTableCell(node.title) : "—";
+    lines.push(`| \`${node.id}\` | ${node.kind} | ${title} | ${node.status ?? "—"} | ${node.epicId ?? "—"} |`);
   }
   lines.push("");
 }
@@ -205,7 +240,7 @@ function renderWarnings(lines: string[], bundle: ExportBundle): void {
   lines.push("## Warnings");
   lines.push("");
   for (const warning of bundle.warnings) {
-    lines.push(`- **${warning.code}**: ${warning.message}`);
+    lines.push(`- **${escapeInlineText(warning.code)}**: ${escapeInlineText(warning.message)}`);
   }
   lines.push("");
 }
@@ -217,10 +252,5 @@ function renderFooter(lines: string[], bundle: ExportBundle): void {
 }
 
 function taskAnchor(task: TaskRecord): string {
-  return task.title
-    .toLowerCase()
-    .replace(/[^a-z0-9\s-]/g, "")
-    .replace(/\s+/g, "-")
-    .replace(/-+/g, "-")
-    .replace(/^-|-$/g, "");
+  return `task-${task.id}`;
 }
