@@ -59,6 +59,7 @@ const QUICKSTART_TEXT = [
   "  Bulk update:           trekoon --toon task update --ids id1,id2 --append \"...\" --status in_progress",
   "  Ready queue:           trekoon --toon task ready [--limit <n>] [--epic <id>]",
   "  Next candidate:        trekoon --toon task next [--epic <id>]",
+  "  Export epic to MD:     trekoon --toon epic export <epic-id> [--path <path>] [--overwrite]",
   "",
   "6) List and view defaults",
   "  Default scope: open work (in_progress, todo), limit 10.",
@@ -152,6 +153,7 @@ export async function runQuickstart(_: CliContext): Promise<CliResult> {
         "trekoon --toon task list --status in_progress,todo --limit 20",
         "trekoon --toon task list --cursor <n>",
         "trekoon --toon task update --ids id1,id2 --append \"...\" --status in_progress",
+        "trekoon --toon epic export <epic-id>",
       ],
       machineExamples: [
         "trekoon --toon quickstart",
@@ -166,6 +168,7 @@ export async function runQuickstart(_: CliContext): Promise<CliResult> {
         "trekoon --toon task ready --limit 5",
         "trekoon --toon task next",
         "trekoon --toon dep reverse <task-or-subtask-id>",
+        "trekoon --toon epic export <epic-id>",
       ],
       wipeWarning: {
         command: "trekoon wipe --yes",
