@@ -1,7 +1,7 @@
 {
   "name": "trekoon",
   "version": "0.4.0",
-  "description": "AI-first local issue tracker CLI.",
+  "description": "AI-first task tracking that lives in your repo. You describe what to build, your agent plans it as a dependency graph, then executes it task by task",
   "keywords": [
     "ai",
     "agent",
