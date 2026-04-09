@@ -138,12 +138,15 @@ external dependency, the whole update fails with no partial writes. Works with
 
 ```bash
 trekoon epic export <epic-id>
-trekoon epic export <epic-id> --path plans/custom.md
+trekoon epic export <epic-id> --path docs/plan.md        # exact file
+trekoon epic export <epic-id> --path docs/plans           # default name inside dir
 trekoon epic export <epic-id> --overwrite
 ```
 
-Writes a readable Markdown snapshot under `plans/` by default. Use `--overwrite`
-to resave after the plan state changes.
+Writes a readable Markdown snapshot under `plans/` by default. With `--path`,
+a file extension means "write this file"; no extension means "put the default-
+named file in this directory". Use `--overwrite` to resave after the plan state
+changes.
 
 ## Check progress
 
