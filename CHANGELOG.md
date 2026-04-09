@@ -2,6 +2,28 @@
 
 All notable changes to Trekoon are documented in this file.
 
+## 0.3.9
+
+### Added
+
+- `trekoon epic export <epic-id>` writes a Markdown snapshot of an epic
+  including tasks, subtasks, dependencies, external node stubs, and warnings.
+  Default output path is `<worktree-root>/plans/<slugified-title>.md`.
+  `--path` accepts a custom relative or absolute path. `--overwrite` resaves
+  when the file already exists. The Markdown is a point-in-time artifact; the
+  database remains the source of truth.
+- Format-agnostic export bundle (`src/export/types.ts`,
+  `src/export/build-epic-export-bundle.ts`) that classifies internal and
+  cross-epic dependencies, resolves external node stubs, and produces stable
+  ordering with schema versioning.
+- Markdown renderer (`src/export/render-markdown.ts`) with context-aware
+  escaping for table cells, headings, inline text, and multiline descriptions.
+  ID-based task anchors prevent collisions from duplicate titles.
+- Atomic file writes (`src/export/write.ts`) using `O_CREAT | O_EXCL` for
+  create-only semantics and temp-file rename for overwrites.
+- Export tests covering bundle shape, dependency classification, Markdown
+  escaping for special characters, write safety, and overwrite behavior.
+
 ## 0.3.8
 
 ### Added
