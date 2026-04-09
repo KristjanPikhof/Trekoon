@@ -1503,7 +1503,7 @@ export async function runEpic(context: CliContext): Promise<CliResult> {
         const markdown = renderMarkdown(bundle);
         const storagePaths = resolveStoragePaths(context.cwd);
         const customPath = readOption(parsed, "path");
-        const overwrite = hasFlag(parsed, "overwrite");
+        const overwrite = hasFlag(parsed.flags, "overwrite");
 
         const exportPath = resolveExportPath({
           customPath,
