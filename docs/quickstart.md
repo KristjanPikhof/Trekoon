@@ -134,6 +134,17 @@ Cascades atomically through all descendants. If any descendant has an unresolved
 external dependency, the whole update fails with no partial writes. Works with
 `--status done` and `--status todo` only.
 
+## Export an epic to Markdown
+
+```bash
+trekoon epic export <epic-id>
+trekoon epic export <epic-id> --path plans/custom.md
+trekoon epic export <epic-id> --overwrite
+```
+
+Writes a readable Markdown snapshot under `plans/` by default. Use `--overwrite`
+to resave after the plan state changes.
+
 ## Check progress
 
 ```bash
