@@ -213,7 +213,8 @@ external node stubs, and warnings. The output is a point-in-time artifact; the
 database remains the source of truth.
 
 - Default path: `<worktree-root>/plans/<slugified-title>.md`
-- `--path` accepts a relative or absolute custom output path
+- `--path` with a file extension (e.g. `docs/plan.md`) creates that exact file
+- `--path` without an extension (e.g. `docs/plans`) creates the default-named file inside that directory
 - `--overwrite` resaves when the file already exists
 
 Returns `epicId`, `path`, `overwritten`, and `summary` counts in structured
