@@ -158,11 +158,14 @@ const EPIC_HELP = [
   "",
   "  Default path: <worktree-root>/plans/<slugified-title>.md",
   "  --path <path>  Custom output path (relative or absolute).",
+  "                  With extension (e.g. docs/plan.md): creates that file.",
+  "                  Without extension (e.g. docs/plans): creates the default-named file inside.",
   "  --overwrite     Resave if the file already exists.",
   "",
   "  Examples:",
   "    trekoon epic export abc-123",
-  "    trekoon epic export abc-123 --path plans/custom.md",
+  "    trekoon epic export abc-123 --path docs/plan.md       # writes docs/plan.md",
+  "    trekoon epic export abc-123 --path docs/plans          # writes docs/plans/<title>.md",
   "    trekoon epic export abc-123 --overwrite",
 ].join("\n");
 
