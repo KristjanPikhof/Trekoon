@@ -1535,6 +1535,23 @@ export async function runEpic(context: CliContext): Promise<CliResult> {
               error: { code: error.code, message: error.message },
             });
           }
+          const fsCode = typeof error === "object" && error !== null && "code" in error ? (error as { code: string }).code : null;
+          if (fsCode === "EACCES" || fsCode === "EPERM" || fsCode === "EROFS") {
+            return failResult({
+              command: "epic.export",
+              human: `Permission denied: cannot write to ${exportPath}`,
+              data: { path: exportPath, epicId: bundle.epic.id, fsError: fsCode },
+              error: { code: "permission_denied", message: `Permission denied: ${exportPath}` },
+            });
+          }
+          if (fsCode === "EISDIR") {
+            return failResult({
+              command: "epic.export",
+              human: `Path is a directory, not a file: ${exportPath}`,
+              data: { path: exportPath, epicId: bundle.epic.id, fsError: fsCode },
+              error: { code: "invalid_path", message: `Path is a directory: ${exportPath}` },
+            });
+          }
           throw error;
         }
       }
