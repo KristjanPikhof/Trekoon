@@ -68,16 +68,16 @@ describe("renderMarkdown", () => {
     expect(md).toContain("| Subtasks | 0 |");
   });
 
-  test("renders task index with anchors", () => {
+  test("renders task index with id-based anchors", () => {
     const cwd = createWorkspace();
     const domain = createDomain(cwd);
     const epic = domain.createEpic({ title: "Index Test", description: "Check index" });
-    domain.createTask({ epicId: epic.id, title: "First Task", description: "D1" });
+    const task = domain.createTask({ epicId: epic.id, title: "First Task", description: "D1" });
     const bundle = buildEpicExportBundle(domain, epic.id);
     const md = renderMarkdown(bundle);
 
     expect(md).toContain("## Task index");
-    expect(md).toContain("[First Task](#first-task)");
+    expect(md).toContain(`[First Task](#task-${task.id})`);
   });
 
   test("renders task details with id and status", () => {
@@ -159,6 +159,88 @@ describe("renderMarkdown", () => {
     const md = renderMarkdown(bundle);
 
     expect(md).toContain("the database is the source of truth");
+  });
+
+  test("escapes pipe characters in table cells", () => {
+    const cwd = createWorkspace();
+    const domain = createDomain(cwd);
+    const epic = domain.createEpic({ title: "Pipe Test", description: "Check pipe escaping" });
+    domain.createTask({ epicId: epic.id, title: "Fix [auth] | retry", description: "Has pipes" });
+    const bundle = buildEpicExportBundle(domain, epic.id);
+    const md = renderMarkdown(bundle);
+
+    // Task index table cell should escape pipe so it doesn't break the table
+    const indexLines = md.split("\n").filter((l) => l.includes("auth"));
+    for (const line of indexLines) {
+      if (line.startsWith("|")) {
+        expect(line).not.toMatch(/\| Fix \[auth\] \| retry/);
+        expect(line).toContain("\\|");
+      }
+    }
+  });
+
+  test("escapes brackets and backticks in inline text", () => {
+    const cwd = createWorkspace();
+    const domain = createDomain(cwd);
+    const epic = domain.createEpic({ title: "Bracket Test", description: "Check bracket escaping" });
+    const task = domain.createTask({ epicId: epic.id, title: "Parent", description: "D" });
+    domain.createSubtask({ taskId: task.id, title: "Fix `code` and [link]", description: "Has special chars" });
+    const bundle = buildEpicExportBundle(domain, epic.id);
+    const md = renderMarkdown(bundle);
+
+    // Subtask title should have escaped backticks and brackets
+    expect(md).toContain("\\`code\\`");
+    expect(md).toContain("\\[link\\]");
+  });
+
+  test("handles multiline descriptions in subtasks", () => {
+    const cwd = createWorkspace();
+    const domain = createDomain(cwd);
+    const epic = domain.createEpic({ title: "Multiline Test", description: "Check multiline" });
+    const task = domain.createTask({ epicId: epic.id, title: "Parent", description: "D" });
+    domain.createSubtask({ taskId: task.id, title: "Sub", description: "Line one\nLine two\nLine three" });
+    const bundle = buildEpicExportBundle(domain, epic.id);
+    const md = renderMarkdown(bundle);
+
+    // Subtask description lines should be indented
+    expect(md).toContain("  Line one");
+    expect(md).toContain("  Line two");
+    expect(md).toContain("  Line three");
+  });
+
+  test("duplicate task titles produce unique anchors", () => {
+    const cwd = createWorkspace();
+    const domain = createDomain(cwd);
+    const epic = domain.createEpic({ title: "Dup Test", description: "Check duplicate anchors" });
+    const t1 = domain.createTask({ epicId: epic.id, title: "Same Name", description: "First" });
+    const t2 = domain.createTask({ epicId: epic.id, title: "Same Name", description: "Second" });
+    const bundle = buildEpicExportBundle(domain, epic.id);
+    const md = renderMarkdown(bundle);
+
+    // ID-based anchors must be unique even when titles are identical
+    expect(md).toContain(`#task-${t1.id}`);
+    expect(md).toContain(`#task-${t2.id}`);
+    expect(t1.id).not.toBe(t2.id);
+  });
+
+  test("escapes external node titles containing pipes in table", () => {
+    const cwd = createWorkspace();
+    const domain = createDomain(cwd);
+    const epicA = domain.createEpic({ title: "Epic A", description: "First" });
+    const epicB = domain.createEpic({ title: "Epic B", description: "Second" });
+    const taskA = domain.createTask({ epicId: epicA.id, title: "Task A", description: "In A" });
+    const taskB = domain.createTask({ epicId: epicB.id, title: "Has | pipe", description: "In B" });
+    domain.addDependency(taskA.id, taskB.id);
+    const bundle = buildEpicExportBundle(domain, epicA.id);
+    const md = renderMarkdown(bundle);
+
+    // External nodes table should escape the pipe in the title
+    const extLines = md.split("\n").filter((l) => l.includes("pipe"));
+    for (const line of extLines) {
+      if (line.startsWith("|")) {
+        expect(line).toContain("Has \\| pipe");
+      }
+    }
   });
 
   test("omits empty sections for empty epic", () => {
