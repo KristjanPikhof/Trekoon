@@ -4,6 +4,23 @@ All notable changes to Trekoon are documented in this file.
 
 ## 0.4.0
 
+### Changed
+
+- `--path` on `epic export` now distinguishes files from directories: a path
+  with a file extension (e.g. `docs/plan.md`) writes that exact file; a path
+  without an extension (e.g. `docs/plans`) places the default-named file inside
+  that directory. Previously bare directory paths were treated as file names.
+- Documentation and CLI help updated to reflect the file-vs-directory `--path`
+  semantics with clearer examples.
+
+### Fixed
+
+- `epic export` to an unwritable path (read-only filesystem, permission denied)
+  now returns a structured `permission_denied` error instead of a generic
+  "Unexpected epic command failure". `EISDIR` returns `invalid_path`.
+
+## 0.3.9
+
 ### Added
 
 - `trekoon epic export <epic-id>` writes a Markdown snapshot of an epic
@@ -23,19 +40,6 @@ All notable changes to Trekoon are documented in this file.
   create-only semantics and temp-file rename for overwrites.
 - Export tests covering bundle shape, dependency classification, Markdown
   escaping for special characters, write safety, and overwrite behavior.
-
-### Changed
-
-- `--path` on `epic export` now distinguishes files from directories: a path
-  with a file extension (e.g. `docs/plan.md`) writes that exact file; a path
-  without an extension (e.g. `docs/plans`) places the default-named file inside
-  that directory. Previously bare directory paths were treated as file names.
-
-### Fixed
-
-- `epic export` to an unwritable path (read-only filesystem, permission denied)
-  now returns a structured `permission_denied` error instead of a generic
-  "Unexpected epic command failure". `EISDIR` returns `invalid_path`.
 
 ## 0.3.8
 
