@@ -211,6 +211,7 @@ overview, kanban workspace per epic, task detail modals, and search.
 | Start an agent session | `trekoon session --epic <id>` |
 | Get next-action suggestions | `trekoon suggest --epic <id>` |
 | Check epic progress | `trekoon epic progress <id>` |
+| Export epic to Markdown | `trekoon epic export <id>` |
 | Mark a task done | `trekoon task done <id>` |
 | Sync across worktrees | `trekoon sync pull --from main` |
 | Get help | `trekoon [command] -h` |
