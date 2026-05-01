@@ -418,7 +418,7 @@ export function createBoardActions(options) {
       if (!task || !nextStatus || task.status === nextStatus) {
         return;
       }
-      transition({ selectedTaskId: taskId }, { rerenderBoard: false });
+      transition({ selectedTaskId: taskId, taskModalOpen: false }, { rerenderBoard: false });
       api.patchTask(taskId, { status: nextStatus }, (snapshot) => updateTaskInSnapshot(snapshot, taskId, { status: nextStatus }, normalizeSnapshot));
     },
     changeEpicStatus(epicId, newStatus) {
