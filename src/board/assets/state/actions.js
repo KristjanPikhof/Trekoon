@@ -344,10 +344,11 @@ export function createBoardActions(options) {
         screen: "tasks",
         selectedEpicId: task.epicId,
         selectedTaskId: taskId,
+        taskModalOpen: true,
       });
     },
     closeTask() {
-      transition({ selectedTaskId: null, selectedSubtaskId: null });
+      transition({ selectedTaskId: null, selectedSubtaskId: null, taskModalOpen: false });
     },
     openSubtask(subtaskId) {
       transition({ selectedSubtaskId: subtaskId || null }, { persistState: false });
