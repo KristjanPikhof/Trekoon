@@ -265,6 +265,8 @@ function deriveBoardState(state) {
     : stateWithScreen;
   const selectedSubtask = selectedTaskId ? selectSelectedSubtask(stateWithTaskSelection) : null;
 
+  const taskModalOpen = state.taskModalOpen === true && Boolean(selectedTaskId && selectedTask);
+
   return {
     screen,
     selectedEpicId: selectedEpic?.id ?? null,
@@ -273,6 +275,7 @@ function deriveBoardState(state) {
     selectedTask: selectedTaskId ? selectedTask : null,
     selectedSubtaskId: selectedSubtask?.id ?? null,
     selectedSubtask,
+    taskModalOpen,
     search: stateWithScreen.search,
     searchQuery: stateWithScreen.searchQuery,
     searchScope: selectSearchScope(stateWithScreen),
