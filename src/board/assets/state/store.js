@@ -293,6 +293,7 @@ function reconcileBoardState(state) {
     view: VIEW_MODES.includes(state.view) ? state.view : "kanban",
     selectedTaskId: derived.selectedTaskId,
     selectedSubtaskId: derived.selectedSubtaskId,
+    taskModalOpen: derived.taskModalOpen,
   };
 }
 
