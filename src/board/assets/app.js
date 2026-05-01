@@ -429,7 +429,7 @@ export async function bootLegacyBoard(options = {}) {
           visibleTasks: boardState.visibleTasks,
         });
 
-        taskModal.update(selectedTask ? {
+        taskModal.update(taskModalOpen ? {
           task: selectedTask,
           epics: store.snapshot.epics,
           snapshot: store.snapshot,
