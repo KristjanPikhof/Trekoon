@@ -252,7 +252,7 @@ export function isCompactViewport() {
 }
 
 export function shouldUseTaskModal(boardState, store) {
-  return Boolean(boardState?.selectedTask);
+  return Boolean(boardState?.taskModalOpen && boardState?.selectedTask);
 }
 
 export function lookupNode(snapshot, id) {
