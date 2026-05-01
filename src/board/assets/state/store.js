@@ -224,6 +224,7 @@ function selectSearchScope(state) {
  * @property {object|null} selectedTask
  * @property {string|null} selectedSubtaskId
  * @property {object|null} selectedSubtask
+ * @property {boolean} taskModalOpen
  * @property {string} search
  * @property {string} searchQuery
  * @property {object} searchScope
