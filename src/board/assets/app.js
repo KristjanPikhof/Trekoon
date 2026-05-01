@@ -365,7 +365,8 @@ export async function bootLegacyBoard(options = {}) {
       const screen = boardState.screen;
       const selectedTask = boardState.selectedTask;
       const selectedSubtask = boardState.selectedSubtask;
-      const currentNav = selectedTask ? "detail" : screen === "tasks" ? "board" : "epics";
+      const taskModalOpen = Boolean(boardState.taskModalOpen && selectedTask);
+      const currentNav = taskModalOpen ? "detail" : screen === "tasks" ? "board" : "epics";
 
       // Layout toggles
       const showTasks = screen === "tasks" && boardState.selectedEpic;
@@ -381,11 +382,11 @@ export async function bootLegacyBoard(options = {}) {
         confirmDialog.update(null);
       }
 
-      if (!showTasks || !selectedTask) {
+      if (!showTasks || !taskModalOpen) {
         taskModal.update(null);
       }
 
-      if (!showTasks || !selectedTask || !selectedSubtask) {
+      if (!showTasks || !taskModalOpen || !selectedSubtask) {
         subtaskModal.update(null);
       }
 
