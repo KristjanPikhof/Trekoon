@@ -336,6 +336,7 @@ export function createStore(initialSnapshot, options = {}) {
     view: VIEW_MODES.includes(storedState.view) ? storedState.view : "kanban",
     selectedTaskId: typeof storedState.selectedTaskId === "string" ? storedState.selectedTaskId : null,
     selectedSubtaskId: null,
+    taskModalOpen: false,
     theme: readThemePreference(),
     focusedEpicIndex: 0,
     copyFeedback: null,
