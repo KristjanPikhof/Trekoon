@@ -265,7 +265,7 @@ function deriveBoardState(state) {
     : stateWithScreen;
   const selectedSubtask = selectedTaskId ? selectSelectedSubtask(stateWithTaskSelection) : null;
 
-  const taskModalOpen = state.taskModalOpen === true && Boolean(selectedTaskId && selectedTask);
+  const taskModalOpen = state.taskModalOpen === true;
 
   return {
     screen,
