@@ -263,6 +263,7 @@ export function createBoardActions(options) {
         selectedEpicId: epicId || null,
         selectedTaskId: null,
         selectedSubtaskId: null,
+        taskModalOpen: false,
       });
     },
     selectEpic(epicId) {
@@ -271,6 +272,7 @@ export function createBoardActions(options) {
         selectedEpicId: epicId || null,
         selectedTaskId: null,
         selectedSubtaskId: null,
+        taskModalOpen: false,
       });
     },
     showEpics() {
@@ -278,6 +280,7 @@ export function createBoardActions(options) {
         screen: "epics",
         selectedTaskId: null,
         selectedSubtaskId: null,
+        taskModalOpen: false,
       });
     },
     showBoard() {
@@ -295,6 +298,7 @@ export function createBoardActions(options) {
         selectedEpicId: fallbackEpicId,
         selectedTaskId: null,
         selectedSubtaskId: null,
+        taskModalOpen: false,
       });
     },
     setView(view) {
