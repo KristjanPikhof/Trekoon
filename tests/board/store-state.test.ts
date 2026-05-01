@@ -325,6 +325,77 @@ describe("board state store reconciliation", () => {
     ]);
   });
 
+  test("createStore initializes taskModalOpen to false even when localStorage seeds it", () => {
+    globalThis.localStorage = createMockStorage({
+      "trekoon-board-state": JSON.stringify({
+        screen: "tasks",
+        selectedEpicId: "epic-1",
+        selectedTaskId: "task-1",
+        taskModalOpen: true,
+      }),
+    }) as Storage;
+
+    const store = createStore({
+      epics: [{ id: "epic-1", title: "Epic 1" }],
+      tasks: [{ id: "task-1", epicId: "epic-1", title: "Task 1", status: "todo" }],
+      subtasks: [],
+      dependencies: [],
+    });
+
+    expect(store.getState().taskModalOpen).toBe(false);
+    expect(store.getBoardState().taskModalOpen).toBe(false);
+  });
+
+  test("persist excludes taskModalOpen from the localStorage payload", () => {
+    const storage = createMockStorage();
+    globalThis.localStorage = storage as Storage;
+
+    const store = createStore({
+      epics: [{ id: "epic-1", title: "Epic 1" }],
+      tasks: [{ id: "task-1", epicId: "epic-1", title: "Task 1", status: "todo" }],
+      subtasks: [],
+      dependencies: [],
+    });
+
+    store.syncState({
+      screen: "tasks",
+      selectedEpicId: "epic-1",
+      selectedTaskId: "task-1",
+      taskModalOpen: true,
+    });
+    store.persist();
+
+    const written = JSON.parse(storage.getItem("trekoon-board-state") ?? "{}");
+    expect(written).not.toHaveProperty("taskModalOpen");
+    expect(written.selectedTaskId).toBe("task-1");
+  });
+
+  test("syncState({ taskModalOpen: true }) flips the flag and notifies subscribers", () => {
+    globalThis.localStorage = createMockStorage() as Storage;
+
+    const store = createStore({
+      epics: [{ id: "epic-1", title: "Epic 1" }],
+      tasks: [{ id: "task-1", epicId: "epic-1", title: "Task 1", status: "todo" }],
+      subtasks: [],
+      dependencies: [],
+    });
+
+    store.syncState({
+      screen: "tasks",
+      selectedEpicId: "epic-1",
+      selectedTaskId: "task-1",
+    });
+
+    const listener = mock(() => {});
+    store.subscribe(listener);
+
+    const result = store.syncState({ taskModalOpen: true });
+
+    expect(result.taskModalOpen).toBe(true);
+    expect(store.getState().taskModalOpen).toBe(true);
+    expect(listener).toHaveBeenCalled();
+  });
+
   test("ignores malformed delta records without creating persistent synthetic ids", () => {
     globalThis.localStorage = createMockStorage() as Storage;
 
