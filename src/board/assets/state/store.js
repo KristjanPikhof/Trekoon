@@ -381,7 +381,8 @@ export function createStore(initialSnapshot, options = {}) {
       || state.search !== reconciled.search
       || state.view !== reconciled.view
       || state.selectedTaskId !== reconciled.selectedTaskId
-      || state.selectedSubtaskId !== reconciled.selectedSubtaskId;
+      || state.selectedSubtaskId !== reconciled.selectedSubtaskId
+      || state.taskModalOpen !== reconciled.taskModalOpen;
 
     state.screen = reconciled.screen;
     state.selectedEpicId = reconciled.selectedEpicId;
@@ -390,6 +391,7 @@ export function createStore(initialSnapshot, options = {}) {
     state.view = reconciled.view;
     state.selectedTaskId = reconciled.selectedTaskId;
     state.selectedSubtaskId = reconciled.selectedSubtaskId;
+    state.taskModalOpen = reconciled.taskModalOpen;
     if (changed) {
       notify();
     }
