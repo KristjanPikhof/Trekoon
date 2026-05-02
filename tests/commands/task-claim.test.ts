@@ -238,52 +238,20 @@ describe("subtask claim — domain layer (MutationService.claimSubtask)", (): vo
 });
 
 describe("task claim — CLI subcommand", (): void => {
-  test("task claim <id> --owner: claimed=true from todo", async (): Promise<void> => {
+  test("task claim via runTask CLI function — claimed=true from todo", async (): Promise<void> => {
     const cwd = createWorkspace();
 
-    const epicRes = await runTask({ cwd, mode: "toon", args: [] });
-    // Create epic via raw service for test isolation
-    const db = new Database(join(cwd, ".trekoon", "trekoon.db"));
-    // Use the CLI to create resources
-    void epicRes;
+    // Bootstrap storage via CLI (runEpic calls openTrekoonDatabase which creates .trekoon/)
+    const epicRes = await runEpic({ cwd, mode: "toon", args: ["create", "--title", "E", "--description", "d"] });
+    const epicId = (epicRes.data as { epic: { id: string } }).epic.id;
 
-    // Use in-memory path for CLI tests via the workspace-based CLI
-    const { service, domain: _domain } = (() => {
-      const idb = new Database(":memory:");
-      idb.exec("PRAGMA foreign_keys = ON;");
-      migrateDatabase(idb);
-      return {
-        service: new MutationService(idb, cwd),
-        domain: new TrackerDomain(idb),
-      };
-    })();
-    db.close();
-
-    const epic = service.createEpic({ title: "CLI-E", description: "d" });
-    const task = service.createTask({ epicId: epic.id, title: "CLI-T", description: "d", status: "todo" });
-
-    const result = service.claimTask({ taskId: task.id, owner: "cli-agent" });
-    expect(result.claimed).toBe(true);
-    expect(result.task!.status).toBe("in_progress");
-    expect(result.task!.owner).toBe("cli-agent");
-  });
-
-  test("task claim via runTask CLI function — claimed=true", async (): Promise<void> => {
-    const cwd = createWorkspace();
-
-    // Initialize storage
-    const db = new Database(join(cwd, ".trekoon", "trekoon.db"), { create: true });
-    db.exec("PRAGMA journal_mode=WAL;");
-    migrateDatabase(db);
-    const svc = new MutationService(db, cwd);
-    const epic = svc.createEpic({ title: "CLI Epic", description: "d" });
-    const task = svc.createTask({ epicId: epic.id, title: "CLI Task", description: "d", status: "todo" });
-    db.close();
+    const taskRes = await runTask({ cwd, mode: "toon", args: ["create", "--epic", epicId, "--title", "T", "--description", "d"] });
+    const taskId = (taskRes.data as { task: { id: string } }).task.id;
 
     const result = await runTask({
       cwd,
       mode: "toon",
-      args: ["claim", task.id, "--owner", "cli-runner"],
+      args: ["claim", taskId, "--owner", "cli-runner"],
     });
 
     expect(result.ok).toBe(true);
@@ -292,23 +260,20 @@ describe("task claim — CLI subcommand", (): void => {
     expect(data.claimed).toBe(true);
     expect(data.currentOwner).toBe("cli-runner");
     expect(data.currentStatus).toBe("in_progress");
-    expect(data.task.id).toBe(task.id);
+    expect(data.task.id).toBe(taskId);
   });
 
   test("task claim — missing --owner returns invalid_input", async (): Promise<void> => {
     const cwd = createWorkspace();
-    const db = new Database(join(cwd, ".trekoon", "trekoon.db"), { create: true });
-    db.exec("PRAGMA journal_mode=WAL;");
-    migrateDatabase(db);
-    const svc = new MutationService(db, cwd);
-    const epic = svc.createEpic({ title: "E", description: "d" });
-    const task = svc.createTask({ epicId: epic.id, title: "T", description: "d", status: "todo" });
-    db.close();
+    const epicRes = await runEpic({ cwd, mode: "toon", args: ["create", "--title", "E", "--description", "d"] });
+    const epicId = (epicRes.data as { epic: { id: string } }).epic.id;
+    const taskRes = await runTask({ cwd, mode: "toon", args: ["create", "--epic", epicId, "--title", "T", "--description", "d"] });
+    const taskId = (taskRes.data as { task: { id: string } }).task.id;
 
     const result = await runTask({
       cwd,
       mode: "toon",
-      args: ["claim", task.id],
+      args: ["claim", taskId],
     });
 
     expect(result.ok).toBe(false);
@@ -317,19 +282,17 @@ describe("task claim — CLI subcommand", (): void => {
 
   test("task claim — claimed=false when already owned by another", async (): Promise<void> => {
     const cwd = createWorkspace();
-    const db = new Database(join(cwd, ".trekoon", "trekoon.db"), { create: true });
-    db.exec("PRAGMA journal_mode=WAL;");
-    migrateDatabase(db);
-    const svc = new MutationService(db, cwd);
-    const epic = svc.createEpic({ title: "E", description: "d" });
-    const task = svc.createTask({ epicId: epic.id, title: "T", description: "d", status: "todo" });
-    svc.updateTask(task.id, { status: "in_progress", owner: "existing-owner" });
-    db.close();
+    const epicRes = await runEpic({ cwd, mode: "toon", args: ["create", "--title", "E", "--description", "d"] });
+    const epicId = (epicRes.data as { epic: { id: string } }).epic.id;
+    const taskRes = await runTask({ cwd, mode: "toon", args: ["create", "--epic", epicId, "--title", "T", "--description", "d"] });
+    const taskId = (taskRes.data as { task: { id: string } }).task.id;
+    // First, claim it
+    await runTask({ cwd, mode: "toon", args: ["claim", taskId, "--owner", "existing-owner"] });
 
     const result = await runTask({
       cwd,
       mode: "toon",
-      args: ["claim", task.id, "--owner", "new-owner"],
+      args: ["claim", taskId, "--owner", "new-owner"],
     });
 
     expect(result.ok).toBe(true);
@@ -341,19 +304,16 @@ describe("task claim — CLI subcommand", (): void => {
 
   test("task claim — done task returns claimed=false", async (): Promise<void> => {
     const cwd = createWorkspace();
-    const db = new Database(join(cwd, ".trekoon", "trekoon.db"), { create: true });
-    db.exec("PRAGMA journal_mode=WAL;");
-    migrateDatabase(db);
-    const svc = new MutationService(db, cwd);
-    const epic = svc.createEpic({ title: "E", description: "d" });
-    const task = svc.createTask({ epicId: epic.id, title: "T", description: "d", status: "todo" });
-    svc.markTaskDoneAtomically({ taskId: task.id, computeSnapshot: ({ completed }) => completed });
-    db.close();
+    const epicRes = await runEpic({ cwd, mode: "toon", args: ["create", "--title", "E", "--description", "d"] });
+    const epicId = (epicRes.data as { epic: { id: string } }).epic.id;
+    const taskRes = await runTask({ cwd, mode: "toon", args: ["create", "--epic", epicId, "--title", "T", "--description", "d"] });
+    const taskId = (taskRes.data as { task: { id: string } }).task.id;
+    await runTask({ cwd, mode: "toon", args: ["done", taskId] });
 
     const result = await runTask({
       cwd,
       mode: "toon",
-      args: ["claim", task.id, "--owner", "agent-1"],
+      args: ["claim", taskId, "--owner", "agent-1"],
     });
 
     expect(result.ok).toBe(true);
