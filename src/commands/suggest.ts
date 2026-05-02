@@ -234,7 +234,7 @@ export async function runSuggest(context: CliContext): Promise<CliResult> {
 
     const syncSummary = resolveSyncStatus(database, context.cwd, DEFAULT_SOURCE_BRANCH);
     const domain = new TrackerDomain(database.db);
-    const epics = domain.listEpics();
+    const epicCount = domain.countEpics();
     const activeEpic = resolveActiveEpic(domain, epicId);
 
     const readiness = buildTaskReadiness(domain, epicId ?? activeEpic?.id);
@@ -243,14 +243,14 @@ export async function runSuggest(context: CliContext): Promise<CliResult> {
       diagnostics.recoveryRequired,
       syncSummary,
       readiness,
-      epics,
+      epicCount,
       activeEpic,
     );
 
     const result: SuggestResult = {
       suggestions,
       context: {
-        totalEpics: epics.length,
+        totalEpics: epicCount,
         activeEpic: activeEpic?.id ?? null,
         readyTasks: readiness.summary.readyCount,
         blockedTasks: readiness.summary.blockedCount,
