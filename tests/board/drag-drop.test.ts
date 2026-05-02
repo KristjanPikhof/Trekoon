@@ -91,7 +91,7 @@ describe("dropTaskStatus selection invariants", () => {
     expect(model.getState().selectedTaskId).toBeNull();
     expect(model.getState().taskModalOpen).toBe(false);
     expect(api.patchTask).toHaveBeenCalledTimes(1);
-    expect(api.patchTask.mock.calls[0]?.[1]).toEqual({ status: "done" });
+    expect((api.patchTask.mock.calls[0] as unknown[])?.[1]).toEqual({ status: "done" });
   });
 
   test("keeps an open task modal intact when dragging a different card", () => {
