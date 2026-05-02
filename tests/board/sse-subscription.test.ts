@@ -23,6 +23,7 @@ function createMockEventSourceCtor(): {
     this.readyState = 0;
     this.closed = false;
     this.listeners = new Map();
+    this.onerror = null;
     instances.push(this);
   } as unknown as new (url: string) => MockEventSourceInstance;
 
