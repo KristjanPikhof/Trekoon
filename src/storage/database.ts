@@ -160,27 +160,70 @@ const NO_LEGACY_RECOVERY: WorktreeRecoveryDiagnostics = {
  * Cached handles override `close()` to be a no-op so callers that follow the
  * `try { ... } finally { db?.close(); }` pattern do not actually tear down the
  * shared connection. The daemon shutdown path calls `closeCachedDatabases()`.
+ *
+ * The cache is bounded LRU (insertion-order on Map; touched on access) so a
+ * long-running daemon serving many distinct cwds does not accumulate open
+ * SQLite connections / FDs without bound. Eviction closes the underlying
+ * database after a passive WAL checkpoint.
  */
+const CACHED_DATABASES_CAPACITY = 16;
 const cachedDatabases: Map<string, TrekoonDatabase> = new Map();
 
 function isDaemonInProcessCacheEnabled(): boolean {
   return process.env.TREKOON_DAEMON_INPROCESS === "1";
 }
 
-export function closeCachedDatabases(): void {
-  for (const handle of cachedDatabases.values()) {
-    try {
-      handle.db.exec("PRAGMA wal_checkpoint(PASSIVE);");
-    } catch {
-      /* best effort */
+function closeCachedHandle(handle: TrekoonDatabase): void {
+  try {
+    handle.db.exec("PRAGMA wal_checkpoint(PASSIVE);");
+  } catch {
+    /* best effort */
+  }
+  try {
+    handle.db.close(false);
+  } catch {
+    /* best effort */
+  }
+}
+
+/**
+ * Evict the least-recently-used handle when the cache is at capacity. Map
+ * iteration order in JS is insertion order; we re-insert on access (`touch`)
+ * to model LRU semantics.
+ */
+function evictLruIfNeeded(): void {
+  while (cachedDatabases.size >= CACHED_DATABASES_CAPACITY) {
+    const oldestKey = cachedDatabases.keys().next().value;
+    if (oldestKey === undefined) {
+      return;
     }
-    try {
-      handle.db.close(false);
-    } catch {
-      /* best effort */
+    const oldest = cachedDatabases.get(oldestKey);
+    cachedDatabases.delete(oldestKey);
+    if (oldest) {
+      closeCachedHandle(oldest);
     }
   }
+}
+
+function touchCachedDatabase(key: string, handle: TrekoonDatabase): void {
+  // Re-insert to move to the most-recently-used (tail) end of insertion order.
+  cachedDatabases.delete(key);
+  cachedDatabases.set(key, handle);
+}
+
+export function closeCachedDatabases(): void {
+  for (const handle of cachedDatabases.values()) {
+    closeCachedHandle(handle);
+  }
   cachedDatabases.clear();
+}
+
+/**
+ * Test-only: report the current size of the daemon-mode database cache.
+ * Production code never inspects this — used by `tests/runtime/cache-bound`.
+ */
+export function cachedDatabasesSize(): number {
+  return cachedDatabases.size;
 }
 
 export function openTrekoonDatabase(
