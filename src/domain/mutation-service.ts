@@ -446,13 +446,31 @@ export class MutationService {
     return this.#writeTransaction((): T => {
       const existing = this.#domain.getTaskOrThrow(input.taskId);
 
-      if (existing.status === "done") {
+      // Positive allowlist of acceptable source statuses for the atomic done
+      // bypass. Any future terminal status (e.g. `cancelled`, `archived`) MUST
+      // be explicitly added here before it can be auto-flipped to `done`;
+      // otherwise it falls through to this guard and surfaces as
+      // `already_done`. This is safer than the legacy
+      // `existing.status === "done"` negative check, which silently accepted
+      // any new terminal status as "still allowed to transition to done".
+      if (existing.status !== "todo" && existing.status !== "blocked" && existing.status !== "in_progress") {
         throw new DomainError({
           code: "already_done",
           message: "Task is already done",
           details: { id: input.taskId },
         });
       }
+
+      // Enforce dependency gating BEFORE the direct UPDATE bypass. The atomic
+      // done flow skips `validateStatusTransition`, so without this call a
+      // blocked task with unresolved upstream deps would be silently flipped
+      // to `done` — defeating the dependency_blocked contract.
+      this.#domain.assertNoUnresolvedDependenciesForStatusTransition(
+        input.taskId,
+        "task",
+        existing.status,
+        "done",
+      );
 
       // Snapshot direct task-level reverse-dep blockers BEFORE the status
       // flip so the post-write snapshot can diff "newly-unblocked" tasks.
