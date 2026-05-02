@@ -132,11 +132,12 @@ function serializeInlineJson(value: unknown): string {
     .replace(/\u2029/g, "\\u2029");
 }
 
-function buildBoardBootstrapPayload(database: TrekoonDatabase, token: string): string {
-  const domain = new TrackerDomain(database.db);
+function buildBoardBootstrapPayload(_database: TrekoonDatabase, token: string): string {
+  // Only the auth token is inlined; the snapshot is fetched client-side via
+  // /api/snapshot to keep index.html small and avoid disclosing data even
+  // briefly through the HTML response cache.
   return serializeInlineJson({
     token,
-    snapshot: buildBoardSnapshot(domain),
   });
 }
 
