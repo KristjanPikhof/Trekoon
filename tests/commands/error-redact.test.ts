@@ -161,6 +161,31 @@ describe("redactSensitive", (): void => {
   test("redacts standalone Basic token", (): void => {
     expect(redactSensitive("auth: Basic dXNlcjpwYXNz here")).toBe("auth: Basic REDACTED here");
   });
+
+  // --- JWT-shape heuristic (three eyJ segments + signature) ---
+  test("redacts bare JWT in message", (): void => {
+    const jwt =
+      "eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiIxMjM0NTY3ODkwIn0.SflKxwRJSMeKKF2QT4fwpMeJf36POk6yJV_adQssw5c";
+    const input = `decode failed for ${jwt} in handler`;
+    const result = redactSensitive(input);
+    expect(result).toBe("decode failed for REDACTED in handler");
+  });
+
+  test("redacts JWT with hyphen and underscore base64url chars", (): void => {
+    const jwt = "eyJhbGc-A_B.eyJzdWI-X_Y.sig-_value";
+    expect(redactSensitive(jwt)).toBe("REDACTED");
+  });
+
+  test("does not match non-JWT three-dot strings", (): void => {
+    expect(redactSensitive("version=1.2.3.4")).toBe("version=1.2.3.4");
+  });
+
+  test("redacts multiple JWTs in one message", (): void => {
+    const jwt1 = "eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiJhIn0.sigA";
+    const jwt2 = "eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiJiIn0.sigB";
+    const result = redactSensitive(`${jwt1} and ${jwt2}`);
+    expect(result).toBe("REDACTED and REDACTED");
+  });
 });
 
 describe("safeErrorMessage redaction", (): void => {
