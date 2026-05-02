@@ -352,6 +352,7 @@ backup over `.trekoon/trekoon.db`.
 
 ```bash
 trekoon --toon migrate backup
+trekoon --toon migrate backup --retain 5
 ```
 
 Snapshots `.trekoon/trekoon.db` to a timestamped sibling file
@@ -360,6 +361,11 @@ is opened read-only, so a backup never mutates live state. Returns
 `backupPath`, `bytes`, `migrationVersion`, and `latestVersion` for machine
 consumers. Backups stay inside `.trekoon/` and are gitignored along with the
 rest of the directory.
+
+`--retain <n>` keeps the last `n` timestamped backups; older siblings are
+pruned in the same call. Default is `10`. Backups created within the same
+millisecond produce a deterministic collision error that names the existing
+file so operators can identify it.
 
 To restore from a backup: stop any process holding the DB, then copy the
 backup file over `.trekoon/trekoon.db`.
