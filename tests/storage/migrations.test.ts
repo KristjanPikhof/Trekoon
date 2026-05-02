@@ -323,3 +323,185 @@ describe("migrate backup CLI", (): void => {
     expect(result.error?.code).toBe("backup_database_missing");
   });
 });
+
+// ---------------------------------------------------------------------------
+// Migration version marker file tests
+// ---------------------------------------------------------------------------
+
+describe("migration-version marker: written after migrate", (): void => {
+  test("marker file is created after migrateDatabase", (): void => {
+    const workspace: string = createWorkspace();
+    const storage = openTrekoonDatabase(workspace);
+
+    try {
+      const markerPath = join(workspace, ".trekoon", "migration-version");
+      expect(existsSync(markerPath)).toBe(true);
+      const version = readMigrationVersionMarker(storage.db);
+      expect(version).toBe(LATEST_MIGRATION_VERSION);
+    } finally {
+      storage.close();
+    }
+  });
+
+  test("readMigrationVersionMarker returns null for :memory: db", (): void => {
+    const db = new Database(":memory:");
+    try {
+      expect(readMigrationVersionMarker(db)).toBeNull();
+    } finally {
+      db.close(false);
+    }
+  });
+
+  test("writeMigrationVersionMarker is a no-op for :memory: db", (): void => {
+    const db = new Database(":memory:");
+    try {
+      // Should not throw.
+      writeMigrationVersionMarker(db, LATEST_MIGRATION_VERSION);
+    } finally {
+      db.close(false);
+    }
+  });
+});
+
+describe("migration-version marker: probe skipped on second call", (): void => {
+  test("second migrateDatabase call is skipped via marker (no exception, correct version)", (): void => {
+    const workspace: string = createWorkspace();
+    // First call — runs migrations and writes marker.
+    const storage = openTrekoonDatabase(workspace);
+    storage.close();
+
+    // Re-open and call migrateDatabase again; marker should cause probe skip.
+    const dbPath = join(workspace, ".trekoon", "trekoon.db");
+    const db = new Database(dbPath);
+    db.exec("PRAGMA journal_mode = WAL;");
+    db.exec("PRAGMA foreign_keys = ON;");
+
+    try {
+      // This must not throw and must not regress schema.
+      migrateDatabase(db);
+      expect(readCurrentMigrationVersionReadOnly(db)).toBe(LATEST_MIGRATION_VERSION);
+    } finally {
+      db.close(false);
+    }
+  });
+});
+
+describe("migration-version marker: stale marker falls back to probe", (): void => {
+  test("marker older than DB triggers probe and still succeeds", async (): Promise<void> => {
+    const workspace: string = createWorkspace();
+    // First pass: create DB + marker.
+    const storage = openTrekoonDatabase(workspace);
+    storage.close();
+
+    const markerPath = join(workspace, ".trekoon", "migration-version");
+    const dbPath = join(workspace, ".trekoon", "trekoon.db");
+
+    // Make the marker appear older than the DB by back-dating it.
+    const oldTime = new Date(Date.now() - 5000);
+    const { utimesSync } = await import("node:fs");
+    utimesSync(markerPath, oldTime, oldTime);
+
+    // Verify the DB is now newer than the marker.
+    expect(statSync(dbPath).mtimeMs).toBeGreaterThan(statSync(markerPath).mtimeMs);
+
+    const db = new Database(dbPath);
+    db.exec("PRAGMA journal_mode = WAL;");
+    db.exec("PRAGMA foreign_keys = ON;");
+
+    try {
+      // Even with a stale marker the migration runner must succeed gracefully.
+      expect((): void => migrateDatabase(db)).not.toThrow();
+      expect(readCurrentMigrationVersionReadOnly(db)).toBe(LATEST_MIGRATION_VERSION);
+    } finally {
+      db.close(false);
+    }
+  });
+});
+
+describe("migration-version marker: missing marker falls back to probe", (): void => {
+  test("absent marker causes normal probe without throwing", (): void => {
+    const workspace: string = createWorkspace();
+    const storage = openTrekoonDatabase(workspace);
+    storage.close();
+
+    const markerPath = join(workspace, ".trekoon", "migration-version");
+    const dbPath = join(workspace, ".trekoon", "trekoon.db");
+
+    // Delete the marker.
+    rmSync(markerPath);
+    expect(existsSync(markerPath)).toBe(false);
+
+    const db = new Database(dbPath);
+    db.exec("PRAGMA journal_mode = WAL;");
+    db.exec("PRAGMA foreign_keys = ON;");
+
+    try {
+      expect((): void => migrateDatabase(db)).not.toThrow();
+      expect(readCurrentMigrationVersionReadOnly(db)).toBe(LATEST_MIGRATION_VERSION);
+    } finally {
+      db.close(false);
+    }
+  });
+});
+
+describe("migration-version marker: malformed marker falls back to probe", (): void => {
+  test("corrupt marker content probes normally without throwing", (): void => {
+    const workspace: string = createWorkspace();
+    const storage = openTrekoonDatabase(workspace);
+    storage.close();
+
+    const markerPath = join(workspace, ".trekoon", "migration-version");
+    const dbPath = join(workspace, ".trekoon", "trekoon.db");
+
+    // Overwrite with garbage.
+    const { writeFileSync } = require("node:fs");
+    writeFileSync(markerPath, "not-a-number", "utf8");
+
+    const db = new Database(dbPath);
+    db.exec("PRAGMA journal_mode = WAL;");
+    db.exec("PRAGMA foreign_keys = ON;");
+
+    try {
+      expect((): void => migrateDatabase(db)).not.toThrow();
+      expect(readCurrentMigrationVersionReadOnly(db)).toBe(LATEST_MIGRATION_VERSION);
+    } finally {
+      db.close(false);
+    }
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Warm-start benchmark: 5 consecutive marker-skipped migrateDatabase calls
+// must complete in under 100ms total.
+// ---------------------------------------------------------------------------
+
+describe("migration-version marker: warm-start benchmark", (): void => {
+  test("5 warm migrateDatabase calls complete under 100ms total", (): void => {
+    const workspace: string = createWorkspace();
+    // Perform cold start so the marker is written.
+    const storage = openTrekoonDatabase(workspace);
+    storage.close();
+
+    const dbPath = join(workspace, ".trekoon", "trekoon.db");
+
+    // Open a persistent connection for the bench iterations.
+    const db = new Database(dbPath);
+    db.exec("PRAGMA journal_mode = WAL;");
+    db.exec("PRAGMA foreign_keys = ON;");
+
+    try {
+      // Warm-up: one call outside the timed window.
+      migrateDatabase(db);
+
+      const start = performance.now();
+      for (let i = 0; i < 5; i++) {
+        migrateDatabase(db);
+      }
+      const elapsedMs = performance.now() - start;
+
+      expect(elapsedMs).toBeLessThan(100);
+    } finally {
+      db.close(false);
+    }
+  });
+});
