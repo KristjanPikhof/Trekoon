@@ -255,14 +255,63 @@ export interface StatusCascadePlan {
   readonly counts: StatusCascadeCounts;
 }
 
+export const ERROR_CODES = {
+  ALREADY_DONE: "already_done",
+  ALREADY_RESOLVED: "already_resolved",
+  AMBIGUOUS_LEGACY_STATE: "ambiguous_legacy_state",
+  BACKUP_ALREADY_EXISTS: "backup_already_exists",
+  BACKUP_DATABASE_MISSING: "backup_database_missing",
+  BACKUP_FAILED: "backup_failed",
+  CANCELLED: "cancelled",
+  CONFIRMATION_REQUIRED: "confirmation_required",
+  CONFLICT_SET_CHANGED: "conflict_set_changed",
+  DATABASE_BUSY: "database_busy",
+  DEPENDENCY_BLOCKED: "dependency_blocked",
+  DISALLOWED_FIELD: "disallowed_field",
+  EVENTS_FAILED: "events_failed",
+  INSTALL_FAILED: "install_failed",
+  INTERNAL_ERROR: "internal_error",
+  INVALID_ARGS: "invalid_args",
+  INVALID_DEPENDENCY: "invalid_dependency",
+  INVALID_INPUT: "invalid_input",
+  INVALID_PATH: "invalid_path",
+  INVALID_SOURCE: "invalid_source",
+  INVALID_STATE: "invalid_state",
+  INVALID_SUBCOMMAND: "invalid_subcommand",
+  LEGACY_IMPORT_FAILED: "legacy_import_failed",
+  MIGRATE_FAILED: "migrate_failed",
+  MIGRATION_DOWN_UNSUPPORTED: "migration_down_unsupported",
+  MISSING_ASSET: "missing_asset",
+  NO_MATCHING_CONFLICTS: "no_matching_conflicts",
+  NOT_FOUND: "not_found",
+  ORPHANED_EXTERNAL_NODE: "orphaned_external_node",
+  OUTSIDE_REPO_TARGET: "outside_repo_target",
+  PERMISSION_DENIED: "permission_denied",
+  PRECONDITION_FAILED: "precondition_failed",
+  ROW_NOT_FOUND: "row_not_found",
+  STATUS_TRANSITION_INVALID: "status_transition_invalid",
+  STREAM_UNAVAILABLE: "stream_unavailable",
+  SYNC_FAILED: "sync_failed",
+  TRACKED_IGNORED_MISMATCH: "tracked_ignored_mismatch",
+  UNAUTHORIZED: "unauthorized",
+  UNHANDLED_COMMAND: "unhandled_command",
+  UNKNOWN_COMMAND: "unknown_command",
+  UNKNOWN_OPTION: "unknown_option",
+  UNSUPPORTED_ENTITY_KIND: "unsupported_entity_kind",
+  UPDATE_FAILED: "update_failed",
+  WRONG_ENTITY_TYPE: "wrong_entity_type",
+} as const;
+
+export type ErrorCode = (typeof ERROR_CODES)[keyof typeof ERROR_CODES];
+
 export interface DomainErrorShape {
-  readonly code: string;
+  readonly code: ErrorCode;
   readonly message: string;
   readonly details?: Record<string, unknown>;
 }
 
 export class DomainError extends Error {
-  readonly code: string;
+  readonly code: ErrorCode;
   readonly details?: Record<string, unknown>;
 
   constructor(input: DomainErrorShape) {
