@@ -124,14 +124,32 @@ function insertConflict(
     readonly fieldName: string;
     readonly oursValue: string;
     readonly theirsValue: string;
+    readonly worktreePath?: string;
+    readonly currentBranch?: string;
   },
 ): string {
   const id = randomUUID();
   const ts = Date.now();
   db.query(
-    `INSERT INTO sync_conflicts (id, event_id, entity_kind, entity_id, field_name, ours_value, theirs_value, resolution, created_at, updated_at, version)
-     VALUES (?, ?, ?, ?, ?, ?, ?, 'pending', ?, ?, 1);`,
-  ).run(id, opts.eventId, opts.entityKind, opts.entityId, opts.fieldName, opts.oursValue, opts.theirsValue, ts, ts);
+    `INSERT INTO sync_conflicts (
+       id, event_id, entity_kind, entity_id, field_name,
+       ours_value, theirs_value, resolution,
+       created_at, updated_at, version,
+       worktree_path, current_branch
+     ) VALUES (?, ?, ?, ?, ?, ?, ?, 'pending', ?, ?, 1, ?, ?);`,
+  ).run(
+    id,
+    opts.eventId,
+    opts.entityKind,
+    opts.entityId,
+    opts.fieldName,
+    opts.oursValue,
+    opts.theirsValue,
+    ts,
+    ts,
+    opts.worktreePath ?? "",
+    opts.currentBranch ?? "",
+  );
   return id;
 }
 
