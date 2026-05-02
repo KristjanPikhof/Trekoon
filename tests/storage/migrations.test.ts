@@ -797,40 +797,33 @@ describe("migration-version marker: PRAGMA user_version fingerprint", (): void =
     const storage = openTrekoonDatabase(workspace);
 
     const markerPath = join(workspace, ".trekoon", "migration-version");
-    const storageDir = join(workspace, ".trekoon");
+    const tmpMarkerPath = `${markerPath}.tmp`;
 
     try {
-      // Drop write permissions on the storage dir so the rename of the temp
-      // marker file fails. SQLite still operates on the open DB handle.
-      chmodSync(storageDir, 0o500);
+      // Pre-create a directory at the temp-marker path so writeFileSync()
+      // fails with EISDIR; the rollback code path detects that and unlinks
+      // the now-stale on-disk marker (which still points at LATEST).
+      const { mkdirSync } = require("node:fs");
+      mkdirSync(tmpMarkerPath, { recursive: true });
 
       try {
         rollbackDatabase(storage.db, 7);
       } finally {
-        // Always restore writability so afterEach() can clean up.
-        chmodSync(storageDir, 0o700);
+        // Always clean up the obstruction so afterEach() can recurse.
+        rmSync(tmpMarkerPath, { recursive: true, force: true });
       }
 
-      // The pre-rollback marker (LATEST) is now stale. Either the writer
-      // succeeded after restoring perms (rare on macOS — the sync chmod
-      // takes effect immediately) and the marker is in v2 form pointing at
-      // 7, OR the writer failed and the marker was unlinked. Both outcomes
-      // are acceptable; what is NOT acceptable is a leftover marker still
-      // claiming LATEST.
-      if (existsSync(markerPath)) {
-        const raw: string = readFileSync(markerPath, "utf8").trim();
-        const parsed = JSON.parse(raw) as { version: number; userVersion: number };
-        expect(parsed.version).toBe(7);
-        expect(parsed.userVersion).toBe(7);
-      } else {
-        expect(existsSync(markerPath)).toBe(false);
-      }
+      // The pre-rollback marker pointed at LATEST. The new marker write
+      // failed because of the EISDIR obstruction, so the rollback path
+      // must have unlinked the stale marker.
+      expect(existsSync(markerPath)).toBe(false);
+
+      // PRAGMA user_version was committed inside the rollback transaction,
+      // so the DB header is the source of truth even though the sidecar
+      // file is now absent.
+      const row = storage.db.query("PRAGMA user_version;").get() as { user_version: number } | null;
+      expect(row?.user_version).toBe(7);
     } finally {
-      try {
-        chmodSync(storageDir, 0o700);
-      } catch {
-        // best-effort
-      }
       storage.close();
     }
   });
