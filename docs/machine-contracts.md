@@ -334,6 +334,43 @@ data:
     pendingConflicts
 ```
 
+## Task claim
+
+```bash
+trekoon --toon task claim <task-id> --owner <owner>
+trekoon --toon subtask claim <subtask-id> --owner <owner>
+```
+
+Atomically claims a task or subtask using SQL compare-and-swap. The single
+UPDATE predicate ensures exactly one concurrent caller gets `claimed: true`.
+
+Success (claimed):
+
+```text
+ok: true
+command: task.claim | subtask.claim
+data:
+  claimed: true
+  currentOwner: <owner>
+  currentStatus: in_progress
+  task | subtask: { ...full record... }
+```
+
+Not claimed (another owner holds it, or status is done/in_progress by others):
+
+```text
+ok: true
+command: task.claim | subtask.claim
+data:
+  claimed: false
+  currentOwner: <string> | null
+  currentStatus: in_progress | done | todo | blocked
+```
+
+Note: `claimed: false` is a successful response (`ok: true`). The command
+reports the current state, not an error condition. Check `data.claimed` to
+distinguish the two cases.
+
 ## Owner field in updates
 
 Task and subtask update payloads include `owner`:
