@@ -155,6 +155,7 @@ export async function runQuickstart(_: CliContext): Promise<CliResult> {
         "trekoon --toon task list --status in_progress,todo --limit 20",
         "trekoon --toon task list --cursor <n>",
         "trekoon --toon task update --ids id1,id2 --append \"...\" --status in_progress",
+        "trekoon --toon task claim <task-id> --owner <owner>",
         "trekoon --toon epic export <epic-id>",
         "trekoon --toon migrate backup",
       ],
