@@ -64,6 +64,7 @@ export function parseInvocation(argv: readonly string[], options: ParseInvocatio
   let compatibilityModeMissingValue = false;
   let wantsHelp = false;
   let wantsVersion = false;
+  let wantsDaemon = false;
   const positionals: string[] = [];
 
   for (let index = 0; index < argv.length; index += 1) {
