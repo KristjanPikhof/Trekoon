@@ -348,7 +348,7 @@ Use the same status discipline for subtasks when a task depends on concrete
 subtask progress:
 
 ```bash
-trekoon --toon subtask update <subtask-id> --status in_progress
+trekoon --toon subtask claim <subtask-id> --owner <name>
 trekoon --toon subtask update <subtask-id> --append "Implemented parser branch"
 trekoon --toon subtask update <subtask-id> --append "Verified with fixture set" --status done
 trekoon --toon subtask update <subtask-id> --append "Blocked by <reason>" --status blocked
