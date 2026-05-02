@@ -76,6 +76,7 @@ export function hashToState(hash) {
 
   const epicId = params.get("epic") || null;
   const taskId = params.get("task") || null;
+  const subtaskId = params.get("subtask") || null;
   const screenParam = params.get("screen");
   const search = params.get("search") || "";
   const view = params.get("view") || DEFAULT_VIEW;
@@ -85,9 +86,15 @@ export function hashToState(hash) {
       ? "tasks"
       : "epics";
 
+  // Deep-linking with task=/subtask= must open the corresponding modals so the
+  // booted page actually renders the deep-linked dialog instead of just
+  // selecting a row in the workspace.
   return {
     selectedEpicId: epicId,
     selectedTaskId: taskId,
+    selectedSubtaskId: subtaskId,
+    taskModalOpen: Boolean(taskId),
+    subtaskModalOpen: Boolean(subtaskId),
     search,
     view,
     screen,
