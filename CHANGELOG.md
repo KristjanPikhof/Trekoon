@@ -2,6 +2,29 @@
 
 All notable changes to Trekoon are documented in this file.
 
+## 0.4.1
+
+### Fixed
+
+- Board task modal now stays closed unless explicitly opened. Previously the
+  modal opened on any task selection, so changing a task's status, switching
+  epics, or restoring `selectedTaskId` from persisted state could pop the
+  modal open unintentionally. A new `taskModalOpen` flag in the board store
+  gates modal visibility independently of `selectedTaskId`.
+- `closeTask`, `selectEpic`, `showEpics`, `showBoard`, and inline status
+  changes now reset `taskModalOpen` to `false`, so the modal closes when the
+  user navigates away or mutates a task in place.
+- `shouldUseTaskModal` and the legacy boot loop check `taskModalOpen` before
+  rendering the task and subtask modals, preventing stale modal state from
+  bleeding across view changes.
+
+### Added
+
+- `taskModalOpen` field on the derived board state, persisted through
+  `reconcileBoardState` and initialized to `false` on store creation.
+- Tests covering task modal visibility (`tests/board/task-modal-visibility.test.ts`)
+  and store state persistence for the new flag (`tests/board/store-state.test.ts`).
+
 ## 0.4.0
 
 ### Changed
