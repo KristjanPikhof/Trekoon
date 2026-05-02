@@ -138,8 +138,11 @@ describe("board SSE snapshot stream", (): void => {
       const controllers = [new AbortController(), new AbortController()];
       const responses = await Promise.all(
         controllers.map((controller) =>
-          fetch(`${boardServer.origin}/api/snapshot/stream?token=multi-client-token`, {
-            headers: { accept: "text/event-stream" },
+          fetch(`${boardServer.origin}/api/snapshot/stream`, {
+            headers: {
+              accept: "text/event-stream",
+              cookie: `trekoon_board_session=${encodeURIComponent("multi-client-token")}`,
+            },
             signal: controller.signal,
           }),
         ),
@@ -173,9 +176,12 @@ describe("board SSE snapshot stream", (): void => {
         const epicResult = mutations.createEpic({ title: "SSE Epic", description: "Epic for SSE smoke." });
         const epicId = epicResult.id;
         // Trigger a board-side mutation that publishes a delta.
-        const patchResponse = await fetch(`${boardServer.origin}/api/epics/${encodeURIComponent(epicId)}?token=multi-client-token`, {
+        const patchResponse = await fetch(`${boardServer.origin}/api/epics/${encodeURIComponent(epicId)}`, {
           method: "PATCH",
-          headers: { "content-type": "application/json" },
+          headers: {
+            "content-type": "application/json",
+            authorization: "Bearer multi-client-token",
+          },
           body: JSON.stringify({ title: "SSE Epic Renamed" }),
         });
         expect(patchResponse.status).toBe(200);
@@ -216,7 +222,11 @@ describe("board SSE snapshot stream", (): void => {
         eventBus,
       });
       const response = await handler(
-        new Request("http://board.test/api/snapshot/stream?token=slow-client-token"),
+        new Request("http://board.test/api/snapshot/stream", {
+          headers: {
+            cookie: `trekoon_board_session=${encodeURIComponent("slow-client-token")}`,
+          },
+        }),
       );
       expect(response.status).toBe(200);
       const body = response.body as ReadableStream<Uint8Array>;
@@ -262,22 +272,32 @@ describe("board SSE snapshot stream", (): void => {
         eventBus,
       });
       const response = await handler(
-        new Request("http://board.test/api/snapshot/stream?token=quiet-drain-token"),
+        new Request("http://board.test/api/snapshot/stream", {
+          headers: {
+            cookie: `trekoon_board_session=${encodeURIComponent("quiet-drain-token")}`,
+          },
+        }),
       );
       expect(response.status).toBe(200);
       const body = response.body as ReadableStream<Uint8Array>;
 
       expect(eventBus.subscriberCount).toBe(1);
 
-      const taskPatch = await handler(new Request(`http://board.test/api/tasks/${encodeURIComponent(task.id)}?token=quiet-drain-token`, {
+      const taskPatch = await handler(new Request(`http://board.test/api/tasks/${encodeURIComponent(task.id)}`, {
         method: "PATCH",
-        headers: { "content-type": "application/json" },
+        headers: {
+          "content-type": "application/json",
+          authorization: "Bearer quiet-drain-token",
+        },
         body: JSON.stringify({ title: "Task after" }),
       }));
       expect(taskPatch.status).toBe(200);
-      const subtaskPatch = await handler(new Request(`http://board.test/api/subtasks/${encodeURIComponent(subtask.id)}?token=quiet-drain-token`, {
+      const subtaskPatch = await handler(new Request(`http://board.test/api/subtasks/${encodeURIComponent(subtask.id)}`, {
         method: "PATCH",
-        headers: { "content-type": "application/json" },
+        headers: {
+          "content-type": "application/json",
+          authorization: "Bearer quiet-drain-token",
+        },
         body: JSON.stringify({ title: "Subtask after" }),
       }));
       expect(subtaskPatch.status).toBe(200);
