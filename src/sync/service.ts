@@ -649,8 +649,6 @@ function entityFieldConflictDependencyWalk(
         CONFLICT_HISTORY_SCAN_BATCH_SIZE,
       ) as LocalEntityEventRow[];
 
-    const incomingDependencyIdentity = dependencyEventIdentity(event);
-
     if (rows.length === 0) {
       return null;
     }
@@ -661,17 +659,15 @@ function entityFieldConflictDependencyWalk(
         continue;
       }
 
-      if (incomingDependencyIdentity !== null) {
-        const localDependencyIdentity = dependencyEventIdentityFromFields(payloadValidation.fields);
-        if (
-          localDependencyIdentity === null ||
-          localDependencyIdentity.sourceId !== incomingDependencyIdentity.sourceId ||
-          localDependencyIdentity.sourceKind !== incomingDependencyIdentity.sourceKind ||
-          localDependencyIdentity.dependsOnId !== incomingDependencyIdentity.dependsOnId ||
-          localDependencyIdentity.dependsOnKind !== incomingDependencyIdentity.dependsOnKind
-        ) {
-          continue;
-        }
+      const localDependencyIdentity = dependencyEventIdentityFromFields(payloadValidation.fields);
+      if (
+        localDependencyIdentity === null ||
+        localDependencyIdentity.sourceId !== incomingDependencyIdentity.sourceId ||
+        localDependencyIdentity.sourceKind !== incomingDependencyIdentity.sourceKind ||
+        localDependencyIdentity.dependsOnId !== incomingDependencyIdentity.dependsOnId ||
+        localDependencyIdentity.dependsOnKind !== incomingDependencyIdentity.dependsOnKind
+      ) {
+        continue;
       }
 
       const payload: EventPayload = { fields: payloadValidation.fields };
@@ -682,7 +678,6 @@ function entityFieldConflictDependencyWalk(
       }
 
       const oursValue = serializeValue(localValue);
-      const theirsValue = serializeValue(incomingValue);
 
       if (oursValue !== theirsValue) {
         return {
