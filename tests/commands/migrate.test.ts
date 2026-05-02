@@ -162,8 +162,9 @@ describe("migrate command", (): void => {
     });
 
     expect(result.ok).toBeFalse();
-    expect(result.error?.code).toBe("migrate_failed");
+    expect(result.error?.code).toBe("migration_down_unsupported");
     expect(result.error?.message).toMatch(/irreversible/i);
+    expect(result.error?.message).toContain("trekoon migrate backup");
   });
 
   test("rejects rollback to version 0 via migrate command", async (): Promise<void> => {
@@ -178,8 +179,9 @@ describe("migrate command", (): void => {
     });
 
     expect(result.ok).toBeFalse();
-    expect(result.error?.code).toBe("migrate_failed");
+    expect(result.error?.code).toBe("migration_down_unsupported");
     expect(result.error?.message).toMatch(/irreversible/i);
+    expect(result.error?.message).toContain("trekoon migrate backup");
   });
 
   test("maps known legacy base migration names during status", async (): Promise<void> => {
