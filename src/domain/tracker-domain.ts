@@ -1066,42 +1066,6 @@ export class TrackerDomain {
       });
     }
 
-    const sourceKind = this.resolveNodeKind(normalizedSourceId);
-    const dependsOnKind = this.resolveNodeKind(normalizedDependsOnId);
-
-    // Reject parent-task → child-subtask and child-subtask → parent-task deps.
-    if (sourceKind === "task" && dependsOnKind === "subtask") {
-      const subtask = this.getSubtask(normalizedDependsOnId);
-      if (subtask && subtask.taskId === normalizedSourceId) {
-        throw new DomainError({
-          code: "invalid_dependency",
-          message: "dependency from a parent task to its own subtask is not allowed",
-          details: {
-            source: { kind: sourceKind, id: normalizedSourceId },
-            target: { kind: dependsOnKind, id: normalizedDependsOnId },
-            reason: "parent_to_child",
-            offendingEdge: { parentTaskId: normalizedSourceId, childSubtaskId: normalizedDependsOnId },
-          },
-        });
-      }
-    }
-
-    if (sourceKind === "subtask" && dependsOnKind === "task") {
-      const subtask = this.getSubtask(normalizedSourceId);
-      if (subtask && subtask.taskId === normalizedDependsOnId) {
-        throw new DomainError({
-          code: "invalid_dependency",
-          message: "dependency from a subtask to its own parent task is not allowed",
-          details: {
-            source: { kind: sourceKind, id: normalizedSourceId },
-            target: { kind: dependsOnKind, id: normalizedDependsOnId },
-            reason: "parent_to_child",
-            offendingEdge: { parentTaskId: normalizedDependsOnId, childSubtaskId: normalizedSourceId },
-          },
-        });
-      }
-    }
-
     const existing = this.#db
       .query(
         "SELECT id, source_id, source_kind, depends_on_id, depends_on_kind, created_at, updated_at FROM dependencies WHERE source_id = ? AND depends_on_id = ?;",
