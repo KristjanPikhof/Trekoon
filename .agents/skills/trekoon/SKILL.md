@@ -26,7 +26,10 @@ Treat these entrypoints as hard mode contracts:
   Teams only when the environment supports it and the user explicitly wants it.
 
 Reading `reference/planning.md` or `reference/execution.md` is a required setup
-step for those modes, not the end of the workflow.
+step for those modes, not the end of the workflow. Read
+`reference/harness-primitives.md` before any mode that uses harness-local
+question tools, local todo/task displays, subagents, review agents, or
+runtime-specific orchestration.
 
 ## Trigger guidance
 
@@ -51,10 +54,10 @@ reference needed for that mode.
 
 | Command shape | Mode | Required read | Completion target |
 |---|---|---|---|
-| `trekoon plan <goal>` | Plan | `reference/planning.md` | Epic exists, graph is validated, next-wave summary is returned |
+| `trekoon plan <goal>` | Plan | `reference/harness-primitives.md`, then `reference/planning.md` | Epic exists, graph is validated, next-wave summary is returned |
 | `trekoon <epic-id>` | Orient | None beyond this file unless needed | User knows current state, next ready action, and blockers |
-| `trekoon <epic-id> execute` | Execute | `reference/execution.md` | Epic is done, all remaining work is blocked, or user input is required |
-| `trekoon <epic-id> team execute` | Team execute | `reference/execution-with-team.md` | Same as execute, using Agent Teams |
+| `trekoon <epic-id> execute` | Execute | `reference/harness-primitives.md`, then `reference/execution.md` | Epic is done, all remaining work is blocked, or user input is required |
+| `trekoon <epic-id> team execute` | Team execute | `reference/harness-primitives.md`, then `reference/execution-with-team.md` | Same as execute, using Agent Teams |
 
 ### 2. Resolve entity IDs when present
 
@@ -80,24 +83,24 @@ user's intent.
 |---|---|
 | No text, just an ID | **Orient:** run `session --epic <epic-id>` (or show the task/subtask), summarize status, readiness, and next action |
 | `analyze`, `review`, `check`, `status`, `progress` | **Analyze:** run `epic progress <id>` or `task show <id> --all`, then `suggest --epic <id>`, and report findings |
-| `execute`, `implement`, `do`, `complete`, `start`, `run` | **Execute:** read `reference/execution.md`, choose single-agent vs orchestrated execution, and keep going until the mode contract is satisfied |
-| `team execute`, `execute with team` | **Team execute:** read `reference/execution-with-team.md` only when Agent Teams are available |
-| `plan`, `break down`, `design`, `architect` | **Plan:** read `reference/planning.md` and create or expand the epic graph |
+| `execute`, `implement`, `do`, `complete`, `start`, `run` | **Execute:** read `reference/harness-primitives.md` and `reference/execution.md`, choose single-agent vs orchestrated execution, and keep going until the mode contract is satisfied |
+| `team execute`, `execute with team` | **Team execute:** read `reference/harness-primitives.md` and `reference/execution-with-team.md` only when Agent Teams are available |
+| `plan`, `break down`, `design`, `architect` | **Plan:** read `reference/harness-primitives.md` and `reference/planning.md`, then create or expand the epic graph |
 
 ### Examples
 
 ```text
 trekoon plan build a dependency-aware release workflow
-  → reads planning reference, creates a validated epic, returns epic ID + wave summary
+  → reads harness primitives + planning reference, creates a validated epic, returns epic ID + wave summary
 
 trekoon abc-123
   → orients on epic/task/subtask abc-123, summarizes state and next action
 
 trekoon abc-123 execute
-  → reads execution reference, starts the execution loop, keeps going until done or blocked
+  → reads harness primitives + execution reference, starts the execution loop, keeps going until done or blocked
 
 trekoon abc-123 team execute
-  → reads team execution reference, starts Agent Teams orchestration if supported
+  → reads harness primitives + team execution reference, starts Agent Teams orchestration if supported
 ```
 
 ## Reference guides
@@ -108,10 +111,10 @@ Read references lazily based on mode.
 
 | Mode | Read | Use it for |
 |---|---|---|
-| Harness primitives | `reference/harness-primitives.md` | Universal intent-level guidance for local task displays, questions, subagent delegation, testing, review agents, and Trekoon evidence recording across Codex, Claude Code, OpenCode, Pi, and similar harnesses. |
-| Plan | `reference/planning.md` | Converting a goal into a real epic/task/subtask dependency graph with validation and handoff. Includes creation policy, search/replace policy. |
-| Execute | `reference/execution.md` | Running an epic end to end, choosing lanes, dispatching sub-agents, recording evidence, closing the epic. Includes single-agent loop, update policy, read policy. |
-| Team execute | `reference/execution-with-team.md` | Agent Teams coordination via TeamCreate/TaskCreate/SendMessage when the environment supports it |
+| Harness primitives | `reference/harness-primitives.md` | Required before Plan, Execute, and Team execute. Universal intent-level guidance for local task displays, questions, subagent delegation, testing, review agents, and Trekoon evidence recording across Codex, Claude Code, OpenCode, Pi, and similar harnesses. |
+| Plan | `reference/harness-primitives.md`, then `reference/planning.md` | Converting a goal into a real epic/task/subtask dependency graph with validation and handoff. Includes creation policy, search/replace policy. |
+| Execute | `reference/harness-primitives.md`, then `reference/execution.md` | Running an epic end to end, choosing lanes, dispatching sub-agents, recording evidence, closing the epic. Includes single-agent loop, update policy, read policy. |
+| Team execute | `reference/harness-primitives.md`, then `reference/execution-with-team.md` | Agent Teams coordination via TeamCreate/TaskCreate/SendMessage when the environment supports it |
 | Status machine | `reference/status-machine.md` | Canonical status transition table |
 | Sync | `reference/sync.md` | Cross-branch sync, conflict resolution, shared-database model, worktree diagnostics |
 
