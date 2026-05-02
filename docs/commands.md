@@ -329,6 +329,38 @@ rest of the directory.
 To restore from a backup: stop any process holding the DB, then copy the
 backup file over `.trekoon/trekoon.db`.
 
+## Daemon (experimental)
+
+`trekoon serve` is a spike that runs Trekoon as a long-lived process listening
+on a Unix-domain socket inside `<storage-root>/.trekoon/daemon.sock`. The
+daemon holds the SQLite connection in memory, so subsequent invocations skip
+Bun startup, module load, migration probes, and database open.
+
+Status: **experimental**. Not on by default. The default one-shot CLI behavior
+is unchanged whether or not the daemon is running.
+
+Activate the client with one of:
+
+```bash
+TREKOON_DAEMON=1 trekoon session
+trekoon --daemon session
+```
+
+If no daemon is reachable, the client transparently falls back to the in-process
+one-shot path. Calls run against the daemon return identical envelopes to the
+in-process call (modulo the per-request `requestId` and `persistedAt` fields).
+
+Security:
+
+- Socket file mode `0o600`; parent `.trekoon/` directory forced to `0o700`.
+- Stale sockets from prior crashes are unlinked at startup.
+- On `Ctrl-C` / `SIGTERM` the socket is unlinked and the cached database
+  connection is closed.
+
+Spike acceptance signal (see `bench/daemon-session.ts`): the daemon path runs a
+`session` call several times faster than the cold one-shot CLI by reusing the
+held-open SQLite connection across requests.
+
 ## Related docs
 
 - [Quickstart](quickstart.md)
