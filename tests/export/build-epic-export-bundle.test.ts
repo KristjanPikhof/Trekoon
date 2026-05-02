@@ -135,12 +135,16 @@ describe("buildEpicExportBundle", () => {
 
   test("counts mixed statuses correctly", () => {
     const cwd = createWorkspace();
-    const { domain, db } = createDomain(cwd);
+    const { domain, db, seed } = createDomain(cwd);
+    void db;
 
-    const epic = domain.createEpic({ title: "Status test", description: "Mixed statuses" });
-    const t1 = domain.createTask({ epicId: epic.id, title: "T1", description: "D1" });
-    domain.createTask({ epicId: epic.id, title: "T2", description: "D2" });
-    writeTransaction(db, () => domain.updateTask(t1.id, { status: "in_progress" }));
+    const epic = seed((d) => {
+      const createdEpic = d.createEpic({ title: "Status test", description: "Mixed statuses" });
+      const t1 = d.createTask({ epicId: createdEpic.id, title: "T1", description: "D1" });
+      d.createTask({ epicId: createdEpic.id, title: "T2", description: "D2" });
+      d.updateTask(t1.id, { status: "in_progress" });
+      return createdEpic;
+    });
 
     const bundle = buildEpicExportBundle(domain, epic.id);
 
