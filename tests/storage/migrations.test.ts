@@ -23,6 +23,7 @@ import {
   migrateDatabase,
   readCurrentMigrationVersionReadOnly,
   readMigrationVersionMarker,
+  runExclusive,
   rollbackDatabase,
   writeMigrationVersionMarker,
 } from "../../src/storage/migrations";
@@ -52,6 +53,42 @@ function listBackups(workspace: string): string[] {
   }
   return readdirSync(storageDir).filter((entry) => entry.startsWith("trekoon.db.backup-"));
 }
+
+describe("storage migrations: exclusive transaction errors", (): void => {
+  test("rollback failure preserves the original migration error as the thrown error", (): void => {
+    const db = new Database(":memory:");
+    const originalExec = db.exec.bind(db);
+    const migrationError = new Error("original migration failure");
+    const rollbackFailure = new Error("forced rollback failure");
+
+    try {
+      let rollbackAttempts = 0;
+      (db as unknown as { exec: (sql: string) => void }).exec = (sql: string): void => {
+        if (sql === "ROLLBACK;") {
+          rollbackAttempts += 1;
+          throw rollbackFailure;
+        }
+        originalExec(sql);
+      };
+
+      let caught: unknown;
+      try {
+        runExclusive(db, (): void => {
+          throw migrationError;
+        });
+      } catch (error: unknown) {
+        caught = error;
+      }
+
+      expect(caught).toBe(migrationError);
+      expect((caught as Error).message).toBe("original migration failure");
+      expect((caught as Error).cause).toBe(rollbackFailure);
+      expect(rollbackAttempts).toBe(1);
+    } finally {
+      db.close();
+    }
+  });
+});
 
 describe("storage migrations: down() v4-v6", (): void => {
   test("rollback below v4 throws DomainError with migration_down_unsupported and backup hint", (): void => {
