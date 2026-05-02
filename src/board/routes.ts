@@ -1,7 +1,7 @@
 import { type Database } from "bun:sqlite";
 
 import { safeErrorMessage } from "../commands/error-utils";
-import { MutationService } from "../domain/mutation-service";
+import { MutationService, PreconditionFailedError } from "../domain/mutation-service";
 import { TrackerDomain } from "../domain/tracker-domain";
 import { DomainError } from "../domain/types";
 import { type BoardEventBus } from "./event-bus";
