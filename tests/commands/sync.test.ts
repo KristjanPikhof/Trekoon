@@ -71,6 +71,12 @@ function createBranchWorktree(workspace: string, branch: string): string {
 }
 
 afterEach((): void => {
+  // Drop git-context cache entries that may key on the temp workspace paths
+  // we are about to delete. Stale entries from a sibling test file's
+  // workspace (whose temp dir has since been removed) would otherwise leak
+  // into the next test's `resolveGitContext` and shift the conflict-scope
+  // tuple under it.
+  clearGitContextCache();
   while (tempDirs.length > 0) {
     const workspace: string | undefined = tempDirs.pop();
     if (workspace) {
