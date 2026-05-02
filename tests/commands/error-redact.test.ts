@@ -52,11 +52,11 @@ describe("redactSensitive", (): void => {
 
   // --- JSON-style "key":"value" ---
   test('redacts JSON "token":"value"', (): void => {
-    expect(redactSensitive('"token":"abc123"')).toBe('"token": REDACTED"');
+    expect(redactSensitive('"token":"abc123"')).toBe('"token":"REDACTED"');
   });
 
   test('redacts JSON "password":"value"', (): void => {
-    expect(redactSensitive('"password":"hunter2"')).toBe('"password": REDACTED"');
+    expect(redactSensitive('"password":"hunter2"')).toBe('"password":"REDACTED"');
   });
 
   // --- mixed case ---
