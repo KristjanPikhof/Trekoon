@@ -374,8 +374,9 @@ export async function bootLegacyBoard(options = {}) {
       return true;
     }
 
-    document.addEventListener("keydown", trapOverlayFocus, true);
-    document.addEventListener("focusin", containOverlayFocus, true);
+    // Focus-trap listeners are attached lazily by syncOverlayEnvironment when an
+    // overlay actually opens (and detached when it closes), so plain Tab outside
+    // any overlay reaches normal browser flow.
 
     // Render cycle
     function rerender() {
