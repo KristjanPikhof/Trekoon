@@ -34,6 +34,7 @@ the quickest way to get started, read [Quickstart](quickstart.md) first.
 - `--toon` — TOON-encoded output (preferred for agent loops)
 - `--compact` — strips contract metadata from TOON/JSON envelopes
 - `--compat <mode>` — explicit machine compatibility behavior
+- `--daemon` — (experimental) route the call through a running `trekoon serve` daemon over a Unix socket; transparently falls back to the in-process CLI when no daemon is reachable. Equivalent to `TREKOON_DAEMON=1`.
 - `--help` — root and command help
 - `--version` — CLI version
 
