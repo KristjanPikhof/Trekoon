@@ -68,7 +68,7 @@ export class PreWriteTransportError extends Error {
  * process — exit non-zero so the caller can decide.
  */
 export class PostWriteError extends Error {
-  public readonly cause: unknown;
+  public override readonly cause: unknown;
   public constructor(message: string, cause?: unknown) {
     super(message);
     this.name = "PostWriteError";
