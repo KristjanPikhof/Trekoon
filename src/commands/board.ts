@@ -122,30 +122,46 @@ export async function runBoard(context: CliContext): Promise<CliResult> {
         const install = ensureInstalledImpl(boardInstallOptions(context));
         const server = startBoardServerImpl({ cwd: context.cwd });
         const launch = await openBoardInBrowserImpl(server.url);
+        const humanLines: string[] = [
+          `Board ready at ${server.fallbackUrl}`,
+          launch.launched
+            ? `Browser launched with ${launch.command}`
+            : `Browser launch failed: ${launch.errorMessage ?? "unknown failure"}`,
+          `Open manually if needed: ${server.fallbackUrl}`,
+        ];
+        if (revealToken) {
+          humanLines.push(
+            `Tokenized URL (do not share, grants full board access): ${server.url}`,
+          );
+        }
+        const serverData: Record<string, unknown> = {
+          origin: server.origin,
+          fallbackUrl: server.fallbackUrl,
+          hostname: server.hostname,
+          port: server.port,
+        };
+        const launchData: Record<string, unknown> = {
+          launched: launch.launched,
+          command: launch.command,
+          errorMessage: launch.errorMessage,
+        };
+        if (revealToken) {
+          serverData.url = server.url;
+          serverData.token = server.token;
+          launchData.url = launch.url;
+          launchData.args = launch.args;
+        }
         return okResult({
           command: "board.open",
-          human: [
-            `Board ready at ${server.fallbackUrl}`,
-            launch.launched
-              ? `Browser launched with ${launch.command}`
-              : `Browser launch failed: ${launch.errorMessage ?? "unknown failure"}`,
-            `Open manually if needed: ${server.fallbackUrl}`,
-          ].join("\n"),
+          human: humanLines.join("\n"),
           data: {
             install: {
               action: install.action,
               paths: install.paths,
               manifest: install.manifest,
             },
-            server: {
-              origin: server.origin,
-              url: server.url,
-              fallbackUrl: server.fallbackUrl,
-              hostname: server.hostname,
-              port: server.port,
-              token: server.token,
-            },
-            launch,
+            server: serverData,
+            launch: launchData,
           },
         });
       }
