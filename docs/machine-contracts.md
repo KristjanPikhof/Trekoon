@@ -597,6 +597,7 @@ any `ok: false` response will be one of the following strings.
 | `cancelled` | Operation was cancelled by the user (e.g. confirmation prompt rejected). |
 | `confirmation_required` | Human-mode operation requires explicit confirmation before proceeding. |
 | `conflict_set_changed` | Batch conflict set changed between preview and confirmed write. |
+| `daemon_start_failed` | Daemon failed to start (socket bind error or already running). |
 | `database_busy` | SQLite database is locked; retry after a short wait. |
 | `dependency_blocked` | Cascade update blocked because one or more descendants have unresolved dependencies. |
 | `disallowed_field` | Sync resolve attempted to write a field that is not on the allow-list. |
