@@ -168,7 +168,7 @@ describe("board SSE snapshot stream", (): void => {
       const database = openTrekoonDatabase(workspace);
       try {
         const mutations = new MutationService(database.db, workspace);
-        const epicResult = mutations.createEpic({ title: "SSE Epic", description: "" });
+        const epicResult = mutations.createEpic({ title: "SSE Epic", description: "Epic for SSE smoke." });
         const epicId = epicResult.id;
         // Trigger a board-side mutation that publishes a delta.
         const patchResponse = await fetch(`${boardServer.origin}/api/epics/${encodeURIComponent(epicId)}?token=multi-client-token`, {
