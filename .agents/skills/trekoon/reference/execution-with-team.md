@@ -63,7 +63,7 @@ TaskCreate:
 
     Before starting each task:
     - claim and assign owner:
-      trekoon --toon task update <id> --status in_progress --owner <lane-name>
+      trekoon --toon task claim <id> --owner <lane-name>
     - append a short start note:
       trekoon --toon task update <id> --append "Starting implementation"
 
