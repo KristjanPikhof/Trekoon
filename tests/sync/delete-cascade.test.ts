@@ -115,6 +115,18 @@ function insertEvent(
 // Conflict insertion helper (simulates a pre-existing conflict)
 // ---------------------------------------------------------------------------
 
+/**
+ * Default conflict scope used by `insertConflict` to mirror the worktree
+ * + branch the active test mocks via `mockGitContext`. Each test sets this
+ * at setup time so seeded conflict rows match the cleanup scope under which
+ * the cascade-delete pull runs.
+ */
+let defaultConflictScope: { workspace: string; branch: string } = { workspace: "", branch: "" };
+
+function setConflictScope(workspace: string, branch: string): void {
+  defaultConflictScope = { workspace, branch };
+}
+
 function insertConflict(
   db: Db,
   opts: {
@@ -147,8 +159,8 @@ function insertConflict(
     opts.theirsValue,
     ts,
     ts,
-    opts.worktreePath ?? "",
-    opts.currentBranch ?? "",
+    opts.worktreePath ?? defaultConflictScope.workspace,
+    opts.currentBranch ?? defaultConflictScope.branch,
   );
   return id;
 }
