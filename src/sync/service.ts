@@ -1766,7 +1766,7 @@ export function syncPull(cwd: string, sourceBranch: string): PullSummary {
 
         for (const incoming of incomingEvents) {
           if (incoming.operation === "resolve_conflict") {
-            if (applyIncomingResolutionEvent(storage.db, incoming)) {
+            if (applyIncomingResolutionEvent(storage.db, incoming, conflictScope)) {
               appliedEvents += 1;
             }
             storeEvent(storage.db, incoming);
