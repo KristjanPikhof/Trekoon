@@ -538,7 +538,20 @@ function validateMigrationPlan(): void {
   }
 }
 
-function runExclusive<T>(db: Database, operation: () => T): T {
+function attachRollbackFailure(error: unknown, rollbackError: unknown): unknown {
+  if (error instanceof Error) {
+    Object.defineProperty(error, "cause", {
+      value: rollbackError,
+      configurable: true,
+      writable: true,
+    });
+    return error;
+  }
+
+  return new Error("Migration operation failed and rollback also failed.", { cause: rollbackError });
+}
+
+export function runExclusive<T>(db: Database, operation: () => T): T {
   db.exec("BEGIN EXCLUSIVE TRANSACTION;");
 
   try {
@@ -546,7 +559,11 @@ function runExclusive<T>(db: Database, operation: () => T): T {
     db.exec("COMMIT;");
     return result;
   } catch (error: unknown) {
-    db.exec("ROLLBACK;");
+    try {
+      db.exec("ROLLBACK;");
+    } catch (rollbackError: unknown) {
+      throw attachRollbackFailure(error, rollbackError);
+    }
     throw error;
   }
 }
