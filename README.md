@@ -14,12 +14,6 @@ accounts. The database lives in `.trekoon/` inside your repo.
 bun add -g trekoon
 ```
 
-Or via npm (Bun still needs to be installed as the runtime):
-
-```bash
-npm i -g trekoon
-```
-
 ```bash
 trekoon init          # set up .trekoon/ in your repo
 trekoon quickstart    # walkthrough of the basics
