@@ -1421,7 +1421,12 @@ function applyUpdatePatch(db: Database, event: StoredEvent, fields: Record<strin
   return true;
 }
 
-function applyDelete(db: Database, event: StoredEvent, fields: Record<string, unknown>): boolean {
+function applyDelete(
+  db: Database,
+  event: StoredEvent,
+  fields: Record<string, unknown>,
+  scope: ConflictScope,
+): boolean {
   const tableName = tableForEntityKind(event.entity_kind);
   if (!tableName) {
     return false;
@@ -1441,13 +1446,13 @@ function applyDelete(db: Database, event: StoredEvent, fields: Record<string, un
   if (event.entity_kind === "task") {
     const subtasks = removeTaskSubtree(db, event.entity_id);
     const subtaskIds = subtasks.map((s) => s.id);
-    removeConflictsForEntityIds(db, "subtask", subtaskIds);
-    removeConflictsForEntityIds(db, "task", [event.entity_id]);
+    removeConflictsForEntityIds(db, "subtask", subtaskIds, scope);
+    removeConflictsForEntityIds(db, "task", [event.entity_id], scope);
   } else if (event.entity_kind === "subtask") {
     removeDependenciesTouchingNode(db, event.entity_id);
-    removeConflictsForEntityIds(db, "subtask", [event.entity_id]);
+    removeConflictsForEntityIds(db, "subtask", [event.entity_id], scope);
   } else {
-    removeConflictsForEntityIds(db, event.entity_kind, [event.entity_id]);
+    removeConflictsForEntityIds(db, event.entity_kind, [event.entity_id], scope);
   }
 
   db.query(`DELETE FROM ${tableName} WHERE id = ?;`).run(event.entity_id);
