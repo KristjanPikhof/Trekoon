@@ -289,18 +289,23 @@ export function openTrekoonDatabase(
   // Daemon-mode reuse: when running inside `trekoon serve`, return a cached
   // connection so each request avoids the migration probe and database open.
   if (isDaemonInProcessCacheEnabled()) {
-    const cached = cachedDatabases.get(paths.databaseFile);
-    if (cached) {
+    const cachedEntry = cachedDatabases.get(paths.databaseFile);
+    if (cachedEntry) {
       // Honor autoMigrate on the cached-handle path: a previous request that
       // opened this DB with `{autoMigrate: false}` (e.g. migrate-status) may
       // have left the schema below LATEST_MIGRATION_VERSION. The next request
       // that asks for autoMigrate (the default) must still get a migrated DB.
-      if ((options.autoMigrate ?? true) && readCurrentMigrationVersionReadOnly(cached.db) < LATEST_MIGRATION_VERSION) {
-        migrateDatabase(cached.db);
+      if (
+        (options.autoMigrate ?? true)
+        && readCurrentMigrationVersionReadOnly(cachedEntry.handle.db) < LATEST_MIGRATION_VERSION
+      ) {
+        migrateDatabase(cachedEntry.handle.db);
       }
-      // Refresh LRU position on access.
-      touchCachedDatabase(paths.databaseFile, cached);
-      return cached;
+      // Refresh LRU position on access and increment the in-use refcount so
+      // `evictLruIfNeeded` cannot close this entry under the borrower.
+      cachedEntry.refcount += 1;
+      touchCachedDatabase(paths.databaseFile, cachedEntry);
+      return cachedEntry.handle;
     }
   }
 
