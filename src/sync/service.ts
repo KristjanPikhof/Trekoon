@@ -779,7 +779,7 @@ function hasLocalEntityEdits(db: Database, entityKind: string, entityId: string,
   return row !== null;
 }
 
-function hasLocalDependencyEditsTouchingNodes(db: Database, nodeIds: readonly string[], sourceBranch: string): boolean {
+function hasLocalDependencyEditsTouchingNodes(db: Database, nodeIds: readonly string[], currentBranch: string): boolean {
   if (nodeIds.length === 0) {
     return false;
   }
@@ -793,7 +793,7 @@ function hasLocalDependencyEditsTouchingNodes(db: Database, nodeIds: readonly st
         SELECT 1
         FROM events
         WHERE entity_kind = 'dependency'
-          AND (git_branch IS NULL OR git_branch != ?)
+          AND git_branch = ?
           AND (
             json_extract(payload, '$.fields.source_id') IN (${placeholders})
             OR json_extract(payload, '$.fields.depends_on_id') IN (${placeholders})
@@ -801,7 +801,7 @@ function hasLocalDependencyEditsTouchingNodes(db: Database, nodeIds: readonly st
         LIMIT 1;
         `,
       )
-      .get(sourceBranch, ...chunk, ...chunk);
+      .get(currentBranch, ...chunk, ...chunk);
 
     if (row !== null) {
       return true;
