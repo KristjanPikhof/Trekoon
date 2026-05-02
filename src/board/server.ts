@@ -4,6 +4,7 @@ import { dirname, extname, resolve } from "node:path";
 
 import { createBoardEventBus, type BoardEventBus } from "./event-bus";
 import { createBoardApiHandler } from "./routes";
+import { startWalWatcher, type WalWatcher } from "./wal-watcher";
 
 import { openTrekoonDatabase, type TrekoonDatabase } from "../storage/database";
 import { resolveStoragePaths } from "../storage/path";
