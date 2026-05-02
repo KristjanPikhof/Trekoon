@@ -384,6 +384,7 @@ export function createStore(initialSnapshot, options = {}) {
     copyFeedback: null,
     notice: null,
     isMutating: false,
+    dragFeedback: null,
     notesPanelOpen: storedState.notesPanelOpen === true,
     epicStatusFilter: readStatusFilter(storedState.epicStatusFilter),
     taskStatusFilter: readStatusFilter(storedState.taskStatusFilter),
