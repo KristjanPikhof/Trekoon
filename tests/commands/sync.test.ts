@@ -4611,10 +4611,11 @@ describe("sync command", (): void => {
           .get() as { id: string };
 
         const now: number = Date.now();
+        const scope = conflictScopeFor(workspace);
         storage.db
           .query(
-            `INSERT INTO sync_conflicts (id, event_id, entity_kind, entity_id, field_name, ours_value, theirs_value, resolution, created_at, updated_at, version)
-             VALUES (?, ?, ?, ?, ?, ?, ?, 'pending', ?, ?, 1);`,
+            `INSERT INTO sync_conflicts (id, event_id, entity_kind, entity_id, field_name, ours_value, theirs_value, resolution, created_at, updated_at, version, worktree_path, current_branch)
+             VALUES (?, ?, ?, ?, ?, ?, ?, 'pending', ?, ?, 1, ?, ?);`,
           )
           .run(
             randomUUID(),
@@ -4626,6 +4627,8 @@ describe("sync command", (): void => {
             JSON.stringify("remote value"),
             now,
             now,
+            scope.worktreePath,
+            scope.currentBranch,
           );
       } finally {
         storage.close();
