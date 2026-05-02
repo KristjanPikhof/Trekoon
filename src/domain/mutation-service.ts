@@ -178,11 +178,7 @@ export class MutationService {
   createEpic(input: { title: string; description: string; status?: string | undefined }): EpicRecord {
     return this.#writeTransaction((): EpicRecord => {
       const epic = this.#domain.createEpic(input);
-      this.#appendEntityEvent("epic", epic.id, ENTITY_OPERATIONS.epic.created, {
-        title: epic.title,
-        description: epic.description,
-        status: epic.status,
-      });
+      this.#emitEpicCreated(epic);
       return epic;
     });
   }
