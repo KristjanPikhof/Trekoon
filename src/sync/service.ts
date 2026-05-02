@@ -1467,7 +1467,7 @@ function applyDelete(
   return true;
 }
 
-function hasPendingDeleteConflict(db: Database, sourceEventId: string): boolean {
+function hasPendingDeleteConflict(db: Database, sourceEventId: string, scope: ConflictScope): boolean {
   const row = db
     .query(
       `
@@ -1476,10 +1476,12 @@ function hasPendingDeleteConflict(db: Database, sourceEventId: string): boolean 
       WHERE event_id = ?
         AND field_name = '__delete__'
         AND resolution = 'pending'
+        AND worktree_path = ?
+        AND current_branch = ?
       LIMIT 1;
       `,
     )
-    .get(sourceEventId);
+    .get(sourceEventId, scope.worktreePath, scope.currentBranch);
 
   return row !== null;
 }
