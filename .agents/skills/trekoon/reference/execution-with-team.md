@@ -110,6 +110,11 @@ Agent:
     Use TaskUpdate to claim tasks (set owner to your name) and mark
     them completed.
 
+    Before starting each Trekoon task, claim it in Trekoon:
+      trekoon --toon task update <trekoon-task-id> --status in_progress --owner <your-name>
+    (Note: once the t-skill-claim primitive ships in Epic B, use that command
+    instead — it combines status + owner in one atomic step.)
+
     Status machine rules:
     - todo -> in_progress -> done (valid)
     - todo -> done (INVALID — use task done which auto-transitions)
