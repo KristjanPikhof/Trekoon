@@ -179,7 +179,7 @@ function buildSuggestions(
   }
 
   // Priority 8: No epics exist
-  if (suggestions.length < MAX_SUGGESTIONS && epics.length === 0) {
+  if (suggestions.length < MAX_SUGGESTIONS && epicCount === 0) {
     suggestions.push({
       priority: suggestions.length + 1,
       action: "quickstart",
