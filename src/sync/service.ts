@@ -1776,7 +1776,14 @@ export function syncPull(cwd: string, sourceBranch: string): PullSummary {
             if (conflict) {
               withheldConflictCount += 1;
               conflictEvents += 1;
-              createConflict(storage.db, incoming, fieldName, conflict.oursValue, conflict.theirsValue);
+              createConflict(
+                storage.db,
+                incoming,
+                fieldName,
+                conflict.oursValue,
+                conflict.theirsValue,
+                conflictScope,
+              );
               createdConflicts += 1;
               continue;
             }
@@ -1784,7 +1791,7 @@ export function syncPull(cwd: string, sourceBranch: string): PullSummary {
             fieldsToApply[fieldName] = value;
           }
 
-          if (applyEntityFields(storage.db, incoming, fieldsToApply)) {
+          if (applyEntityFields(storage.db, incoming, fieldsToApply, conflictScope)) {
             appliedEvents += 1;
           } else if (applyReplayedCreateWithConflicts(storage.db, incoming, fieldsToApply, withheldConflictCount)) {
             appliedEvents += 1;
@@ -1797,6 +1804,7 @@ export function syncPull(cwd: string, sourceBranch: string): PullSummary {
               "__apply__",
               null,
               `Rejected event ${incoming.operation} for ${incoming.entity_kind}`,
+              conflictScope,
               "invalid",
             );
             createdConflicts += 1;
