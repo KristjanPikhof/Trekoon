@@ -574,9 +574,16 @@ function entityFieldConflict(
 
   // Current-row short-circuit: live entity already matches the incoming
   // value, so applying the incoming event is a no-op — no conflict possible.
+  //
+  // Only valid when the local row exists. If the row was deleted locally
+  // currentEntityFieldValue returns `undefined`, which serializeValue maps
+  // to `null` — that would falsely match an incoming `null` field and mask
+  // a real conflict (delete vs. concurrent update). When the row is gone
+  // we must fall through to the history walk so the local delete event is
+  // discovered and reported as a conflict against the incoming non-delete.
   const currentValue = currentEntityFieldValue(localDb, event.entity_kind, event.entity_id, fieldName);
   const theirsValue = serializeValue(incomingValue);
-  if (serializeValue(currentValue) === theirsValue) {
+  if (typeof currentValue !== "undefined" && serializeValue(currentValue) === theirsValue) {
     return null;
   }
 
