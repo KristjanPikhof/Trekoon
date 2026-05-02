@@ -185,8 +185,28 @@ export function startBoardServer(options: StartBoardServerOptions = {}): BoardSe
         const responseHeaders: Record<string, string> = {
           "cache-control": "no-store",
         };
-        if (isAuthenticated && (url.searchParams.get("token") ?? "") === token) {
+        const queryTokenMatched = (url.searchParams.get("token") ?? "") === token;
+        if (isAuthenticated && queryTokenMatched) {
           responseHeaders["set-cookie"] = buildBoardSessionCookie(token);
+
+          // Token revoke on rotation (P1 finding 8): once we've installed the
+          // session cookie, redirect to the same URL with the `token=` query
+          // param stripped. This keeps the browser's address bar, history,
+          // and Referer headers free of the secret on the very first
+          // navigation, severing the leakage surface that an open URL bar
+          // would otherwise expose. The cookie carries auth from here on.
+          const redirectUrl = new URL(url);
+          redirectUrl.searchParams.delete("token");
+          // Preserve the relative location so the redirect works regardless
+          // of how the client reached us (loopback IP vs. localhost name).
+          const location = `${redirectUrl.pathname}${redirectUrl.search}${redirectUrl.hash}`;
+          return new Response(null, {
+            status: 302,
+            headers: {
+              ...responseHeaders,
+              location: location.length > 0 ? location : "/",
+            },
+          });
         }
 
         const assetPath = readAssetPath(boardRoot, url.pathname === "/" ? "/index.html" : url.pathname);
