@@ -472,22 +472,26 @@ export function createBoardActions(options) {
     toggleEpicStatusFilter(status) {
       const current = store.epicStatusFilter || { ...DEFAULT_STATUS_FILTER };
       store.epicStatusFilter = { ...current, [status]: !current[status] };
+      invalidateMemo();
       persist();
       rerender();
     },
     toggleTaskStatusFilter(status) {
       const current = store.taskStatusFilter || { ...DEFAULT_STATUS_FILTER };
       store.taskStatusFilter = { ...current, [status]: !current[status] };
+      invalidateMemo();
       persist();
       rerender();
     },
     resetEpicFilter() {
       store.epicStatusFilter = { ...DEFAULT_STATUS_FILTER };
+      invalidateMemo();
       persist();
       rerender();
     },
     resetTaskFilter() {
       store.taskStatusFilter = { ...DEFAULT_STATUS_FILTER };
+      invalidateMemo();
       persist();
       rerender();
     },
