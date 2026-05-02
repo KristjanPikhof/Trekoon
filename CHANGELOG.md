@@ -2,7 +2,7 @@
 
 All notable changes to Trekoon are documented in this file.
 
-## 0.4.2 - Unreleased
+## 0.4.2
 
 ### Experimental
 
