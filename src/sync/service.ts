@@ -44,7 +44,7 @@ function isSyncFieldValueSupported(tableName: string, fieldName: string, value: 
   return value === null && isSyncNullableStringField(tableName, fieldName);
 }
 
-function isCursorStale(db: Database, cursorToken: string, sourceBranch: string): boolean {
+export function isCursorStale(db: Database, cursorToken: string, sourceBranch: string): boolean {
   if (cursorToken === "0:") {
     return false;
   }
