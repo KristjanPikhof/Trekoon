@@ -410,6 +410,52 @@ function readOptionalNullableString(body: Record<string, unknown>, field: string
   return value;
 }
 
+function parseIfMatchHeader(request: Request): number | null {
+  const raw = request.headers.get("if-match");
+  if (raw === null) {
+    return null;
+  }
+
+  const trimmed = raw.trim().replace(/^"+|"+$/g, "");
+  if (trimmed.length === 0) {
+    return null;
+  }
+
+  const parsed = Number(trimmed);
+  if (!Number.isFinite(parsed) || !Number.isInteger(parsed)) {
+    throw new DomainError({
+      code: "invalid_input",
+      message: "If-Match header must be an integer updatedAt millisecond timestamp",
+      details: { header: "If-Match", value: raw },
+    });
+  }
+
+  return parsed;
+}
+
+interface PreconditionFailedDetails {
+  readonly entityKind: "epic" | "task" | "subtask";
+  readonly entityId: string;
+  readonly currentUpdatedAt: number;
+  readonly providedUpdatedAt: number;
+}
+
+function preconditionFailedResponse(details: PreconditionFailedDetails): Response {
+  return jsonResponse(409, {
+    ok: false,
+    error: {
+      code: "precondition_failed",
+      message: "If-Match version does not match current updatedAt",
+      details: {
+        entityKind: details.entityKind,
+        entityId: details.entityId,
+        currentUpdatedAt: details.currentUpdatedAt,
+        providedUpdatedAt: details.providedUpdatedAt,
+      },
+    },
+  });
+}
+
 function readIdempotencyKey(request: Request, body: Record<string, unknown>): string | null {
   const headerKey = request.headers.get("x-trekoon-idempotency-key");
   if (typeof headerKey === "string" && headerKey.trim().length > 0) {
