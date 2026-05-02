@@ -531,6 +531,100 @@ function recordMigration(db: Database, migration: Migration): void {
   );
 }
 
+/** Name of the marker file relative to the .trekoon storage directory. */
+const MIGRATION_VERSION_MARKER_FILENAME = "migration-version";
+
+/**
+ * Derive the path to the migration-version marker file from the database
+ * connection's filename. Returns null for in-memory databases.
+ */
+function resolveMarkerPath(db: Database): string | null {
+  const dbFile: string = db.filename;
+  if (!dbFile || dbFile === ":memory:") {
+    return null;
+  }
+  return join(dirname(dbFile), MIGRATION_VERSION_MARKER_FILENAME);
+}
+
+/**
+ * Read the migration version stored in the marker file.
+ * Returns null when the file is absent, unreadable, or malformed.
+ */
+export function readMigrationVersionMarker(db: Database): number | null {
+  const markerPath: string | null = resolveMarkerPath(db);
+  if (!markerPath) {
+    return null;
+  }
+
+  try {
+    if (!existsSync(markerPath)) {
+      return null;
+    }
+
+    const raw: string = Bun.file(markerPath).text();
+    const version: number = parseInt(raw.trim(), 10);
+    if (!Number.isFinite(version) || version < 0) {
+      return null;
+    }
+
+    return version;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Write the migration version to the marker file atomically (temp + rename).
+ * Silently no-ops for in-memory databases or on write errors.
+ */
+export function writeMigrationVersionMarker(db: Database, version: number): void {
+  const markerPath: string | null = resolveMarkerPath(db);
+  if (!markerPath) {
+    return;
+  }
+
+  try {
+    mkdirSync(dirname(markerPath), { recursive: true });
+    const tmpPath = `${markerPath}.tmp`;
+    writeFileSync(tmpPath, String(version), "utf8");
+    renameSync(tmpPath, markerPath);
+  } catch {
+    // Best-effort: never let a marker write failure break migrations.
+  }
+}
+
+/**
+ * Determine whether the marker file allows skipping the schema probe query.
+ * Returns true only when:
+ *   1. The marker file exists and parses to `LATEST_MIGRATION_VERSION`.
+ *   2. The marker's mtime is newer than the database file's mtime (defensive).
+ */
+function canSkipProbeViaMarker(db: Database): boolean {
+  const markerPath: string | null = resolveMarkerPath(db);
+  if (!markerPath) {
+    return false;
+  }
+
+  try {
+    const markerVersion: number | null = readMigrationVersionMarker(db);
+    if (markerVersion !== LATEST_MIGRATION_VERSION) {
+      return false;
+    }
+
+    // Defensive: ensure the marker is not stale relative to the DB file.
+    const dbFile: string = db.filename;
+    if (!existsSync(dbFile)) {
+      return false;
+    }
+
+    const markerMtime: number = statSync(markerPath).mtimeMs;
+    const dbMtime: number = statSync(dbFile).mtimeMs;
+    return markerMtime >= dbMtime;
+  } catch {
+    return false;
+  }
+}
+
 function isSchemaCurrentFastPath(db: Database, latestVersion: number): boolean {
   if (latestVersion === 0 || !migrationTableExists(db) || !hasMigrationVersionColumn(db)) {
     return false;
