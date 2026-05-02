@@ -49,6 +49,7 @@ export interface ParsedInvocation {
   readonly args: readonly string[];
   readonly wantsHelp: boolean;
   readonly wantsVersion: boolean;
+  readonly wantsDaemon: boolean;
 }
 
 export interface ParseInvocationOptions {
