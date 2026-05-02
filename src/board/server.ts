@@ -174,6 +174,7 @@ export function startBoardServer(options: StartBoardServerOptions = {}): BoardSe
     Bun.serve({
       hostname: "127.0.0.1",
       port,
+      idleTimeout: 0,
       fetch(request: Request): Promise<Response> | Response {
         const url = new URL(request.url);
         if (url.pathname.startsWith("/api/")) {
