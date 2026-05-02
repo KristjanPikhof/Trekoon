@@ -600,6 +600,29 @@ export function migrateDatabase(db: Database): void {
   });
 }
 
+export const LATEST_MIGRATION_VERSION: number = MIGRATIONS[MIGRATIONS.length - 1]?.version ?? 0;
+
+/**
+ * Read the highest applied migration version from a database without mutating
+ * it. Safe to call against a connection opened in `readonly: true` mode.
+ * Returns 0 when the schema_migrations table does not exist or has no rows.
+ */
+export function readCurrentMigrationVersionReadOnly(db: Database): number {
+  if (!migrationTableExists(db)) {
+    return 0;
+  }
+
+  if (!hasMigrationVersionColumn(db)) {
+    return 0;
+  }
+
+  const row = db
+    .query("SELECT COALESCE(MAX(version), 0) AS version FROM schema_migrations WHERE version IS NOT NULL;")
+    .get() as { version: number } | null;
+
+  return row?.version ?? 0;
+}
+
 export function describeMigrations(db: Database): MigrationStatus {
   ensureMigrationTable(db);
   ensureMigrationVersionColumn(db);
