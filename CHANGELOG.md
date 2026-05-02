@@ -2,6 +2,94 @@
 
 All notable changes to Trekoon are documented in this file.
 
+## 0.5.0
+
+### Added
+
+- Real-time board updates via Server-Sent Events. `GET /api/snapshot/stream`
+  pushes `snapshotDelta` events from the in-process mutation bus, so two
+  browser clients see each other's writes without polling. The event bus
+  (`src/board/event-bus.ts`) is per-server-instance, so concurrent test
+  servers stay isolated.
+- WAL watcher (`src/board/wal-watcher.ts`) observes `.trekoon/trekoon.db-wal`,
+  debounces filesystem changes, diffs the snapshot, and republishes deltas
+  through the same event bus. CLI mutations from another shell appear in the
+  board within ~1 second.
+- Optimistic concurrency via `If-Match` headers on
+  `PATCH /api/epics/:id`, `/api/tasks/:id`, `/api/subtasks/:id`, and
+  `/api/epics/:id/cascade`. The header carries `updatedAt` ms (bare or
+  quoted). Stale writes are rejected with 409 and `currentUpdatedAt`. Missing
+  header preserves backward compatibility.
+- `subtaskModalOpen` flag on the board store, mirroring the `taskModalOpen`
+  pattern from 0.4.1. Subtask selection without an explicit open no longer
+  pops the modal.
+- `--reveal-token` flag on `trekoon board open`. Token is redacted from
+  default machine output (`--toon` / JSON); explicit opt-in is required to
+  expose it.
+- Lazy overlay focus trap helper (`src/board/assets/runtime/focus-trap.js`)
+  with `attach`/`detach` lifecycle. Tab outside any overlay reaches normal
+  browser flow.
+- Per-mutation inverse-delta rollback (`computeInverseDelta` in
+  `src/board/assets/state/api.js`). Failed mutations revert their own
+  patch instead of replacing the whole snapshot, so concurrent server-pushed
+  deltas on unrelated entities survive.
+- Stable `mutationId` UUID on each enqueued mutation. `lastFailedMutation`
+  clears by id, not by function-reference comparison, so retried mutations
+  with new closures still clear the failure notice.
+- `createBoardStateMemo` for reference-stable derived board state, invalidated
+  via `notify()`. `selectVisibleEpics` includes a 1-hour `Date.now` bucket so
+  the 24h done-grace cutoff re-evaluates on long-open pages.
+- `dragFeedback` field in the board store; drag classes survive rerenders
+  via `setDragFeedback` action and `Workspace` rendering.
+- Optional `cache: Map` parameter on `getManagedControls` /
+  `getControlIdentity`, eliminating O(n²) DOM walks in `preserveFormState`.
+- Apostrophe (`'` → `&#39;`) added to `escapeHtml` in `state/utils.js`.
+- Canonical status-machine reference at
+  `.agents/skills/trekoon/reference/status-machine.md`. SKILL.md and
+  `reference/planning.md` link to it instead of restating transitions.
+- Sync, shared-database, and worktree-diagnostics reference at
+  `.agents/skills/trekoon/reference/sync.md`.
+
+### Changed
+
+- Board HTML routes are auth-gated. Unauthenticated `GET /` returns 401
+  with no snapshot or token in the body. The bootstrap snapshot is no longer
+  inlined into `index.html`; clients fetch `/api/snapshot` after auth.
+- `dropTaskStatus` no longer mutates `selectedTaskId` or `taskModalOpen`.
+  Dragging a card while another task modal is open preserves the existing
+  selection.
+- `restoreFromLocation` (`state/url.js`) sets `taskModalOpen=true` and
+  `subtaskModalOpen=true` when the matching params are present in the hash,
+  fixing the deep-link regression.
+- `.agents/skills/trekoon/SKILL.md` rewritten as a lean router (≤250 LOC).
+  Single-agent execution loop, update policy, read policy moved to
+  `reference/execution.md`. Creation policy and search/replace policy moved
+  to `reference/planning.md`. Sync flows, shared-database model, and
+  worktree diagnostics moved to `reference/sync.md`.
+- Trekoon skill recovery rule for `status_transition_invalid` and
+  `dependency_blocked` now names an explicit command sequence (task show →
+  blocker append → correct intermediate transition / ready-candidate
+  selection) instead of a vague "same error twice → ask user".
+- Spawn-teammate template in `reference/execution-with-team.md` requires
+  `trekoon --toon task update <id> --status in_progress --owner <name>`
+  before starting each task.
+
+### Fixed
+
+- Board token leak: HTML responses no longer disclose the session token or
+  full snapshot in unauthenticated GETs; `board open` machine output no
+  longer prints the tokenized URL by default.
+- Drag feedback classes (`board-drop-valid` / `board-drop-invalid`) persist
+  across rerender by living in store state instead of being wiped by DOM
+  diffing.
+- Focus trap is registered only while an overlay is open. Previously a
+  `document.keydown` listener swallowed Tab in the microtask window after
+  closing.
+- `escapeHtml` now covers all five HTML-significant characters; future
+  single-quoted attributes are safe.
+- `selectVisibleEpics` memo no longer caches stale results across hour
+  boundaries.
+
 ## 0.4.1
 
 ### Fixed
