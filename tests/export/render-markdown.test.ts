@@ -21,14 +21,12 @@ function createWorkspace(): string {
 
 function createDomain(cwd: string): {
   domain: TrackerDomain;
-  db: Database;
   seed: <T>(fn: (domain: TrackerDomain) => T) => T;
 } {
   const storage = openTrekoonDatabase(cwd);
   const domain = new TrackerDomain(storage.db);
   return {
     domain,
-    db: storage.db,
     seed: <T>(fn: (domain: TrackerDomain) => T): T => writeTransaction(storage.db, () => fn(domain)),
   };
 }
