@@ -451,6 +451,34 @@ const SKILLS_HELP = [
   "  trekoon update",
 ].join("\n");
 
+const SERVE_HELP = [
+  "Usage: trekoon serve [--json|--toon]",
+  "",
+  "Status: EXPERIMENTAL spike. Not on by default. The default one-shot CLI",
+  "behavior is unchanged when this command is not running.",
+  "",
+  "Starts a foreground Trekoon daemon on a Unix-domain socket inside the",
+  "shared .trekoon directory. The daemon holds the SQLite connection and the",
+  "CLI shell in memory, so subsequent invocations skip Bun startup, module",
+  "load, and database open.",
+  "",
+  "Activate the client side with one of:",
+  "  TREKOON_DAEMON=1 trekoon session",
+  "  trekoon --daemon session",
+  "If the socket is missing or unreachable, the client transparently falls",
+  "back to the in-process one-shot path.",
+  "",
+  "Security:",
+  "  - Socket file mode is 0o600.",
+  "  - Parent .trekoon directory is forced to 0o700.",
+  "  - Stale sockets from prior crashes are cleaned up on start.",
+  "  - On Ctrl-C / SIGTERM the socket is unlinked.",
+  "",
+  "Examples:",
+  "  trekoon serve",
+  "  trekoon --daemon session",
+].join("\n");
+
 const COMMAND_HELP: Record<string, string> = {
   init: INIT_HELP,
   board: BOARD_HELP,
