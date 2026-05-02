@@ -1,3 +1,5 @@
+import { Database } from "bun:sqlite";
+
 import {
   type DependencyNodeKind,
   type DependencyRecord,
@@ -12,6 +14,7 @@ import {
 } from "./types";
 
 const DEPENDENCY_GATED_STATUSES = new Set<string>(["in_progress", "done"]);
+const CASCADE_BLOCKER_SQLITE_MAX_VARIABLES = 999;
 
 /**
  * Row shape returned by {@link CascadePlannerReader.loadDependencyTargetStatuses}.
