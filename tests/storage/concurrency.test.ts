@@ -666,7 +666,7 @@ describe("SQLite concurrent write stress tests", () => {
     });
 
     test("appendToTaskDescription with combined --status lands atomically", () => {
-      const { dbFile: _dbFile, workspace } = setupTrekoonWorkspace("trekoon-append-status-");
+      const workspace = setupTrekoonWorkspace("trekoon-append-status-");
 
       const seedDb = openTrekoonDatabase(workspace);
       const seedMutations = new MutationService(seedDb.db, workspace);
