@@ -11,6 +11,7 @@
  * concurrent writers to expose lock contention characteristics.
  */
 
+import { execFileSync, writeFileSync } from "node:child_process";
 import { mkdirSync, mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -18,7 +19,8 @@ import { join } from "node:path";
 import { Database } from "bun:sqlite";
 import { afterEach, describe, expect, test } from "bun:test";
 
-import { writeTransaction } from "../../src/storage/database";
+import { openTrekoonDatabase, writeTransaction } from "../../src/storage/database";
+import { persistGitContext } from "../../src/sync/git-context";
 
 /* ------------------------------------------------------------------ */
 /*  Constants                                                         */
