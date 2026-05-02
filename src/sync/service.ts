@@ -2171,17 +2171,22 @@ export function syncResolvePreview(cwd: string, conflictId: string, resolution: 
 function queryPendingConflictIds(
   db: Database,
   filters: ResolveAllQueryFilters,
+  scope: ConflictScope,
 ): readonly string[] {
-  const conditions: string[] = ["resolution = 'pending'"];
-  const params: string[] = [];
+  const conditions: string[] = [
+    "c.resolution = 'pending'",
+    "c.worktree_path = ?",
+    "c.current_branch = ?",
+  ];
+  const params: string[] = [scope.worktreePath, scope.currentBranch];
 
   if (filters.entityId !== undefined) {
-    conditions.push("entity_id = ?");
+    conditions.push("c.entity_id = ?");
     params.push(filters.entityId);
   }
 
   if (filters.fieldName !== undefined) {
-    conditions.push("field_name = ?");
+    conditions.push("c.field_name = ?");
     params.push(filters.fieldName);
   }
 
@@ -2189,7 +2194,7 @@ function queryPendingConflictIds(
     SELECT c.id
     FROM sync_conflicts c
     LEFT JOIN events e ON e.id = c.event_id
-    WHERE ${conditions.map((condition) => condition.replaceAll("resolution", "c.resolution").replaceAll("entity_id", "c.entity_id").replaceAll("field_name", "c.field_name")).join(" AND ")}
+    WHERE ${conditions.join(" AND ")}
     ORDER BY COALESCE(e.created_at, c.created_at) ASC, COALESCE(e.id, c.event_id) ASC, c.created_at ASC, c.id ASC;
   `;
 
