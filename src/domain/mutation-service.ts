@@ -1007,34 +1007,18 @@ export class MutationService {
 
         if (node.kind === "epic") {
           const epic = this.#domain.updateEpic(node.id, { title: nextTitle, description: nextDescription });
-          this.#appendEntityEvent("epic", epic.id, ENTITY_OPERATIONS.epic.updated, {
-            title: epic.title,
-            description: epic.description,
-            status: epic.status,
-          });
+          this.#emitEpicUpdated(epic);
           continue;
         }
 
         if (node.kind === "task") {
           const task = this.#domain.updateTask(node.id, { title: nextTitle, description: nextDescription });
-          this.#appendEntityEvent("task", task.id, ENTITY_OPERATIONS.task.updated, {
-            epic_id: task.epicId,
-            title: task.title,
-            description: task.description,
-            status: task.status,
-            owner: task.owner,
-          });
+          this.#emitTaskUpdated(task);
           continue;
         }
 
         const subtask = this.#domain.updateSubtask(node.id, { title: nextTitle, description: nextDescription });
-        this.#appendEntityEvent("subtask", subtask.id, ENTITY_OPERATIONS.subtask.updated, {
-          task_id: subtask.taskId,
-          title: subtask.title,
-          description: subtask.description,
-          status: subtask.status,
-          owner: subtask.owner,
-        });
+        this.#emitSubtaskUpdated(subtask);
       }
     });
 
