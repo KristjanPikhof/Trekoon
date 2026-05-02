@@ -37,7 +37,6 @@ import {
   type BatchValidationReader,
   type DependencyBatchResolution,
   type DependencyBatchValidationIssue,
-  type ResolvedCompactEntity,
   type ResolvedDependencyBatchSpec,
   buildDependencyAdjacency as buildDependencyAdjacencyFn,
   collectDependencyBatchIssues as collectDependencyBatchIssuesFn,
