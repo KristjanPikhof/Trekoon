@@ -104,7 +104,7 @@ describe("board server", (): void => {
     const { stateFile } = prepareBoardAssets(workspace);
 
     const firstServer = startBoardServer({ cwd: workspace, token: "first-token" });
-    const firstResponse = await fetch(firstServer.url);
+    const firstResponse = await fetchFollowingTokenRedirect(firstServer.url, "first-token");
     const firstBody = await firstResponse.text();
 
     expect(firstResponse.status).toBe(200);
