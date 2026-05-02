@@ -400,6 +400,9 @@ export function createStore(initialSnapshot, options = {}) {
 
   const boardStateMemo = createBoardStateMemo(deriveBoardState);
 
+  // Direct `model.store` mutations must manually invalidate this memo before
+  // rerendering. Current direct-mutation fields: snapshot, notice, isMutating,
+  // dragFeedback.
   function notify() {
     boardStateMemo.invalidate();
     for (const listener of listeners) {
