@@ -329,13 +329,7 @@ export class MutationService {
         validateStatusTransition(existing.status, input.status, "task", id);
       }
       const task = this.#domain.updateTask(id, input);
-      this.#appendEntityEvent("task", task.id, ENTITY_OPERATIONS.task.updated, {
-        epic_id: task.epicId,
-        title: task.title,
-        description: task.description,
-        status: task.status,
-        owner: task.owner,
-      });
+      this.#emitTaskUpdated(task);
       return task;
     });
   }
