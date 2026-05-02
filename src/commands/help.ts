@@ -34,6 +34,7 @@ const ROOT_HELP = [
   "  sync         Pull events and resolve conflicts across branches",
   "  skills       Install, link, or update the Trekoon skill",
   "  update       Alias for skills update",
+  "  serve        (experimental) Run a long-lived daemon over a Unix socket",
 ].join("\n");
 
 const INIT_HELP = [
