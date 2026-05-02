@@ -397,6 +397,7 @@ export class TrackerDomain {
   }
 
   createTask(input: { epicId: string; title: string; description: string; status?: string | undefined }): TaskRecord {
+    this.#assertInTransaction("createTask");
     const now: number = Date.now();
     const id: string = randomUUID();
     const epicId: string = assertNonEmpty("epicId", input.epicId);
