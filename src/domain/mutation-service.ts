@@ -125,6 +125,28 @@ type AtomicIdempotentMutationResult =
 
 const BOARD_IDEMPOTENCY_RETENTION_MS = 7 * 24 * 60 * 60 * 1000;
 
+// Throttle window for idempotency-key garbage collection. The previous
+// implementation ran a DELETE on every claim which wasted IO under bursts
+// (System Hardening 0.4.2, finding 27). Keys live for
+// BOARD_IDEMPOTENCY_RETENTION_MS (7 days), so a once-per-minute sweep more
+// than keeps up with expiration.
+const BOARD_IDEMPOTENCY_PRUNE_INTERVAL_MS = 60 * 1000;
+
+// Module-level timestamp guards the prune sweep. Per-process (not
+// per-MutationService) so that a long-lived process making frequent claims
+// does not re-run the DELETE on every transaction. Reset to 0 by tests via
+// `__resetIdempotencyPruneThrottleForTests`.
+let lastIdempotencyPruneAt = 0;
+
+/**
+ * Test hook: resets the module-level prune throttle so a fresh test run
+ * always observes the first call as un-throttled. Production code paths
+ * never invoke this.
+ */
+export function __resetIdempotencyPruneThrottleForTests(): void {
+  lastIdempotencyPruneAt = 0;
+}
+
 interface ScopeReplacementResult {
   readonly matches: readonly SearchEntityMatch[];
   readonly summary: SearchSummary;
@@ -302,13 +324,13 @@ export class MutationService {
       const existing = this.#domain.getEpicOrThrow(id);
 
       const nextTitle = input.title !== undefined
-        ? assertEpicFieldNonEmpty("title", input.title)
+        ? assertNonEmptyField("title", input.title)
         : existing.title;
       const nextDescription = input.description !== undefined
-        ? assertEpicFieldNonEmpty("description", input.description)
+        ? assertNonEmptyField("description", input.description)
         : existing.description;
       const nextStatus = input.status !== undefined
-        ? assertEpicFieldNonEmpty("status", input.status)
+        ? assertNonEmptyField("status", input.status)
         : existing.status;
 
       if (input.status !== undefined) {
@@ -498,13 +520,13 @@ export class MutationService {
       const existing = this.#domain.getTaskOrThrow(id);
 
       const nextTitle = input.title !== undefined
-        ? assertTaskFieldNonEmpty("title", input.title)
+        ? assertNonEmptyField("title", input.title)
         : existing.title;
       const nextDescription = input.description !== undefined
-        ? assertTaskFieldNonEmpty("description", input.description)
+        ? assertNonEmptyField("description", input.description)
         : existing.description;
       const nextStatus = input.status !== undefined
-        ? assertTaskFieldNonEmpty("status", input.status)
+        ? assertNonEmptyField("status", input.status)
         : existing.status;
       const normalizedOwner = normalizeOwnerInput(input.owner);
       const nextOwner = normalizedOwner === undefined ? existing.owner : normalizedOwner;
@@ -1017,7 +1039,7 @@ export class MutationService {
       const existing = this.#domain.getSubtaskOrThrow(id);
 
       const nextTitle = input.title !== undefined
-        ? assertSubtaskFieldNonEmpty("title", input.title)
+        ? assertNonEmptyField("title", input.title)
         : existing.title;
       // Subtask description allows empty strings — mirror
       // normalizeSubtaskDescription rather than asserting non-empty.
@@ -1025,7 +1047,7 @@ export class MutationService {
         ? input.description.trim()
         : existing.description;
       const nextStatus = input.status !== undefined
-        ? assertSubtaskFieldNonEmpty("status", input.status)
+        ? assertNonEmptyField("status", input.status)
         : existing.status;
       const normalizedOwner = normalizeOwnerInput(input.owner);
       const nextOwner = normalizedOwner === undefined ? existing.owner : normalizedOwner;
