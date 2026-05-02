@@ -258,6 +258,20 @@ export async function bootLegacyBoard(options = {}) {
       overlay.focus({ preventScroll: true });
     }
 
+    let overlayKeydownAttached = false;
+    function attachOverlayFocusTrap() {
+      if (overlayKeydownAttached) return;
+      document.addEventListener("keydown", trapOverlayFocus, true);
+      document.addEventListener("focusin", containOverlayFocus, true);
+      overlayKeydownAttached = true;
+    }
+    function detachOverlayFocusTrap() {
+      if (!overlayKeydownAttached) return;
+      document.removeEventListener("keydown", trapOverlayFocus, true);
+      document.removeEventListener("focusin", containOverlayFocus, true);
+      overlayKeydownAttached = false;
+    }
+
     function syncOverlayEnvironment() {
       const hadOverlay = activeOverlay instanceof HTMLElement;
       const nextOverlay = getActiveOverlayElement();
@@ -271,6 +285,10 @@ export async function bootLegacyBoard(options = {}) {
           lockBackgroundScroll();
           setBackgroundInert(true);
         }
+        // Attach the document-level focus trap only while an overlay is actually
+        // open. This avoids the microtask window where Tab keydowns get swallowed
+        // by a stale handler with no overlay to confine to.
+        attachOverlayFocusTrap();
         queueMicrotask(() => focusOverlay(nextOverlay));
         return;
       }
@@ -280,6 +298,7 @@ export async function bootLegacyBoard(options = {}) {
         unlockBackgroundScroll();
         setBackgroundInert(false);
       }
+      detachOverlayFocusTrap();
       queueMicrotask(() => restoreOverlayFocus());
     }
 
