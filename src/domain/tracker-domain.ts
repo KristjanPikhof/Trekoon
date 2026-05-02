@@ -1080,6 +1080,7 @@ export class TrackerDomain {
   }
 
   addDependency(sourceId: string, dependsOnId: string): DependencyRecord {
+    this.#assertInTransaction("addDependency");
     const normalizedSourceId: string = assertNonEmpty("sourceId", sourceId);
     const normalizedDependsOnId: string = assertNonEmpty("dependsOnId", dependsOnId);
 
