@@ -268,6 +268,20 @@ export class TrackerDomain {
     }
   }
 
+  #makeBatchValidationReader(): BatchValidationReader {
+    return {
+      getTask: (id) => this.getTask(id),
+      getSubtask: (id) => this.getSubtask(id),
+      getDependencyByEdge: (sourceId, dependsOnId) => this.#getDependencyByEdge(sourceId, dependsOnId),
+      buildDependencyAdjacency: () => {
+        const rows = this.#db
+          .query("SELECT source_id, depends_on_id FROM dependencies ORDER BY source_id ASC, depends_on_id ASC;")
+          .all() as Array<{ source_id: string; depends_on_id: string }>;
+        return buildDependencyAdjacencyFn(rows);
+      },
+    };
+  }
+
   createEpic(input: { title: string; description: string; status?: string | undefined }): EpicRecord {
     const now: number = Date.now();
     const id: string = randomUUID();
