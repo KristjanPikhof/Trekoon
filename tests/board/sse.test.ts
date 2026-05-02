@@ -5,6 +5,8 @@ import { dirname, join } from "node:path";
 import { afterEach, describe, expect, test } from "bun:test";
 
 import { startBoardServer } from "../../src/board/server";
+import { createBoardApiHandler } from "../../src/board/routes";
+import { createBoardEventBus } from "../../src/board/event-bus";
 import { resolveStoragePaths } from "../../src/storage/path";
 import { openTrekoonDatabase } from "../../src/storage/database";
 import { MutationService } from "../../src/domain/mutation-service";
