@@ -206,7 +206,10 @@ describe("board server", (): void => {
     const boardServer = startBoardServer({ cwd: workspace, token: "deep-route-snapshot" });
 
     try {
-      const response = await fetch(`${boardServer.origin}/epics/m?token=${encodeURIComponent("deep-route-snapshot")}`);
+      const response = await fetchFollowingTokenRedirect(
+        `${boardServer.origin}/epics/m?token=${encodeURIComponent("deep-route-snapshot")}`,
+        "deep-route-snapshot",
+      );
       const body = await response.text();
       expect(response.status).toBe(200);
       expect(body).not.toContain('"snapshot":');
