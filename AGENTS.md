@@ -23,7 +23,6 @@
 ## Coding conventions
 
 - **Imports:** stdlib → third-party → local. Explicit named imports. Remove unused.
-- **Formatting:** consistent quotes, no mixed tabs/spaces.
 - **Types:** explicit at API boundaries. Avoid `any` unless justified. Stubbing `globalThis.fetch` in tests: cast `as unknown as typeof fetch` (bare `() => Promise<Response>` lacks `preconnect`).
 - **Naming:** `camelCase` (vars/fns), `PascalCase` (types), `UPPER_SNAKE_CASE` (constants).
 - **Errors:** never silently swallow. Include op + endpoint + status code. Redact secrets from errors, logs, and machine output; require explicit `--reveal-*` flag to expose.
