@@ -946,16 +946,25 @@ function applyPendingDeleteCascadeResolution(db: Database, conflict: ConflictRow
   }
 }
 
+function scopeFromConflictRow(conflict: ConflictRow): ConflictScope {
+  return { worktreePath: conflict.worktree_path, currentBranch: conflict.current_branch };
+}
+
 function applyConflictTheirsResolution(db: Database, conflict: ConflictRow): void {
+  // Cleanup is scoped to the conflict's own worktree+branch so resolving a
+  // conflict in this worktree does not erase peer worktrees' pending
+  // conflicts on the same entity.
+  const scope: ConflictScope = scopeFromConflictRow(conflict);
+
   if (conflict.field_name === "__delete__") {
     if (conflict.entity_kind === "task") {
       const subtasks = removeTaskSubtree(db, conflict.entity_id);
       const subtaskIds = subtasks.map((s) => s.id);
-      removeConflictsForEntityIds(db, "subtask", subtaskIds, conflict.id);
-      removeConflictsForEntityIds(db, "task", [conflict.entity_id], conflict.id);
+      removeConflictsForEntityIds(db, "subtask", subtaskIds, scope, conflict.id);
+      removeConflictsForEntityIds(db, "task", [conflict.entity_id], scope, conflict.id);
     } else if (conflict.entity_kind === "subtask") {
       removeDependenciesTouchingNode(db, conflict.entity_id);
-      removeConflictsForEntityIds(db, "subtask", [conflict.entity_id], conflict.id);
+      removeConflictsForEntityIds(db, "subtask", [conflict.entity_id], scope, conflict.id);
     }
     applyPendingDeleteCascadeResolution(db, conflict);
     deleteSingleEntity(db, conflict.entity_kind, conflict.entity_id, { allowMissing: true });
