@@ -412,12 +412,12 @@ export function createStore(initialSnapshot, options = {}) {
       screen: state.screen,
       selectedEpicId: state.selectedEpicId,
       search: state.search,
-        view: state.view,
-        selectedTaskId: state.selectedTaskId,
-        notesPanelOpen: state.notesPanelOpen,
-        epicStatusFilter: state.epicStatusFilter,
-        taskStatusFilter: state.taskStatusFilter,
-      });
+      view: state.view,
+      selectedTaskId: state.selectedTaskId,
+      notesPanelOpen: state.notesPanelOpen,
+      epicStatusFilter: state.epicStatusFilter,
+      taskStatusFilter: state.taskStatusFilter,
+    });
   }
 
   function syncState(patch = {}) {
