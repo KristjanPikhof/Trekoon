@@ -325,12 +325,7 @@ const MIGRATIONS: readonly Migration[] = [
       }
     },
     down(_db: Database): void {
-      throw new Error(
-        "Migration 0006 (add_owner_column) is irreversible. " +
-        "It adds columns via ALTER TABLE that cannot be removed without " +
-        "reconstructing tables and risking data loss. " +
-        "Rollback below version 6 is not supported.",
-      );
+      throw migrationDownUnsupported("0006_add_owner_column", 6);
     },
   },
   {
