@@ -298,7 +298,7 @@ function render(props) {
   });
 
   const contentMarkup = store.view === "kanban"
-    ? renderKanbanColumns({ visibleTasks, selectedTaskId, isMutating: store.isMutating, taskStatusFilter: store.taskStatusFilter })
+    ? renderKanbanColumns({ visibleTasks, selectedTaskId, isMutating: store.isMutating, taskStatusFilter: store.taskStatusFilter, dragFeedback: store.dragFeedback ?? null })
     : renderListView({ visibleTasks, selectedTaskId });
 
   return `
