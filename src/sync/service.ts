@@ -1749,7 +1749,7 @@ export function syncPull(cwd: string, sourceBranch: string): PullSummary {
 
           const payload: EventPayload = { fields: payloadValidation.fields };
 
-          if (shouldWithholdDeleteCascadeEvent(storage.db, incoming, payload.fields)) {
+          if (shouldWithholdDeleteCascadeEvent(storage.db, incoming, payload.fields, conflictScope)) {
             storeEvent(storage.db, incoming);
             lastToken = cursorTokenFromEvent(incoming);
             lastEventAt = incoming.created_at;
