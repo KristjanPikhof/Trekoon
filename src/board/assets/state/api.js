@@ -220,6 +220,11 @@ export function createMutationQueue(model, rerender) {
           const optimisticSnapshot = mutation.optimistic(cloneSnapshot(model.store.snapshot));
           inverseDelta = computeInverseDelta(previousSnapshot, optimisticSnapshot);
           model.store.snapshot = optimisticSnapshot;
+          // Direct snapshot mutation bypasses setState/syncState; invalidate
+          // the memo so the next getBoardState() reflects the optimistic write.
+          if (typeof model.invalidateBoardStateMemo === "function") {
+            model.invalidateBoardStateMemo();
+          }
           rerender();
         }
 
