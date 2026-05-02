@@ -130,7 +130,7 @@ describe("renderMarkdown", () => {
     const epic = domain.createEpic({ title: "Dep Render Test", description: "Check dep table" });
     const t1 = domain.createTask({ epicId: epic.id, title: "First", description: "A" });
     const t2 = domain.createTask({ epicId: epic.id, title: "Second", description: "B" });
-    domain.addDependency(t2.id, t1.id);
+    writeTransaction(db, () => domain.addDependency(t2.id, t1.id));
     const bundle = buildEpicExportBundle(domain, epic.id);
     const md = renderMarkdown(bundle);
 
