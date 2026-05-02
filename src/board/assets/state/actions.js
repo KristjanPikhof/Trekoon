@@ -142,6 +142,13 @@ export function createBoardActions(options) {
     searchFocusKeys,
   } = options;
   const { store, persist, getBoardState, getTaskById, syncState } = model;
+  // Direct mutations of `store.*` (filter toggles, notice changes, drag
+  // feedback) bypass setState/syncState, so `getBoardState()`'s memo would
+  // otherwise return a stale reference until the next syncState/notify.
+  // Route these through invalidateBoardStateMemo() before rerender.
+  const invalidateMemo = typeof model.invalidateBoardStateMemo === "function"
+    ? () => model.invalidateBoardStateMemo()
+    : () => {};
 
   const transition = (patch = {}, options = {}) => {
     const { persistState = true, rerenderBoard = true } = options;
