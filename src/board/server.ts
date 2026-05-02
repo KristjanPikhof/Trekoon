@@ -93,6 +93,35 @@ function buildBoardSessionCookie(token: string): string {
   return `trekoon_board_session=${encodeURIComponent(token)}; Path=/; SameSite=Strict; HttpOnly`;
 }
 
+function readBoardSessionCookie(request: Request): string | null {
+  const rawCookie = request.headers.get("cookie");
+  if (!rawCookie) {
+    return null;
+  }
+
+  for (const part of rawCookie.split(";")) {
+    const [name, ...valueParts] = part.split("=");
+    if (name?.trim() !== "trekoon_board_session") {
+      continue;
+    }
+
+    const value = valueParts.join("=").trim();
+    return value.length > 0 ? decodeURIComponent(value) : null;
+  }
+
+  return null;
+}
+
+function isAuthenticatedBoardRequest(request: Request, url: URL, token: string): boolean {
+  const queryToken = url.searchParams.get("token");
+  if (queryToken && queryToken === token) {
+    return true;
+  }
+
+  const cookieToken = readBoardSessionCookie(request);
+  return cookieToken !== null && cookieToken === token;
+}
+
 function serializeInlineJson(value: unknown): string {
   return JSON.stringify(value)
     .replace(/</g, "\\u003c")
