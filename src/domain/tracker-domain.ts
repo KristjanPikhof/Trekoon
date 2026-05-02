@@ -356,6 +356,53 @@ export class TrackerDomain {
     return rows.map(mapEpic);
   }
 
+  /**
+   * Returns the count of all epics without fetching rows.
+   */
+  countEpics(): number {
+    const row = this.#db.query("SELECT COUNT(*) AS n FROM epics;").get() as { n: number };
+    return row.n;
+  }
+
+  /**
+   * Returns the single "active" epic without fetching all rows:
+   * 1. First in_progress epic (any order — there should be at most one).
+   * 2. Fallback: most-recently-updated todo epic.
+   * 3. Fallback: oldest epic by created_at / id (matches epics[0] from listEpics).
+   * 4. null when the table is empty.
+   *
+   * Note: no index on (status, updated_at) exists on the epics table as of this
+   * writing, so the query uses a table scan. For typical epic counts this is
+   * negligible; add idx_epics_status_updated_at if it becomes a concern.
+   */
+  findActiveEpic(): EpicRecord | null {
+    const inProgress = this.#db
+      .query(
+        "SELECT id, title, description, status, created_at, updated_at FROM epics WHERE status = 'in_progress' LIMIT 1;",
+      )
+      .get() as EpicRow | null;
+    if (inProgress) {
+      return mapEpic(inProgress);
+    }
+
+    const todo = this.#db
+      .query(
+        "SELECT id, title, description, status, created_at, updated_at FROM epics WHERE status = 'todo' ORDER BY updated_at DESC LIMIT 1;",
+      )
+      .get() as EpicRow | null;
+    if (todo) {
+      return mapEpic(todo);
+    }
+
+    // Fallback: oldest epic regardless of status (mirrors epics[0] from listEpics).
+    const oldest = this.#db
+      .query(
+        "SELECT id, title, description, status, created_at, updated_at FROM epics ORDER BY created_at ASC, id ASC LIMIT 1;",
+      )
+      .get() as EpicRow | null;
+    return oldest ? mapEpic(oldest) : null;
+  }
+
   getEpic(id: string): EpicRecord | null {
     const row = this.#db
       .query("SELECT id, title, description, status, created_at, updated_at FROM epics WHERE id = ?;")
