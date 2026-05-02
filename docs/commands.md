@@ -75,6 +75,7 @@ Board API endpoints (all require token authentication):
 | Method | Endpoint | Purpose |
 | --- | --- | --- |
 | `GET` | `/api/snapshot` | Full board state (epics, tasks, subtasks, deps, counts) |
+| `GET` | `/api/snapshot/stream` | Server-sent events stream of `snapshot` and `snapshotDelta` events for live updates |
 | `PATCH` | `/api/epics/{id}` | Update epic title, description, or status |
 | `PATCH` | `/api/tasks/{id}` | Update task title, description, status, or owner |
 | `PATCH` | `/api/subtasks/{id}` | Update subtask title, description, status, or owner |
@@ -82,6 +83,14 @@ Board API endpoints (all require token authentication):
 | `DELETE` | `/api/subtasks/{id}` | Delete subtask |
 | `POST` | `/api/dependencies` | Add dependency edge (sourceId, dependsOnId) |
 | `DELETE` | `/api/dependencies?sourceId=...&dependsOnId=...` | Remove dependency |
+
+Board mutations from any source — board UI, CLI in another shell, or another
+worktree — propagate to every connected client through the SSE stream. The CLI
+side is driven by a WAL-watcher that diffs the snapshot when
+`.trekoon/trekoon.db-wal` changes; in-process mutations publish deltas
+directly. PATCH endpoints accept `If-Match: <updatedAt-ms>` for optimistic
+concurrency: a stale value returns `409` with `currentUpdatedAt`. Missing
+`If-Match` is allowed for back-compat.
 
 Board commands don't accept command-specific options yet. For tests and local
 development, `TREKOON_BOARD_ASSET_ROOT` overrides the bundled asset source.
