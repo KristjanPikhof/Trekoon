@@ -24,7 +24,8 @@ function parseDocumentedCodes(contents: string): Set<string> {
   const rowPattern = /^\|\s*`([a-z][a-z_]+)`\s*\|/gm;
   let match: RegExpExecArray | null;
   while ((match = rowPattern.exec(section)) !== null) {
-    codes.add(match[1]);
+    // match[1] is always a string here because the group is required in the pattern
+    codes.add(match[1]!);
   }
   return codes;
 }
