@@ -1,6 +1,6 @@
 import { chmodSync, existsSync, mkdirSync, unlinkSync, statSync } from "node:fs";
 import { connect, createServer, type Server, type Socket } from "node:net";
-import { dirname, relative, resolve } from "node:path";
+import { dirname, isAbsolute, relative, resolve } from "node:path";
 import { redactStack, safeErrorMessage } from "../commands/error-utils";
 import { closeCachedDatabases } from "../storage/database";
 import { resolveStoragePaths } from "../storage/path";
@@ -139,7 +139,7 @@ function isPathWithin(candidatePath: string, rootPath: string): boolean {
   const candidate: string = resolve(candidatePath);
   const root: string = resolve(rootPath);
   const pathToCandidate: string = relative(root, candidate);
-  return pathToCandidate === "" || (!pathToCandidate.startsWith("..") && !resolve(pathToCandidate).startsWith("/"));
+  return pathToCandidate === "" || (!pathToCandidate.startsWith("..") && !isAbsolute(pathToCandidate));
 }
 
 function isAllowedRequestCwd(cwd: string, allowedRoots: readonly string[]): boolean {
@@ -417,12 +417,10 @@ export async function startDaemonServer(options: StartDaemonOptions = {}): Promi
       }
       await Promise.allSettled([...inFlightRequests]);
       for (const sock of liveSockets) {
-        for (const sock of liveSockets) {
-          try {
-            sock.destroy();
-          } catch {
-            // best effort
-          }
+        try {
+          sock.destroy();
+        } catch {
+          // best effort
         }
       }
       await serverClosed;
