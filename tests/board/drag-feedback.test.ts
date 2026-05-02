@@ -20,7 +20,7 @@ function getDropColumnClasses(html: string, status: string): string {
   const tagMatch = html.match(new RegExp(`<div[^>]*data-drop-status="${status}"[^>]*>`));
   if (!tagMatch) return "";
   const classMatch = tagMatch[0].match(/class="([^"]*)"/);
-  return classMatch ? classMatch[1] : "";
+  return classMatch?.[1] ?? "";
 }
 
 const baseStore = {
