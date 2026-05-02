@@ -326,11 +326,11 @@ describe("Snapshot consistency", () => {
     const service = new MutationService(storage.db, workspace);
 
     // Write a mix of operations
-    const epic1 = service.createEpic({ title: "Epic 1", description: "" });
-    const epic2 = service.createEpic({ title: "Epic 2", description: "" });
+    const epic1 = service.createEpic({ title: "Epic 1", description: "desc 1" });
+    const epic2 = service.createEpic({ title: "Epic 2", description: "desc 2" });
     service.updateEpic(epic1.id, { title: "Epic 1 updated" });
     service.updateEpic(epic2.id, { title: "Epic 2 updated" });
-    service.createEpic({ title: "Epic 3", description: "" });
+    service.createEpic({ title: "Epic 3", description: "desc 3" });
 
     // Consumer reads the log ordered by (created_at ASC, id ASC)
     const events = readEvents(storage.db);
