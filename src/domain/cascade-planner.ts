@@ -347,3 +347,57 @@ export function collectStatusCascadeBlockers(
       left.dependsOnKind.localeCompare(right.dependsOnKind),
   );
 }
+
+/**
+ * Default SQL implementation of {@link CascadePlannerReader.loadDependencyTargetStatuses}.
+ *
+ * Issues chunked `WHERE source_id IN (...)` joins so the `?` parameter count
+ * never exceeds SQLite's binding cap, preserving the deterministic
+ * `(created_at ASC, id ASC)` row order the blocker pass relies on.
+ */
+export function loadCascadeDependencyTargetStatuses(
+  db: Database,
+  sourceIds: readonly string[],
+): readonly CascadeDependencyTargetStatusRow[] {
+  if (sourceIds.length === 0) {
+    return [];
+  }
+
+  type DepStatusRow = {
+    source_id: string;
+    source_kind: DependencyNodeKind;
+    depends_on_id: string;
+    depends_on_kind: DependencyNodeKind;
+    dep_status: string | null;
+  };
+
+  const collected: CascadeDependencyTargetStatusRow[] = [];
+
+  for (let offset = 0; offset < sourceIds.length; offset += CASCADE_BLOCKER_SQLITE_MAX_VARIABLES) {
+    const chunkIds = sourceIds.slice(offset, offset + CASCADE_BLOCKER_SQLITE_MAX_VARIABLES);
+    const inPlaceholders: string = chunkIds.map(() => "?").join(", ");
+    const rows = db
+      .query(
+        `SELECT d.source_id, d.source_kind, d.depends_on_id, d.depends_on_kind,
+                COALESCE(t.status, s.status) AS dep_status
+         FROM dependencies d
+         LEFT JOIN tasks t ON d.depends_on_kind = 'task' AND d.depends_on_id = t.id
+         LEFT JOIN subtasks s ON d.depends_on_kind = 'subtask' AND d.depends_on_id = s.id
+         WHERE d.source_id IN (${inPlaceholders})
+         ORDER BY d.created_at ASC, d.id ASC;`,
+      )
+      .all(...chunkIds) as DepStatusRow[];
+
+    for (const row of rows) {
+      collected.push({
+        sourceId: row.source_id,
+        sourceKind: row.source_kind,
+        dependsOnId: row.depends_on_id,
+        dependsOnKind: row.depends_on_kind,
+        dependsOnStatus: row.dep_status,
+      });
+    }
+  }
+
+  return collected;
+}
