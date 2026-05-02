@@ -96,11 +96,18 @@ const BOARD_HELP = [
   "          and open the browser. Returns the board URL and a fallback URL.",
   "  update  Refresh board runtime assets only. No server, no browser.",
   "",
+  "Token visibility:",
+  "  By default the board token is redacted from machine output (shown as ****).",
+  "  Pass --reveal-token to print the raw token value.",
+  "    trekoon board open --reveal-token",
+  "  Treat the token like a password: it grants full board access over loopback.",
+  "",
   "Environment:",
   "  TREKOON_BOARD_ASSET_ROOT  Override the bundled asset source (tests/dev only).",
   "",
   "Examples:",
   "  trekoon board open",
+  "  trekoon board open --reveal-token",
   "  trekoon --json board update",
 ].join("\n");
 
