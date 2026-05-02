@@ -412,6 +412,11 @@ export async function executeShell(parsed: ParsedInvocation, cwd: string = proce
       // Route `trekoon update` to `trekoon skills update` internally.
       result = await runSkills({ ...context, args: ["update", ...context.args] });
       break;
+    case "serve":
+      // Experimental: run the daemon in the foreground. Loaded lazily so the
+      // default cold path stays free of node:net imports.
+      result = await runServe(context);
+      break;
     default:
       result = failResult({
         command: "shell",
