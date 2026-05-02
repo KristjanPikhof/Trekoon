@@ -425,7 +425,7 @@ export function createStore(initialSnapshot, options = {}) {
     if (changed) {
       notify();
     }
-    return deriveBoardState(state);
+    return boardStateMemo.get(state);
   }
 
   // Reconcile initial state
