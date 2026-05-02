@@ -92,25 +92,46 @@ describe("board server auth", (): void => {
     }
   });
 
-  test("serves bootstrap and sets HttpOnly cookie when valid query token is provided", async (): Promise<void> => {
+  test("redirects with HttpOnly cookie and strips token from URL when valid query token is provided", async (): Promise<void> => {
     const workspace: string = createWorkspace();
     prepareBoardAssets(workspace);
 
     const boardServer = startBoardServer({ cwd: workspace, token: "session-token" });
 
     try {
-      const response = await fetch(boardServer.url);
-      const body = await response.text();
+      // Token-revoke-on-rotation: the first GET with `?token=` must respond
+      // with a 302 that installs the cookie and removes the token from the
+      // URL bar, then redirect to the same path without the token query
+      // parameter (P1 finding 8).
+      const redirect = await fetch(boardServer.url, { redirect: "manual" });
 
-      expect(response.status).toBe(200);
-      expect(body).toContain("trekoon-board-bootstrap");
-      expect(body).toContain('"token":"session-token"');
+      expect(redirect.status).toBe(302);
 
-      const setCookie = response.headers.get("set-cookie");
+      const setCookie = redirect.headers.get("set-cookie");
       expect(setCookie).not.toBeNull();
       expect(setCookie ?? "").toContain("trekoon_board_session=session-token");
       expect(setCookie ?? "").toContain("HttpOnly");
       expect(setCookie ?? "").toContain("SameSite=Strict");
+
+      const location = redirect.headers.get("location");
+      expect(location).not.toBeNull();
+      expect(location ?? "").not.toContain("token=");
+      expect(location ?? "").not.toContain("session-token");
+      // Path-relative location to / preserves the loopback hostname the
+      // browser dialed in with.
+      expect(location ?? "").toBe("/");
+
+      // Following the redirect with the just-installed cookie should yield
+      // the bootstrap HTML.
+      const followed = await fetch(`${boardServer.origin}${location ?? "/"}`, {
+        headers: {
+          cookie: `trekoon_board_session=${encodeURIComponent("session-token")}`,
+        },
+      });
+      const body = await followed.text();
+      expect(followed.status).toBe(200);
+      expect(body).toContain("trekoon-board-bootstrap");
+      expect(body).toContain('"token":"session-token"');
     } finally {
       boardServer.stop();
     }
