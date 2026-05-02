@@ -57,7 +57,7 @@ describe("buildEpicExportBundle", () => {
     expect(bundle.epic.id).toBe(epic.id);
     expect(bundle.tasks).toHaveLength(2);
     expect(bundle.subtasks).toHaveLength(1);
-    expect(bundle.subtasks[0].id).toBe(sub1.id);
+    expect(bundle.subtasks[0]!.id).toBe(sub1.id);
     expect(bundle.summary.taskCount).toBe(2);
     expect(bundle.summary.subtaskCount).toBe(1);
     expect(bundle.summary.taskStatuses.todo).toBe(2);
