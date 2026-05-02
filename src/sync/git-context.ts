@@ -1,6 +1,6 @@
 import { type Database } from "bun:sqlite";
-import { statSync } from "node:fs";
-import { join } from "node:path";
+import { readFileSync, statSync } from "node:fs";
+import { isAbsolute, join, resolve as resolvePath } from "node:path";
 
 import { writeTransaction } from "../storage/database";
 import { resolveStoragePaths } from "../storage/path";
@@ -32,26 +32,117 @@ interface GitContextCore {
   readonly branchName: string | null;
   readonly headSha: string | null;
   readonly headStatKey: string | null;
+  readonly gitDir: string | null;
 }
 
 const gitContextCache: Map<string, GitContextCore> = new Map();
 
-function readHeadStatKey(cwd: string): string | null {
-  // Try normal repo path first (.git/HEAD updates on every checkout).
+/** Cache of worktree path → absolute gitdir, populated lazily. */
+const gitDirCache: Map<string, string | null> = new Map();
+
+function statKey(prefix: string, path: string): string | null {
   try {
-    const stat = statSync(join(cwd, ".git", "HEAD"));
-    return `head|${stat.mtimeMs}|${stat.size}|${stat.ino}`;
-  } catch {
-    // ignore — fall through
-  }
-  // Linked worktree: .git is a file pointing to the actual gitdir.
-  // Stat the file itself; safer than chasing the pointer (rare moves only).
-  try {
-    const stat = statSync(join(cwd, ".git"));
-    return `gitfile|${stat.mtimeMs}|${stat.size}|${stat.ino}`;
+    const stat = statSync(path);
+    return `${prefix}|${stat.mtimeMs}|${stat.size}|${stat.ino}`;
   } catch {
     return null;
   }
+}
+
+/**
+ * Resolve the absolute gitdir for a worktree path.
+ *
+ * - In a normal (primary) repo, gitdir = `<worktree>/.git` (a directory).
+ * - In a linked worktree, `<worktree>/.git` is a regular file containing
+ *   `gitdir: <abs-or-rel-path>` and the real gitdir lives elsewhere
+ *   (typically `<main-gitdir>/worktrees/<name>`).
+ *
+ * Reads the `.git` entry directly when possible (cheap, no subprocess) and
+ * falls back to `git rev-parse --absolute-git-dir` only when the entry is
+ * missing or unreadable. Result is memoized per worktree path because the
+ * gitdir location only changes when a worktree is moved/recreated — safe to
+ * pin for process lifetime in CLI usage.
+ */
+function resolveGitDir(worktreePath: string): string | null {
+  const cached = gitDirCache.get(worktreePath);
+  if (cached !== undefined) {
+    return cached;
+  }
+
+  const dotGit = join(worktreePath, ".git");
+  let resolved: string | null = null;
+
+  try {
+    const stat = statSync(dotGit);
+    if (stat.isDirectory()) {
+      resolved = dotGit;
+    } else if (stat.isFile()) {
+      // Linked worktree: parse the `gitdir: <path>` pointer.
+      const raw: string = readFileSync(dotGit, "utf8").trim();
+      const match = /^gitdir:\s*(.+)$/m.exec(raw);
+      if (match) {
+        const pointer: string = match[1]!.trim();
+        resolved = isAbsolute(pointer) ? pointer : resolvePath(worktreePath, pointer);
+      }
+    }
+  } catch {
+    // Fall through to git rev-parse below.
+  }
+
+  if (resolved === null) {
+    const fromGit: string | null = runGit(["rev-parse", "--absolute-git-dir"], worktreePath);
+    resolved = fromGit;
+  }
+
+  gitDirCache.set(worktreePath, resolved);
+  return resolved;
+}
+
+/**
+ * Compute a composite cache key that changes whenever HEAD moves — including
+ * commit advance on the same branch and checkouts in linked worktrees.
+ *
+ * Sources of variance:
+ *   1. `<gitdir>/HEAD` — changes on branch checkout (symbolic-ref content)
+ *      or detached-HEAD updates.
+ *   2. The resolved branch ref tip (loose ref file or packed-refs) — changes
+ *      on every commit on the current branch. Stat'ing this is what catches
+ *      the previously-missed "same-branch commit advance" case.
+ */
+function readHeadStatKey(worktreePath: string): string | null {
+  const gitDir: string | null = resolveGitDir(worktreePath);
+  if (gitDir === null) {
+    // Best effort: fall back to stat'ing the dotgit entry. Better than
+    // pinning forever on a stale cache when git is missing.
+    return statKey("dotgit", join(worktreePath, ".git"));
+  }
+
+  const parts: string[] = [];
+
+  const headKey: string | null = statKey("head", join(gitDir, "HEAD"));
+  parts.push(headKey ?? "head|missing");
+
+  // Resolve the branch ref pointed to by HEAD (if symbolic). Otherwise HEAD
+  // itself encodes the SHA (detached) and stat'ing HEAD already covers it.
+  let refTipKey: string | null = null;
+  try {
+    const headContent: string = readFileSync(join(gitDir, "HEAD"), "utf8").trim();
+    const symMatch = /^ref:\s*(.+)$/m.exec(headContent);
+    if (symMatch) {
+      const refPath: string = symMatch[1]!.trim();
+      // Loose ref file: <gitdir>/<refPath>. Falls back to packed-refs stat.
+      refTipKey =
+        statKey("ref", join(gitDir, refPath)) ?? statKey("packed", join(gitDir, "packed-refs"));
+    }
+  } catch {
+    // ignore — HEAD already in `parts`
+  }
+
+  if (refTipKey !== null) {
+    parts.push(refTipKey);
+  }
+
+  return parts.join("::");
 }
 
 /**
@@ -60,6 +151,7 @@ function readHeadStatKey(cwd: string): string | null {
  */
 export function clearGitContextCache(): void {
   gitContextCache.clear();
+  gitDirCache.clear();
 }
 
 /**
@@ -83,7 +175,8 @@ export function resolveGitContext(cwd: string, persistedAt: number = Date.now())
   const branchName: string | null = runGit(["branch", "--show-current"], cwd);
   const headSha: string | null = runGit(["rev-parse", "HEAD"], cwd);
 
-  const core: GitContextCore = { worktreePath, branchName, headSha, headStatKey };
+  const gitDir: string | null = resolveGitDir(worktreePath);
+  const core: GitContextCore = { worktreePath, branchName, headSha, headStatKey, gitDir };
   gitContextCache.set(worktreePath, core);
 
   return { worktreePath, branchName, headSha, persistedAt };
