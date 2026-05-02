@@ -1356,9 +1356,15 @@ function applyDelete(db: Database, event: StoredEvent, fields: Record<string, un
   }
 
   if (event.entity_kind === "task") {
-    removeTaskSubtree(db, event.entity_id);
+    const subtasks = removeTaskSubtree(db, event.entity_id);
+    const subtaskIds = subtasks.map((s) => s.id);
+    removeConflictsForEntityIds(db, "subtask", subtaskIds);
+    removeConflictsForEntityIds(db, "task", [event.entity_id]);
   } else if (event.entity_kind === "subtask") {
     removeDependenciesTouchingNode(db, event.entity_id);
+    removeConflictsForEntityIds(db, "subtask", [event.entity_id]);
+  } else {
+    removeConflictsForEntityIds(db, event.entity_kind, [event.entity_id]);
   }
 
   db.query(`DELETE FROM ${tableName} WHERE id = ?;`).run(event.entity_id);
