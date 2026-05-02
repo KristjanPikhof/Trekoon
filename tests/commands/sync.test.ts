@@ -831,8 +831,18 @@ describe("sync command", (): void => {
     const primaryStorage = openTrekoonDatabase(primary);
     let primaryConflictId: string;
     try {
+      const primaryScope = conflictScopeFor(primary);
       primaryConflictId = (
-        primaryStorage.db.query("SELECT id FROM sync_conflicts WHERE entity_id = ? AND resolution = 'pending' LIMIT 1;").get(epicId) as
+        primaryStorage.db
+          .query(
+            `SELECT id FROM sync_conflicts
+             WHERE entity_id = ?
+               AND resolution = 'pending'
+               AND worktree_path = ?
+               AND current_branch = ?
+             LIMIT 1;`,
+          )
+          .get(epicId, primaryScope.worktreePath, primaryScope.currentBranch) as
           | { id: string }
           | null
       )!.id;
