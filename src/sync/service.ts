@@ -1491,7 +1491,12 @@ function pendingDeleteConflictSourceEventId(fields: Record<string, unknown>): st
   return typeof sourceEventId === "string" && sourceEventId.length > 0 ? sourceEventId : null;
 }
 
-function shouldWithholdDeleteCascadeEvent(db: Database, event: StoredEvent, fields: Record<string, unknown>): boolean {
+function shouldWithholdDeleteCascadeEvent(
+  db: Database,
+  event: StoredEvent,
+  fields: Record<string, unknown>,
+  scope: ConflictScope,
+): boolean {
   const sourceEventId = pendingDeleteConflictSourceEventId(fields);
   if (!sourceEventId) {
     return false;
@@ -1502,7 +1507,7 @@ function shouldWithholdDeleteCascadeEvent(db: Database, event: StoredEvent, fiel
     return false;
   }
 
-  return hasPendingDeleteConflict(db, sourceEventId);
+  return hasPendingDeleteConflict(db, sourceEventId, scope);
 }
 
 function applyEntityFields(
