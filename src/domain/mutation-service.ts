@@ -34,6 +34,37 @@ import {
   DomainError,
 } from "./types";
 
+/**
+ * Thrown by the *WithIfMatch CAS variants when the supplied `If-Match`
+ * `updatedAt` does not match the row currently in the database.
+ *
+ * The error is **not** a `DomainError` so the generic `toBoardRouteError`
+ * fall-through doesn't accidentally surface it as a 400 — route handlers
+ * catch it explicitly and emit the canonical 409 `precondition_failed`
+ * payload (with `currentUpdatedAt` fetched inside the same transaction
+ * that observed the mismatch).
+ */
+export class PreconditionFailedError extends Error {
+  readonly entityKind: "epic" | "task" | "subtask";
+  readonly entityId: string;
+  readonly currentUpdatedAt: number;
+  readonly providedUpdatedAt: number;
+
+  constructor(input: {
+    entityKind: "epic" | "task" | "subtask";
+    entityId: string;
+    currentUpdatedAt: number;
+    providedUpdatedAt: number;
+  }) {
+    super("If-Match version does not match current updatedAt");
+    this.name = "PreconditionFailedError";
+    this.entityKind = input.entityKind;
+    this.entityId = input.entityId;
+    this.currentUpdatedAt = input.currentUpdatedAt;
+    this.providedUpdatedAt = input.providedUpdatedAt;
+  }
+}
+
 interface AtomicIdempotencyClaim {
   readonly scope: "subtask" | "dependency" | "deleted_subtask" | "deleted_dependency";
   readonly idempotencyKey: string;
