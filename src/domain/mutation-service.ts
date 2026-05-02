@@ -69,10 +69,6 @@ function normalizeOwnerInput(owner: string | null | undefined): string | null | 
   return trimmed.length > 0 ? trimmed : null;
 }
 
-const assertEpicFieldNonEmpty = assertNonEmptyField;
-const assertTaskFieldNonEmpty = assertNonEmptyField;
-const assertSubtaskFieldNonEmpty = assertNonEmptyField;
-
 /**
  * Thrown by the *WithIfMatch CAS variants when the supplied `If-Match`
  * `updatedAt` does not match the row currently in the database.
