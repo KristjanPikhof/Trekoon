@@ -399,8 +399,8 @@ describe("owner field roundtrip", (): void => {
       const epic = domain.createEpic({ title: "Owner Epic", description: "desc" });
       const task = domain.createTask({ epicId: epic.id, title: "Owned task", description: "desc" });
 
-      expect(domain.updateTask(task.id, { owner: "alice" }).owner).toBe("alice");
-      expect(domain.updateTask(task.id, { owner: null }).owner).toBeNull();
+      expect(writeTransaction(storage.db, () => domain.updateTask(task.id, { owner: "alice" })).owner).toBe("alice");
+      expect(writeTransaction(storage.db, () => domain.updateTask(task.id, { owner: null })).owner).toBeNull();
       expect(domain.getTask(task.id)?.owner).toBeNull();
     } finally {
       storage.close();
