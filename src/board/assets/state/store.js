@@ -488,7 +488,7 @@ export function createStore(initialSnapshot, options = {}) {
      * @returns {BoardState}
      */
     getBoardState() {
-      return deriveBoardState(state);
+      return boardStateMemo.get(state);
     },
 
     /**
