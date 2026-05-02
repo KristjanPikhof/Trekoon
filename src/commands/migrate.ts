@@ -4,7 +4,7 @@ import { safeErrorMessage, sqliteBusyFailure } from "./error-utils";
 import { DomainError } from "../domain/types";
 import { failResult, okResult } from "../io/output";
 import { type CliContext, type CliResult } from "../runtime/command-types";
-import { createMigrationBackup } from "../storage/backup";
+import { createMigrationBackup, DEFAULT_BACKUP_RETENTION } from "../storage/backup";
 import { openTrekoonDatabase, type TrekoonDatabase } from "../storage/database";
 import { describeMigrations, rollbackDatabase } from "../storage/migrations";
 
