@@ -525,13 +525,26 @@ export function createBoardApiHandler(context: BoardRouteContext): (request: Req
 
         const epicCascadeMatch = request.method === "PATCH" ? url.pathname.match(/^\/api\/epics\/([^/]+)\/cascade$/u) : null;
         if (epicCascadeMatch) {
+          const epicId = epicCascadeMatch[1] ?? "";
           const body = await parseJsonBody(request);
           const status = readRequiredString(body, "status");
-          const plan = mutations.updateEpicStatusCascade(epicCascadeMatch[1] ?? "", status);
+          const ifMatch = parseIfMatchHeader(request);
+          if (ifMatch !== null) {
+            const currentEpic = domain.getEpicOrThrow(epicId);
+            if (currentEpic.updatedAt !== ifMatch) {
+              return preconditionFailedResponse({
+                entityKind: "epic",
+                entityId: epicId,
+                currentUpdatedAt: currentEpic.updatedAt,
+                providedUpdatedAt: ifMatch,
+              });
+            }
+          }
+          const plan = mutations.updateEpicStatusCascade(epicId, status);
           return respondWithMutationDelta(domain, {
             plan,
           }, {
-            epicIds: [epicCascadeMatch[1] ?? ""],
+            epicIds: [epicId],
             taskIds: plan.orderedChanges.filter((change) => change.kind === "task").map((change) => change.id),
             subtaskIds: plan.orderedChanges.filter((change) => change.kind === "subtask").map((change) => change.id),
           });
@@ -539,8 +552,21 @@ export function createBoardApiHandler(context: BoardRouteContext): (request: Req
 
       const epicMatch = request.method === "PATCH" ? url.pathname.match(/^\/api\/epics\/([^/]+)$/u) : null;
         if (epicMatch) {
+        const epicId = epicMatch[1] ?? "";
         const body = await parseJsonBody(request);
-        const epic = mutations.updateEpic(epicMatch[1] ?? "", {
+        const ifMatch = parseIfMatchHeader(request);
+        if (ifMatch !== null) {
+          const currentEpic = domain.getEpicOrThrow(epicId);
+          if (currentEpic.updatedAt !== ifMatch) {
+            return preconditionFailedResponse({
+              entityKind: "epic",
+              entityId: epicId,
+              currentUpdatedAt: currentEpic.updatedAt,
+              providedUpdatedAt: ifMatch,
+            });
+          }
+        }
+        const epic = mutations.updateEpic(epicId, {
           title: readOptionalString(body, "title"),
           description: readOptionalString(body, "description"),
           status: readOptionalString(body, "status"),
@@ -550,8 +576,21 @@ export function createBoardApiHandler(context: BoardRouteContext): (request: Req
 
       const taskMatch = request.method === "PATCH" ? url.pathname.match(/^\/api\/tasks\/([^/]+)$/u) : null;
       if (taskMatch) {
+        const taskId = taskMatch[1] ?? "";
         const body = await parseJsonBody(request);
-          const task = mutations.updateTask(taskMatch[1] ?? "", {
+        const ifMatch = parseIfMatchHeader(request);
+        if (ifMatch !== null) {
+          const currentTask = domain.getTaskOrThrow(taskId);
+          if (currentTask.updatedAt !== ifMatch) {
+            return preconditionFailedResponse({
+              entityKind: "task",
+              entityId: taskId,
+              currentUpdatedAt: currentTask.updatedAt,
+              providedUpdatedAt: ifMatch,
+            });
+          }
+        }
+          const task = mutations.updateTask(taskId, {
             title: readOptionalString(body, "title"),
             description: readOptionalString(body, "description"),
             status: readOptionalString(body, "status"),
@@ -562,8 +601,21 @@ export function createBoardApiHandler(context: BoardRouteContext): (request: Req
 
       const subtaskMatch = request.method === "PATCH" ? url.pathname.match(/^\/api\/subtasks\/([^/]+)$/u) : null;
       if (subtaskMatch) {
+        const subtaskId = subtaskMatch[1] ?? "";
         const body = await parseJsonBody(request);
-          const subtask = mutations.updateSubtask(subtaskMatch[1] ?? "", {
+        const ifMatch = parseIfMatchHeader(request);
+        if (ifMatch !== null) {
+          const currentSubtask = domain.getSubtaskOrThrow(subtaskId);
+          if (currentSubtask.updatedAt !== ifMatch) {
+            return preconditionFailedResponse({
+              entityKind: "subtask",
+              entityId: subtaskId,
+              currentUpdatedAt: currentSubtask.updatedAt,
+              providedUpdatedAt: ifMatch,
+            });
+          }
+        }
+          const subtask = mutations.updateSubtask(subtaskId, {
             title: readOptionalString(body, "title"),
             description: readOptionalString(body, "description"),
             status: readOptionalString(body, "status"),
