@@ -359,6 +359,38 @@ export class MutationService {
     });
   }
 
+  /**
+   * Atomic If-Match CAS variant of {@link updateEpicStatusCascade}.
+   *
+   * Cascades touch many rows so a row-level SQL CAS isn't a natural fit;
+   * instead the precondition is enforced inside the same writeTransaction
+   * as the cascade plan. The BEGIN IMMEDIATE write lock guarantees no
+   * other writer mutates the epic between the precondition read and the
+   * cascade application — eliminating the same race the per-row CAS
+   * variants close.
+   */
+  updateEpicStatusCascadeWithIfMatch(
+    id: string,
+    ifMatchUpdatedAt: number,
+    status: string,
+  ): StatusCascadePlan {
+    return this.#writeTransaction((): StatusCascadePlan => {
+      const existing = this.#domain.getEpicOrThrow(id);
+      if (existing.updatedAt !== ifMatchUpdatedAt) {
+        throw new PreconditionFailedError({
+          entityKind: "epic",
+          entityId: id,
+          currentUpdatedAt: existing.updatedAt,
+          providedUpdatedAt: ifMatchUpdatedAt,
+        });
+      }
+      const plan = this.#domain.planStatusCascade("epic", id, status);
+      this.#assertCascadeNotBlocked(plan);
+      this.#applyStatusCascadePlan(plan);
+      return plan;
+    });
+  }
+
   deleteEpic(id: string): void {
     this.#writeTransaction((): void => {
       const tasks = this.#domain.listTasks(id);
