@@ -208,6 +208,7 @@ overview, kanban workspace per epic, task detail modals, and search.
 | Export epic to Markdown | `trekoon epic export <id>` |
 | Mark a task done | `trekoon task done <id>` |
 | Sync across worktrees | `trekoon sync pull --from main` |
+| Back up the DB before migrations | `trekoon migrate backup` |
 | Get help | `trekoon [command] -h` |
 
 Every command supports `--toon`, `--json`, `--compact` for structured output.
