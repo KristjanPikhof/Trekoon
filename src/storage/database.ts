@@ -340,11 +340,36 @@ export function openTrekoonDatabase(
       ) {
         migrateDatabase(cachedEntry.handle.db);
       }
+
+      // Re-inspect worktree state on every cache hit so out-of-band changes
+      // (legacy DB restored after daemon start, fresh tracked/ignored
+      // mismatch, etc.) surface to callers through fresh diagnostics. The
+      // cached `handle.diagnostics` is a frozen snapshot from the original
+      // open and would otherwise mask a freshly-required recovery — leading
+      // `session` and friends to silently proceed against a stale state.
+      const refreshedRecovery: WorktreeRecoveryDiagnostics = reinspectRecoveryForCacheHit(paths);
+      const refreshedDiagnostics: StorageResolutionDiagnostics =
+        buildStorageResolutionDiagnostics(paths, refreshedRecovery);
+
       // Refresh LRU position on access and increment the in-use refcount so
       // `evictLruIfNeeded` cannot close this entry under the borrower.
       cachedEntry.refcount += 1;
       touchCachedDatabase(paths.databaseFile, cachedEntry);
-      return cachedEntry.handle;
+
+      const cacheKey: string = paths.databaseFile;
+      // Return a per-request handle wrapper that exposes the refreshed
+      // diagnostics while sharing the underlying connection. The wrapper's
+      // close() releases the same cache key the cached entry's close()
+      // does, so refcount accounting stays consistent regardless of which
+      // handle the caller holds.
+      return {
+        db: cachedEntry.handle.db,
+        paths: cachedEntry.handle.paths,
+        diagnostics: refreshedDiagnostics,
+        close(): void {
+          releaseCachedDatabase(cacheKey);
+        },
+      };
     }
   }
 
