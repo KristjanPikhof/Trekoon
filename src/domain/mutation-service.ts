@@ -132,11 +132,9 @@ const BOARD_IDEMPOTENCY_RETENTION_MS = 7 * 24 * 60 * 60 * 1000;
 // than keeps up with expiration.
 const BOARD_IDEMPOTENCY_PRUNE_INTERVAL_MS = 60 * 1000;
 
-// Module-level timestamp guards the prune sweep. Per-process (not
-// per-MutationService) so that a long-lived process making frequent claims
-// does not re-run the DELETE on every transaction. Reset to 0 by tests via
-// `__resetIdempotencyPruneThrottleForTests`.
-let lastIdempotencyPruneAt = 0;
+const idempotencyPruneByDatabase = new Map<string, number>();
+let memoryDatabasePruneKeys = new WeakMap<Database, string>();
+let nextMemoryDatabasePruneId = 0;
 
 /**
  * Test hook: resets the module-level prune throttle so a fresh test run
@@ -144,7 +142,26 @@ let lastIdempotencyPruneAt = 0;
  * never invoke this.
  */
 export function __resetIdempotencyPruneThrottleForTests(): void {
-  lastIdempotencyPruneAt = 0;
+  idempotencyPruneByDatabase.clear();
+  memoryDatabasePruneKeys = new WeakMap<Database, string>();
+  nextMemoryDatabasePruneId = 0;
+}
+
+function idempotencyPruneKeyForDatabase(db: Database): string {
+  const rows = db.query("PRAGMA database_list;").all() as Array<{ name: string; file: string }>;
+  const main = rows.find((row) => row.name === "main");
+  if (main?.file) {
+    return main.file;
+  }
+
+  const existing = memoryDatabasePruneKeys.get(db);
+  if (existing) {
+    return existing;
+  }
+  nextMemoryDatabasePruneId += 1;
+  const next = `:memory:${nextMemoryDatabasePruneId}`;
+  memoryDatabasePruneKeys.set(db, next);
+  return next;
 }
 
 interface ScopeReplacementResult {
@@ -686,7 +703,7 @@ export class MutationService {
       const nextStatus = input.status ?? existing.status;
       this.#db
         .query(
-          "UPDATE epics SET description = description || ?, status = ?, updated_at = ? WHERE id = ?;",
+          "UPDATE epics SET description = description || ?, status = ?, updated_at = ?, version = version + 1 WHERE id = ?;",
         )
         .run(separator + input.append, nextStatus, now, input.epicId);
       const epic = this.#domain.getEpicOrThrow(input.epicId);
@@ -1581,12 +1598,13 @@ export class MutationService {
 
   #pruneExpiredIdempotencyKeys(now: number = Date.now()): void {
     // Skip if we swept recently — see BOARD_IDEMPOTENCY_PRUNE_INTERVAL_MS
-    // for rationale. Module-level throttle so it applies per-process even
-    // across MutationService instances.
-    if (now - lastIdempotencyPruneAt < BOARD_IDEMPOTENCY_PRUNE_INTERVAL_MS) {
+    // for rationale. The throttle is per database file so daemon processes
+    // serving several workspaces do not suppress each other's cleanup.
+    const pruneKey = idempotencyPruneKeyForDatabase(this.#db);
+    const lastPrunedAt = idempotencyPruneByDatabase.get(pruneKey) ?? 0;
+    if (now - lastPrunedAt < BOARD_IDEMPOTENCY_PRUNE_INTERVAL_MS) {
       return;
     }
-    lastIdempotencyPruneAt = now;
 
     const cutoff: number = now - BOARD_IDEMPOTENCY_RETENTION_MS;
     this.#db.query(
@@ -1596,6 +1614,7 @@ export class MutationService {
         AND created_at < ?;
       `,
     ).run(cutoff);
+    idempotencyPruneByDatabase.set(pruneKey, now);
   }
 
   #previewScopeReplacement(
