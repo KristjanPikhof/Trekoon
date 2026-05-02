@@ -336,6 +336,19 @@ export class MutationService {
       const existing = this.#domain.getTaskOrThrow(input.taskId);
       if (input.status !== undefined) {
         validateStatusTransition(existing.status, input.status, "task", input.taskId);
+        // Enforce dependency gating BEFORE the direct UPDATE bypass below.
+        // The combined append+status path issues its own SQL UPDATE rather
+        // than going through `domain.updateTask`, so without this call a
+        // blocked task with unresolved upstream deps could be flipped into
+        // a gated status (in_progress/done) — defeating the
+        // dependency_blocked contract. Symmetric with claimTask /
+        // markTaskDoneAtomically gating sites.
+        this.#domain.assertNoUnresolvedDependenciesForStatusTransition(
+          input.taskId,
+          "task",
+          existing.status,
+          input.status,
+        );
       }
       const separator = existing.description.length > 0 ? "\n" : "";
       const now = Date.now();
@@ -368,6 +381,15 @@ export class MutationService {
       const existing = this.#domain.getSubtaskOrThrow(input.subtaskId);
       if (input.status !== undefined) {
         validateStatusTransition(existing.status, input.status, "subtask", input.subtaskId);
+        // Mirror of appendToTaskDescription: gate the combined
+        // append+status path through assertNoUnresolvedDependenciesForStatusTransition
+        // so subtasks cannot bypass dependency resolution via the bypass UPDATE.
+        this.#domain.assertNoUnresolvedDependenciesForStatusTransition(
+          input.subtaskId,
+          "subtask",
+          existing.status,
+          input.status,
+        );
       }
       const separator = existing.description.length > 0 ? "\n" : "";
       const now = Date.now();
