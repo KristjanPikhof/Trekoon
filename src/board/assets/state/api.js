@@ -222,10 +222,9 @@ function createTimeoutError(method, path, timeoutMs) {
  * }}
  */
 export function createMutationQueue(model, rerender) {
-  /** @type {Array<{ optimistic?: function, request: function, onSuccess?: function, onError?: function, successMessage?: string }>} */
+  /** @type {Array<{ mutationId: string, optimistic?: function, request: function, onSuccess?: function, onError?: function, successMessage?: string }>} */
   const queue = [];
   let processing = false;
-  let nextMutationId = 1;
   /** @type {Array<() => void>} */
   let flushResolvers = [];
 
@@ -246,7 +245,7 @@ export function createMutationQueue(model, rerender) {
 
     while (queue.length > 0) {
       const mutation = queue.shift();
-      if (model.store.notice?.retryMutationId !== mutation.id) {
+      if (model.store.notice?.retryMutationId !== mutation.mutationId) {
         model.store.notice = null;
       }
 
@@ -258,8 +257,8 @@ export function createMutationQueue(model, rerender) {
 
       try {
         if (typeof mutation.optimistic === "function") {
-          const previousSnapshot = cloneSnapshot(model.store.snapshot);
-          const optimisticSnapshot = mutation.optimistic(cloneSnapshot(model.store.snapshot));
+          const previousSnapshot = model.store.snapshot;
+          const optimisticSnapshot = mutation.optimistic(cloneSnapshot(previousSnapshot));
           inverseDelta = computeInverseDelta(previousSnapshot, optimisticSnapshot);
           model.store.snapshot = optimisticSnapshot;
           // Direct snapshot mutation bypasses setState/syncState; invalidate
@@ -298,7 +297,7 @@ export function createMutationQueue(model, rerender) {
           title: "Action failed",
           message,
           retryLabel: "Retry",
-          retryMutationId: mutation.id,
+          retryMutationId: mutation.mutationId,
         };
 
         if (typeof mutation.onError === "function") {
@@ -318,8 +317,7 @@ export function createMutationQueue(model, rerender) {
 
   return {
     enqueue(mutation) {
-      queue.push({ ...mutation, id: nextMutationId });
-      nextMutationId += 1;
+      queue.push(mutation);
       processNext();
     },
 
