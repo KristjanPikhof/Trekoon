@@ -75,8 +75,10 @@ export class MutationService {
   }
 
   #writeTransaction<T>(fn: () => T): T {
-    const eventContext = prepareEventWriteContext(this.#db, this.#cwd);
-    return writeTransaction(this.#db, (): T => withTransactionEventContext(this.#db, eventContext, fn));
+    // withTransactionEventContext computes the event timestamp lazily AFTER
+    // BEGIN IMMEDIATE is issued by writeTransaction, so concurrent writers
+    // cannot collide on (created_at, id).
+    return writeTransaction(this.#db, (): T => withTransactionEventContext(this.#db, this.#cwd, fn));
   }
 
   #dependencyEventEntityId(input: {
