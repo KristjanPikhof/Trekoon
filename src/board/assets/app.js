@@ -4,6 +4,7 @@ import { applyTheme, createStore, readThemePreference } from "./state/store.js";
 import { normalizeSnapshot, normalizeStatus } from "./state/utils.js";
 import { syncUrlHash } from "./state/url.js";
 import { createDelegation } from "./runtime/delegation.js";
+import { createOverlayFocusTrap } from "./runtime/focus-trap.js";
 import { createTopBar } from "./components/TopBar.js";
 import { createWorkspace } from "./components/Workspace.js";
 import { createTaskModal } from "./components/TaskModal.js";
