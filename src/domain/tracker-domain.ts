@@ -994,37 +994,60 @@ export class TrackerDomain {
   }
 
   planStatusCascade(rootKind: StatusCascadeRootKind, rootId: string, targetStatus: string): StatusCascadePlan {
-    const normalizedTargetStatus = assertNonEmpty("status", targetStatus);
-    const scope = this.#collectStatusCascadeScope(rootKind, rootId);
-    const scopeIdSet = new Set(scope.map((node) => node.id));
-    const orderedChanges = this.#orderStatusCascadeChanges(scope, normalizedTargetStatus);
-    const changedIds = orderedChanges.map((change) => change.id);
-    const changedIdSet = new Set(changedIds);
-    const unchangedIds = scope
-      .filter((node) => !changedIdSet.has(node.id))
-      .map((node) => node.id);
-    const blockers = this.#collectStatusCascadeBlockers(orderedChanges, scopeIdSet, changedIdSet, normalizedTargetStatus);
+    return planStatusCascadeImpl(this.#cascadePlannerReader(), rootKind, rootId, targetStatus);
+  }
 
+  #cascadePlannerReader(): CascadePlannerReader {
     return {
-      rootKind,
-      rootId,
-      targetStatus: normalizedTargetStatus,
-      atomic: true,
-      scope,
-      orderedChanges,
-      changedIds,
-      unchangedIds,
-      blockers,
-      counts: {
-        scope: scope.length,
-        changed: orderedChanges.length,
-        unchanged: unchangedIds.length,
-        blockers: blockers.length,
-        changedEpics: orderedChanges.filter((change) => change.kind === "epic").length,
-        changedTasks: orderedChanges.filter((change) => change.kind === "task").length,
-        changedSubtasks: orderedChanges.filter((change) => change.kind === "subtask").length,
-      },
+      buildEpicTreeDetailed: (id: string) => this.buildEpicTreeDetailed(id),
+      buildTaskTreeDetailed: (id: string) => this.buildTaskTreeDetailed(id),
+      listDependenciesBySourceIds: (ids: readonly string[]) => this.listDependenciesBySourceIds(ids),
+      loadDependencyTargetStatuses: (ids: readonly string[]) => this.#loadCascadeDependencyTargetStatuses(ids),
     };
+  }
+
+  #loadCascadeDependencyTargetStatuses(sourceIds: readonly string[]): readonly CascadeDependencyTargetStatusRow[] {
+    if (sourceIds.length === 0) {
+      return [];
+    }
+
+    type DepStatusRow = {
+      source_id: string;
+      source_kind: DependencyNodeKind;
+      depends_on_id: string;
+      depends_on_kind: DependencyNodeKind;
+      dep_status: string | null;
+    };
+
+    const collected: CascadeDependencyTargetStatusRow[] = [];
+
+    for (let offset = 0; offset < sourceIds.length; offset += SQLITE_MAX_VARIABLES) {
+      const chunkIds = sourceIds.slice(offset, offset + SQLITE_MAX_VARIABLES);
+      const inPlaceholders: string = chunkIds.map(() => "?").join(", ");
+      const rows = this.#db
+        .query(
+          `SELECT d.source_id, d.source_kind, d.depends_on_id, d.depends_on_kind,
+                  COALESCE(t.status, s.status) AS dep_status
+           FROM dependencies d
+           LEFT JOIN tasks t ON d.depends_on_kind = 'task' AND d.depends_on_id = t.id
+           LEFT JOIN subtasks s ON d.depends_on_kind = 'subtask' AND d.depends_on_id = s.id
+           WHERE d.source_id IN (${inPlaceholders})
+           ORDER BY d.created_at ASC, d.id ASC;`,
+        )
+        .all(...chunkIds) as DepStatusRow[];
+
+      for (const row of rows) {
+        collected.push({
+          sourceId: row.source_id,
+          sourceKind: row.source_kind,
+          dependsOnId: row.depends_on_id,
+          dependsOnKind: row.depends_on_kind,
+          dependsOnStatus: row.dep_status,
+        });
+      }
+    }
+
+    return collected;
   }
 
   collectEpicSearchScope(epicId: string): readonly SearchNode[] {
