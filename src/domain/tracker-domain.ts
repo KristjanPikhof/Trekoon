@@ -265,55 +265,6 @@ function mapDependency(row: DependencyRow): DependencyRecord {
   };
 }
 
-function countMatches(value: string, searchText: string): number {
-  if (searchText.length === 0) {
-    return 0;
-  }
-
-  let count = 0;
-  let offset = 0;
-  while (offset <= value.length - searchText.length) {
-    const nextIndex = value.indexOf(searchText, offset);
-    if (nextIndex === -1) {
-      return count;
-    }
-
-    count += 1;
-    offset = nextIndex + searchText.length;
-  }
-
-  return count;
-}
-
-function buildMatchSnippet(value: string, searchText: string, contextSize = 24): string {
-  if (searchText.length === 0) {
-    return "";
-  }
-
-  const matchIndex = value.indexOf(searchText);
-  if (matchIndex === -1) {
-    return "";
-  }
-
-  const start = Math.max(0, matchIndex - contextSize);
-  const end = Math.min(value.length, matchIndex + searchText.length + contextSize);
-  const rawSnippet = value.slice(start, end).replace(/\s+/g, " ").trim();
-  const prefix = start > 0 ? "…" : "";
-  const suffix = end < value.length ? "…" : "";
-  return `${prefix}${rawSnippet}${suffix}`;
-}
-
-function summarizeMatches(matches: readonly SearchEntityMatch[]): SearchSummary {
-  return {
-    matchedEntities: matches.length,
-    matchedFields: matches.reduce((total, match) => total + match.fields.length, 0),
-    totalMatches: matches.reduce(
-      (total, match) => total + match.fields.reduce((fieldTotal, field) => fieldTotal + field.count, 0),
-      0,
-    ),
-  };
-}
-
 export class TrackerDomain {
   readonly #db: Database;
 
