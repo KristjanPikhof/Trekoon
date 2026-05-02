@@ -10,6 +10,7 @@ import {
   recoverWorktreeDatabaseState,
   type WorktreeRecoveryDiagnostics,
 } from "./worktree-recovery";
+import { resolveLegacyWorktreeDatabaseFile } from "./path";
 
 export interface StorageResolutionDiagnostics {
   readonly invocationCwd: string;
