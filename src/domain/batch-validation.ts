@@ -22,7 +22,7 @@ export interface ResolvedDependencyBatchSpec {
 
 export interface DependencyBatchValidationIssue {
   readonly index: number;
-  readonly type: "missing_id" | "duplicate" | "cycle" | "parent_to_child";
+  readonly type: "missing_id" | "duplicate" | "cycle";
   readonly sourceId: string;
   readonly dependsOnId: string;
   readonly details: Record<string, unknown>;
