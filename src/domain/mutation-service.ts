@@ -971,34 +971,18 @@ export class MutationService {
     for (const change of plan.orderedChanges) {
       if (change.kind === "epic") {
         const epic = this.#domain.updateEpic(change.id, { status: change.nextStatus });
-        this.#appendEntityEvent("epic", epic.id, ENTITY_OPERATIONS.epic.updated, {
-          title: epic.title,
-          description: epic.description,
-          status: epic.status,
-        });
+        this.#emitEpicUpdated(epic);
         continue;
       }
 
       if (change.kind === "task") {
         const task = this.#domain.updateTask(change.id, { status: change.nextStatus });
-        this.#appendEntityEvent("task", task.id, ENTITY_OPERATIONS.task.updated, {
-          epic_id: task.epicId,
-          title: task.title,
-          description: task.description,
-          status: task.status,
-          owner: task.owner,
-        });
+        this.#emitTaskUpdated(task);
         continue;
       }
 
       const subtask = this.#domain.updateSubtask(change.id, { status: change.nextStatus });
-      this.#appendEntityEvent("subtask", subtask.id, ENTITY_OPERATIONS.subtask.updated, {
-        task_id: subtask.taskId,
-        title: subtask.title,
-        description: subtask.description,
-        status: subtask.status,
-        owner: subtask.owner,
-      });
+      this.#emitSubtaskUpdated(subtask);
     }
   }
 
