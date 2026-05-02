@@ -549,7 +549,11 @@ export function subscribeSnapshotStream(model, options) {
     let payload;
     try {
       payload = JSON.parse(raw);
-    } catch {
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      // Surface malformed payloads so operators can spot serialization bugs.
+      // Avoid logging the raw text (may include sensitive content) — just length + error.
+      console.warn(`subscribeSnapshotStream: malformed snapshotDelta JSON (${raw.length} bytes): ${message}`);
       return;
     }
     const delta = payload?.snapshotDelta;
@@ -565,7 +569,9 @@ export function subscribeSnapshotStream(model, options) {
     let payload;
     try {
       payload = JSON.parse(raw);
-    } catch {
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      console.warn(`subscribeSnapshotStream: malformed snapshot JSON (${raw.length} bytes): ${message}`);
       return;
     }
     const snapshot = payload?.snapshot;
@@ -576,8 +582,32 @@ export function subscribeSnapshotStream(model, options) {
     }
   };
 
+  const handleError = () => {
+    if (disposed) return;
+    // Surface the disconnect to the user so they don't silently miss live
+    // updates. EventSource will keep auto-reconnecting; once a snapshot/
+    // snapshotDelta event lands again, the regular notice clearing flow
+    // (e.g. on the next mutation) replaces this notice.
+    if (model.store && typeof model.store === "object") {
+      const existing = model.store.notice;
+      if (!existing || existing.code !== "live_updates_disconnected") {
+        model.store.notice = {
+          type: "warning",
+          code: "live_updates_disconnected",
+          title: "Live updates disconnected",
+          message: "Reconnecting to the server. Changes from other sessions may be delayed.",
+        };
+        if (typeof rerender === "function") rerender();
+      }
+    }
+  };
+
   eventSource.addEventListener("snapshotDelta", handleSnapshotDelta);
   eventSource.addEventListener("snapshot", handleSnapshot);
+  // EventSource calls .onerror on disconnect (and will continue auto-reconnecting).
+  // Use the onerror property rather than addEventListener("error") so tests can
+  // trigger it via `instance.onerror?.()` without a full event object.
+  eventSource.onerror = handleError;
 
   return {
     eventSource,
