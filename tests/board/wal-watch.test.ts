@@ -159,6 +159,193 @@ describe("WAL watcher unit", (): void => {
   });
 });
 
+describe("WAL watcher diff and resilience", (): void => {
+  test("shape-change-without-content does not produce a delta", async (): Promise<void> => {
+    const workspace: string = createWorkspace();
+    const seedDb: TrekoonDatabase = openTrekoonDatabase(workspace);
+    new MutationService(seedDb.db, workspace).createEpic({ title: "Stable", description: "Original" });
+    seedDb.close();
+
+    const watcherDb: TrekoonDatabase = openTrekoonDatabase(workspace);
+    const eventBus = createBoardEventBus();
+    const events: unknown[] = [];
+    eventBus.subscribe((event) => {
+      if (event.type === "snapshotDelta") {
+        events.push(event.snapshotDelta);
+      }
+    });
+
+    // Custom snapshot builder: returns the same logical content (same id,
+    // updatedAt, version) but mutates non-content shape (reorders array,
+    // swaps in a different description string). The (version, updatedAt)
+    // tuple is unchanged, so the watcher must NOT emit a delta.
+    const baseSnapshot = {
+      generatedAt: Date.now(),
+      epics: [{ id: "epic-1", title: "Stable", description: "Original", status: "todo", createdAt: 1, updatedAt: 100, version: 1, taskIds: [], counts: { todo: 0, blocked: 0, in_progress: 0, done: 0 }, searchText: "" }],
+      tasks: [],
+      subtasks: [],
+      dependencies: [],
+      counts: {
+        epics: { total: 1, todo: 1, blocked: 0, inProgress: 0, done: 0, other: 0 },
+        tasks: { total: 0, todo: 0, blocked: 0, inProgress: 0, done: 0, other: 0 },
+        subtasks: { total: 0, todo: 0, blocked: 0, inProgress: 0, done: 0, other: 0 },
+        dependencies: 0,
+      },
+    };
+    const reshapedSnapshot = {
+      ...baseSnapshot,
+      generatedAt: Date.now() + 5000, // shape-only metadata change
+      epics: [{ ...baseSnapshot.epics[0]!, description: "shape-shifted but same version+updatedAt", searchText: "different searchText" }],
+    };
+
+    let buildCalls = 0;
+    const watcher = startWalWatcher({
+      db: watcherDb.db,
+      databaseFile: watcherDb.paths.databaseFile,
+      eventBus,
+      debounceMs: 10,
+      buildSnapshot: () => {
+        buildCalls += 1;
+        return (buildCalls === 1 ? baseSnapshot : reshapedSnapshot) as never;
+      },
+    });
+
+    try {
+      // First reconcile: same logical (version, updatedAt) — must NOT emit.
+      watcher.reconcile();
+      // Second reconcile: still same tuple — still must NOT emit.
+      watcher.reconcile();
+      await new Promise((resolve) => setTimeout(resolve, 50));
+      expect(events.length).toBe(0);
+      expect(buildCalls).toBeGreaterThanOrEqual(2);
+    } finally {
+      watcher.close();
+      eventBus.close();
+      watcherDb.close();
+    }
+  });
+
+  test("burst of 50 mutations inside debounce window emits a single coalesced delta", async (): Promise<void> => {
+    const workspace: string = createWorkspace();
+    const seedDb: TrekoonDatabase = openTrekoonDatabase(workspace);
+    new MutationService(seedDb.db, workspace).createEpic({ title: "Burst Seed", description: "Seed" });
+    seedDb.close();
+
+    const watcherDb: TrekoonDatabase = openTrekoonDatabase(workspace);
+    const eventBus = createBoardEventBus();
+    const deltas: unknown[] = [];
+    eventBus.subscribe((event) => {
+      if (event.type === "snapshotDelta") {
+        deltas.push(event.snapshotDelta);
+      }
+    });
+    const watcher = startWalWatcher({
+      db: watcherDb.db,
+      databaseFile: watcherDb.paths.databaseFile,
+      eventBus,
+      debounceMs: 300, // generous window so the burst can finish before debounce fires
+    });
+
+    try {
+      const cliDb: TrekoonDatabase = openTrekoonDatabase(workspace);
+      try {
+        const cliMutations = new MutationService(cliDb.db, workspace);
+        // 50 rapid writes through one connection — all hit the WAL within
+        // the 300ms debounce window on any reasonable machine.
+        for (let i = 0; i < 50; i += 1) {
+          cliMutations.createEpic({ title: `Burst-${i}`, description: `Mutation ${i}` });
+        }
+      } finally {
+        cliDb.close();
+      }
+
+      // Force one reconcile after the writer connection closed to make the
+      // test deterministic on slow CI filesystems where fs.watch is laggy.
+      const deadline = Date.now() + 4000;
+      while (deltas.length === 0 && Date.now() < deadline) {
+        await new Promise((resolve) => setTimeout(resolve, 100));
+        if (deltas.length === 0) {
+          watcher.reconcile();
+        }
+      }
+
+      // Coalesced: exactly one delta carrying all 50 new epics, not 50
+      // separate deltas.
+      expect(deltas.length).toBe(1);
+      const delta = deltas[0] as { epics: ReadonlyArray<{ title?: string }> };
+      const titles = (delta.epics ?? []).map((epic) => epic.title);
+      const burstTitles = titles.filter((title) => title?.startsWith("Burst-"));
+      expect(burstTitles.length).toBe(50);
+    } finally {
+      watcher.close();
+      eventBus.close();
+      watcherDb.close();
+    }
+  });
+
+  test("thrown error from buildBoardSnapshot increments failure counter and does not crash", async (): Promise<void> => {
+    const workspace: string = createWorkspace();
+    const seedDb: TrekoonDatabase = openTrekoonDatabase(workspace);
+    new MutationService(seedDb.db, workspace).createEpic({ title: "Pre-throw", description: "Seed" });
+    seedDb.close();
+
+    const watcherDb: TrekoonDatabase = openTrekoonDatabase(workspace);
+    const eventBus = createBoardEventBus();
+    const loggedMessages: string[] = [];
+
+    let buildCalls = 0;
+    const okSnapshot = {
+      generatedAt: Date.now(),
+      epics: [],
+      tasks: [],
+      subtasks: [],
+      dependencies: [],
+      counts: {
+        epics: { total: 0, todo: 0, blocked: 0, inProgress: 0, done: 0, other: 0 },
+        tasks: { total: 0, todo: 0, blocked: 0, inProgress: 0, done: 0, other: 0 },
+        subtasks: { total: 0, todo: 0, blocked: 0, inProgress: 0, done: 0, other: 0 },
+        dependencies: 0,
+      },
+    };
+
+    const watcher = startWalWatcher({
+      db: watcherDb.db,
+      databaseFile: watcherDb.paths.databaseFile,
+      eventBus,
+      debounceMs: 10,
+      logEveryNthFailure: 2,
+      logger: (message) => {
+        loggedMessages.push(message);
+      },
+      buildSnapshot: () => {
+        buildCalls += 1;
+        if (buildCalls === 1) {
+          return okSnapshot as never;
+        }
+        throw new Error(`synthetic snapshot failure #${buildCalls}`);
+      },
+    });
+
+    try {
+      // Five reconciles — first call already happened during start. All five
+      // explicit reconciles throw; counter must advance to 5 and the watcher
+      // must remain operable (no crash, close still works).
+      for (let i = 0; i < 5; i += 1) {
+        watcher.reconcile();
+      }
+
+      expect(watcher.failureCount()).toBe(5);
+      // logEveryNthFailure=2 means we log on failures 2 and 4 → 2 messages.
+      expect(loggedMessages.length).toBe(2);
+      expect(loggedMessages[0]).toContain("wal-watcher");
+    } finally {
+      watcher.close();
+      eventBus.close();
+      watcherDb.close();
+    }
+  });
+});
+
 describe("board server WAL watcher integration", (): void => {
   test("CLI-style mutation appears via SSE within ~1s", async (): Promise<void> => {
     const workspace: string = createWorkspace();
