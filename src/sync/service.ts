@@ -863,10 +863,21 @@ function findConflictForResolutionEvent(
   payload: ResolutionEventPayload,
   receiverScope: ConflictScope,
 ): ConflictRow | null {
-  // Always restrict the lookup to the receiver's active worktree+branch.
-  // The sync_conflicts table is shared across worktrees, so a single
-  // (event_id, entity, field) tuple can have multiple rows — one per
-  // observer scope. Resolving must only touch this receiver's row.
+  // Scope-isolated resolve: a single (event_id, entity, field) tuple can
+  // have multiple sync_conflicts rows — one per observer worktree+branch.
+  // The receiver only resolves its OWN scoped row. If the payload carries
+  // an emitter scope (new, scope-aware events), require it to match the
+  // receiver — cross-scope events are a no-op so a resolve in worktree A
+  // never mutates worktree B's row.
+  if (
+    typeof payload.worktree_path === "string" &&
+    typeof payload.current_branch === "string" &&
+    (payload.worktree_path !== receiverScope.worktreePath ||
+      payload.current_branch !== receiverScope.currentBranch)
+  ) {
+    return null;
+  }
+
   if (typeof payload.source_event_id === "string" && payload.source_event_id.length > 0) {
     const bySourceEvent = db
       .query(
