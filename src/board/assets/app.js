@@ -1,5 +1,5 @@
 import { createBoardActions } from "./state/actions.js";
-import { createApi } from "./state/api.js";
+import { createApi, subscribeSnapshotStream } from "./state/api.js";
 import { applyTheme, createStore, readThemePreference } from "./state/store.js";
 import { normalizeSnapshot, normalizeStatus } from "./state/utils.js";
 import { syncUrlHash } from "./state/url.js";
