@@ -527,6 +527,23 @@ export class MutationService {
     task?: TaskRecord;
   } {
     return this.#writeTransaction(() => {
+      // Enforce dependency gating BEFORE the CAS so a blocked-by-unresolved-dep
+      // task cannot be silently flipped into `in_progress`. Symmetric with
+      // markTaskDoneAtomically: both "forward-progress" terminal/active
+      // transitions go through the same gating call. A pre-existing in_progress
+      // or done row is short-circuited because its existing status equals the
+      // next status (or is non-gated terminal) and the gating helper returns
+      // early.
+      const existing = this.#domain.getTask(input.taskId);
+      if (existing && (existing.status === "todo" || existing.status === "blocked")) {
+        this.#domain.assertNoUnresolvedDependenciesForStatusTransition(
+          input.taskId,
+          "task",
+          existing.status,
+          "in_progress",
+        );
+      }
+
       const now = Date.now();
       const result = this.#db
         .query(
