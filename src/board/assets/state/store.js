@@ -338,6 +338,7 @@ function reconcileBoardState(state) {
     selectedTaskId: derived.selectedTaskId,
     selectedSubtaskId: derived.selectedSubtaskId,
     taskModalOpen: derived.taskModalOpen,
+    subtaskModalOpen: derived.subtaskModalOpen,
   };
 }
 
