@@ -37,9 +37,18 @@ interface GitContextCore {
 const gitContextCache: Map<string, GitContextCore> = new Map();
 
 function readHeadStatKey(cwd: string): string | null {
+  // Try normal repo path first (.git/HEAD updates on every checkout).
   try {
     const stat = statSync(join(cwd, ".git", "HEAD"));
-    return `${stat.mtimeMs}|${stat.size}|${stat.ino}`;
+    return `head|${stat.mtimeMs}|${stat.size}|${stat.ino}`;
+  } catch {
+    // ignore — fall through
+  }
+  // Linked worktree: .git is a file pointing to the actual gitdir.
+  // Stat the file itself; safer than chasing the pointer (rare moves only).
+  try {
+    const stat = statSync(join(cwd, ".git"));
+    return `gitfile|${stat.mtimeMs}|${stat.size}|${stat.ino}`;
   } catch {
     return null;
   }
