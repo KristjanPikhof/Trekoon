@@ -9,21 +9,21 @@ const SRC_DIR = join(PROJECT_ROOT, "src");
 
 /**
  * Parse documented error codes from docs/machine-contracts.md.
- * Scans for backtick-quoted codes in the "Error code registry" table.
- * Table rows have the form: | `code_name` | Description |
+ * Only reads codes from the first column of the "Error code registry" table.
+ * Table rows have the form: | `code_name` | Description text |
  */
 function parseDocumentedCodes(contents: string): Set<string> {
   const codes = new Set<string>();
-  // Match backtick-quoted identifiers that look like error codes (all lowercase + underscores)
-  // Only in the Error code registry section
   const registryMatch = contents.match(/## Error code registry[\s\S]*?(?=\n## |$)/);
   if (!registryMatch) {
     throw new Error("Could not find '## Error code registry' section in docs/machine-contracts.md");
   }
   const section = registryMatch[0];
-  const codePattern = /`([a-z][a-z_]+)`/g;
+  // Match table rows: | `code_name` | ... |
+  // Only capture the first backtick-quoted token on each line (the code column).
+  const rowPattern = /^\|\s*`([a-z][a-z_]+)`\s*\|/gm;
   let match: RegExpExecArray | null;
-  while ((match = codePattern.exec(section)) !== null) {
+  while ((match = rowPattern.exec(section)) !== null) {
     codes.add(match[1]);
   }
   return codes;
