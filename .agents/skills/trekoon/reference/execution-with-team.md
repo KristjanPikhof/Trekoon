@@ -160,14 +160,23 @@ Your job as team lead:
 
 ## Auto-recovery
 
-1. If status update fails with `status_transition_invalid`, check current status
-   and use the valid intermediate transition.
-2. If status update fails with `dependency_blocked`, refresh with
-   `task ready`/`task next` and continue with a ready candidate.
-3. Teammate attempts to fix failures (has context).
-4. If can't fix, teammate reports failure with error output via SendMessage.
-5. Dispatch fix instructions via SendMessage to the teammate.
-6. Same error twice -> stop and ask user.
+Teammate attempts to fix failures. If can't fix, teammate reports failure with
+error output via SendMessage; dispatch fix instructions in response.
+
+**`status_transition_invalid`** — exact recovery sequence:
+1. Run `trekoon --toon --compact task show <id>` to read the current status.
+2. Append a blocker note: `trekoon --toon task update <id> --append "Blocked: status_transition_invalid from <attempted transition>; current status is <actual>"`.
+3. Identify the valid intermediate transition (see `reference/status-machine.md`).
+4. Apply the correct intermediate step, then retry the intended transition.
+5. Only move on to the next task after the target task reaches the intended status or is explicitly marked `blocked`.
+6. Report resolution via SendMessage.
+
+**`dependency_blocked`** — exact recovery sequence:
+1. Run `trekoon --toon --compact task show <id>` to identify which dependency is unmet.
+2. Append a blocker note: `trekoon --toon task update <id> --append "Blocked: dependency_blocked; depends on <dep-id>"`.
+3. Run `trekoon --toon task ready --epic <epic-id>` to get a ready candidate.
+4. Only then continue with the ready candidate — do not retry the blocked task.
+5. Notify team lead via SendMessage with blocker details.
 
 ## Verify and close
 
