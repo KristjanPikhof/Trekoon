@@ -158,6 +158,11 @@ export function startBoardServer(options: StartBoardServerOptions = {}): BoardSe
   const stateFile: string = resolve(paths.storageDir, BOARD_SERVER_STATE_FILENAME);
   const token: string = options.token ?? randomBytes(18).toString("hex");
   const eventBus: BoardEventBus = createBoardEventBus();
+  const walWatcher: WalWatcher = startWalWatcher({
+    db: database.db,
+    databaseFile: database.paths.databaseFile,
+    eventBus,
+  });
   const apiHandler = createBoardApiHandler({
     db: database.db,
     cwd,
