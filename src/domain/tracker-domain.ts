@@ -995,10 +995,10 @@ export class TrackerDomain {
   planStatusCascade(rootKind: StatusCascadeRootKind, rootId: string, targetStatus: string): StatusCascadePlan {
     return planStatusCascadeImpl(
       {
-        buildEpicTreeDetailed: (id: string) => this.buildEpicTreeDetailed(id),
-        buildTaskTreeDetailed: (id: string) => this.buildTaskTreeDetailed(id),
-        listDependenciesBySourceIds: (ids: readonly string[]) => this.listDependenciesBySourceIds(ids),
-        loadDependencyTargetStatuses: (ids: readonly string[]) => loadCascadeDependencyTargetStatuses(this.#db, ids),
+        buildEpicTreeDetailed: (id) => this.buildEpicTreeDetailed(id),
+        buildTaskTreeDetailed: (id) => this.buildTaskTreeDetailed(id),
+        listDependenciesBySourceIds: (ids) => this.listDependenciesBySourceIds(ids),
+        loadDependencyTargetStatuses: (ids) => loadCascadeDependencyTargetStatuses(this.#db, ids),
       },
       rootKind,
       rootId,
