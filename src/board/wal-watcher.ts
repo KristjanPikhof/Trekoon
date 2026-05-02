@@ -22,6 +22,8 @@ import { TrackerDomain } from "../domain/tracker-domain";
 import { type BoardEventBus } from "./event-bus";
 import { buildBoardSnapshot, type BoardSnapshot } from "./snapshot";
 
+const IN_PROCESS_WAL_SUPPRESS_MS = 100;
+
 interface CollectionDiff {
   readonly upserted: unknown[];
   readonly deletedIds: string[];
@@ -104,6 +106,17 @@ function diffById(previous: readonly unknown[] | undefined, current: readonly un
   return { upserted, deletedIds };
 }
 
+function readMtime(path: string): number {
+  if (!existsSync(path)) {
+    return 0;
+  }
+  try {
+    return statSync(path).mtimeMs;
+  } catch {
+    return 0;
+  }
+}
+
 export interface WalWatcherOptions {
   readonly db: Database;
   readonly databaseFile: string;
@@ -173,6 +186,9 @@ export function startWalWatcher(options: WalWatcherOptions): WalWatcher {
     if (closed) {
       return;
     }
+    if (Date.now() - options.eventBus.lastInProcessWriteAt <= IN_PROCESS_WAL_SUPPRESS_MS) {
+      return;
+    }
 
     try {
       const fresh = buildSnapshot(domain);
@@ -234,17 +250,6 @@ export function startWalWatcher(options: WalWatcherOptions): WalWatcher {
   // Track WAL mtime when available, so we only react to actual changes rather
   // than spurious watcher fires (e.g. atime-only updates on some filesystems).
   let lastWalMtime: number = readMtime(walFile);
-
-  function readMtime(path: string): number {
-    if (!existsSync(path)) {
-      return 0;
-    }
-    try {
-      return statSync(path).mtimeMs;
-    } catch {
-      return 0;
-    }
-  }
 
   function maybeScheduleReconcile(): void {
     const currentMtime = readMtime(walFile);
