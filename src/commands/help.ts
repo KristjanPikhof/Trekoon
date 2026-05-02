@@ -28,7 +28,7 @@ const ROOT_HELP = [
   "  subtask      Create, list, update, and search subtasks",
   "  dep          Manage dependency edges between tasks and subtasks",
   "  events       Prune old sync event log rows",
-  "  migrate      Check schema version or roll back migrations",
+  "  migrate      Check schema version, roll back migrations, or snapshot a backup",
   "  session      Agent orientation (diagnostics + sync + next task)",
   "  suggest      Priority-ranked next-action suggestions",
   "  sync         Pull events and resolve conflicts across branches",
