@@ -211,4 +211,53 @@ describe("board PATCH If-Match preconditions", (): void => {
     });
     expect(response.status).toBe(200);
   });
+
+  // Trekoon task 02a08a41-93a9-4c30-95be-0f9bf2478632 / system-hardening-0.4.2
+  // P0 finding 2: previously the route layer issued the If-Match check
+  // BEFORE entering the write transaction, so two concurrent PATCHes that
+  // each saw the same `updatedAt` could both pass the check and the second
+  // one would silently overwrite the first. The CAS variants in
+  // MutationService now perform the precondition INSIDE
+  // BEGIN IMMEDIATE — exactly one writer can win the race.
+  test("two concurrent PATCHes with same If-Match: exactly one returns 200, the other returns 409 with advanced currentUpdatedAt", async (): Promise<void> => {
+    const baselineUpdatedAt = readUpdatedAt("task", seeded.taskId);
+
+    const issuePatch = (label: string): Promise<Response> =>
+      fetch(authedUrl(`/api/tasks/${encodeURIComponent(seeded.taskId)}`), {
+        method: "PATCH",
+        headers: {
+          "content-type": "application/json",
+          "if-match": String(baselineUpdatedAt),
+        },
+        body: JSON.stringify({ title: `Concurrent rename: ${label}` }),
+      });
+
+    // Fire both PATCHes from the same loop tick so they race for the
+    // BEGIN IMMEDIATE lock. SQLite serialises them; the late writer
+    // observes the now-advanced updated_at and the SQL CAS clause
+    // produces zero affected rows -> PreconditionFailedError -> 409.
+    const [responseA, responseB] = await Promise.all([
+      issuePatch("A"),
+      issuePatch("B"),
+    ]);
+
+    const statuses = [responseA.status, responseB.status].sort((a, b) => a - b);
+    expect(statuses).toEqual([200, 409]);
+
+    const losingResponse = responseA.status === 409 ? responseA : responseB;
+    const conflictBody = await losingResponse.json();
+    expect(conflictBody.ok).toBe(false);
+    expect(conflictBody.error.code).toBe("precondition_failed");
+    expect(conflictBody.error.details.entityKind).toBe("task");
+    expect(conflictBody.error.details.entityId).toBe(seeded.taskId);
+    expect(conflictBody.error.details.providedUpdatedAt).toBe(baselineUpdatedAt);
+    // Losing reader observes the freshly-advanced updatedAt: strictly
+    // greater than the baseline they sent (the winner bumped it).
+    expect(conflictBody.error.details.currentUpdatedAt).toBeGreaterThan(baselineUpdatedAt);
+
+    // And exactly one row update landed: the persisted updatedAt should
+    // match the value the losing 409 reported.
+    const persistedUpdatedAt = readUpdatedAt("task", seeded.taskId);
+    expect(persistedUpdatedAt).toBe(conflictBody.error.details.currentUpdatedAt);
+  });
 });
