@@ -206,6 +206,7 @@ overview, kanban workspace per epic, task detail modals, and search.
 | Get next-action suggestions | `trekoon suggest --epic <id>` |
 | Check epic progress | `trekoon epic progress <id>` |
 | Export epic to Markdown | `trekoon epic export <id>` |
+| Claim a task atomically | `trekoon task claim <id> --owner <owner>` |
 | Mark a task done | `trekoon task done <id>` |
 | Sync across worktrees | `trekoon sync pull --from main` |
 | Back up the DB before migrations | `trekoon migrate backup` |
