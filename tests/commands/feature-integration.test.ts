@@ -910,9 +910,12 @@ describe("subtask owner field", (): void => {
 
     try {
       const domain = new TrackerDomain(storage.db);
-      const epic = domain.createEpic({ title: "Subtask Owner Epic", description: "desc" });
-      const task = domain.createTask({ epicId: epic.id, title: "Parent task", description: "desc" });
-      const subtask = domain.createSubtask({ taskId: task.id, title: "Owned subtask" });
+      const { subtask } = writeTransaction(storage.db, () => {
+        const epic = domain.createEpic({ title: "Subtask Owner Epic", description: "desc" });
+        const task = domain.createTask({ epicId: epic.id, title: "Parent task", description: "desc" });
+        const createdSubtask = domain.createSubtask({ taskId: task.id, title: "Owned subtask" });
+        return { subtask: createdSubtask };
+      });
 
       expect(writeTransaction(storage.db, () => domain.updateSubtask(subtask.id, { owner: "bob" })).owner).toBe("bob");
       expect(writeTransaction(storage.db, () => domain.updateSubtask(subtask.id, { owner: null })).owner).toBeNull();
