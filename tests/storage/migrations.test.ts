@@ -653,3 +653,241 @@ describe("migration-version marker: warm-start benchmark", (): void => {
     }
   });
 });
+
+// ---------------------------------------------------------------------------
+// Marker fast-path hardening: PRAGMA user_version fingerprint replaces the
+// previous mtime defensive check (Finding #8).
+// ---------------------------------------------------------------------------
+
+describe("migration-version marker: PRAGMA user_version fingerprint", (): void => {
+  test("marker payload is JSON with version + userVersion fields", (): void => {
+    const workspace: string = createWorkspace();
+    const storage = openTrekoonDatabase(workspace);
+    storage.close();
+
+    const markerPath = join(workspace, ".trekoon", "migration-version");
+    const raw: string = readFileSync(markerPath, "utf8").trim();
+    expect(raw.startsWith("{")).toBe(true);
+
+    const parsed = JSON.parse(raw) as { version: number; userVersion: number };
+    expect(parsed.version).toBe(LATEST_MIGRATION_VERSION);
+    expect(parsed.userVersion).toBe(LATEST_MIGRATION_VERSION);
+  });
+
+  test("DB header user_version is stamped to LATEST after migrate", (): void => {
+    const workspace: string = createWorkspace();
+    const storage = openTrekoonDatabase(workspace);
+    try {
+      const row = storage.db.query("PRAGMA user_version;").get() as { user_version: number } | null;
+      expect(row?.user_version).toBe(LATEST_MIGRATION_VERSION);
+    } finally {
+      storage.close();
+    }
+  });
+
+  test("legacy bare-integer marker forces a probe (rewrites in v2 form)", (): void => {
+    const workspace: string = createWorkspace();
+    const storage = openTrekoonDatabase(workspace);
+    storage.close();
+
+    const markerPath = join(workspace, ".trekoon", "migration-version");
+    const dbPath = join(workspace, ".trekoon", "trekoon.db");
+
+    // Overwrite with the legacy v1 format.
+    writeFileSync(markerPath, String(LATEST_MIGRATION_VERSION), "utf8");
+
+    const db = new Database(dbPath);
+    db.exec("PRAGMA journal_mode = WAL;");
+    db.exec("PRAGMA foreign_keys = ON;");
+    try {
+      expect((): void => migrateDatabase(db)).not.toThrow();
+      expect(readCurrentMigrationVersionReadOnly(db)).toBe(LATEST_MIGRATION_VERSION);
+    } finally {
+      db.close(false);
+    }
+
+    // Marker should now be in v2 JSON form.
+    const after: string = readFileSync(markerPath, "utf8").trim();
+    expect(after.startsWith("{")).toBe(true);
+  });
+
+  test("restored-from-backup with stale user_version probes despite fresh marker", (): void => {
+    // (b) from finding #8: a DB restored from an older backup keeps its
+    // pre-restore user_version baked into the SQLite header. The marker on
+    // disk still claims LATEST, but the header tells the truth.
+    const workspace: string = createWorkspace();
+    const storage = openTrekoonDatabase(workspace);
+    storage.close();
+
+    const dbPath = join(workspace, ".trekoon", "trekoon.db");
+    const markerPath = join(workspace, ".trekoon", "migration-version");
+
+    // Take a snapshot of the live DB, then mutate the snapshot to look like
+    // an older schema by setting its user_version to 0. Restore over the
+    // current DB.
+    const snapshotPath = join(workspace, ".trekoon", "trekoon.db.restore-source");
+    copyFileSync(dbPath, snapshotPath);
+
+    const tampered = new Database(snapshotPath);
+    try {
+      tampered.exec("PRAGMA user_version = 0;");
+    } finally {
+      tampered.close(false);
+    }
+
+    // Restore: overwrite the live DB bytes with the tampered snapshot.
+    copyFileSync(snapshotPath, dbPath);
+
+    // Marker still on disk from the original migrate run.
+    expect(existsSync(markerPath)).toBe(true);
+
+    const db = new Database(dbPath);
+    db.exec("PRAGMA journal_mode = WAL;");
+    db.exec("PRAGMA foreign_keys = ON;");
+
+    try {
+      // user_version is now 0 (stale) — fast path must NOT skip the probe.
+      const beforeRow = db.query("PRAGMA user_version;").get() as { user_version: number } | null;
+      expect(beforeRow?.user_version).toBe(0);
+
+      // migrate must complete without throwing and re-stamp user_version.
+      expect((): void => migrateDatabase(db)).not.toThrow();
+
+      const afterRow = db.query("PRAGMA user_version;").get() as { user_version: number } | null;
+      expect(afterRow?.user_version).toBe(LATEST_MIGRATION_VERSION);
+    } finally {
+      db.close(false);
+    }
+  });
+
+  test("rollback updates DB header user_version inside transaction", (): void => {
+    const workspace: string = createWorkspace();
+    const storage = openTrekoonDatabase(workspace);
+    try {
+      // Roll back two index-only migrations (10 -> 9 -> 8 -> 7) which are
+      // safely reversible. Stop at the first irreversible boundary (v6).
+      const summary = rollbackDatabase(storage.db, 7);
+      expect(summary.toVersion).toBe(7);
+
+      const row = storage.db.query("PRAGMA user_version;").get() as { user_version: number } | null;
+      expect(row?.user_version).toBe(7);
+    } finally {
+      storage.close();
+    }
+  });
+
+  test("rollback marker reflects post-rollback userVersion", (): void => {
+    const workspace: string = createWorkspace();
+    const storage = openTrekoonDatabase(workspace);
+    try {
+      rollbackDatabase(storage.db, 7);
+    } finally {
+      storage.close();
+    }
+
+    const markerPath = join(workspace, ".trekoon", "migration-version");
+    const raw: string = readFileSync(markerPath, "utf8").trim();
+    const parsed = JSON.parse(raw) as { version: number; userVersion: number };
+    expect(parsed.version).toBe(7);
+    expect(parsed.userVersion).toBe(7);
+  });
+
+  test("rollback unlinks stale marker when fresh marker write fails", (): void => {
+    const workspace: string = createWorkspace();
+    const storage = openTrekoonDatabase(workspace);
+
+    const markerPath = join(workspace, ".trekoon", "migration-version");
+    const storageDir = join(workspace, ".trekoon");
+
+    try {
+      // Drop write permissions on the storage dir so the rename of the temp
+      // marker file fails. SQLite still operates on the open DB handle.
+      chmodSync(storageDir, 0o500);
+
+      try {
+        rollbackDatabase(storage.db, 7);
+      } finally {
+        // Always restore writability so afterEach() can clean up.
+        chmodSync(storageDir, 0o700);
+      }
+
+      // The pre-rollback marker (LATEST) is now stale. Either the writer
+      // succeeded after restoring perms (rare on macOS — the sync chmod
+      // takes effect immediately) and the marker is in v2 form pointing at
+      // 7, OR the writer failed and the marker was unlinked. Both outcomes
+      // are acceptable; what is NOT acceptable is a leftover marker still
+      // claiming LATEST.
+      if (existsSync(markerPath)) {
+        const raw: string = readFileSync(markerPath, "utf8").trim();
+        const parsed = JSON.parse(raw) as { version: number; userVersion: number };
+        expect(parsed.version).toBe(7);
+        expect(parsed.userVersion).toBe(7);
+      } else {
+        expect(existsSync(markerPath)).toBe(false);
+      }
+    } finally {
+      try {
+        chmodSync(storageDir, 0o700);
+      } catch {
+        // best-effort
+      }
+      storage.close();
+    }
+  });
+
+  test("warm migrate with matching user_version fingerprint skips probe", (): void => {
+    const workspace: string = createWorkspace();
+    const storage = openTrekoonDatabase(workspace);
+    storage.close();
+
+    const dbPath = join(workspace, ".trekoon", "trekoon.db");
+    const db = new Database(dbPath);
+    db.exec("PRAGMA journal_mode = WAL;");
+    db.exec("PRAGMA foreign_keys = ON;");
+
+    try {
+      // Sanity: user_version is stamped at LATEST.
+      const row = db.query("PRAGMA user_version;").get() as { user_version: number } | null;
+      expect(row?.user_version).toBe(LATEST_MIGRATION_VERSION);
+
+      // Warm calls succeed without modifying schema.
+      for (let i = 0; i < 3; i += 1) {
+        migrateDatabase(db);
+      }
+      expect(readCurrentMigrationVersionReadOnly(db)).toBe(LATEST_MIGRATION_VERSION);
+    } finally {
+      db.close(false);
+    }
+  });
+
+  test("marker payload mismatch (userVersion drift) forces probe", (): void => {
+    const workspace: string = createWorkspace();
+    const storage = openTrekoonDatabase(workspace);
+    storage.close();
+
+    const markerPath = join(workspace, ".trekoon", "migration-version");
+    const dbPath = join(workspace, ".trekoon", "trekoon.db");
+
+    // Tamper the marker so userVersion no longer matches the DB header.
+    writeFileSync(
+      markerPath,
+      JSON.stringify({ version: LATEST_MIGRATION_VERSION, userVersion: 0 }),
+      "utf8",
+    );
+
+    const db = new Database(dbPath);
+    db.exec("PRAGMA journal_mode = WAL;");
+    db.exec("PRAGMA foreign_keys = ON;");
+    try {
+      expect((): void => migrateDatabase(db)).not.toThrow();
+      expect(readCurrentMigrationVersionReadOnly(db)).toBe(LATEST_MIGRATION_VERSION);
+    } finally {
+      db.close(false);
+    }
+
+    // Probe should have rewritten the marker with a correct fingerprint.
+    const raw: string = readFileSync(markerPath, "utf8").trim();
+    const parsed = JSON.parse(raw) as { version: number; userVersion: number };
+    expect(parsed.userVersion).toBe(LATEST_MIGRATION_VERSION);
+  });
+});
