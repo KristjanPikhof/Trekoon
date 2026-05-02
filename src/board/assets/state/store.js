@@ -377,7 +377,10 @@ export function createStore(initialSnapshot, options = {}) {
   /** @type {Set<(state: object) => void>} */
   const listeners = new Set();
 
+  const boardStateMemo = createBoardStateMemo(deriveBoardState);
+
   function notify() {
+    boardStateMemo.invalidate();
     for (const listener of listeners) {
       listener(state);
     }
