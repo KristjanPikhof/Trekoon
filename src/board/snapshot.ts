@@ -22,7 +22,6 @@ export interface BoardSnapshotDependency {
   readonly dependsOnKind: "task" | "subtask";
   readonly createdAt: number;
   readonly updatedAt: number;
-  readonly version: number;
 }
 
 interface BoardSnapshotSubtask {
