@@ -17,6 +17,13 @@ All notable changes to Trekoon are documented in this file.
 
 ### Added
 
+- `trekoon task claim <id> --owner <owner>` and `trekoon subtask claim <id>
+  --owner <owner>` subcommands. Backed by a SQL compare-and-swap UPDATE so two
+  concurrent claim calls on the same task yield exactly one `claimed: true`.
+  Predicate: `status IN ('todo','blocked') AND (owner IS NULL OR owner = ?)`.
+  Response includes `claimed`, `currentOwner`, `currentStatus`, and the full
+  entity record on success.
+
 - SSE board updates via `GET /api/snapshot/stream`, fed by a per-server
   event bus. Two browsers see each other's writes without polling.
 - WAL watcher republishes external CLI writes through the same bus, so
