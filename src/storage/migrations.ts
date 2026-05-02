@@ -758,9 +758,16 @@ function unlinkMarkerIfExists(db: Database): void {
     if (existsSync(markerPath)) {
       unlinkSync(markerPath);
     }
-  } catch {
+  } catch (error) {
     // Defense-in-depth — the worst case is that the next cold start spends
-    // one extra schema probe noticing the marker mismatch.
+    // one extra schema probe noticing the marker mismatch. We surface the
+    // failure at warn level (System Hardening 0.4.2, finding 30) so that
+    // operators can spot recurring stale-marker issues without escalating
+    // a one-off cleanup failure to a hard error.
+    const message = error instanceof Error ? error.message : String(error);
+    console.warn(
+      `[trekoon] failed to unlink stale schema marker at ${markerPath}: ${message}`,
+    );
   }
 }
 
