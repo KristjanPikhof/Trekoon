@@ -12,8 +12,8 @@ the quickest way to get started, read [Quickstart](quickstart.md) first.
 - `trekoon epic <create|expand|list|show|search|replace|update|delete|progress>`
 - `trekoon session [--epic <epic-id>]`
 - `trekoon suggest [--epic <epic-id>]`
-- `trekoon task <create|create-many|list|show|ready|next|done|search|replace|update|delete>`
-- `trekoon subtask <create|create-many|list|search|replace|update|delete>`
+- `trekoon task <create|create-many|list|show|ready|next|done|search|replace|update|delete|claim>`
+- `trekoon subtask <create|create-many|list|search|replace|update|delete|claim>`
 - `trekoon dep <add|add-many|remove|list|reverse>`
 - `trekoon events prune [--dry-run] [--archive] [--retention-days <n>]`
 - `trekoon migrate <status|rollback|backup> [--to-version <n>]`
