@@ -50,7 +50,6 @@ All notable changes to Trekoon are documented in this file.
 - Optional cache map on `getManagedControls`, removing the O(n²) walk in
   `preserveFormState`.
 - Lazy overlay focus trap (`runtime/focus-trap.js`) with attach/detach.
-- Apostrophe added to `escapeHtml`.
 - Canonical status-machine reference at
   `.agents/skills/trekoon/reference/status-machine.md` and a sync
   reference at `reference/sync.md`.
