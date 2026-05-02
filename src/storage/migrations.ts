@@ -763,7 +763,7 @@ export function rollbackDatabase(db: Database, targetVersion: number): RollbackS
     throw new Error("Rollback target version must be a non-negative integer.");
   }
 
-  return runExclusive(db, (): RollbackSummary => {
+  const summary: RollbackSummary = runExclusive(db, (): RollbackSummary => {
     ensureMigrationTable(db);
     ensureMigrationVersionColumn(db);
     validateMigrationPlan();
@@ -801,7 +801,7 @@ export function rollbackDatabase(db: Database, targetVersion: number): RollbackS
     };
   });
 
-  // Update the marker so the next start reflects the new version.
+  // Update the marker so the next start reflects the rolled-back version.
   writeMigrationVersionMarker(db, targetVersion);
 
   return summary;
