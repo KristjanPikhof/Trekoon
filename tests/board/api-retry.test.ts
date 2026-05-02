@@ -152,7 +152,7 @@ describe("stable mutationId for retry compare", () => {
     // Without mutationId-based comparison, lastFailedMutation never gets cleared
     // because the new closure is a different function reference.
     let callCount = 0;
-    globalThis.fetch = async () => {
+    globalThis.fetch = (async () => {
       callCount += 1;
       const ok = callCount > 1; // first call fails, subsequent succeed
       return {
