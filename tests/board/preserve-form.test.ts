@@ -280,9 +280,11 @@ describe("preserveFormState with cached getManagedControls", () => {
   test("resetFormIds option skips restore for the named form", () => {
     globalThis.document = { activeElement: null } as Document;
 
+    // The mock form uses identity "reset-me" which becomes "form:reset-me" via
+    // getNamespacedFormIdentity (prefixes with "form:" because data-form-id is set).
     const { container, getControl } = createMockContainer([
       {
-        identity: "form:reset-me",
+        identity: "reset-me",
         controls: [{ tagName: "INPUT", name: "title", value: "Should be cleared", dataControlId: "ctrl" }],
       },
     ]);
@@ -292,15 +294,16 @@ describe("preserveFormState with cached getManagedControls", () => {
       () => {
         container.setForms([
           {
-            identity: "form:reset-me",
+            identity: "reset-me",
             controls: [{ tagName: "INPUT", name: "title", value: "", dataControlId: "ctrl" }],
           },
         ]);
       },
+      // "form:reset-me" is the namespaced identity produced by getNamespacedFormIdentity.
       { resetFormIds: new Set(["form:reset-me"]) },
     );
 
     // Value should remain empty because the form was in resetFormIds.
-    expect(getControl("form:reset-me", "title").value).toBe("");
+    expect(getControl("reset-me", "title").value).toBe("");
   });
 });
