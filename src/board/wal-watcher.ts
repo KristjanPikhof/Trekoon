@@ -131,56 +131,85 @@ export interface WalWatcher {
    * tests and for kicking the watcher after a manual external change.
    */
   reconcile(): void;
+  /**
+   * Total number of reconcile failures since the watcher started. Exposed for
+   * tests and operators; the watcher itself never throws.
+   */
+  readonly failureCount: () => number;
   close(): void;
 }
 
 export function startWalWatcher(options: WalWatcherOptions): WalWatcher {
   const debounceMs = options.debounceMs ?? 150;
+  const logEveryNthFailure = Math.max(1, options.logEveryNthFailure ?? 5);
+  const logger = options.logger ?? ((message: string, error: unknown): void => {
+    // eslint-disable-next-line no-console
+    console.warn(message, error);
+  });
   const walFile = `${options.databaseFile}-wal`;
   const watchDir = dirname(options.databaseFile);
   const dbBaseName = basename(options.databaseFile);
 
-  let lastSnapshot = buildBoardSnapshot(new TrackerDomain(options.db));
+  // Hoist TrackerDomain construction out of reconcile: build once and reuse
+  // across ticks. The domain is a thin wrapper over the bun:sqlite Database
+  // handle and holds prepared-statement caches — recreating it per tick burns
+  // CPU on large boards. The handle stays valid for the lifetime of the
+  // server, so re-binding is unnecessary.
+  const domain = new TrackerDomain(options.db);
+
+  let lastSnapshot = buildBoardSnapshot(domain);
 
   let debounceTimer: ReturnType<typeof setTimeout> | null = null;
   let closed = false;
+  let failures = 0;
 
   function reconcile(): void {
     if (closed) {
       return;
     }
 
-    const fresh = buildBoardSnapshot(new TrackerDomain(options.db));
+    try {
+      const fresh = buildBoardSnapshot(domain);
 
-    const epicsDiff = diffById(lastSnapshot.epics, fresh.epics);
-    const tasksDiff = diffById(lastSnapshot.tasks, fresh.tasks);
-    const subtasksDiff = diffById(lastSnapshot.subtasks, fresh.subtasks);
-    const dependenciesDiff = diffById(lastSnapshot.dependencies, fresh.dependencies);
+      const epicsDiff = diffById(lastSnapshot.epics, fresh.epics);
+      const tasksDiff = diffById(lastSnapshot.tasks, fresh.tasks);
+      const subtasksDiff = diffById(lastSnapshot.subtasks, fresh.subtasks);
+      const dependenciesDiff = diffById(lastSnapshot.dependencies, fresh.dependencies);
 
-    const hasChanges =
-      epicsDiff.upserted.length > 0 || epicsDiff.deletedIds.length > 0 ||
-      tasksDiff.upserted.length > 0 || tasksDiff.deletedIds.length > 0 ||
-      subtasksDiff.upserted.length > 0 || subtasksDiff.deletedIds.length > 0 ||
-      dependenciesDiff.upserted.length > 0 || dependenciesDiff.deletedIds.length > 0;
+      const hasChanges =
+        epicsDiff.upserted.length > 0 || epicsDiff.deletedIds.length > 0 ||
+        tasksDiff.upserted.length > 0 || tasksDiff.deletedIds.length > 0 ||
+        subtasksDiff.upserted.length > 0 || subtasksDiff.deletedIds.length > 0 ||
+        dependenciesDiff.upserted.length > 0 || dependenciesDiff.deletedIds.length > 0;
 
-    lastSnapshot = fresh;
+      lastSnapshot = fresh;
 
-    if (!hasChanges) {
-      return;
+      if (!hasChanges) {
+        return;
+      }
+
+      options.eventBus.publishSnapshotDelta({
+        generatedAt: Date.now(),
+        source: "wal-watcher",
+        epics: epicsDiff.upserted,
+        tasks: tasksDiff.upserted,
+        subtasks: subtasksDiff.upserted,
+        dependencies: dependenciesDiff.upserted,
+        deletedEpicIds: epicsDiff.deletedIds,
+        deletedTaskIds: tasksDiff.deletedIds,
+        deletedSubtaskIds: subtasksDiff.deletedIds,
+        deletedDependencyIds: dependenciesDiff.deletedIds,
+      });
+    } catch (error) {
+      // Reconciliation must never crash the server. Errors here usually mean
+      // the database is mid-write or a downstream snapshot builder threw; the
+      // next mtime tick will retry. Log every Nth failure to keep operators
+      // informed without flooding stderr on persistent faults.
+      failures += 1;
+      if (failures % logEveryNthFailure === 0) {
+        logger(`wal-watcher: reconcile failed (${failures} total failures)`, error);
+      }
     }
-
-    options.eventBus.publishSnapshotDelta({
-      generatedAt: Date.now(),
-      source: "wal-watcher",
-      epics: epicsDiff.upserted,
-      tasks: tasksDiff.upserted,
-      subtasks: subtasksDiff.upserted,
-      dependencies: dependenciesDiff.upserted,
-      deletedEpicIds: epicsDiff.deletedIds,
-      deletedTaskIds: tasksDiff.deletedIds,
-      deletedSubtaskIds: subtasksDiff.deletedIds,
-      deletedDependencyIds: dependenciesDiff.deletedIds,
-    });
   }
 
   function scheduleReconcile(): void {
@@ -192,12 +221,7 @@ export function startWalWatcher(options: WalWatcherOptions): WalWatcher {
     }
     debounceTimer = setTimeout(() => {
       debounceTimer = null;
-      try {
-        reconcile();
-      } catch {
-        // Reconciliation must never crash the server. Errors here usually mean
-        // the database is mid-write; the next mtime tick will retry.
-      }
+      reconcile();
     }, debounceMs);
   }
 
