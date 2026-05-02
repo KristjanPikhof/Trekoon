@@ -116,9 +116,19 @@ export function orderEpicsNewestFirst(epics) {
 
 /** Recently-done epics stay visible for 24h even when the "done" filter is off. */
 const DONE_GRACE_PERIOD_MS = 86400000;
+/**
+ * Bucket Date.now() into hour-aligned chunks so the memoized epic selector
+ * re-evaluates the 24h grace cutoff at most once per hour on a long-open page.
+ */
+const GRACE_BUCKET_MS = 3600000;
 
 const selectVisibleEpics = createSelector(
-  (s) => [s.snapshot?.epics, s.searchQuery, s.epicStatusFilter],
+  (s) => [
+    s.snapshot?.epics,
+    s.searchQuery,
+    s.epicStatusFilter,
+    Math.floor(Date.now() / GRACE_BUCKET_MS),
+  ],
   (epics, searchQuery, epicStatusFilter) => {
     if (!epics) return [];
     const now = Date.now();
