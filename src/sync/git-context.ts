@@ -1,4 +1,6 @@
 import { type Database } from "bun:sqlite";
+import { statSync } from "node:fs";
+import { join } from "node:path";
 
 import { writeTransaction } from "../storage/database";
 import { resolveStoragePaths } from "../storage/path";
