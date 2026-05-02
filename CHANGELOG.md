@@ -90,6 +90,84 @@ All notable changes to Trekoon are documented in this file.
 - `selectVisibleEpics` memo no longer caches stale results across hour
   boundaries.
 
+### Security and hardening (cr-expert remediation)
+
+- **Dependency gating on `task claim` and `subtask claim`.** Both atomic
+  claim paths now run the same dependency check `task done` uses, so a
+  blocked-by-unresolved-dep task can no longer be flipped into
+  `in_progress` via claim. Failures return
+  `error.code: dependency_blocked` with the unresolved dependency list,
+  and the row is left untouched (atomic rollback).
+- **Atomic `task done` enforces dependency gating.**
+  `markTaskDoneAtomically` now calls
+  `assertNoUnresolvedDependenciesForStatusTransition` before the direct
+  UPDATE and uses a positive allow-list on the source status
+  (`todo|blocked|in_progress`) so future terminal statuses can't bypass
+  the check.
+- **Centralized `DEPENDENCY_GATED_STATUSES`** in
+  `src/domain/dependency-rules.ts`. Cascade planner and tracker domain
+  share one source of truth instead of duplicating the constant.
+- **Singular `createEpic` / `createTask` / `createSubtask`** now run the
+  same `assertInTransaction` guard as the batch creators, so calling
+  them outside a `writeTransaction` raises `invalid_state` immediately
+  instead of corrupting event ordering.
+- **`resolveGitContext` moved out of the SQLite write lock.**
+  `withTransactionEventContext(db, git, fn)` accepts a pre-resolved
+  `ResolvedGitContext`, so cold-cache git invocations no longer
+  serialize parallel writers behind `BEGIN IMMEDIATE`.
+- **`isCursorStale` scopes `MIN(created_at)` per branch.** Deep history
+  on one branch no longer triggers false-stale detection on another.
+- **`sync_conflicts` is scoped per worktree + branch.** Migration `0011`
+  adds `worktree_path` and `current_branch` columns; insert / list /
+  resolve / cleanup all bind by them. Cross-worktree resolves no longer
+  erase peer conflicts on the same entity.
+- **Conflict short-circuit no longer hides field conflicts on a
+  deleted local row.** `entityFieldConflict` only short-circuits when
+  the current value is defined, so an incoming non-delete event against
+  a locally-deleted row still falls through to the history walk.
+- **`git-context.ts` cache invalidates on commit advance and linked
+  worktrees.** Cache key incorporates the resolved gitdir HEAD plus the
+  branch ref tip from `commondir`. Both `gitContextCache` and
+  `gitDirCache` are now LRU-bounded (cap 16) with proper eviction.
+- **`cachedDatabases` is LRU-bounded (cap 16)** with a passive WAL
+  checkpoint and `db.close(false)` on eviction. Cached handles honor
+  the `autoMigrate` opt: a stale handle below `LATEST_MIGRATION_VERSION`
+  re-runs `migrateDatabase` before being returned.
+- **`migrate backup --retain <n>`** keeps the last `n` timestamped
+  backups (default 10); older siblings are pruned in the same call. The
+  same-millisecond collision error names the existing file so operators
+  can identify it.
+- **Migration marker uses `PRAGMA user_version` as the fingerprint.**
+  Marker payload upgraded to JSON v2 (`{version, userVersion}`); legacy
+  bare-integer markers force a probe and rewrite. `user_version` is
+  stamped inside both the migrate and rollback transactions, so the DB
+  header is authoritative. Marker-write failures during rollback unlink
+  the stale marker rather than leaving it pointing at a higher version.
+- **Daemon error envelope is sanitized.** `executeDaemonRequest` and
+  `handlePayload` now return `error.message` only — no stack frames,
+  file paths, or secret-bearing locator strings. Stacks remain on the
+  daemon's local `console.error` for operator debugging.
+- **Daemon `DaemonRequest` wire contract drops `env`.** The client no
+  longer copies `process.env` over the socket; the daemon process uses
+  the environment captured at `trekoon serve` startup. Legacy clients
+  with a stray `env` field are still accepted, but the field is
+  ignored. Equivalence note narrowed in `docs/commands.md`.
+- **Daemon umask tightened to `0o077` around `server.listen()`** so the
+  socket inode is created with mode `0o600` from inception, with no
+  TOCTOU window before the defensive `chmodSync`.
+- **`redactSensitive` covers more shapes.** `api_key`, `apikey`,
+  `api-key`, `client_secret`, `private_key`, `cookie`, `session_id`;
+  single-quoted values, tag-style `<key>val</key>`, and standalone
+  `Bearer` / `Basic` tokens now redact correctly.
+- **Board flag allow-list per subcommand.** `trekoon board <subcommand>`
+  validates flags against `FLAGS_BY_SUBCOMMAND` so unknown flags fail
+  fast on the right subcommand, replacing the previous ad-hoc ternary.
+- **Dragover memoization** uses a primitive `<status>|<kind>` key so a
+  drag staying inside one column no longer rerenders on every tick.
+- **Sync resolve `lookupOursFieldValue` parameterizes `fieldName`** as
+  a SQLite bind value (defense in depth) while still gating by
+  `SAFE_FIELD_NAME_PATTERN`.
+
 ## 0.4.1
 
 ### Fixed
