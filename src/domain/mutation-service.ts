@@ -384,12 +384,7 @@ export class MutationService {
   }): SubtaskRecord {
     return this.#writeTransaction((): SubtaskRecord => {
       const subtask = this.#domain.createSubtask(input);
-      this.#appendEntityEvent("subtask", subtask.id, ENTITY_OPERATIONS.subtask.created, {
-        task_id: subtask.taskId,
-        title: subtask.title,
-        description: subtask.description,
-        status: subtask.status,
-      });
+      this.#emitSubtaskCreated(subtask);
       return subtask;
     });
   }
