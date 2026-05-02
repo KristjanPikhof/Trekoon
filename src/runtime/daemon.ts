@@ -272,9 +272,8 @@ function isDaemonRequest(value: unknown): value is DaemonRequest {
   if (typeof candidate.cwd !== "string") {
     return false;
   }
-  if (candidate.env !== undefined && (typeof candidate.env !== "object" || candidate.env === null)) {
-    return false;
-  }
+  // env is no longer part of the request contract; ignore it if present from
+  // older clients rather than failing the request.
   return true;
 }
 
