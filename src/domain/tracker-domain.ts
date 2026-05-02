@@ -579,6 +579,7 @@ export class TrackerDomain {
   createSubtask(
     input: { taskId: string; title: string; description?: string | undefined; status?: string | undefined },
   ): SubtaskRecord {
+    this.#assertInTransaction("createSubtask");
     const now: number = Date.now();
     const id: string = randomUUID();
     const taskId: string = assertNonEmpty("taskId", input.taskId);
