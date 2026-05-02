@@ -674,15 +674,17 @@ function entityFieldConflictHistoryWalk(
         continue;
       }
 
-      const localDependencyIdentity = dependencyEventIdentityFromFields(payloadValidation.fields);
-      if (
-        localDependencyIdentity === null ||
-        localDependencyIdentity.sourceId !== incomingDependencyIdentity.sourceId ||
-        localDependencyIdentity.sourceKind !== incomingDependencyIdentity.sourceKind ||
-        localDependencyIdentity.dependsOnId !== incomingDependencyIdentity.dependsOnId ||
-        localDependencyIdentity.dependsOnKind !== incomingDependencyIdentity.dependsOnKind
-      ) {
-        continue;
+      if (incomingDependencyIdentity !== null) {
+        const localDependencyIdentity = dependencyEventIdentityFromFields(payloadValidation.fields);
+        if (
+          localDependencyIdentity === null ||
+          localDependencyIdentity.sourceId !== incomingDependencyIdentity.sourceId ||
+          localDependencyIdentity.sourceKind !== incomingDependencyIdentity.sourceKind ||
+          localDependencyIdentity.dependsOnId !== incomingDependencyIdentity.dependsOnId ||
+          localDependencyIdentity.dependsOnKind !== incomingDependencyIdentity.dependsOnKind
+        ) {
+          continue;
+        }
       }
 
       const payload: EventPayload = { fields: payloadValidation.fields };
