@@ -347,13 +347,10 @@ export class MutationService {
     return this.#writeTransaction((): { deletedSubtaskIds: string[]; deletedDependencyIds: string[] } => {
       const plan = this.#domain.planTaskDeletion(id);
       this.#domain.deleteTask(id);
-      const taskDeleteEventId = this.#appendEntityEvent("task", id, ENTITY_OPERATIONS.task.deleted, {});
+      const taskDeleteEventId = this.#emitTaskDeleted(id);
 
       for (const subtaskId of plan.subtaskIds) {
-        this.#appendEntityEvent("subtask", subtaskId, ENTITY_OPERATIONS.subtask.deleted, {
-          task_id: id,
-          source_event_id: taskDeleteEventId,
-        });
+        this.#emitSubtaskDeleted(subtaskId, { taskId: id, sourceEventId: taskDeleteEventId });
       }
 
       for (const dependency of plan.touchingDependencies) {
