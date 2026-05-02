@@ -215,7 +215,9 @@ describe("batch creation boundaries", (): void => {
 
     try {
       const domain = new TrackerDomain(storage.db);
-      const epic = domain.createEpic({ title: "Large batch", description: "desc" });
+      const epic = writeTransaction(storage.db, () =>
+        domain.createEpic({ title: "Large batch", description: "desc" }),
+      );
       const specs = Array.from({ length: 1005 }, (_value, index) => ({
         tempKey: `task-${index}`,
         title: `Task ${index}`,
