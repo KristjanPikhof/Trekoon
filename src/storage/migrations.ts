@@ -1005,6 +1005,13 @@ export function rollbackDatabase(db: Database, targetVersion: number): RollbackS
       rolledBackMigrations.push(migration.name);
     }
 
+    // Stamp the DB header inside the rollback transaction so the
+    // user_version is authoritative for the post-rollback schema state. If
+    // the sidecar marker write below fails for any reason, the next
+    // canSkipProbeViaMarker() check will see a stale marker.userVersion and
+    // fall through to the slow probe path — no silent drift.
+    setUserVersion(db, targetVersion);
+
     return {
       fromVersion,
       toVersion: targetVersion,
@@ -1014,7 +1021,20 @@ export function rollbackDatabase(db: Database, targetVersion: number): RollbackS
   });
 
   // Update the marker so the next start reflects the rolled-back version.
-  writeMigrationVersionMarker(db, targetVersion);
+  // If the write fails, attempt to delete the now-stale marker so a future
+  // cold start re-probes instead of trusting a marker that points at the
+  // pre-rollback version.
+  const markerPath: string | null = resolveMarkerPath(db);
+  if (markerPath) {
+    const userVersion: number = readUserVersion(db);
+    const markerResult: WriteMarkerResult = writeMarkerPayload(db, {
+      version: targetVersion,
+      userVersion,
+    });
+    if (!markerResult.written && !markerResult.skipped) {
+      unlinkMarkerIfExists(db);
+    }
+  }
 
   return summary;
 }
