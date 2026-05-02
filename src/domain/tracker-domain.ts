@@ -323,6 +323,16 @@ export class TrackerDomain {
     this.#db = db;
   }
 
+  #assertInTransaction(opName: string): void {
+    if (!this.#db.inTransaction) {
+      throw new DomainError({
+        code: "invalid_state",
+        message: `${opName} must be called inside a writeTransaction`,
+        details: { op: opName },
+      });
+    }
+  }
+
   createEpic(input: { title: string; description: string; status?: string | undefined }): EpicRecord {
     const now: number = Date.now();
     const id: string = randomUUID();
