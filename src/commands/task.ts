@@ -1246,17 +1246,13 @@ export async function runTask(context: CliContext): Promise<CliResult> {
           });
         }
 
-        if (existingTask.status === "done") {
-          return failResult({
-            command: "task.done",
-            human: "Task is already done",
-            data: { code: "already_done", id: taskId },
-            error: {
-              code: "already_done",
-              message: "Task is already done",
-            },
-          });
-        }
+        // Note: the redundant `if (existingTask.status === "done")` pre-check
+        // was removed in the cr-expert hardening pass — `markTaskDoneAtomically`
+        // raises `already_done` itself inside the same transaction that would
+        // perform the flip, eliminating a race window between this read and
+        // the atomic write. The thrown DomainError propagates to the outer
+        // catch and is rendered with the same `code: "already_done"` payload
+        // by `unexpectedFailureResult`.
 
         // Single-transaction atomic completion: the entire flow (status flip,
         // event emission, unblocked-diff snapshot) runs inside ONE
