@@ -493,10 +493,47 @@ describe("board URL/store integration", () => {
       screen: "tasks",
       selectedEpicId: "epic-1",
       selectedTaskId: "task-1",
+      taskModalOpen: true,
     });
     expect(mockWindow.calls).toEqual([
       { mode: "replace", url: "/board#epic=epic-1&task=task-1" },
     ]);
+  });
+
+  test("deep-linking with #task= opens the task modal on boot", () => {
+    globalThis.document = createMockDocument();
+    globalThis.HTMLInputElement = class {} as typeof HTMLInputElement;
+    globalThis.localStorage = createMockStorage() as Storage;
+    const mockWindow = createMockWindow();
+    mockWindow.window.location.hash = "#task=task-1";
+    globalThis.window = mockWindow.window as unknown as Window & typeof globalThis;
+
+    const model = createStore(createSnapshot());
+    syncUrlHash(model);
+
+    // Acceptance: booting with #task=task-1 must render the TaskModal,
+    // i.e. boardState.taskModalOpen MUST be true.
+    expect(model.getBoardState().taskModalOpen).toBe(true);
+    expect(model.getState().taskModalOpen).toBe(true);
+  });
+
+  test("deep-linking with #subtask= opens the subtask modal on boot", () => {
+    globalThis.document = createMockDocument();
+    globalThis.HTMLInputElement = class {} as typeof HTMLInputElement;
+    globalThis.localStorage = createMockStorage() as Storage;
+    const mockWindow = createMockWindow();
+    mockWindow.window.location.hash = "#task=task-1&subtask=subtask-1";
+    globalThis.window = mockWindow.window as unknown as Window & typeof globalThis;
+
+    const model = createStore(createSnapshot());
+    syncUrlHash(model);
+
+    expect(model.getBoardState()).toMatchObject({
+      selectedTaskId: "task-1",
+      selectedSubtaskId: "subtask-1",
+      taskModalOpen: true,
+      subtaskModalOpen: true,
+    });
   });
 
   test("conflicting epic and task deep links canonicalize to the task owning epic", () => {
