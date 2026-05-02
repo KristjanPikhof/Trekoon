@@ -396,4 +396,55 @@ describe("board server WAL watcher integration", (): void => {
       boardServer.stop();
     }
   });
+
+  test("CLI-style epic append appears via SSE with an updated version", async (): Promise<void> => {
+    const workspace: string = createWorkspace();
+    prepareBoardAssets(workspace);
+
+    const seedDb: TrekoonDatabase = openTrekoonDatabase(workspace);
+    const epic = new MutationService(seedDb.db, workspace).createEpic({
+      title: "Append target",
+      description: "Initial",
+    });
+    seedDb.close();
+
+    const boardServer = startBoardServer({ cwd: workspace, token: "wal-append-token" });
+
+    try {
+      const sseResponse = await fetch(`${boardServer.origin}/api/snapshot/stream?token=wal-append-token`, {
+        headers: { accept: "text/event-stream" },
+      });
+      expect(sseResponse.status).toBe(200);
+      if (!sseResponse.body) {
+        throw new Error("SSE response missing body");
+      }
+      const reader = sseResponse.body.getReader();
+
+      await readSseFrames(reader, 1);
+
+      const cliDb: TrekoonDatabase = openTrekoonDatabase(workspace);
+      try {
+        new MutationService(cliDb.db, workspace).appendToEpicDescription({
+          epicId: epic.id,
+          append: "CLI appended note",
+        });
+      } finally {
+        cliDb.close();
+      }
+
+      const deltaFrames = await readSseFrames(reader, 1, 5000);
+      expect(deltaFrames[0]?.event).toBe("snapshotDelta");
+      const delta = (deltaFrames[0]?.data as { snapshotDelta?: Record<string, unknown> })?.snapshotDelta ?? {};
+      const epics = Array.isArray(delta.epics)
+        ? (delta.epics as Array<{ id?: string; description?: string; version?: number }>)
+        : [];
+      const patchedEpic = epics.find((entry) => entry.id === epic.id);
+      expect(patchedEpic?.description).toContain("CLI appended note");
+      expect(patchedEpic?.version).toBeGreaterThan(epic.version);
+
+      await reader.cancel().catch(() => {});
+    } finally {
+      boardServer.stop();
+    }
+  });
 });
