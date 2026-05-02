@@ -110,6 +110,10 @@ export interface StartDaemonOptions {
  * shutdown. The CLI dispatch is run via `executeDaemonRequest`.
  */
 export async function startDaemonServer(options: StartDaemonOptions = {}): Promise<DaemonServerHandle> {
+  // Flip the in-process DB cache flag so subsequent openTrekoonDatabase calls
+  // reuse a held-open connection. The default one-shot CLI never sets this.
+  process.env.TREKOON_DAEMON_INPROCESS = "1";
+
   const cwd: string = options.cwd ?? process.cwd();
   const socketPath: string = options.socketPath ?? resolveDaemonSocketPath(cwd);
   const socketDir: string = dirname(socketPath);
