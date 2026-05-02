@@ -385,7 +385,7 @@ export function createBoardApiHandler(context: BoardRouteContext): (request: Req
           const body = await parseJsonBody(request);
           const status = readRequiredString(body, "status");
           const plan = mutations.updateEpicStatusCascade(epicCascadeMatch[1] ?? "", status);
-          return buildMutationDeltaResponse(domain, {
+          return respondWithMutationDelta(domain, {
             plan,
           }, {
             epicIds: [epicCascadeMatch[1] ?? ""],
@@ -402,7 +402,7 @@ export function createBoardApiHandler(context: BoardRouteContext): (request: Req
           description: readOptionalString(body, "description"),
           status: readOptionalString(body, "status"),
         });
-          return buildMutationDeltaResponse(domain, { epic }, { epicIds: [epic.id] });
+          return respondWithMutationDelta(domain, { epic }, { epicIds: [epic.id] });
         }
 
       const taskMatch = request.method === "PATCH" ? url.pathname.match(/^\/api\/tasks\/([^/]+)$/u) : null;
@@ -414,7 +414,7 @@ export function createBoardApiHandler(context: BoardRouteContext): (request: Req
             status: readOptionalString(body, "status"),
             owner: readOptionalNullableString(body, "owner"),
           });
-          return buildMutationDeltaResponse(domain, { task }, { epicIds: [task.epicId], taskIds: [task.id] });
+          return respondWithMutationDelta(domain, { task }, { epicIds: [task.epicId], taskIds: [task.id] });
         }
 
       const subtaskMatch = request.method === "PATCH" ? url.pathname.match(/^\/api\/subtasks\/([^/]+)$/u) : null;
@@ -427,7 +427,7 @@ export function createBoardApiHandler(context: BoardRouteContext): (request: Req
             owner: readOptionalNullableString(body, "owner"),
           });
           const task = domain.getTaskOrThrow(subtask.taskId);
-          return buildMutationDeltaResponse(domain, { subtask }, { epicIds: [task.epicId], taskIds: [task.id], subtaskIds: [subtask.id] });
+          return respondWithMutationDelta(domain, { subtask }, { epicIds: [task.epicId], taskIds: [task.id], subtaskIds: [subtask.id] });
         }
 
       if (request.method === "POST" && url.pathname === "/api/subtasks") {
