@@ -1680,6 +1680,11 @@ export function syncPull(cwd: string, sourceBranch: string): PullSummary {
     // are O(1) after first hit.
     const oursCache = createOursValueCache();
 
+    // Conflict scope: every conflict / cleanup created by this pull is
+    // tagged with the current worktree+branch so peer worktrees observing
+    // the same entity own their own row set and cannot erase each other.
+    const conflictScope: ConflictScope = scopeFromGitContext(git);
+
     writeTransaction(storage.db, (): void => {
       while (true) {
         const incomingEvents = queryBranchEventsSinceBatch(
@@ -1717,6 +1722,7 @@ export function syncPull(cwd: string, sourceBranch: string): PullSummary {
               "__payload__",
               null,
               payloadValidation.reason ?? "Invalid payload",
+              conflictScope,
               "invalid",
             );
             createdConflicts += 1;
@@ -1739,7 +1745,7 @@ export function syncPull(cwd: string, sourceBranch: string): PullSummary {
             (incoming.operation.endsWith(".deleted") && hasLocalDeleteCascadeEdits(storage.db, incoming, git.branchName)) ||
             (incoming.operation === "dependency.removed" && hasLocalDependencyDeleteConflict(storage.db, incoming, git.branchName));
           if (isDeleteWithLocalEdits) {
-            createConflict(storage.db, incoming, "__delete__", null, "Entity deleted on source branch");
+            createConflict(storage.db, incoming, "__delete__", null, "Entity deleted on source branch", conflictScope);
             createdConflicts += 1;
             conflictEvents += 1;
             storeEvent(storage.db, incoming);
