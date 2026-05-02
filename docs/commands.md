@@ -386,7 +386,7 @@ backup file over `.trekoon/trekoon.db`.
 
 ## Daemon (experimental)
 
-`trekoon serve` is a spike that runs Trekoon as a long-lived process listening
+`trekoon serve` runs Trekoon as a long-lived process listening
 on a Unix-domain socket inside `<storage-root>/.trekoon/daemon.sock`. The
 daemon holds the SQLite connection in memory, so subsequent invocations skip
 Bun startup, module load, migration probes, and database open.
