@@ -22,6 +22,7 @@ export interface BoardSnapshotDependency {
   readonly dependsOnKind: "task" | "subtask";
   readonly createdAt: number;
   readonly updatedAt: number;
+  readonly version: number;
 }
 
 interface BoardSnapshotSubtask {
@@ -34,6 +35,7 @@ interface BoardSnapshotSubtask {
   readonly owner: string | null;
   readonly createdAt: number;
   readonly updatedAt: number;
+  readonly version: number;
   readonly blockedBy: readonly string[];
   readonly blocks: readonly string[];
   readonly dependencyIds: readonly string[];
@@ -51,6 +53,7 @@ interface BoardSnapshotTask {
   readonly owner: string | null;
   readonly createdAt: number;
   readonly updatedAt: number;
+  readonly version: number;
   readonly blockedBy: readonly string[];
   readonly blocks: readonly string[];
   readonly dependencyIds: readonly string[];
@@ -66,6 +69,7 @@ interface BoardSnapshotEpic {
   readonly status: string;
   readonly createdAt: number;
   readonly updatedAt: number;
+  readonly version: number;
   readonly taskIds: readonly string[];
   readonly counts: FlatCounts;
   readonly searchText: string;
@@ -169,6 +173,7 @@ function mapSnapshotSubtask(subtask: SubtaskRecord, indexes: ReturnType<typeof b
     owner: subtask.owner ?? null,
     createdAt: subtask.createdAt,
     updatedAt: subtask.updatedAt,
+    version: subtask.version,
     blockedBy: indexes.blockedByIdsBySource.get(subtask.id) ?? [],
     blocks: indexes.blocksByTarget.get(subtask.id) ?? [],
     dependencyIds: indexes.dependencyIdsBySource.get(subtask.id) ?? [],
@@ -188,6 +193,7 @@ function mapSnapshotTask(task: TaskRecord, taskSubtasks: readonly BoardSnapshotS
     owner: task.owner ?? null,
     createdAt: task.createdAt,
     updatedAt: task.updatedAt,
+    version: task.version,
     blockedBy: indexes.blockedByIdsBySource.get(task.id) ?? [],
     blocks: indexes.blocksByTarget.get(task.id) ?? [],
     dependencyIds: indexes.dependencyIdsBySource.get(task.id) ?? [],
@@ -205,6 +211,7 @@ function mapSnapshotEpic(epic: EpicRecord, epicTasks: readonly BoardSnapshotTask
     status: epic.status,
     createdAt: epic.createdAt,
     updatedAt: epic.updatedAt,
+    version: epic.version,
     taskIds: epicTasks.map((task) => task.id),
     counts: deriveFlatCounts(epicTasks),
     searchText: [epic.title, epic.description, ...epicTasks.map((task) => task.searchText)].join(" ").toLowerCase(),
