@@ -1580,6 +1580,14 @@ export class MutationService {
   }
 
   #pruneExpiredIdempotencyKeys(now: number = Date.now()): void {
+    // Skip if we swept recently — see BOARD_IDEMPOTENCY_PRUNE_INTERVAL_MS
+    // for rationale. Module-level throttle so it applies per-process even
+    // across MutationService instances.
+    if (now - lastIdempotencyPruneAt < BOARD_IDEMPOTENCY_PRUNE_INTERVAL_MS) {
+      return;
+    }
+    lastIdempotencyPruneAt = now;
+
     const cutoff: number = now - BOARD_IDEMPOTENCY_RETENTION_MS;
     this.#db.query(
       `
