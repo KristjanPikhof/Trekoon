@@ -256,10 +256,17 @@ async function handlePayload(payload: string, socket: Socket): Promise<void> {
       response = await executeDaemonRequest(parsed);
     }
   } catch (error: unknown) {
-    const message: string = error instanceof Error ? error.message : String(error);
+    // Sanitize and never include a stack — the wire envelope must not leak
+    // filesystem paths or secret-bearing error text. The stack stays on the
+    // daemon's local stderr for operator debugging.
+    if (error instanceof Error && typeof error.stack === "string") {
+      // eslint-disable-next-line no-console
+      console.error("[trekoon daemon] payload parse error:", error.stack);
+    }
+    const sanitized: string = safeErrorMessage(error, "invalid payload");
     response = {
       stdout: "",
-      stderr: `Daemon: payload parse error: ${message}\n`,
+      stderr: `Daemon: payload parse error: ${sanitized}\n`,
       exitCode: 1,
     };
   }
