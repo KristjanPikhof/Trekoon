@@ -113,4 +113,70 @@ describe("MutationService#pruneExpiredIdempotencyKeys throttle", (): void => {
       storage.close();
     }
   });
+
+  test("prune throttle is isolated per database file", (): void => {
+    const firstCwd = createWorkspace();
+    const secondCwd = createWorkspace();
+    const firstStorage = openTrekoonDatabase(firstCwd);
+    const secondStorage = openTrekoonDatabase(secondCwd);
+
+    try {
+      const firstMutations = new MutationService(firstStorage.db, firstCwd);
+      const secondMutations = new MutationService(secondStorage.db, secondCwd);
+      const firstEpic = firstMutations.createEpic({ title: "E1", description: "d" });
+      const firstTask = firstMutations.createTask({ epicId: firstEpic.id, title: "T1", description: "d" });
+      const secondEpic = secondMutations.createEpic({ title: "E2", description: "d" });
+      const secondTask = secondMutations.createTask({ epicId: secondEpic.id, title: "T2", description: "d" });
+
+      let firstPruneCount = 0;
+      let secondPruneCount = 0;
+      const firstQuery = firstStorage.db.query.bind(firstStorage.db);
+      const secondQuery = secondStorage.db.query.bind(secondStorage.db);
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      (firstStorage.db as unknown as { query: (sql: string) => unknown }).query = (sql: string): unknown => {
+        if (typeof sql === "string" && /DELETE\s+FROM\s+board_idempotency_keys/iu.test(sql)) {
+          firstPruneCount += 1;
+        }
+        return firstQuery(sql);
+      };
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      (secondStorage.db as unknown as { query: (sql: string) => unknown }).query = (sql: string): unknown => {
+        if (typeof sql === "string" && /DELETE\s+FROM\s+board_idempotency_keys/iu.test(sql)) {
+          secondPruneCount += 1;
+        }
+        return secondQuery(sql);
+      };
+
+      firstMutations.createSubtaskAtomicallyWithIdempotency({
+        taskId: firstTask.id,
+        title: "S1",
+        description: "d",
+        claim: {
+          scope: "subtask",
+          idempotencyKey: "first-key",
+          requestFingerprint: "first-fp",
+          conflictMessage: "idempotency conflict",
+        },
+        buildResponseData: () => ({}),
+      });
+      secondMutations.createSubtaskAtomicallyWithIdempotency({
+        taskId: secondTask.id,
+        title: "S2",
+        description: "d",
+        claim: {
+          scope: "subtask",
+          idempotencyKey: "second-key",
+          requestFingerprint: "second-fp",
+          conflictMessage: "idempotency conflict",
+        },
+        buildResponseData: () => ({}),
+      });
+
+      expect(firstPruneCount).toBe(1);
+      expect(secondPruneCount).toBe(1);
+    } finally {
+      firstStorage.close();
+      secondStorage.close();
+    }
+  });
 });
