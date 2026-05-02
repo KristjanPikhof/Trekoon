@@ -112,7 +112,9 @@ export const BASE_SCHEMA_STATEMENTS: readonly string[] = [
     resolution TEXT NOT NULL DEFAULT 'pending',
     created_at INTEGER NOT NULL,
     updated_at INTEGER NOT NULL,
-    version INTEGER NOT NULL DEFAULT 1
+    version INTEGER NOT NULL DEFAULT 1,
+    worktree_path TEXT NOT NULL DEFAULT '',
+    current_branch TEXT NOT NULL DEFAULT ''
   );
   `,
   `
