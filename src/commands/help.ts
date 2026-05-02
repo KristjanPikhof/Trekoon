@@ -218,10 +218,18 @@ const TASK_HELP = [
   "  Cascades atomically through descendant subtasks.",
   "  Blocked descendants abort the whole update. Only --status done|todo is supported.",
   "  Don't combine positional ID + --all with --ids, --append, --description, or --title.",
+  "",
+  "Claim:",
+  "  trekoon task claim <task-id> --owner <owner>",
+  "  Atomically claim a task using SQL compare-and-swap.",
+  "  Sets status=in_progress and owner=<owner> only when the task is todo or blocked",
+  "  and the owner field is NULL or already set to <owner>.",
+  "  Returns claimed (true|false), currentOwner, currentStatus, and the full task record on success.",
+  "  Two concurrent claim calls return exactly one claimed=true.",
 ].join("\n");
 
 const SUBTASK_HELP = [
-  "Usage: trekoon subtask <create|create-many|list|search|replace|update|delete> [options]",
+  "Usage: trekoon subtask <create|create-many|list|search|replace|update|delete|claim> [options]",
   "",
   "Create-many:",
   "  trekoon subtask create-many [<task-id>] [--task <task-id>] --subtask <spec> [--subtask <spec> ...]",
