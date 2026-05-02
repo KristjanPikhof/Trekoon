@@ -227,7 +227,7 @@ describe("Concurrent writers", () => {
       const entityId = randomUUID();
       try {
         writeTransaction(conn, (): void => {
-          withTransactionEventContext(conn, workspace, (): void => {
+          withTransactionEventContext(conn, fakeGitContext(workspace), (): void => {
             const ts: number = (conn
               .query("SELECT COALESCE(MAX(created_at), 0) + 1 AS ts FROM events;")
               .get() as { ts: number }).ts;
