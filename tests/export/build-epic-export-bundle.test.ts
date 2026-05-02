@@ -71,12 +71,16 @@ describe("buildEpicExportBundle", () => {
 
   test("classifies internal dependencies correctly", () => {
     const cwd = createWorkspace();
-    const { domain, db } = createDomain(cwd);
+    const { domain, db, seed } = createDomain(cwd);
+    void db;
 
-    const epic = domain.createEpic({ title: "Dep test", description: "Test deps" });
-    const task1 = domain.createTask({ epicId: epic.id, title: "Task A", description: "First" });
-    const task2 = domain.createTask({ epicId: epic.id, title: "Task B", description: "Second" });
-    writeTransaction(db, () => domain.addDependency(task2.id, task1.id));
+    const { epic, task1, task2 } = seed((d) => {
+      const createdEpic = d.createEpic({ title: "Dep test", description: "Test deps" });
+      const createdTask1 = d.createTask({ epicId: createdEpic.id, title: "Task A", description: "First" });
+      const createdTask2 = d.createTask({ epicId: createdEpic.id, title: "Task B", description: "Second" });
+      d.addDependency(createdTask2.id, createdTask1.id);
+      return { epic: createdEpic, task1: createdTask1, task2: createdTask2 };
+    });
 
     const bundle = buildEpicExportBundle(domain, epic.id);
 
