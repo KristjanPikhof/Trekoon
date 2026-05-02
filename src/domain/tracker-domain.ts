@@ -1126,6 +1126,7 @@ export class TrackerDomain {
   }
 
   addDependencyBatch(input: { specs: readonly CompactDependencySpec[] }): CompactDependencyBatchAddResult {
+    this.#assertInTransaction("addDependencyBatch");
     const resolutions = input.specs.map((spec, index) => this.#resolveDependencyBatchSpec(index, spec));
     const resolvedSpecs = resolutions.flatMap((resolution) => (resolution.spec === undefined ? [] : [resolution.spec]));
     const issues = resolutions.flatMap((resolution) => resolution.issues).concat(this.#collectDependencyBatchIssues(resolvedSpecs));
