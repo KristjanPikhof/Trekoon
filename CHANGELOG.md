@@ -4,6 +4,17 @@ All notable changes to Trekoon are documented in this file.
 
 ## 0.4.2
 
+### Experimental
+
+- `trekoon serve` daemon spike. Runs the CLI as a long-lived process
+  listening on a Unix-domain socket inside `.trekoon/daemon.sock` and
+  reuses the held-open SQLite connection across requests. Activate the
+  client side with `TREKOON_DAEMON=1` or the global `--daemon` flag; the
+  client transparently falls back to the in-process one-shot CLI when no
+  daemon is reachable. Default behavior is unchanged. Socket file mode
+  `0o600` with parent dir forced to `0o700`. See `bench/daemon-session.ts`
+  for the perf-profile shift.
+
 ### Added
 
 - SSE board updates via `GET /api/snapshot/stream`, fed by a per-server
