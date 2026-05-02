@@ -204,6 +204,8 @@ export async function startDaemonServer(options: StartDaemonOptions = {}): Promi
       new Promise<void>((resolve): void => {
         server.close((): void => {
           safeUnlink(socketPath);
+          closeCachedDatabases();
+          delete process.env.TREKOON_DAEMON_INPROCESS;
           resolve();
         });
       }),
