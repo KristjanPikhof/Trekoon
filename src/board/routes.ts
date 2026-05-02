@@ -175,6 +175,99 @@ function publishSnapshotDeltaIfPresent(
   }
 }
 
+function formatSseEvent(eventName: string, data: unknown, id?: number): string {
+  const idLine = id === undefined ? "" : `id: ${id}\n`;
+  return `${idLine}event: ${eventName}\ndata: ${JSON.stringify(data)}\n\n`;
+}
+
+function openSnapshotStream(
+  request: Request,
+  domain: TrackerDomain,
+  eventBus: BoardEventBus | undefined,
+): Response {
+  if (!eventBus) {
+    return jsonResponse(503, {
+      ok: false,
+      error: {
+        code: "stream_unavailable",
+        message: "Snapshot stream is not available on this server",
+      },
+    });
+  }
+
+  const encoder = new TextEncoder();
+  const initialSnapshot = buildBoardSnapshot(domain);
+  let unsubscribe: (() => void) | null = null;
+  let heartbeatTimer: ReturnType<typeof setInterval> | null = null;
+
+  const stream = new ReadableStream<Uint8Array>({
+    start(controller): void {
+      const enqueue = (chunk: string): void => {
+        try {
+          controller.enqueue(encoder.encode(chunk));
+        } catch {
+          // Controller closed; cleanup will happen via cancel.
+        }
+      };
+
+      // Initial snapshot so late-joining tabs converge immediately.
+      enqueue(formatSseEvent("snapshot", { snapshot: initialSnapshot }));
+
+      unsubscribe = eventBus.subscribe((event) => {
+        if (event.type === "snapshotDelta") {
+          enqueue(formatSseEvent("snapshotDelta", { snapshotDelta: event.snapshotDelta }, event.id));
+        }
+      });
+
+      // Heartbeats keep proxies and stale-connection detectors happy.
+      heartbeatTimer = setInterval(() => {
+        enqueue(": heartbeat\n\n");
+      }, 15000);
+
+      const onAbort = (): void => {
+        if (unsubscribe) {
+          unsubscribe();
+          unsubscribe = null;
+        }
+        if (heartbeatTimer) {
+          clearInterval(heartbeatTimer);
+          heartbeatTimer = null;
+        }
+        try {
+          controller.close();
+        } catch {
+          // Already closed.
+        }
+      };
+
+      if (request.signal.aborted) {
+        onAbort();
+        return;
+      }
+      request.signal.addEventListener("abort", onAbort);
+    },
+    cancel(): void {
+      if (unsubscribe) {
+        unsubscribe();
+        unsubscribe = null;
+      }
+      if (heartbeatTimer) {
+        clearInterval(heartbeatTimer);
+        heartbeatTimer = null;
+      }
+    },
+  });
+
+  return new Response(stream, {
+    status: 200,
+    headers: {
+      "cache-control": "no-store",
+      "content-type": "text/event-stream; charset=utf-8",
+      "x-accel-buffering": "no",
+    },
+  });
+}
+
 function buildMutationResponse(_domain: TrackerDomain, data: Record<string, unknown>, status = 200): Response {
   return jsonResponse(status, {
     ok: true,
