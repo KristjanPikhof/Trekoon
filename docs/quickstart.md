@@ -183,9 +183,13 @@ trekoon migrate rollback --to-version 1
 
 ## Daemon mode (experimental)
 
+> **Not for routine agent use.** `trekoon serve` and `--daemon` are
+> experimental; use the default one-shot CLI path in automated workflows.
+
 `trekoon serve` starts a foreground daemon on a Unix-domain socket inside
-`.trekoon`. Subsequent invocations skip Bun startup, module load, and database
-open, which makes repeated calls noticeably faster:
+`.trekoon`. Subsequent calls skip Bun startup, module load, and database
+open — per `bench/daemon-session.ts`: daemon median < 10 ms vs. cold
+one-shot median > 50 ms:
 
 ```bash
 trekoon serve                         # start the daemon (foreground)
