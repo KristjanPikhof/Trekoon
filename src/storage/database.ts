@@ -151,6 +151,38 @@ const NO_LEGACY_RECOVERY: WorktreeRecoveryDiagnostics = {
   operatorAction: "No legacy worktree-local database detected.",
 };
 
+/**
+ * Process-level cache of opened TrekoonDatabase handles. Enabled only when
+ * `TREKOON_DAEMON_INPROCESS=1` is set (the daemon spike sets this on startup).
+ * In normal one-shot CLI invocations this map stays empty and the cache layer
+ * is bypassed entirely, so default behavior is unchanged.
+ *
+ * Cached handles override `close()` to be a no-op so callers that follow the
+ * `try { ... } finally { db?.close(); }` pattern do not actually tear down the
+ * shared connection. The daemon shutdown path calls `closeCachedDatabases()`.
+ */
+const cachedDatabases: Map<string, TrekoonDatabase> = new Map();
+
+function isDaemonInProcessCacheEnabled(): boolean {
+  return process.env.TREKOON_DAEMON_INPROCESS === "1";
+}
+
+export function closeCachedDatabases(): void {
+  for (const handle of cachedDatabases.values()) {
+    try {
+      handle.db.exec("PRAGMA wal_checkpoint(PASSIVE);");
+    } catch {
+      /* best effort */
+    }
+    try {
+      handle.db.close(false);
+    } catch {
+      /* best effort */
+    }
+  }
+  cachedDatabases.clear();
+}
+
 export function openTrekoonDatabase(
   workingDirectory: string = process.cwd(),
   options: OpenTrekoonDatabaseOptions = {},
