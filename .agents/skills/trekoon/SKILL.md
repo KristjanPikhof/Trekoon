@@ -170,11 +170,8 @@ options over a broad list of speculative unknowns.
 
 ## Status machine
 
-See `reference/status-machine.md` for the canonical transition table.
-
-Summary: `todo → in_progress → done`. Use `blocked` with a reason when stuck.
-`task done` auto-transitions through `in_progress` from any non-done status.
-Invalid transitions return `status_transition_invalid`.
+See `reference/status-machine.md` for the canonical transition table and
+`task done` auto-transition exception.
 
 ## Epic lifecycle
 
