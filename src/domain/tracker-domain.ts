@@ -105,7 +105,7 @@ interface ResolvedDependencyBatchSpec {
 
 interface DependencyBatchValidationIssue {
   readonly index: number;
-  readonly type: "missing_id" | "duplicate" | "cycle";
+  readonly type: "missing_id" | "duplicate" | "cycle" | "parent_to_child";
   readonly sourceId: string;
   readonly dependsOnId: string;
   readonly details: Record<string, unknown>;
