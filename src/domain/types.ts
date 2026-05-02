@@ -97,6 +97,7 @@ export interface EpicRecord {
   readonly status: string;
   readonly createdAt: number;
   readonly updatedAt: number;
+  readonly version: number;
 }
 
 export interface TaskRecord {
@@ -108,6 +109,7 @@ export interface TaskRecord {
   readonly owner: string | null;
   readonly createdAt: number;
   readonly updatedAt: number;
+  readonly version: number;
 }
 
 export interface SubtaskRecord {
@@ -119,6 +121,7 @@ export interface SubtaskRecord {
   readonly owner: string | null;
   readonly createdAt: number;
   readonly updatedAt: number;
+  readonly version: number;
 }
 
 export interface DependencyRecord {
