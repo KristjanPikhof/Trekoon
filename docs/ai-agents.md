@@ -211,6 +211,7 @@ Use the narrowest command that answers the question:
 | One task with subtasks | `trekoon --toon task show <task-id> --all` |
 | One epic tree | `trekoon --toon epic show <epic-id> --all` |
 | Export epic to Markdown | `trekoon --toon epic export <epic-id>` |
+| Snapshot the DB before manual recovery | `trekoon --toon migrate backup [--retain <n>]` |
 | Repeated text in one scope | `trekoon --toon epic|task|subtask search ...` |
 
 For repeated text changes, use the safe replace loop:
