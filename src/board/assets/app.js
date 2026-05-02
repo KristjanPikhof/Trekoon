@@ -472,7 +472,17 @@ export async function bootLegacyBoard(options = {}) {
     // the WAL watcher) and concurrent-tab mutations are reflected in this
     // board within ~1s without manual refresh. applySnapshotDelta is idempotent
     // so re-receiving deltas already applied via mutation responses is safe.
-    subscribeSnapshotStream(model, { sessionToken: runtimeSession.token, rerender });
+    // Capture the handle so we can tear it down on page unload (and so tests
+    // and future teardown paths can dispose the EventSource).
+    const snapshotSubscription = subscribeSnapshotStream(model, {
+      sessionToken: runtimeSession.token,
+      rerender,
+    });
+    if (typeof window !== "undefined" && typeof window.addEventListener === "function") {
+      window.addEventListener("beforeunload", () => {
+        snapshotSubscription.dispose();
+      }, { once: true });
+    }
 
     // Actions for delegation
     const actions = createBoardActions({
