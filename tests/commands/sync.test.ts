@@ -7,7 +7,10 @@ import { Readable } from "node:stream";
 import { afterEach, describe, expect, test } from "bun:test";
 
 import { runSync } from "../../src/commands/sync";
-import { MutationService } from "../../src/domain/mutation-service";
+import {
+  MutationService,
+  __resetIdempotencyPruneThrottleForTests,
+} from "../../src/domain/mutation-service";
 import { appendEventWithGitContext } from "../../src/sync/event-writes";
 import { resolveGitContext } from "../../src/sync/git-context";
 import { syncResolve } from "../../src/sync/service";
