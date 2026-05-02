@@ -156,7 +156,7 @@ export function startBoardServer(options: StartBoardServerOptions = {}): BoardSe
   const paths = resolveStoragePaths(cwd);
   const boardRoot: string = paths.boardDir;
   const stateFile: string = resolve(paths.storageDir, BOARD_SERVER_STATE_FILENAME);
-  const token: string = options.token ?? randomBytes(18).toString("hex");
+  const token: string = options.token ?? randomBytes(32).toString("hex");
   const eventBus: BoardEventBus = createBoardEventBus();
   const walWatcher: WalWatcher = startWalWatcher({
     db: database.db,
