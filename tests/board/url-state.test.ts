@@ -146,6 +146,9 @@ describe("board URL state sync", () => {
     expect(hashToState(hash)).toEqual({
       selectedEpicId: "epic-1",
       selectedTaskId: "task-1",
+      selectedSubtaskId: null,
+      taskModalOpen: true,
+      subtaskModalOpen: false,
       search: "roadmap",
       view: "list",
       screen: "tasks",
@@ -165,10 +168,46 @@ describe("board URL state sync", () => {
     expect(hashToState(hash)).toEqual({
       selectedEpicId: "epic-1",
       selectedTaskId: null,
+      selectedSubtaskId: null,
+      taskModalOpen: false,
+      subtaskModalOpen: false,
       search: "",
       view: "kanban",
       screen: "epics",
     });
+  });
+
+  test("deep-link with task= sets taskModalOpen=true; with subtask= sets subtaskModalOpen=true", () => {
+    expect(hashToState("#epic=epic-1&task=task-1")).toMatchObject({
+      selectedEpicId: "epic-1",
+      selectedTaskId: "task-1",
+      taskModalOpen: true,
+      subtaskModalOpen: false,
+      screen: "tasks",
+    });
+
+    expect(hashToState("#epic=epic-1&task=task-1&subtask=subtask-1")).toMatchObject({
+      selectedSubtaskId: "subtask-1",
+      taskModalOpen: true,
+      subtaskModalOpen: true,
+    });
+
+    // No task -> modal stays closed.
+    expect(hashToState("#epic=epic-1")).toMatchObject({
+      taskModalOpen: false,
+      subtaskModalOpen: false,
+    });
+  });
+
+  test("stateToHash includes subtask param when selectedSubtaskId is present", () => {
+    expect(stateToHash({
+      screen: "tasks",
+      selectedEpicId: "epic-1",
+      selectedTaskId: "task-1",
+      selectedSubtaskId: "subtask-1",
+      search: "",
+      view: "kanban",
+    })).toBe("epic=epic-1&task=task-1&subtask=subtask-1");
   });
 
   test("replaces noisy changes but pushes major navigation", () => {
