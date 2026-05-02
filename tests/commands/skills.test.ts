@@ -116,7 +116,7 @@ describe("skills command", (): void => {
     expect(installedContents).toBe(sourceContents);
   });
 
-  test("install --link supports opencode, claude, and pi destinations", async (): Promise<void> => {
+  test("install --link supports opencode, claude, codex, and pi destinations", async (): Promise<void> => {
     const cwd = createWorkspace();
 
     const opencodeResult = await runSkills({
@@ -156,6 +156,25 @@ describe("skills command", (): void => {
     expect(claudeData.linkTarget).toBe(claudeData.installedDir);
     expect(lstatSync(claudeData.linkPath).isSymbolicLink()).toBeTrue();
     expect(realpathSync(claudeData.linkPath)).toBe(realpathSync(claudeData.installedDir));
+
+    const codexResult = await runSkills({
+      cwd,
+      mode: "json",
+      args: ["install", "--link", "--editor", "codex"],
+    });
+
+    expect(codexResult.ok).toBeTrue();
+    const codexData = codexResult.data as {
+      installedDir: string;
+      linked: boolean;
+      linkPath: string;
+      linkTarget: string;
+    };
+    expect(codexData.linked).toBeTrue();
+    expect(codexData.linkPath).toBe(join(cwd, ".codex", "skills", "trekoon"));
+    expect(codexData.linkTarget).toBe(codexData.installedDir);
+    expect(lstatSync(codexData.linkPath).isSymbolicLink()).toBeTrue();
+    expect(realpathSync(codexData.linkPath)).toBe(realpathSync(codexData.installedDir));
 
     const piResult = await runSkills({
       cwd,
@@ -316,11 +335,12 @@ describe("skills command", (): void => {
     const globalAnchorPath = join(home, ".agents", "skills", "trekoon");
     const globalClaudePath = join(home, ".claude", "skills", "trekoon");
     const globalOpencodePath = join(home, ".config", "opencode", "skills", "trekoon");
+    const globalCodexPath = join(home, ".codex", "skills", "trekoon");
     const globalPiPath = join(home, ".pi", "skills", "trekoon");
 
     // Save existing state to restore after test.
     const savedPaths: Array<{ path: string; existed: boolean; target?: string }> = [];
-    for (const p of [globalAnchorPath, globalClaudePath, globalOpencodePath, globalPiPath]) {
+    for (const p of [globalAnchorPath, globalClaudePath, globalOpencodePath, globalCodexPath, globalPiPath]) {
       try {
         const stat = lstatSync(p);
         if (stat.isSymbolicLink()) {
@@ -335,7 +355,7 @@ describe("skills command", (): void => {
 
     try {
       // Clean any existing state for a clean test.
-      for (const p of [globalAnchorPath, globalClaudePath, globalOpencodePath, globalPiPath]) {
+      for (const p of [globalAnchorPath, globalClaudePath, globalOpencodePath, globalCodexPath, globalPiPath]) {
         rmSync(p, { recursive: true, force: true });
       }
 
@@ -366,8 +386,8 @@ describe("skills command", (): void => {
       expect(lstatSync(globalAnchorPath).isSymbolicLink()).toBeTrue();
       expect(resolve(dirname(globalAnchorPath), readlinkSync(globalAnchorPath))).toBe(resolve(bundledSkillDir()));
 
-      // All three editors should be linked.
-      expect(data.editorLinks).toHaveLength(3);
+      // All four editors should be linked.
+      expect(data.editorLinks).toHaveLength(4);
       for (const link of data.editorLinks) {
         expect(link.action).toBe("created");
         expect(lstatSync(link.linkPath).isSymbolicLink()).toBeTrue();
@@ -635,7 +655,7 @@ describe("skills command", (): void => {
     };
     expect(unknownEditorData.code).toBe("invalid_input");
     expect(unknownEditorData.editor).toBe("unknown");
-    expect(unknownEditorData.allowedEditors).toEqual(["opencode", "claude", "pi"]);
+    expect(unknownEditorData.allowedEditors).toEqual(["opencode", "claude", "codex", "pi"]);
 
     const editorWithoutLink = await runSkills({
       cwd,
