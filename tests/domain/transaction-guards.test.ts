@@ -182,6 +182,43 @@ describe("TrackerDomain transaction guards", (): void => {
     db.close(false);
   });
 
+  test("createEpic throws outside transaction", (): void => {
+    const db = createDb();
+    const domain = new TrackerDomain(db);
+
+    assertTransactionGuard(() => domain.createEpic({ title: "Outside Epic", description: "desc" }));
+    db.close(false);
+  });
+
+  test("createTask throws outside transaction", (): void => {
+    const db = createDb();
+    const domain = new TrackerDomain(db);
+
+    let epicId!: string;
+    writeTransaction(db, (): void => {
+      const epic = domain.createEpic({ title: "Epic Singular Task", description: "desc" });
+      epicId = epic.id;
+    });
+
+    assertTransactionGuard(() => domain.createTask({ epicId, title: "Outside Task", description: "desc" }));
+    db.close(false);
+  });
+
+  test("createSubtask throws outside transaction", (): void => {
+    const db = createDb();
+    const domain = new TrackerDomain(db);
+
+    let taskId!: string;
+    writeTransaction(db, (): void => {
+      const epic = domain.createEpic({ title: "Epic Singular Subtask", description: "desc" });
+      const task = domain.createTask({ epicId: epic.id, title: "Task Singular Subtask", description: "desc" });
+      taskId = task.id;
+    });
+
+    assertTransactionGuard(() => domain.createSubtask({ taskId, title: "Outside Subtask" }));
+    db.close(false);
+  });
+
   test("createTaskBatch throws outside transaction when specs are non-empty", (): void => {
     const db = createDb();
     const domain = new TrackerDomain(db);
