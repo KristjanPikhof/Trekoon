@@ -4,7 +4,7 @@ import { join } from "node:path";
 
 import { afterEach, describe, expect, test } from "bun:test";
 
-import { createBoardApiHandler } from "../../src/board/routes";
+import { createBoardApiHandler, redactDetailLeaves } from "../../src/board/routes";
 import { openTrekoonDatabase } from "../../src/storage/database";
 import { MutationService } from "../../src/domain/mutation-service";
 import { TrackerDomain } from "../../src/domain/tracker-domain";
@@ -1427,6 +1427,25 @@ describe("board routes", (): void => {
     } finally {
       storage.close();
     }
+  });
+
+  test("redacts circular details and sensitive object keys without recursing forever", (): void => {
+    const leakedSecret = "abc123";
+    const details: Record<string, unknown> = {
+      [`Bearer ${leakedSecret}`]: "nested value",
+      child: {
+        [`token=${leakedSecret}`]: `Basic ${leakedSecret}`,
+      },
+    };
+    details.self = details;
+
+    const redacted = redactDetailLeaves(details) as Record<string, unknown>;
+    const rawText = JSON.stringify(redacted);
+
+    expect(Object.keys(redacted)).toContain("Bearer REDACTED");
+    expect(rawText).toContain("token=REDACTED");
+    expect(rawText).toContain("[Circular]");
+    expect(rawText).not.toContain(leakedSecret);
   });
 
 });
