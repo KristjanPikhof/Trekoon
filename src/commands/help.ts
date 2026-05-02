@@ -292,16 +292,24 @@ const EVENTS_HELP = [
 ].join("\n");
 
 const MIGRATE_HELP = [
-  "Usage: trekoon migrate <status|rollback> [--to-version <n>]",
+  "Usage: trekoon migrate <status|rollback|backup> [--to-version <n>]",
   "",
   "Subcommands:",
   "  status                Show current schema version, latest version, and pending count.",
   "  rollback [--to-version <n>]  Roll back migrations. Defaults to one version back.",
+  "  backup                Snapshot .trekoon/trekoon.db to a timestamped sibling file",
+  "                        before any manual migration recovery.",
+  "",
+  "Notes:",
+  "  Migrations 0004, 0005, and 0006 are irreversible (ALTER TABLE / data cleanup).",
+  "  Rolling back below those versions errors with code migration_down_unsupported.",
+  "  Take a backup first; restore by copying the backup over .trekoon/trekoon.db.",
   "",
   "Examples:",
   "  trekoon migrate status",
   "  trekoon migrate rollback",
   "  trekoon migrate rollback --to-version 1",
+  "  trekoon migrate backup",
 ].join("\n");
 
 const SYNC_HELP = [
