@@ -475,6 +475,108 @@ describe("applyDelete clears sync_conflicts on epic delete", (): void => {
 });
 
 // ---------------------------------------------------------------------------
+// Cascaded epic-delete: source_event_id stamping suppresses N+1 task conflicts
+// ---------------------------------------------------------------------------
+
+describe("cascaded epic.deleted: peer with edited tasks sees ONE conflict, not N+1", (): void => {
+  test("task.deleted events stamped with source_event_id are withheld behind the epic __delete__ conflict", (): void => {
+    const workspace = createWorkspace();
+    const MAIN = "main";
+    const FEATURE = "feature/x";
+
+    mockGitContext(workspace, FEATURE);
+
+    const storage = openTrekoonDatabase(workspace);
+    const db = storage.db;
+
+    const epicId = randomUUID();
+    const taskAId = randomUUID();
+    const taskBId = randomUUID();
+    const taskCId = randomUUID();
+
+    insertEpic(db, epicId, "Epic A");
+    insertTask(db, taskAId, epicId, "Task A");
+    insertTask(db, taskBId, epicId, "Task B");
+    insertTask(db, taskCId, epicId, "Task C");
+
+    // Peer worktree (feature/x) has local edits on the epic AND each of the
+    // three tasks. Without the source_event_id fix, each cascaded task.deleted
+    // event would generate its own __delete__ conflict on top of the epic-
+    // level conflict (4 total). The fix stamps source_event_id on cascaded
+    // task.deleted rows so they get withheld behind the epic conflict.
+    const baseTs = Date.now();
+    insertEvent(db, {
+      entityKind: "epic",
+      entityId: epicId,
+      operation: "epic.updated",
+      branch: FEATURE,
+      payload: { title: "Epic A (peer edit)" },
+      createdAt: baseTs,
+    });
+    for (const tid of [taskAId, taskBId, taskCId]) {
+      insertEvent(db, {
+        entityKind: "task",
+        entityId: tid,
+        operation: "task.updated",
+        branch: FEATURE,
+        payload: { title: "Task (peer edit)" },
+        createdAt: baseTs,
+      });
+    }
+
+    // Main-side delete cascade. The epic.deleted event id is referenced by
+    // every task.deleted via source_event_id, mirroring what
+    // MutationService.deleteEpic emits.
+    const epicDeleteEventId = randomUUID();
+    db.query(
+      `INSERT INTO events (id, entity_kind, entity_id, operation, payload, git_branch, git_head, created_at, updated_at, version)
+       VALUES (?, 'epic', ?, 'epic.deleted', ?, ?, NULL, ?, ?, 1);`,
+    ).run(
+      epicDeleteEventId,
+      epicId,
+      JSON.stringify({ fields: {} }),
+      MAIN,
+      baseTs + 1000,
+      baseTs + 1000,
+    );
+
+    for (const tid of [taskAId, taskBId, taskCId]) {
+      insertEvent(db, {
+        entityKind: "task",
+        entityId: tid,
+        operation: "task.deleted",
+        branch: MAIN,
+        payload: { source_event_id: epicDeleteEventId },
+        createdAt: baseTs + 1001,
+      });
+    }
+
+    storage.close();
+
+    syncPull(workspace, MAIN);
+
+    const storage2 = openTrekoonDatabase(workspace);
+    const db2 = storage2.db;
+
+    // Exactly one __delete__ conflict — on the epic. The cascaded task.deleted
+    // events were withheld by shouldWithholdDeleteCascadeEvent because their
+    // source_event_id matches the pending epic-level __delete__ conflict.
+    const deleteConflicts = db2
+      .query(
+        `SELECT entity_kind, entity_id FROM sync_conflicts
+         WHERE field_name = '__delete__' AND resolution = 'pending';`,
+      )
+      .all() as Array<{ entity_kind: string; entity_id: string }>;
+
+    expect(deleteConflicts.length).toBe(1);
+    expect(deleteConflicts[0]?.entity_kind).toBe("epic");
+    expect(deleteConflicts[0]?.entity_id).toBe(epicId);
+
+    storage2.close();
+  });
+});
+
+// ---------------------------------------------------------------------------
 // Resolve flow: list/show/resolve after delete must not hit row_not_found
 // ---------------------------------------------------------------------------
 
