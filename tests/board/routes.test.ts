@@ -10,6 +10,26 @@ import { MutationService } from "../../src/domain/mutation-service";
 import { TrackerDomain } from "../../src/domain/tracker-domain";
 
 const tempDirs: string[] = [];
+const NativeRequest = globalThis.Request;
+type RequestInput = ConstructorParameters<typeof globalThis.Request>[0];
+type RequestInitParam = ConstructorParameters<typeof globalThis.Request>[1];
+const Request: typeof globalThis.Request = function BoardRouteTestRequest(
+  input: RequestInput,
+  init?: RequestInitParam,
+): globalThis.Request {
+  const url = typeof input === "string" || input instanceof URL ? new URL(input.toString()) : null;
+  if (url?.searchParams.has("token")) {
+    const token = url.searchParams.get("token") ?? "";
+    url.searchParams.delete("token");
+    const headers = new Headers(init?.headers);
+    if (!headers.has("authorization") && !headers.has("x-trekoon-token") && !headers.has("cookie")) {
+      headers.set("authorization", `Bearer ${token}`);
+    }
+    return new NativeRequest(url.toString(), { ...init, headers });
+  }
+
+  return new NativeRequest(input, init);
+} as unknown as typeof globalThis.Request;
 
 function createWorkspace(): string {
   const workspace = mkdtempSync(join(tmpdir(), "trekoon-board-routes-"));
