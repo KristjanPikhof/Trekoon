@@ -1,4 +1,4 @@
-import { chmodSync, existsSync, mkdirSync, unlinkSync, statSync } from "node:fs";
+import { chmodSync, existsSync, mkdirSync, realpathSync, unlinkSync, statSync } from "node:fs";
 import { connect, createServer, type Server, type Socket } from "node:net";
 import { dirname, isAbsolute, relative, resolve } from "node:path";
 import { redactStack, safeErrorMessage } from "../commands/error-utils";
@@ -140,8 +140,8 @@ export function __assertOwnerOnlyModeForTests(path: string, label: string): void
 }
 
 function isPathWithin(candidatePath: string, rootPath: string): boolean {
-  const candidate: string = resolve(candidatePath);
-  const root: string = resolve(rootPath);
+  const candidate: string = realpathSync(resolve(candidatePath));
+  const root: string = realpathSync(resolve(rootPath));
   const pathToCandidate: string = relative(root, candidate);
   return pathToCandidate === "" || (!pathToCandidate.startsWith("..") && !isAbsolute(pathToCandidate));
 }
