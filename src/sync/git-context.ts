@@ -37,8 +37,7 @@ export function resolveGitContext(cwd: string, persistedAt: number = Date.now())
   };
 }
 
-export function persistGitContext(db: Database, git: GitContextSnapshot, persistedAt: number = Date.now()): void {
-
+function persistGitContextInner(db: Database, git: GitContextSnapshot, persistedAt: number): void {
   db.query(
     `
     INSERT INTO git_context (
@@ -74,4 +73,23 @@ export function persistGitContext(db: Database, git: GitContextSnapshot, persist
     "@headSha": git.headSha,
     "@persistedAt": persistedAt,
   });
+}
+
+/**
+ * Persist the git context snapshot to the database.
+ *
+ * If the caller is already inside a write transaction this function writes
+ * directly (no double-BEGIN).  Otherwise it self-acquires a BEGIN IMMEDIATE
+ * transaction so concurrent callers — e.g. five parallel `session` invocations
+ * — never race on the deferred-to-immediate lock promotion that causes
+ * SQLITE_BUSY.
+ */
+export function persistGitContext(db: Database, git: GitContextSnapshot, persistedAt: number = Date.now()): void {
+  if (db.inTransaction) {
+    persistGitContextInner(db, git, persistedAt);
+  } else {
+    writeTransaction(db, (txDb) => {
+      persistGitContextInner(txDb, git, persistedAt);
+    });
+  }
 }
