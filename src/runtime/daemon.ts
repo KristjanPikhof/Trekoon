@@ -10,9 +10,16 @@ import { executeShell, parseInvocation, renderShellResult } from "./cli-shell";
  * Daemon spike (experimental).
  *
  * Runs the trekoon CLI inside a long-lived Bun process listening on a Unix
- * domain socket. Clients submit `{argv, cwd, env}` payloads; the server runs
+ * domain socket. Clients submit `{argv, cwd}` payloads; the server runs
  * the same `executeShell` pipeline as the one-shot CLI and returns
  * `{stdout, stderr, exitCode}`.
+ *
+ * Environment variables are intentionally NOT part of the request contract.
+ * The daemon process owns its own environment (set at `trekoon serve`
+ * startup). Forwarding the client environment would (a) leak secrets across
+ * the socket, (b) require the server to apply them, which it does not, and
+ * (c) muddy the equivalence claim with the one-shot CLI. Per-call envs are
+ * not supported — narrow the equivalence claim instead.
  *
  * Status: NOT the default path. Activated via `TREKOON_DAEMON=1` or the
  * `--daemon` flag. The one-shot CLI behavior is unchanged when the daemon is
@@ -22,7 +29,6 @@ import { executeShell, parseInvocation, renderShellResult } from "./cli-shell";
 export interface DaemonRequest {
   readonly argv: readonly string[];
   readonly cwd: string;
-  readonly env?: Record<string, string>;
 }
 
 export interface DaemonResponse {
