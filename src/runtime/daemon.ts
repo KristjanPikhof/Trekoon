@@ -53,7 +53,7 @@ const SERVER_SOCKET_IDLE_MS = 5_000;
  * dispatch — no server-side mutation could have run.
  */
 export class PreWriteTransportError extends Error {
-  public readonly cause: unknown;
+  public override readonly cause: unknown;
   public constructor(message: string, cause?: unknown) {
     super(message);
     this.name = "PreWriteTransportError";
