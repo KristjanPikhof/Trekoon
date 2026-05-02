@@ -495,6 +495,7 @@ const COMMAND_HELP: Record<string, string> = {
   suggest: SUGGEST_HELP,
   skills: SKILLS_HELP,
   update: "Usage: trekoon update [--json|--toon]\n\nAlias for: trekoon skills update\n\nProbes and repairs all installed global and local skill symlinks.",
+  serve: SERVE_HELP,
   help: "Usage: trekoon help [command] [--json|--toon]",
 };
 
