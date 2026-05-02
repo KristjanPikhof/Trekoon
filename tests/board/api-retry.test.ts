@@ -91,13 +91,10 @@ describe("stable mutationId for retry compare", () => {
 
   test("each enqueued mutation gets a unique mutationId", async () => {
     const model = makeModel();
-    const seenMutationIds = new Set<string>();
-    let duplicatesFound = false;
+    const capturedIds: string[] = [];
 
-    stubFetch([
-      { ok: true, body: { ok: true, data: {} } },
-      { ok: true, body: { ok: true, data: {} } },
-    ]);
+    // Both calls will fail so we can capture retryMutationId for each.
+    stubFetch([{ ok: false }, { ok: false }]);
 
     const api = createApi(model, {
       sessionToken: "test-token",
@@ -105,30 +102,27 @@ describe("stable mutationId for retry compare", () => {
       requestTimeoutMs: 2000,
     });
 
-    // Enqueue two separate mutations and capture their IDs via the error path
-    // by making both fail so onError fires with the tagged definition.
-    stubFetch([
-      { ok: false },
-      { ok: false },
-    ]);
-
     const taskId = "fake-id";
+
+    // First mutation — fails and records a retryMutationId.
     api.patchTask(taskId, { status: "todo" }, (snap: unknown) => snap);
+    await waitForQueue();
+    const id1 = model.store.notice?.retryMutationId;
+    expect(id1).toBeDefined();
+    capturedIds.push(String(id1));
+
+    // Reset fetch so the next call also fails.
+    stubFetch([{ ok: false }]);
+
+    // Second mutation — a fresh enqueue, so it must receive a different mutationId.
     api.patchTask(taskId, { status: "in_progress" }, (snap: unknown) => snap);
     await waitForQueue();
+    const id2 = model.store.notice?.retryMutationId;
+    expect(id2).toBeDefined();
+    capturedIds.push(String(id2));
 
-    const notice1 = model.store.notice;
-    if (notice1?.retryMutationId !== undefined) {
-      seenMutationIds.add(String(notice1.retryMutationId));
-    }
-
-    // The queue processed both; retryMutationId from the last error
-    // should be different from anything we've seen (they're incremental ints or UUIDs).
-    if (seenMutationIds.size >= 1) {
-      duplicatesFound = seenMutationIds.size < 2 && seenMutationIds.has(String(notice1?.retryMutationId));
-    }
-
-    expect(duplicatesFound).toBe(false);
+    // The two IDs must be different — each mutation is tagged independently.
+    expect(capturedIds[0]).not.toBe(capturedIds[1]);
   });
 
   test("onError callback receives the error and records failure", async () => {
