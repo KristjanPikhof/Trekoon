@@ -31,9 +31,19 @@ interface GitContextCore {
   readonly worktreePath: string;
   readonly branchName: string | null;
   readonly headSha: string | null;
+  readonly headStatKey: string | null;
 }
 
 const gitContextCache: Map<string, GitContextCore> = new Map();
+
+function readHeadStatKey(cwd: string): string | null {
+  try {
+    const stat = statSync(join(cwd, ".git", "HEAD"));
+    return `${stat.mtimeMs}|${stat.size}|${stat.ino}`;
+  } catch {
+    return null;
+  }
+}
 
 /**
  * Clear the process-level git context cache.
