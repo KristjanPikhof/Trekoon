@@ -107,32 +107,6 @@ interface ValidatedSubtaskBatchSpec {
   readonly status: string;
 }
 
-interface ResolvedDependencyBatchSpec {
-  readonly index: number;
-  readonly sourceId: string;
-  readonly sourceKind: "task" | "subtask";
-  readonly dependsOnId: string;
-  readonly dependsOnKind: "task" | "subtask";
-}
-
-interface DependencyBatchValidationIssue {
-  readonly index: number;
-  readonly type: "missing_id" | "duplicate" | "cycle" | "parent_to_child";
-  readonly sourceId: string;
-  readonly dependsOnId: string;
-  readonly details: Record<string, unknown>;
-}
-
-interface DependencyBatchResolution {
-  readonly spec?: ResolvedDependencyBatchSpec;
-  readonly issues: readonly DependencyBatchValidationIssue[];
-}
-
-interface ResolvedCompactEntity {
-  readonly id: string;
-  readonly kind: "task" | "subtask";
-}
-
 interface TaskDeletionPlan {
   readonly subtaskIds: readonly string[];
   readonly touchingDependencies: readonly DependencyRecord[];
