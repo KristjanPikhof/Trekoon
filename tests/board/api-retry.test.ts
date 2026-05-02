@@ -41,7 +41,7 @@ function stubFetch(responses: Array<{ ok: boolean; body?: unknown }>) {
       headers: new Headers({ "content-type": "application/json" }),
       text: async () => JSON.stringify(spec.body ?? (spec.ok ? { ok: true, data: {} } : { error: { code: "server_error", message: "fail" } })),
     } as Response;
-  }) as typeof fetch;
+  }) as unknown as typeof fetch;
 }
 
 describe("stable mutationId for retry compare", () => {
