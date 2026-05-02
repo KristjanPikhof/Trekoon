@@ -234,7 +234,11 @@ describe("daemon dispatch", (): void => {
     } finally {
       delete process.env.TREKOON_TEST_DO_NOT_LEAK;
       process.chdir(previousCwd);
-      await new Promise<void>((resolve): void => captureServer.close((): void => resolve()));
+      await new Promise<void>((resolve): void => {
+        captureServer.close((): void => {
+          resolve();
+        });
+      });
     }
 
     expect(captured.length).toBeGreaterThan(0);
