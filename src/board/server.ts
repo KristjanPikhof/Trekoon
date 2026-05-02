@@ -4,11 +4,9 @@ import { dirname, extname, resolve } from "node:path";
 
 import { createBoardEventBus, type BoardEventBus } from "./event-bus";
 import { createBoardApiHandler } from "./routes";
-import { buildBoardSnapshot } from "./snapshot";
 
 import { openTrekoonDatabase, type TrekoonDatabase } from "../storage/database";
 import { resolveStoragePaths } from "../storage/path";
-import { TrackerDomain } from "../domain/tracker-domain";
 
 const CONTENT_TYPES: Record<string, string> = {
   ".css": "text/css; charset=utf-8",
