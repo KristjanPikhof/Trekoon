@@ -75,6 +75,34 @@ describe("task claim — domain layer (MutationService.claimTask)", (): void => 
     expect(row.owner).toBe("agent-x");
   });
 
+  test("claim a blocked task with unresolved dep — fails with dependency_blocked", (): void => {
+    const { service, domain } = createInMemoryDb();
+    const epic = service.createEpic({ title: "E", description: "d" });
+    const upstream = service.createTask({ epicId: epic.id, title: "U", description: "d", status: "todo" });
+    const downstream = service.createTask({ epicId: epic.id, title: "D", description: "d", status: "todo" });
+    service.addDependency(downstream.id, upstream.id);
+
+    const blocked = service.updateTask(downstream.id, { status: "blocked" });
+    expect(blocked.status).toBe("blocked");
+
+    let caught: unknown;
+    try {
+      service.claimTask({ taskId: downstream.id, owner: "agent-z" });
+    } catch (error) {
+      caught = error;
+    }
+
+    expect(caught).toBeDefined();
+    const err = caught as { code?: string; details?: { unresolvedDependencyIds?: readonly string[] } };
+    expect(err.code).toBe("dependency_blocked");
+    expect(err.details?.unresolvedDependencyIds).toEqual([upstream.id]);
+
+    // Atomic rollback: row stays blocked, no owner assigned, no in_progress flip.
+    const row = domain.getTaskOrThrow(downstream.id);
+    expect(row.status).toBe("blocked");
+    expect(row.owner).toBeNull();
+  });
+
   test("claim already in_progress by another owner — claimed=false", (): void => {
     const { service } = createInMemoryDb();
     const epic = service.createEpic({ title: "E", description: "d" });
