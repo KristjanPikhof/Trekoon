@@ -1,7 +1,7 @@
 import { type Database } from "bun:sqlite";
 
 import { writeTransaction } from "../storage/database";
-import { appendEventWithGitContext, prepareEventWriteContext, withTransactionEventContext } from "../sync/event-writes";
+import { appendEventWithGitContext, withTransactionEventContext } from "../sync/event-writes";
 import { ENTITY_OPERATIONS } from "./mutation-operations";
 import {
   buildMatchSnippet,
