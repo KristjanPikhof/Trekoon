@@ -310,6 +310,8 @@ export function createDelegation(rootElement, actions) {
     for (const el of rootElement.querySelectorAll(".board-drop-valid, .board-drop-invalid")) {
       el.classList.remove("board-drop-valid", "board-drop-invalid");
     }
+    // Clear feedback in store so rerenders do not re-apply stale classes.
+    actions.setDragFeedback?.(null);
   }
 
   function handleDragstart(event) {
@@ -336,11 +338,15 @@ export function createDelegation(rootElement, actions) {
     const targetStatus = column.dataset.dropStatus;
     if (draggedTaskStatus && isValidTransition(draggedTaskStatus, targetStatus)) {
       event.preventDefault();
+      // Fast path: apply directly to DOM for immediate visual feedback.
       column.classList.add("board-drop-valid");
       column.classList.remove("board-drop-invalid");
+      // Also persist in store so a rerender during drag restores the class.
+      actions.setDragFeedback?.({ targetStatus, kind: "valid" });
     } else if (draggedTaskStatus && targetStatus !== draggedTaskStatus) {
       column.classList.add("board-drop-invalid");
       column.classList.remove("board-drop-valid");
+      actions.setDragFeedback?.({ targetStatus, kind: "invalid" });
     }
   }
 
@@ -348,6 +354,8 @@ export function createDelegation(rootElement, actions) {
     const column = event.target.closest("[data-drop-status]");
     if (column && !column.contains(event.relatedTarget)) {
       column.classList.remove("board-drop-valid", "board-drop-invalid");
+      // Clear store feedback when leaving the column.
+      actions.setDragFeedback?.(null);
     }
   }
 
