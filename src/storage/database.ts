@@ -4,13 +4,12 @@ import { Database } from "bun:sqlite";
 
 import { DomainError } from "../domain/types";
 import { migrateDatabase } from "./migrations";
-import { resolveStoragePaths, type StoragePaths } from "./path";
+import { resolveLegacyWorktreeDatabaseFile, resolveStoragePaths, type StoragePaths } from "./path";
 import {
   inspectWorktreeDatabaseState,
   recoverWorktreeDatabaseState,
   type WorktreeRecoveryDiagnostics,
 } from "./worktree-recovery";
-import { resolveLegacyWorktreeDatabaseFile } from "./path";
 
 export interface StorageResolutionDiagnostics {
   readonly invocationCwd: string;
