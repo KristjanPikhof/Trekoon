@@ -4443,19 +4443,40 @@ describe("sync command", (): void => {
 
         // Intentionally reverse the conflict row timestamps to verify batch resolve
         // uses source event order rather than sync_conflicts.created_at order.
+        const scope = conflictScopeFor(workspace);
         storage.db
           .query(
-            `INSERT INTO sync_conflicts (id, event_id, entity_kind, entity_id, field_name, ours_value, theirs_value, resolution, created_at, updated_at, version)
-             VALUES (?, ?, 'epic', ?, 'title', ?, ?, 'pending', ?, ?, 1);`,
+            `INSERT INTO sync_conflicts (id, event_id, entity_kind, entity_id, field_name, ours_value, theirs_value, resolution, created_at, updated_at, version, worktree_path, current_branch)
+             VALUES (?, ?, 'epic', ?, 'title', ?, ?, 'pending', ?, ?, 1, ?, ?);`,
           )
-          .run(randomUUID(), firstEventId, epicId, JSON.stringify("Local title"), JSON.stringify("Remote title v1"), baseTime + 200, baseTime + 200);
+          .run(
+            randomUUID(),
+            firstEventId,
+            epicId,
+            JSON.stringify("Local title"),
+            JSON.stringify("Remote title v1"),
+            baseTime + 200,
+            baseTime + 200,
+            scope.worktreePath,
+            scope.currentBranch,
+          );
 
         storage.db
           .query(
-            `INSERT INTO sync_conflicts (id, event_id, entity_kind, entity_id, field_name, ours_value, theirs_value, resolution, created_at, updated_at, version)
-             VALUES (?, ?, 'epic', ?, 'title', ?, ?, 'pending', ?, ?, 1);`,
+            `INSERT INTO sync_conflicts (id, event_id, entity_kind, entity_id, field_name, ours_value, theirs_value, resolution, created_at, updated_at, version, worktree_path, current_branch)
+             VALUES (?, ?, 'epic', ?, 'title', ?, ?, 'pending', ?, ?, 1, ?, ?);`,
           )
-          .run(randomUUID(), secondEventId, epicId, JSON.stringify("Local title"), JSON.stringify("Remote title v2"), baseTime + 100, baseTime + 100);
+          .run(
+            randomUUID(),
+            secondEventId,
+            epicId,
+            JSON.stringify("Local title"),
+            JSON.stringify("Remote title v2"),
+            baseTime + 100,
+            baseTime + 100,
+            scope.worktreePath,
+            scope.currentBranch,
+          );
       } finally {
         storage.close();
       }
