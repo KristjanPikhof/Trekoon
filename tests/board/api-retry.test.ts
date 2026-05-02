@@ -32,7 +32,7 @@ function makeModel() {
 function stubFetch(responses: Array<{ ok: boolean; body?: unknown }>) {
   let callIndex = 0;
   globalThis.fetch = async () => {
-    const spec = responses[callIndex] ?? responses[responses.length - 1];
+    const spec = (responses[callIndex] ?? responses[responses.length - 1])!;
     callIndex += 1;
     return {
       ok: spec.ok,
