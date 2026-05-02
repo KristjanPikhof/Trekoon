@@ -170,6 +170,8 @@ export async function runQuickstart(_: CliContext): Promise<CliResult> {
         "trekoon --toon task next",
         "trekoon --toon dep reverse <task-or-subtask-id>",
         "trekoon --toon epic export <epic-id>",
+        "trekoon --toon migrate status",
+        "trekoon --toon migrate backup",
       ],
       wipeWarning: {
         command: "trekoon wipe --yes",
