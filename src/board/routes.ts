@@ -190,11 +190,12 @@ function buildMutationDeltaResponse(
   data: Record<string, unknown>,
   selection: SnapshotDeltaSelection,
   status = 200,
+  eventBus?: BoardEventBus,
 ): Response {
   return buildMutationResponse(domain, {
     ...data,
     snapshotDelta: buildSnapshotDelta(domain, selection),
-  }, status);
+  }, status, eventBus);
 }
 
 function readRecordId(value: unknown): string | null {
