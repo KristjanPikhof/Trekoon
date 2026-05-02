@@ -481,6 +481,15 @@ function oursCacheKey(entityKind: string, entityId: string, fieldName: string): 
   return `${entityKind}|${entityId}|${fieldName}`;
 }
 
+// Safe field-name guard for use in JSON1 path strings. We only inline
+// fieldName into a `$.fields.<name>` path; any non-identifier character
+// would either break the path syntax or invite injection-like surprises.
+const SAFE_FIELD_NAME_PATTERN = /^[A-Za-z_][A-Za-z0-9_]*$/;
+
+function isSafeJsonPathField(fieldName: string): boolean {
+  return SAFE_FIELD_NAME_PATTERN.test(fieldName);
+}
+
 /**
  * Fast O(1)-per-call probe (after first lookup is memoized) for the most
  * recent local-branch event that touched a given (entity, field).
