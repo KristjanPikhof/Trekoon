@@ -33,10 +33,7 @@ import {
   VALID_TRANSITIONS,
   type ValidStatus,
 } from "./types";
-import {
-  loadCascadeDependencyTargetStatuses,
-  planStatusCascade as planStatusCascadeImpl,
-} from "./cascade-planner";
+import { loadCascadeDependencyTargetStatuses, planStatusCascade as planStatusCascadeImpl } from "./cascade-planner";
 
 const DEFAULT_STATUS = "todo";
 const DEPENDENCY_GATED_STATUSES = new Set<string>(["in_progress", "done"]);
