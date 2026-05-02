@@ -422,7 +422,7 @@ describe("event retention", (): void => {
     const storage = openTrekoonDatabase(workspace);
 
     try {
-      withTransactionEventContext(storage.db, workspace, (): void => {
+      withTransactionEventContext(storage.db, resolveGitContext(workspace), (): void => {
         appendEventWithGitContext(storage.db, workspace, {
           entityKind: "epic",
           entityId: randomUUID(),
