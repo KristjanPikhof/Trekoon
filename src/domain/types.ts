@@ -259,6 +259,7 @@ export const ERROR_CODES = {
   ALREADY_DONE: "already_done",
   ALREADY_RESOLVED: "already_resolved",
   AMBIGUOUS_LEGACY_STATE: "ambiguous_legacy_state",
+  BACKPRESSURE: "backpressure",
   BACKUP_ALREADY_EXISTS: "backup_already_exists",
   BACKUP_DATABASE_MISSING: "backup_database_missing",
   BACKUP_FAILED: "backup_failed",
