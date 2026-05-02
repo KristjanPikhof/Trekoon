@@ -26,6 +26,8 @@ import { migrateDatabase } from "../../src/storage/migrations";
 import { MutationService } from "../../src/domain/mutation-service";
 import { withTransactionEventContext } from "../../src/sync/event-writes";
 import { type ResolvedGitContext } from "../../src/sync/git-context";
+import * as branchDb from "../../src/sync/branch-db";
+import { syncPull } from "../../src/sync/service";
 
 function fakeGitContext(workspace: string, branchName = "main"): ResolvedGitContext {
   return { worktreePath: workspace, branchName, headSha: null, persistedAt: Date.now() };
