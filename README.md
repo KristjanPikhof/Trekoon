@@ -110,6 +110,7 @@ agents don't know how to use Trekoon properly.
 ```bash
 trekoon skills install          # repo-local (.agents/skills/trekoon/)
 trekoon skills install -g       # global (~/.agents/skills/trekoon)
+trekoon skills install --link --editor codex    # editor link (.codex/skills/trekoon)
 trekoon update                  # refresh all installed skills
 ```
 
