@@ -8,6 +8,8 @@ import { afterEach, describe, expect, test } from "bun:test";
 import {
   executeDaemonRequest,
   isDaemonSocketPresent,
+  PostWriteError,
+  PreWriteTransportError,
   resolveDaemonSocketPath,
   sendDaemonRequest,
   startDaemonServer,
