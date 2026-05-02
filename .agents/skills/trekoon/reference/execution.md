@@ -416,7 +416,8 @@ intermediate step to reach `done`. Direct `todo → done` is invalid via
 ### Preferred patterns
 
 ```bash
-trekoon --toon task update <task-id> --append "Started implementation" --status in_progress
+trekoon --toon task claim <task-id> --owner <name>
+trekoon --toon task update <task-id> --append "Started implementation"
 trekoon --toon task update <task-id> --append "Completed implementation and checks"
 trekoon --toon task done <task-id>
 trekoon --toon task update <task-id> --append "Blocked by <reason>" --status blocked
