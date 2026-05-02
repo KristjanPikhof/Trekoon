@@ -25,6 +25,7 @@ import { afterEach, describe, expect, test } from "bun:test";
 // `mock.module` overrides across test files, so we import the source module
 // via a query-string suffix to bypass the module-specifier cache and force a
 // fresh evaluation of the real file.
+// @ts-expect-error — query-string import bypasses Bun's module-specifier cache; TS has no declaration for the suffixed path.
 const realModule = (await import("../../src/sync/git-context.ts?real")) as typeof import("../../src/sync/git-context");
 const { clearGitContextCache, resolveGitContext } = realModule;
 
