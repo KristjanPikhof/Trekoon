@@ -201,4 +201,55 @@ describe("board SSE snapshot stream", (): void => {
       boardServer.stop();
     }
   });
+
+  test("unsubscribes a slow client that never reads when queued bytes pass the 1MB hard limit", async (): Promise<void> => {
+    const cwd: string = createWorkspace();
+    prepareBoardAssets(cwd);
+    const storage = openTrekoonDatabase(cwd);
+    const eventBus = createBoardEventBus();
+
+    try {
+      const handler = createBoardApiHandler({
+        db: storage.db,
+        cwd,
+        token: "slow-client-token",
+        eventBus,
+      });
+
+      const response = await handler(
+        new Request("http://board.test/api/snapshot/stream?token=slow-client-token"),
+      );
+      expect(response.status).toBe(200);
+      expect(response.body).not.toBeNull();
+
+      // Hold a reference to the body but never read it. The stream's internal
+      // queue grows on each enqueue; the route must trip the 1MB hard cap and
+      // tear the connection down (unsubscribe + close).
+      const body = response.body as ReadableStream<Uint8Array>;
+
+      // Build a delta payload of ~50KB so 100 publishes exceeds the 1MB hard
+      // limit. The exact shape doesn't matter — only the byte size matters
+      // for backpressure accounting.
+      const filler = "x".repeat(50_000);
+      const largeDelta = { filler };
+
+      // 1 subscriber == this stream.
+      expect(eventBus.subscriberCount).toBe(1);
+
+      for (let i = 0; i < 100; i += 1) {
+        eventBus.publishSnapshotDelta(largeDelta);
+      }
+
+      // The stream's start callback runs synchronously; backpressure logic in
+      // handleSnapshotDelta is invoked on each publish. Once queuedBytes >=
+      // 1MB the listener calls cleanup() which unsubscribes from the bus.
+      expect(eventBus.subscriberCount).toBe(0);
+
+      // Cancel the body so the test exits cleanly even though we never read.
+      await body.cancel().catch(() => {});
+    } finally {
+      eventBus.close();
+      storage.close();
+    }
+  });
 });
