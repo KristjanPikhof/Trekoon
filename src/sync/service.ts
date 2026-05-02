@@ -1682,32 +1682,44 @@ export function syncPull(cwd: string, sourceBranch: string): PullSummary {
       let lastEventAt: number | null = cursor?.last_event_at ?? null;
       let scannedEvents = 0;
 
-      writeTransaction(storage.db, (): void => {
-        while (true) {
-          const incomingEvents = queryBranchEventsSinceBatch(
-            storage.db,
-            sourceBranch,
-            lastToken ?? cursorToken,
-            SYNC_PULL_BATCH_SIZE,
-          ) as StoredEvent[];
+      // Chunked write transactions: each batch of SYNC_PULL_BATCH_SIZE
+      // events is committed in its own transaction so the write lock is
+      // never held across multiple batches. On crash, the cursor reflects
+      // the last fully-committed batch and the next pull resumes there.
+      while (true) {
+        const incomingEvents = queryBranchEventsSinceBatch(
+          storage.db,
+          sourceBranch,
+          lastToken ?? cursorToken,
+          SYNC_PULL_BATCH_SIZE,
+        ) as StoredEvent[];
 
-          if (incomingEvents.length === 0) {
-            break;
-          }
+        if (incomingEvents.length === 0) {
+          break;
+        }
 
-          scannedEvents += incomingEvents.length;
-
+        const batchResult = writeTransaction(storage.db, (): { token: string | null; eventAt: number | null } => {
+          let token: string | null = lastToken;
+          let eventAt: number | null = lastEventAt;
           for (const incoming of incomingEvents) {
             storeEvent(storage.db, incoming);
-            lastToken = cursorTokenFromEvent(incoming);
-            lastEventAt = incoming.created_at;
+            token = cursorTokenFromEvent(incoming);
+            eventAt = incoming.created_at;
           }
-        }
+          if (token) {
+            saveCursor(storage.db, git.worktreePath, sourceBranch, token, eventAt);
+          }
+          return { token, eventAt };
+        });
 
-        if (lastToken) {
-          saveCursor(storage.db, git.worktreePath, sourceBranch, lastToken, lastEventAt);
+        scannedEvents += incomingEvents.length;
+        lastToken = batchResult.token;
+        lastEventAt = batchResult.eventAt;
+
+        if (incomingEvents.length < SYNC_PULL_BATCH_SIZE) {
+          break;
         }
-      });
+      }
 
       return {
         sourceBranch,
