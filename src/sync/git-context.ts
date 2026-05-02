@@ -138,7 +138,7 @@ function resolveGitDir(worktreePath: string): GitDirInfo {
  *      the previously-missed "same-branch commit advance" case.
  */
 function readHeadStatKey(worktreePath: string): string | null {
-  const gitDir: string | null = resolveGitDir(worktreePath);
+  const { gitDir, commonDir } = resolveGitDir(worktreePath);
   if (gitDir === null) {
     // Best effort: fall back to stat'ing the dotgit entry. Better than
     // pinning forever on a stale cache when git is missing.
@@ -147,27 +147,27 @@ function readHeadStatKey(worktreePath: string): string | null {
 
   const parts: string[] = [];
 
-  const headKey: string | null = statKey("head", join(gitDir, "HEAD"));
-  parts.push(headKey ?? "head|missing");
+  // 1. Per-worktree HEAD — changes on checkout in this worktree.
+  parts.push(statKey("head", join(gitDir, "HEAD")) ?? "head|missing");
 
-  // Resolve the branch ref pointed to by HEAD (if symbolic). Otherwise HEAD
-  // itself encodes the SHA (detached) and stat'ing HEAD already covers it.
-  let refTipKey: string | null = null;
+  // 2. Resolved branch ref tip — changes on every commit on the current
+  //    branch. For linked worktrees, refs/heads live under the commonDir.
+  //    Detached HEAD has no symbolic ref; stat'ing HEAD above already
+  //    covers SHA changes in that case.
   try {
     const headContent: string = readFileSync(join(gitDir, "HEAD"), "utf8").trim();
     const symMatch = /^ref:\s*(.+)$/m.exec(headContent);
     if (symMatch) {
       const refPath: string = symMatch[1]!.trim();
-      // Loose ref file: <gitdir>/<refPath>. Falls back to packed-refs stat.
-      refTipKey =
-        statKey("ref", join(gitDir, refPath)) ?? statKey("packed", join(gitDir, "packed-refs"));
+      const refsRoot: string = commonDir ?? gitDir;
+      const refTipKey: string | null =
+        statKey("ref", join(refsRoot, refPath)) ?? statKey("packed", join(refsRoot, "packed-refs"));
+      if (refTipKey !== null) {
+        parts.push(refTipKey);
+      }
     }
   } catch {
-    // ignore — HEAD already in `parts`
-  }
-
-  if (refTipKey !== null) {
-    parts.push(refTipKey);
+    // ignore — HEAD stat already captured above
   }
 
   return parts.join("::");
