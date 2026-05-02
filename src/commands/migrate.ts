@@ -8,11 +8,11 @@ import { createMigrationBackup, DEFAULT_BACKUP_RETENTION } from "../storage/back
 import { openTrekoonDatabase, type TrekoonDatabase } from "../storage/database";
 import { describeMigrations, rollbackDatabase } from "../storage/migrations";
 
-const MIGRATE_USAGE = "Usage: trekoon migrate <status|rollback|backup> [--to-version <n>]";
+const MIGRATE_USAGE = "Usage: trekoon migrate <status|rollback|backup> [--to-version <n>] [--retain <n>]";
 
 const STATUS_OPTIONS: readonly string[] = [];
 const ROLLBACK_OPTIONS: readonly string[] = ["to-version"];
-const BACKUP_OPTIONS: readonly string[] = [];
+const BACKUP_OPTIONS: readonly string[] = ["retain"];
 
 function usage(message: string): CliResult {
   return failResult({
