@@ -631,13 +631,7 @@ export class TrackerDomain {
       };
     }
 
-    if (!this.#db.inTransaction) {
-      throw new DomainError({
-        code: "invalid_state",
-        message: "createSubtaskBatch must be called inside a writeTransaction",
-        details: { entity: "subtask" },
-      });
-    }
+    this.#assertInTransaction("createSubtaskBatch");
 
     const SUBTASK_COLS_PER_ROW = 7; // id, task_id, title, description, status, created_at, updated_at (version is literal 1)
     const WRITE_CHUNK_SIZE: number = Math.floor(SQLITE_MAX_VARIABLES / SUBTASK_COLS_PER_ROW);
