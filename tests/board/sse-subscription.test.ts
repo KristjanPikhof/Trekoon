@@ -93,7 +93,7 @@ function createMockModel(): MockModel {
 }
 
 describe("subscribeSnapshotStream", () => {
-  test("opens EventSource at /api/snapshot/stream with token query parameter", () => {
+  test("opens EventSource at /api/snapshot/stream without a token query parameter", () => {
     const { Ctor, instances } = createMockEventSourceCtor();
     const model = createMockModel();
 
@@ -104,11 +104,11 @@ describe("subscribeSnapshotStream", () => {
     });
 
     expect(instances).toHaveLength(1);
-    expect(instances[0]?.url).toBe("/api/snapshot/stream?token=secret-token");
+    expect(instances[0]?.url).toBe("/api/snapshot/stream");
     handle.dispose();
   });
 
-  test("URL-encodes the token", () => {
+  test("uses the stream path unchanged even when the session token contains URL-sensitive characters", () => {
     const { Ctor, instances } = createMockEventSourceCtor();
     const model = createMockModel();
 
@@ -118,8 +118,7 @@ describe("subscribeSnapshotStream", () => {
       EventSourceCtor: Ctor,
     });
 
-    expect(instances[0]?.url).toContain("?token=");
-    expect(instances[0]?.url).toContain(encodeURIComponent("tok with spaces & symbols"));
+    expect(instances[0]?.url).toBe("/api/snapshot/stream");
     handle.dispose();
   });
 
@@ -155,6 +154,30 @@ describe("subscribeSnapshotStream", () => {
 
     expect(model.applied).toHaveLength(1);
     expect(model.applied[0]).toEqual(delta);
+    expect(rerenderCount).toBe(1);
+    handle.dispose();
+  });
+
+  test("successful snapshotDelta clears a stale live-disconnect notice", () => {
+    const { Ctor, instances } = createMockEventSourceCtor();
+    const model = createMockModel();
+    model.store.notice = {
+      type: "warning",
+      code: "live_updates_disconnected",
+    };
+    let rerenderCount = 0;
+
+    const handle = subscribeSnapshotStream(model, {
+      sessionToken: "tok",
+      rerender: () => {
+        rerenderCount += 1;
+      },
+      EventSourceCtor: Ctor,
+    });
+
+    instances[0]?.emit("snapshotDelta", { snapshotDelta: { tasks: [] } });
+
+    expect(model.store.notice).toBeNull();
     expect(rerenderCount).toBe(1);
     handle.dispose();
   });
@@ -252,6 +275,30 @@ describe("subscribeSnapshotStream", () => {
     handle.dispose();
   });
 
+  test("successful snapshot clears a stale live-disconnect notice", () => {
+    const { Ctor, instances } = createMockEventSourceCtor();
+    const model = createMockModel();
+    model.store.notice = {
+      type: "warning",
+      code: "live_updates_disconnected",
+    };
+    let rerenderCount = 0;
+
+    const handle = subscribeSnapshotStream(model, {
+      sessionToken: "tok",
+      rerender: () => {
+        rerenderCount += 1;
+      },
+      EventSourceCtor: Ctor,
+    });
+
+    instances[0]?.emit("snapshot", { snapshot: { epics: [], tasks: [], subtasks: [], dependencies: [] } });
+
+    expect(model.store.notice).toBeNull();
+    expect(rerenderCount).toBe(1);
+    handle.dispose();
+  });
+
   test("onerror surfaces a 'live updates disconnected' notice and rerenders", () => {
     const { Ctor, instances } = createMockEventSourceCtor();
     const model = createMockModel();
@@ -281,6 +328,31 @@ describe("subscribeSnapshotStream", () => {
     expect(rerenderCount).toBe(1);
 
     handle.dispose();
+  });
+
+  test("onerror escalates after sustained reconnect failures and closes the stream", () => {
+    const { Ctor, instances } = createMockEventSourceCtor();
+    const model = createMockModel();
+    let rerenderCount = 0;
+
+    subscribeSnapshotStream(model, {
+      sessionToken: "tok",
+      rerender: () => {
+        rerenderCount += 1;
+      },
+      EventSourceCtor: Ctor,
+    });
+
+    for (let i = 0; i < 5; i += 1) {
+      instances[0]?.onerror?.();
+    }
+
+    expect(model.store.notice).toMatchObject({
+      type: "warning",
+      code: "live_updates_disabled",
+    });
+    expect(instances[0]?.closed).toBe(true);
+    expect(rerenderCount).toBe(2);
   });
 
   test("onerror after dispose is a no-op", () => {
