@@ -9,21 +9,36 @@ export async function run(argv: readonly string[] = process.argv.slice(2)): Prom
   // subcommand always runs in-process so it can host the daemon.
   const daemonRequested: boolean = parsed.wantsDaemon || process.env.TREKOON_DAEMON === "1";
   if (daemonRequested && parsed.command !== "serve") {
-    const { tryDaemonDispatch } = await import("./runtime/daemon");
+    const { tryDaemonDispatch, PostWriteError } = await import("./runtime/daemon");
     // Strip --daemon from the argv we forward (the server has its own dispatch).
     const forwarded: readonly string[] = argv.filter((token: string): boolean => token !== "--daemon");
-    const daemonResult = await tryDaemonDispatch(forwarded);
-    if (daemonResult !== null) {
-      if (daemonResult.stdout.length > 0) {
-        process.stdout.write(daemonResult.stdout);
+    try {
+      const daemonResult = await tryDaemonDispatch(forwarded);
+      if (daemonResult !== null) {
+        if (daemonResult.stdout.length > 0) {
+          process.stdout.write(daemonResult.stdout);
+        }
+        if (daemonResult.stderr.length > 0) {
+          process.stderr.write(daemonResult.stderr);
+        }
+        process.exitCode = daemonResult.exitCode;
+        return;
       }
-      if (daemonResult.stderr.length > 0) {
-        process.stderr.write(daemonResult.stderr);
+      // Fall through to one-shot CLI when no daemon is reachable (pre-write
+      // transport failure — request never made it onto the wire).
+    } catch (error: unknown) {
+      // Post-write failure: the request bytes were already flushed to the
+      // daemon. The mutation may have committed. Refuse to silently re-run
+      // the command in-process; exit non-zero so the caller can decide.
+      if (error instanceof PostWriteError) {
+        process.stderr.write(
+          `trekoon: daemon may have committed; do not retry: ${error.message}\n`,
+        );
+        process.exitCode = 1;
+        return;
       }
-      process.exitCode = daemonResult.exitCode;
-      return;
+      throw error;
     }
-    // Fall through to one-shot CLI when no daemon is reachable.
   }
 
   const result = await executeShell(parsed);
