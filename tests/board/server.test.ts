@@ -158,7 +158,10 @@ describe("board server", (): void => {
     const boardServer = startBoardServer({ cwd: workspace, token: "overlay token" });
 
     try {
-      const response = await fetch(`${boardServer.origin}/epics/mobile/detail?token=${encodeURIComponent("overlay token")}`);
+      const response = await fetchFollowingTokenRedirect(
+        `${boardServer.origin}/epics/mobile/detail?token=${encodeURIComponent("overlay token")}`,
+        "overlay token",
+      );
       const body = await response.text();
 
       expect(boardServer.url).toBe(`${boardServer.origin}/?token=overlay%20token`);
