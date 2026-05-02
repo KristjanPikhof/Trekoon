@@ -148,7 +148,7 @@ describe("board server", (): void => {
     }
   });
 
-  test("embeds bootstrap auth and snapshot payloads for manual opens", async (): Promise<void> => {
+  test("embeds bootstrap auth token but never inlines snapshot data in index.html", async (): Promise<void> => {
     const workspace: string = createWorkspace();
     prepareBoardAssets(workspace);
 
@@ -161,7 +161,26 @@ describe("board server", (): void => {
       expect(response.status).toBe(200);
       expect(body).toContain("trekoon-board-bootstrap");
       expect(body).toContain('"token":"manual-open-token"');
-      expect(body).toContain('"snapshot":');
+      // Snapshot must never be inlined in index.html anymore.
+      expect(body).not.toContain('"snapshot":');
+      expect(body).not.toContain('"epics":');
+      expect(body).not.toContain('"tasks":');
+    } finally {
+      boardServer.stop();
+    }
+  });
+
+  test("snapshot is fetched via API rather than inlined in HTML for deep routes", async (): Promise<void> => {
+    const workspace: string = createWorkspace();
+    prepareBoardAssets(workspace);
+
+    const boardServer = startBoardServer({ cwd: workspace, token: "deep-route-snapshot" });
+
+    try {
+      const response = await fetch(`${boardServer.origin}/epics/m?token=${encodeURIComponent("deep-route-snapshot")}`);
+      const body = await response.text();
+      expect(response.status).toBe(200);
+      expect(body).not.toContain('"snapshot":');
     } finally {
       boardServer.stop();
     }
