@@ -290,3 +290,139 @@ in task descriptions:
 
 For large scope, create multiple epics with explicit cross-epic boundaries. Use
 dependencies within each epic DAG and keep each epic executable in bounded time.
+
+## Creation policy: prefer bulk planning workflows
+
+When creating multiple related records, do not loop through repeated single-item
+creates unless only one record is needed.
+
+### Which command to use
+
+| Situation | Preferred command |
+|---|---|
+| New epic and full graph already known | `trekoon --toon epic create ... --task ... --subtask ... --dep ...` |
+| Existing epic needs linked additions | `trekoon --toon epic expand <epic-id> ...` |
+| Multiple sibling tasks under one epic | `trekoon --toon task create-many --epic <epic-id> --task ...` |
+| Multiple sibling subtasks under one task | `trekoon --toon subtask create-many <task-id> --subtask ...` |
+| Multiple dependency edges across existing IDs | `trekoon --toon dep add-many --dep ...` |
+| One record only | `epic create`, `task create`, or `subtask create` |
+
+### Compact spec escaping rules
+
+Compact specs (pipe-delimited `--task`, `--subtask`, `--dep` values) use `\` as
+the escape character. Only these sequences are valid:
+
+| Sequence | Produces |
+|---|---|
+| `\|` | literal `\|` (not a field separator) |
+| `\\` | literal `\` |
+| `\n` | newline |
+| `\r` | carriage return |
+| `\t` | tab |
+
+Any other `\X` combination (e.g., `\!`, `\=`, `\$`) is rejected with
+`Invalid escape sequence`. To avoid accidental escapes:
+
+- Do not use `!=` or similar operators in description text; rephrase instead
+  (e.g., "null does not equal sourceBranch" instead of "null !== sourceBranch").
+- If a literal backslash is needed, double it: `\\`.
+- When using shell line continuations (`\` at end of line), ensure the next
+  line's first character is not one that forms an invalid escape with `\`.
+
+### Critical temp-key rule
+
+- Use plain temp keys when declaring records in compact specs, for example
+  `task-api` or `sub-tests`.
+- Refer to those records later in the same invocation as `@task-api` or
+  `@sub-tests`.
+- `@temp-key` references work in same-invocation graph workflows such as
+  one-shot `epic create` and `epic expand`.
+- `dep add-many` does **not** resolve temp keys from earlier commands. Use real
+  persisted IDs there.
+
+### Compact examples
+
+#### One-shot epic creation
+
+Use this when the epic does not exist yet and you already know the tree.
+
+```bash
+trekoon --toon epic create \
+  --title "Batch command rollout" \
+  --description "Ship linked planning in one transaction" \
+  --task "task-api|Design API|Define compact grammar|todo" \
+  --task "task-cli|Wire CLI|Hook parser and output|todo" \
+  --subtask "@task-api|sub-tests|Write tests|Cover parser cases|todo" \
+  --dep "@task-cli|@task-api"
+```
+
+#### Expand an existing epic
+
+Use this when the epic already exists and the new batch needs internal links.
+
+```bash
+trekoon --toon epic expand <epic-id> \
+  --task "task-docs|Document workflow|Write operator guide|todo" \
+  --subtask "@task-docs|sub-examples|Add examples|Show canonical flows|todo" \
+  --dep "@sub-examples|@task-docs"
+```
+
+#### Create sibling tasks or subtasks
+
+```bash
+trekoon --toon task create-many --epic <epic-id> \
+  --task "seed-api|Design API|Define grammar|todo" \
+  --task "seed-cli|Wire CLI|Hook output|todo"
+
+trekoon --toon subtask create-many <task-id> \
+  --subtask "seed-tests|Write tests|Cover happy path|todo" \
+  --subtask "seed-docs|Document flow|Add notes|todo"
+```
+
+#### Add dependencies after records already exist
+
+```bash
+trekoon --toon dep add-many \
+  --dep "<task-b>|<task-a>" \
+  --dep "<subtask-c>|<task-b>"
+```
+
+## Search and replace policy
+
+Use scoped search before manual tree reads when you need to locate repeated
+paths, labels, owners, or migration targets.
+
+### Scope choice
+
+Prefer the narrowest valid root:
+
+1. `subtask search` or `subtask replace`
+2. `task search` or `task replace`
+3. `epic search` or `epic replace`
+
+Scope behavior:
+
+- `subtask` scope scans only that subtask.
+- `task` scope scans the task plus descendant subtasks.
+- `epic` scope scans the epic plus descendant tasks and subtasks.
+
+### Safe replace workflow
+
+1. Search first.
+2. Preview replace.
+3. Apply only after preview matches the intended scope.
+
+```bash
+trekoon --toon epic search <epic-id> "path/to/somewhere"
+trekoon --toon epic replace <epic-id> --search "path/to/somewhere" --replace "path/to/new-path"
+trekoon --toon epic replace <epic-id> --search "path/to/somewhere" --replace "path/to/new-path" --apply
+```
+
+Guardrails:
+
+- Use literal, explicit search text.
+- Narrow fields when useful: `--fields title`, `--fields description`, or
+  `--fields title,description`.
+- Do not jump straight to `--apply`.
+- Prefer scoped search/replace over manually reading a whole tree and editing
+  many records one by one.
