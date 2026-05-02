@@ -189,6 +189,15 @@ export function openTrekoonDatabase(
 ): TrekoonDatabase {
   const paths: StoragePaths = resolveStoragePaths(workingDirectory);
 
+  // Daemon-mode reuse: when running inside `trekoon serve`, return a cached
+  // connection so each request avoids the migration probe and database open.
+  if (isDaemonInProcessCacheEnabled()) {
+    const cached = cachedDatabases.get(paths.databaseFile);
+    if (cached) {
+      return cached;
+    }
+  }
+
   // Fast path: if no legacy .trekoon/trekoon.db exists in the current worktree,
   // skip the git-heavy recoverWorktreeDatabaseState entirely.
   const legacyDbFile: string = resolveLegacyWorktreeDatabaseFile(paths.worktreeRoot);
@@ -209,6 +218,19 @@ export function openTrekoonDatabase(
 
   if (options.autoMigrate ?? true) {
     migrateDatabase(db);
+  }
+
+  if (isDaemonInProcessCacheEnabled()) {
+    const cachedHandle: TrekoonDatabase = {
+      db,
+      paths,
+      diagnostics,
+      close(): void {
+        // No-op: the daemon owns the lifetime, freed via closeCachedDatabases().
+      },
+    };
+    cachedDatabases.set(paths.databaseFile, cachedHandle);
+    return cachedHandle;
   }
 
   return {
