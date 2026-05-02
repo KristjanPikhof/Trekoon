@@ -905,8 +905,8 @@ describe("subtask owner field", (): void => {
       const task = domain.createTask({ epicId: epic.id, title: "Parent task", description: "desc" });
       const subtask = domain.createSubtask({ taskId: task.id, title: "Owned subtask" });
 
-      expect(domain.updateSubtask(subtask.id, { owner: "bob" }).owner).toBe("bob");
-      expect(domain.updateSubtask(subtask.id, { owner: null }).owner).toBeNull();
+      expect(writeTransaction(storage.db, () => domain.updateSubtask(subtask.id, { owner: "bob" })).owner).toBe("bob");
+      expect(writeTransaction(storage.db, () => domain.updateSubtask(subtask.id, { owner: null })).owner).toBeNull();
       expect(domain.getSubtask(subtask.id)?.owner).toBeNull();
     } finally {
       storage.close();
