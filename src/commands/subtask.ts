@@ -922,11 +922,10 @@ export async function runSubtask(context: CliContext): Promise<CliResult> {
           });
         }
 
-        const nextDescription =
-          append === undefined
-            ? description
-            : appendLine(domain.getSubtaskOrThrow(subtaskId).description, append);
-        const subtask = mutations.updateSubtask(subtaskId, { title, description: nextDescription, status, owner });
+        const subtask =
+          append !== undefined
+            ? mutations.appendToSubtaskDescription({ subtaskId, append, status, owner })
+            : mutations.updateSubtask(subtaskId, { title, description, status, owner });
 
         return okResult({
           command: "subtask.update",
