@@ -551,6 +551,7 @@ export async function bootLegacyBoard(options = {}) {
       addDependency: (src, data) => actions.addDependency(src, data),
       dropTaskStatus: (id, status) => actions.dropTaskStatus(id, status),
       getTaskStatus: (id) => actions.getTaskStatus(id),
+      setDragFeedback: (feedback) => actions.setDragFeedback(feedback),
       changeEpicStatus: (epicId, status) => actions.changeEpicStatus(epicId, status),
       bulkSetStatus: (epicId, status) => actions.bulkSetStatus(epicId, status),
       toggleEpicStatusFilter: (status) => actions.toggleEpicStatusFilter(status),
