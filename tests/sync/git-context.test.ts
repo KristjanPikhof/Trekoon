@@ -18,9 +18,19 @@ import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
-import { afterEach, describe, expect, test } from "bun:test";
+import { afterEach, beforeAll, describe, expect, mock, test } from "bun:test";
 
-import { clearGitContextCache, resolveGitContext } from "../../src/sync/git-context";
+// Other tests in tests/sync use `mock.module("../../src/sync/git-context", ...)`
+// to stub git resolution. Bun's `mock.restore()` does not reliably undo
+// `mock.module` overrides across test files, so we explicitly re-install the
+// real module here before importing it.
+beforeAll(async () => {
+  mock.restore();
+  const real = await import("../../src/sync/git-context");
+  mock.module("../../src/sync/git-context", () => real);
+});
+
+const { clearGitContextCache, resolveGitContext } = await import("../../src/sync/git-context");
 
 const tempDirs: string[] = [];
 
