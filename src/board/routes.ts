@@ -108,17 +108,34 @@ function isSqliteBusyMessage(message: string): boolean {
   return normalized.includes("database is locked") || normalized.includes("database schema is locked");
 }
 
-function redactDetailLeaves(value: unknown): unknown {
+const REDACT_DETAILS_MAX_DEPTH = 16;
+
+export function redactDetailLeaves(
+  value: unknown,
+  seen: WeakSet<object> = new WeakSet<object>(),
+  depth = 0,
+): unknown {
   if (typeof value === "string") {
     return redactSensitive(value);
   }
+  if (depth >= REDACT_DETAILS_MAX_DEPTH) {
+    return "[MaxDepth]";
+  }
   if (Array.isArray(value)) {
-    return value.map((item) => redactDetailLeaves(item));
+    if (seen.has(value)) {
+      return "[Circular]";
+    }
+    seen.add(value);
+    return value.map((item) => redactDetailLeaves(item, seen, depth + 1));
   }
   if (value !== null && typeof value === "object") {
+    if (seen.has(value)) {
+      return "[Circular]";
+    }
+    seen.add(value);
     const out: Record<string, unknown> = {};
     for (const [key, child] of Object.entries(value as Record<string, unknown>)) {
-      out[key] = redactDetailLeaves(child);
+      out[redactSensitive(key)] = redactDetailLeaves(child, seen, depth + 1);
     }
     return out;
   }
@@ -242,8 +259,13 @@ function openSnapshotStream(
   let lastConsumeAt = Date.now();
   let closed = false;
   let pendingFrame: string | null = null;
+  let onAbort: (() => void) | null = null;
 
   const cleanupTimers = (): void => {
+    if (onAbort) {
+      request.signal.removeEventListener("abort", onAbort);
+      onAbort = null;
+    }
     if (unsubscribe) {
       unsubscribe();
       unsubscribe = null;
@@ -355,7 +377,7 @@ function openSnapshotStream(
         }
       }, SSE_BACKPRESSURE_CHECK_MS);
 
-      const onAbort = (): void => {
+      onAbort = (): void => {
         if (closed) {
           return;
         }
