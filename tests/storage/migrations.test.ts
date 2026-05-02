@@ -226,7 +226,7 @@ describe("storage backup: createMigrationBackup", (): void => {
     expect((caught as DomainError).code).toBe("backup_database_missing");
   });
 
-  test("does not mutate the live database (no migration writes during backup)", (): void => {
+  test("does not mutate the live database (no migration writes during backup)", async (): Promise<void> => {
     const workspace: string = createWorkspace();
     const storage = openTrekoonDatabase(workspace);
     storage.close();
@@ -235,13 +235,12 @@ describe("storage backup: createMigrationBackup", (): void => {
     const before: number = statSync(databaseFile).mtimeMs;
 
     // Wait a few ms so any mtime change would be observable on most filesystems.
-    const wait = (): Promise<void> => new Promise((r) => setTimeout(r, 50));
-    return wait().then((): void => {
-      createMigrationBackup({ cwd: workspace });
-      const after: number = statSync(databaseFile).mtimeMs;
-      // Backup is a pure read on the source via VACUUM INTO; mtime should be unchanged.
-      expect(after).toBe(before);
-    });
+    await new Promise<void>((resolve) => setTimeout(resolve, 50));
+
+    createMigrationBackup({ cwd: workspace });
+    const after: number = statSync(databaseFile).mtimeMs;
+    // Backup is a pure read on the source via VACUUM INTO; mtime should be unchanged.
+    expect(after).toBe(before);
   });
 
   test("migrateDatabase succeeds after a backup has been taken", (): void => {
