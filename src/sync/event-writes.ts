@@ -18,6 +18,14 @@ interface EventWriteContext {
 
 const transactionEventContexts: WeakMap<Database, EventWriteContext> = new WeakMap();
 
+/**
+ * Compute the next safe event timestamp INSIDE a write lock.
+ *
+ * Must only be called after BEGIN IMMEDIATE has been issued on `db`.
+ * Reading the max(created_at) while holding the write lock guarantees no
+ * concurrent writer can commit a higher timestamp between the read and the
+ * subsequent INSERT, preventing (created_at, id) collisions.
+ */
 export function nextEventTimestamp(db: Database): number {
   const now: number = Date.now();
   const latestEvent = db
@@ -38,21 +46,27 @@ export function nextEventTimestamp(db: Database): number {
   return Math.max(now, latestEvent.created_at + 1);
 }
 
-export function prepareEventWriteContext(db: Database, cwd: string): EventWriteContext {
-  const nextTimestamp: number = nextEventTimestamp(db);
-  const git: ResolvedGitContext = resolveGitContext(cwd, nextTimestamp);
-
-  return {
-    git,
-    nextTimestamp,
-  };
-}
-
-export function withTransactionEventContext<T>(db: Database, context: EventWriteContext, fn: () => T): T {
+/**
+ * Execute `fn` inside a transaction event context, computing the event
+ * timestamp AFTER the write lock is held (i.e. after BEGIN IMMEDIATE).
+ *
+ * If a context is already active for this database connection (nested call),
+ * `fn` is invoked directly so the outer context's monotonic counter is reused.
+ *
+ * @param db   - The database connection that is already inside BEGIN IMMEDIATE.
+ * @param cwd  - Working directory used to resolve git context.
+ * @param fn   - The transaction body to run.
+ */
+export function withTransactionEventContext<T>(db: Database, cwd: string, fn: () => T): T {
   const existingContext: EventWriteContext | undefined = transactionEventContexts.get(db);
   if (existingContext) {
     return fn();
   }
+
+  // Compute the timestamp NOW — the write lock is already held.
+  const nextTimestamp: number = nextEventTimestamp(db);
+  const git: ResolvedGitContext = resolveGitContext(cwd, nextTimestamp);
+  const context: EventWriteContext = { git, nextTimestamp };
 
   transactionEventContexts.set(db, context);
 
