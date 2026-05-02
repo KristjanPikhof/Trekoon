@@ -240,7 +240,7 @@ export class MutationService {
    *
    * The `If-Match` precondition is enforced INSIDE the write transaction
    * via a SQL compare-and-swap (`UPDATE ... WHERE id = ? AND updated_at = ?`).
-   * If zero rows are affected we then determine whether the row is missing
+   * If zero rows are affected we determine whether the row is missing
    * (→ `DomainError(not_found)`) or merely stale (→ {@link PreconditionFailedError}
    * with the freshly-fetched `currentUpdatedAt`).
    *
@@ -248,6 +248,10 @@ export class MutationService {
    * check had: a concurrent writer could land between `parseIfMatchHeader`'s
    * read and `mutations.updateEpic`'s BEGIN IMMEDIATE, allowing the second
    * PATCH to silently overwrite the first.
+   *
+   * Input validation (non-empty / status transition) mirrors
+   * `domain.updateEpic` — it runs inside the same transaction so a
+   * malformed PATCH never observes the CAS branch.
    */
   updateEpicWithIfMatch(
     id: string,
@@ -255,23 +259,28 @@ export class MutationService {
     input: { title?: string | undefined; description?: string | undefined; status?: string | undefined },
   ): EpicRecord {
     return this.#writeTransaction((): EpicRecord => {
-      // Resolve the current row inside the tx to (1) surface `not_found`
-      // before the CAS and (2) materialise the defaults that
-      // domain.updateEpic would compute from the current row when
-      // individual fields are omitted. Holding the BEGIN IMMEDIATE write
-      // lock guarantees no other writer mutates the row between this read
-      // and the CAS UPDATE below.
+      // Resolve the current row first inside the tx so we can (1) surface
+      // `not_found` before the CAS and (2) materialise the per-field
+      // defaults that domain.updateEpic computes from the current row.
+      // Holding the BEGIN IMMEDIATE write lock guarantees no other writer
+      // mutates the row between this read and the CAS UPDATE.
       const existing = this.#domain.getEpicOrThrow(id);
 
+      const nextTitle = input.title !== undefined
+        ? assertEpicFieldNonEmpty("title", input.title)
+        : existing.title;
+      const nextDescription = input.description !== undefined
+        ? assertEpicFieldNonEmpty("description", input.description)
+        : existing.description;
+      const nextStatus = input.status !== undefined
+        ? assertEpicFieldNonEmpty("status", input.status)
+        : existing.status;
+
       if (input.status !== undefined) {
-        validateStatusTransition(existing.status, input.status, "epic", id);
+        validateStatusTransition(existing.status, nextStatus, "epic", id);
       }
 
-      const nextTitle = input.title !== undefined ? input.title : existing.title;
-      const nextDescription = input.description !== undefined ? input.description : existing.description;
-      const nextStatus = input.status !== undefined ? input.status : existing.status;
       const now: number = Date.now();
-
       const result = this.#db
         .query(
           `UPDATE epics
@@ -283,10 +292,10 @@ export class MutationService {
         .get(nextTitle, nextDescription, nextStatus, now, id, ifMatchUpdatedAt) as { id: string } | null;
 
       if (result === null) {
-        // Zero rows changed → the row exists (we already getEpicOrThrow'd
-        // it) so the only remaining failure mode is a stale precondition.
-        // Re-fetch the current updatedAt so the caller's 409 carries the
-        // freshest value seen inside this same transaction.
+        // Zero rows changed. We already proved the row exists via
+        // getEpicOrThrow, so the only remaining failure mode is a stale
+        // precondition. Re-fetch updatedAt inside the same tx so the
+        // caller's 409 carries the freshest value.
         const current = this.#domain.getEpicOrThrow(id);
         throw new PreconditionFailedError({
           entityKind: "epic",
@@ -296,11 +305,6 @@ export class MutationService {
         });
       }
 
-      // Domain layer assertNonEmpty/normalisation contracts: domain.updateEpic
-      // applied them on the legacy path. Re-route through it to validate
-      // inputs, but only when the caller actually provided values that
-      // would trigger validation. Since we've already written the row via
-      // CAS, we just re-fetch the canonical record here.
       const epic = this.#domain.getEpicOrThrow(id);
       this.#emitEpicUpdated(epic);
       return epic;
