@@ -203,7 +203,7 @@ export function resolveGitContext(cwd: string, persistedAt: number = Date.now())
   const branchName: string | null = runGit(["branch", "--show-current"], cwd);
   const headSha: string | null = runGit(["rev-parse", "HEAD"], cwd);
 
-  const gitDir: string | null = resolveGitDir(worktreePath);
+  const { gitDir } = resolveGitDir(worktreePath);
   const core: GitContextCore = { worktreePath, branchName, headSha, headStatKey, gitDir };
   gitContextCache.set(worktreePath, core);
 
