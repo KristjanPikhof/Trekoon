@@ -225,3 +225,229 @@ After verification is complete:
 
 Changes should integrate cleanly with existing patterns. If a change fights the
 architecture, refactor first rather than bolt on. The goal is zero tech debt.
+
+## Single-agent execution loop
+
+Use this loop when one agent should continue the work directly. The primary loop
+is: **session → claim → work → task done → repeat**.
+
+### 1. Orient with a single call
+
+```bash
+trekoon --toon session
+```
+
+If you already know which epic you are working on, scope the session:
+
+```bash
+trekoon --toon session --epic <epic-id>
+```
+
+`session` returns diagnostics, sync status, the next ready task with subtrees,
+blocker list, and readiness counts in one envelope. Use `--compact` to reduce
+output size when you do not need contract metadata:
+
+```bash
+trekoon --toon --compact session
+```
+
+**After session returns, follow this decision tree in order:**
+
+1. **`recoveryRequired` is true?** → Stop. Run `trekoon --toon init` and
+   re-check.
+2. **`behind > 0`?** → Sync first: `trekoon --toon sync pull --from main`.
+   This pulls tracker events (not git commits) so task states are current.
+3. **`pendingConflicts > 0`?** → Resolve before claiming work:
+   `trekoon --toon sync conflicts list`. For uniform conflicts, batch resolve:
+   `trekoon --toon sync resolve --all --use ours` (or `--use theirs`). For
+   mixed conflicts, inspect individually with `sync conflicts show <id>` and
+   resolve per-conflict. See `reference/sync.md` for full conflict guidance.
+4. **Session returned a next task?** → Proceed to step 2 (claim work).
+5. **No next task and unsure what to do?** → Run `trekoon --toon suggest` for
+   priority-ranked recommendations (see step 1b below).
+
+### 1b. Get suggestions when stuck
+
+When the session has no clear next task, or you are unsure what action to take:
+
+```bash
+trekoon --toon suggest
+trekoon --toon suggest --epic <epic-id>
+```
+
+`suggest` inspects recovery state, sync status, readiness, and epic progress,
+then returns up to 3 suggestions ranked by priority. Each suggestion includes a
+category (`recovery`, `sync`, `execution`, `planning`), a reason, and a
+ready-to-run command you can execute directly.
+
+Suggest respects the status machine — it will never recommend an invalid
+transition. Use it:
+- At session start when `readyCount` is 0 and you need guidance.
+- Mid-loop when all tasks are blocked and you need to decide what to unblock.
+- Before closing an epic to confirm the right next step.
+
+### 1c. Check epic progress
+
+When you need a quick dashboard before or during work on an epic:
+
+```bash
+trekoon --toon epic progress <epic-id>
+```
+
+Returns done/in_progress/blocked/todo counts, ready task count, and the next
+candidate. Use this:
+- Before starting a work session to gauge how much remains.
+- After completing several tasks to report progress to the user.
+- To decide whether an epic is ready to be marked done.
+
+### 2. Claim work explicitly
+
+Once you know which task to work on, claim it:
+
+```bash
+trekoon --toon task update <task-id> --status in_progress
+```
+
+Optionally assign ownership when multiple agents or people are working:
+
+```bash
+trekoon --toon task update <task-id> --status in_progress --owner <name>
+```
+
+Owner is for tracking who is responsible. Set it on tasks or subtasks:
+
+```bash
+trekoon --toon task update <task-id> --owner alice
+trekoon --toon subtask update <subtask-id> --owner bob
+```
+
+### 3. Work on the task
+
+While working, append progress notes:
+
+```bash
+trekoon --toon task update <task-id> --append "Started implementation"
+trekoon --toon task update <task-id> --append "Blocked by <reason>" --status blocked
+```
+
+### 3b. Work on subtasks explicitly when they matter
+
+Use the same status discipline for subtasks when a task depends on concrete
+subtask progress:
+
+```bash
+trekoon --toon subtask update <subtask-id> --status in_progress
+trekoon --toon subtask update <subtask-id> --append "Implemented parser branch"
+trekoon --toon subtask update <subtask-id> --append "Verified with fixture set" --status done
+trekoon --toon subtask update <subtask-id> --append "Blocked by <reason>" --status blocked
+```
+
+Use subtasks for real execution units, not filler. If a task has open subtasks
+when `task done` is called, treat the warning as a prompt to consciously decide
+whether the task is genuinely complete.
+
+### 4. Finish or report a block
+
+When done, append a completion note then mark done:
+
+```bash
+trekoon --toon task update <task-id> --append "Completed implementation and checks"
+trekoon --toon task done <task-id>
+```
+
+`task done` works from any non-done status (`todo`, `in_progress`, `blocked`).
+It auto-transitions through `in_progress` when needed. The response includes:
+
+- **Next candidate**: the next ready task with its full tree and blockers.
+- **Unblocked tasks**: downstream tasks that became ready after this completion.
+  Use this to decide what to claim next or to launch parallel work.
+- **Open subtask warning**: if subtasks remain incomplete (completion still
+  proceeds, but the warning is surfaced so you can decide whether to go back).
+
+If blocked instead of done:
+
+```bash
+trekoon --toon task update <task-id> --append "Blocked by <reason>" --status blocked
+```
+
+### 5. Repeat
+
+After `task done`, the returned next-task envelope is sufficient to continue
+the loop from step 2. A fresh `session` call is not required mid-loop unless
+you need updated diagnostics, sync status, or want to switch epics.
+
+Run `session` again at the start of each new conversation session.
+
+**When to use each command during the loop:**
+
+| Situation | Command |
+|---|---|
+| Start of session | `session` or `session --epic <id>` |
+| Unsure what to do next | `suggest` or `suggest --epic <id>` |
+| Quick progress check | `epic progress <epic-id>` |
+| Claim a task | `task update <id> --status in_progress` |
+| Assign ownership | `task update <id> --owner <name>` |
+| Log progress | `task update <id> --append "..."` |
+| Mark done | `task done <id>` |
+| Report blocker | `task update <id> --append "..." --status blocked` |
+| Reduce output noise | Add `--compact` to any command |
+
+## Update policy: prefer append-based progress logging
+
+Use descriptions as the durable work log. For progress updates, append instead
+of rewriting full descriptions.
+
+Status transitions must follow the status machine. Use `in_progress` as the
+intermediate step to reach `done`. Direct `todo → done` is invalid via
+`task update`; use `task done` instead, which auto-transitions.
+
+### Preferred patterns
+
+```bash
+trekoon --toon task update <task-id> --append "Started implementation" --status in_progress
+trekoon --toon task update <task-id> --append "Completed implementation and checks"
+trekoon --toon task done <task-id>
+trekoon --toon task update <task-id> --append "Blocked by <reason>" --status blocked
+trekoon --toon task update <task-id> --owner alice
+```
+
+### Bulk update rules
+
+- Bulk update is available for `epic update`, `task update`, and
+  `subtask update`.
+- Bulk mode uses `--ids <csv>` or `--all`.
+- Bulk mode supports only `--append` and/or `--status`.
+- Do not pass a positional ID in bulk mode.
+- `--append` and `--description` are mutually exclusive.
+- Prefer `--ids` for narrow, explicit updates.
+- Use `--all` only for clear maintenance sweeps or when the user explicitly wants
+  a broad update.
+
+Examples:
+
+```bash
+trekoon --toon task update --ids id1,id2 --append "Waiting on release" --status blocked
+trekoon --toon epic update --ids epic1,epic2 --append "Sprint planning refreshed" --status in_progress
+```
+
+## Read policy: use the smallest sufficient read
+
+Use the narrowest command that answers the question.
+
+| Need | Preferred command |
+|---|---|
+| Session startup (diagnostics + sync + next task) | `trekoon --toon session` |
+| Session scoped to one epic | `trekoon --toon session --epic <epic-id>` |
+| Next-action suggestions | `trekoon --toon suggest` |
+| Epic progress dashboard | `trekoon --toon epic progress <epic-id>` |
+| Next task only | `trekoon --toon task next` |
+| A few ready options | `trekoon --toon task ready --limit 5` |
+| Direct blockers for one task | `trekoon --toon dep list <task-id>` |
+| What this item unblocks | `trekoon --toon dep reverse <task-or-subtask-id>` |
+| One full task payload | `trekoon --toon task show <task-id> --all` |
+| One full epic tree | `trekoon --toon epic show <epic-id> --all` |
+| Repeated text in one scope | `trekoon --toon epic\|task\|subtask search ...` |
+
+Avoid broad scans such as `task list --all` or `epic show --all` when
+`task next`, `task ready`, `dep list`, `dep reverse`, `suggest`, or `search`
+can answer the question more cheaply.
