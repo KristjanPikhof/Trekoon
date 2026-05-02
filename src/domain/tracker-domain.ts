@@ -34,8 +34,7 @@ import {
   type ValidStatus,
 } from "./types";
 import {
-  type CascadeDependencyTargetStatusRow,
-  type CascadePlannerReader,
+  loadCascadeDependencyTargetStatuses,
   planStatusCascade as planStatusCascadeImpl,
 } from "./cascade-planner";
 
