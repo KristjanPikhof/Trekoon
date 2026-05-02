@@ -108,6 +108,7 @@ Read references lazily based on mode.
 
 | Mode | Read | Use it for |
 |---|---|---|
+| Harness primitives | `reference/harness-primitives.md` | Universal intent-level guidance for local task displays, questions, subagent delegation, testing, review agents, and Trekoon evidence recording across Codex, Claude Code, OpenCode, Pi, and similar harnesses. |
 | Plan | `reference/planning.md` | Converting a goal into a real epic/task/subtask dependency graph with validation and handoff. Includes creation policy, search/replace policy. |
 | Execute | `reference/execution.md` | Running an epic end to end, choosing lanes, dispatching sub-agents, recording evidence, closing the epic. Includes single-agent loop, update policy, read policy. |
 | Team execute | `reference/execution-with-team.md` | Agent Teams coordination via TeamCreate/TaskCreate/SendMessage when the environment supports it |
@@ -142,11 +143,13 @@ These stop conditions are the core contract for the skill.
 
 ## Clarification tool rule
 
-When planning or execution needs user input, use the harness's user-question
-tool rather than burying the question inside narration:
+When planning or execution needs user input, use the harness's structured
+question tool when available rather than burying the question inside narration:
 
 - OpenCode: `question`
 - Claude Code: `AskUserQuestion`
+- Codex/Pi/other harnesses: use the native question tool if exposed; otherwise
+  ask one concise plain-text question
 
 Ask narrow, decision-shaping questions. Prefer one clear question with concrete
 options over a broad list of speculative unknowns.
@@ -193,7 +196,7 @@ Choose the lightest mode that will still move the work forward.
 | Situation | Mode | First move |
 |---|---|---|
 | One ready task, narrow scope, or user asked to continue personally | Single-agent execution | `session --epic <epic-id>` |
-| Multiple ready tasks across separable subsystems or owners | Orchestrated execution | Read `reference/execution.md`, then `task ready --epic <epic-id> --limit 50` |
+| Multiple ready tasks across separable subsystems or owners | Orchestrated execution with subagents when supported | Read `reference/harness-primitives.md` and `reference/execution.md`, then `task ready --epic <epic-id> --limit 50` |
 | User explicitly asked for team execution and Agent Teams are available | Team execution | Read `reference/execution-with-team.md` |
 
 Single-agent loop shape: **session → claim → work → task done → repeat**.
@@ -202,15 +205,25 @@ update/recovery policy, and the canonical command sequences.
 
 ## Delegation policy
 
-Prefer one sub-agent per execution lane, not one sub-agent per tiny task.
+Prefer offloading non-trivial independent Trekoon execution lanes to subagents
+when the harness supports it. This preserves the parent context window for
+orchestration, dependency decisions, user communication, and final synthesis.
 
-- Spawn sub-agents when 2+ ready tasks are independent, touch different
+- Use the harness's native subagent/task mechanism. If exact tool names are not
+  known, phrase the action as "spawn a subagent for this bounded Trekoon lane".
+- Prefer one subagent per execution lane, not one subagent per tiny task.
+- Spawn subagents when 2+ ready tasks are independent, touch different
   subsystems, or can be grouped into bounded lanes.
+- Use read-only/explorer subagents for noisy discovery and write-capable
+  worker/general subagents for implementation lanes.
 - Keep each lane small enough to verify and report clearly.
 - Avoid delegation when the scope is tiny, the tasks are tightly coupled, or the
   overhead exceeds the gain.
 - When tasks share the same directory roots, owners, or subsystem context, group
   them into one lane.
+- Use local todo/task tools as a live progress display for the user and as
+  current-session coordination state. Trekoon remains the durable source of
+  truth for status, owners, blockers, dependencies, notes, and evidence.
 
 ## Setup and fallback
 
@@ -234,5 +247,3 @@ selection after missing shared storage or broken bootstrap.
 - Run Trekoon commands, build/lint/test flows, and explicit git operations via
   your shell tool.
 - Use `--compact` on Trekoon commands in sub-agent prompts to reduce token usage.
-
-## User manual input:
