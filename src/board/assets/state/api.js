@@ -69,9 +69,13 @@ export function computeInverseDelta(previousSnapshot, optimisticSnapshot) {
     }
 
     // Entities present in both but mutated -> restore the previous version.
+    // cloneSnapshot always produces fresh references for the optimistic snapshot,
+    // so reference-inequality is sufficient: any record the optimistic patch
+    // touched will be a different object from the pre-patch one. This avoids an
+    // O(snapshot) JSON.stringify on every rollback path.
     for (const [id, afterRecord] of after) {
       const beforeRecord = before.get(id);
-      if (beforeRecord && beforeRecord !== afterRecord && JSON.stringify(beforeRecord) !== JSON.stringify(afterRecord)) {
+      if (beforeRecord && beforeRecord !== afterRecord) {
         restored.push(beforeRecord);
       }
     }
