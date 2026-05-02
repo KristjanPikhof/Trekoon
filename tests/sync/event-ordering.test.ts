@@ -120,7 +120,7 @@ function insertEventViaContext(
   operation: string,
 ): void {
   writeTransaction(conn, (): void => {
-    withTransactionEventContext(conn, cwd, (): void => {
+    withTransactionEventContext(conn, fakeGitContext(cwd), (): void => {
       conn
         .query(
           `INSERT INTO events
