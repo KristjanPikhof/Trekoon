@@ -108,6 +108,23 @@ function isSqliteBusyMessage(message: string): boolean {
   return normalized.includes("database is locked") || normalized.includes("database schema is locked");
 }
 
+function redactDetailLeaves(value: unknown): unknown {
+  if (typeof value === "string") {
+    return redactSensitive(value);
+  }
+  if (Array.isArray(value)) {
+    return value.map((item) => redactDetailLeaves(item));
+  }
+  if (value !== null && typeof value === "object") {
+    const out: Record<string, unknown> = {};
+    for (const [key, child] of Object.entries(value as Record<string, unknown>)) {
+      out[key] = redactDetailLeaves(child);
+    }
+    return out;
+  }
+  return value;
+}
+
 function toBoardRouteError(error: unknown, requestLabel: string): BoardRouteError {
   if (error instanceof DomainError) {
     const status =
@@ -118,11 +135,20 @@ function toBoardRouteError(error: unknown, requestLabel: string): BoardRouteErro
           : error.code === "invalid_dependency" || error.code === "dependency_blocked"
             ? 409
           : 400;
+    // Secrets occasionally ride DomainError when an upstream layer interpolates
+    // a request body or header into the message/details (P1 finding 10).
+    // Run the canonical redactor over the message and recursively over every
+    // string-valued leaf of `details` before serialising to the wire so we
+    // never leak Bearer/Basic credentials, JWTs, or keyed `token=...` shapes.
+    const redactedMessage = redactSensitive(error.message);
+    const redactedDetails = error.details === undefined
+      ? undefined
+      : (redactDetailLeaves(error.details) as Record<string, unknown>);
     return {
       status,
       code: error.code,
-      message: error.message,
-      ...(error.details === undefined ? {} : { details: error.details }),
+      message: redactedMessage,
+      ...(redactedDetails === undefined ? {} : { details: redactedDetails }),
     };
   }
 
