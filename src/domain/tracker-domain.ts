@@ -21,7 +21,6 @@ import {
   type ReverseDependencyNode,
   type SearchEntityMatch,
   type SearchField,
-  type SearchFieldMatch,
   type SearchNode,
   type SearchSummary,
   type StatusCascadePlan,
@@ -33,6 +32,7 @@ import {
   VALID_TRANSITIONS,
   type ValidStatus,
 } from "./types";
+import { buildMatchSnippet, collectSearchMatches, countMatches, summarizeMatches } from "./search";
 import { loadCascadeDependencyTargetStatuses, planStatusCascade as planStatusCascadeImpl } from "./cascade-planner";
 
 const DEFAULT_STATUS = "todo";
