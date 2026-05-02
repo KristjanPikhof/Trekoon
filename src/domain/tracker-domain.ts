@@ -396,6 +396,7 @@ export class TrackerDomain {
   }
 
   deleteEpic(id: string): void {
+    this.#assertInTransaction("deleteEpic");
     this.getEpicOrThrow(id);
     this.#db.query("DELETE FROM epics WHERE id = ?;").run(id);
   }
