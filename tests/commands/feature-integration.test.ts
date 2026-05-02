@@ -241,8 +241,12 @@ describe("batch creation boundaries", (): void => {
 
     try {
       const domain = new TrackerDomain(storage.db);
-      const epic = domain.createEpic({ title: "Large batch", description: "desc" });
-      const task = domain.createTask({ epicId: epic.id, title: "Parent task", description: "desc" });
+      const { epic, task } = writeTransaction(storage.db, () => {
+        const createdEpic = domain.createEpic({ title: "Large batch", description: "desc" });
+        const createdTask = domain.createTask({ epicId: createdEpic.id, title: "Parent task", description: "desc" });
+        return { epic: createdEpic, task: createdTask };
+      });
+      void epic;
       const specs = Array.from({ length: 1005 }, (_value, index) => ({
         tempKey: `subtask-${index}`,
         parent: { kind: "id" as const, id: task.id },
