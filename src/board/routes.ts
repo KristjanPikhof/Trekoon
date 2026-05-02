@@ -181,9 +181,13 @@ function describeBoardError(mutations: MutationService, error: unknown, requestL
     return routeError;
   }
 
+  // describeError can echo user-supplied values straight from a DomainError
+  // (status_transition_invalid returns error.message verbatim, dependency
+  // descriptions interpolate ids). Run the same redact pass over the
+  // friendlier message so secrets don't slip past the wire-level sanitiser.
   return {
     ...routeError,
-    message: readableMessage,
+    message: redactSensitive(readableMessage),
   };
 }
 
