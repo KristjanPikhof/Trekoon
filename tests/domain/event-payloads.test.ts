@@ -253,7 +253,7 @@ describe("MutationService event payload shapes", (): void => {
       description: "graph-desc",
       taskSpecs: [{ tempKey: "t1", title: "Graph Task", description: "gt-desc" }],
       subtaskSpecs: [
-        { tempKey: "s1", title: "Graph Subtask", description: "gs-desc", parent: { kind: "tempKey", tempKey: "t1" } },
+        { tempKey: "s1", title: "Graph Subtask", description: "gs-desc", parent: { kind: "temp_key", tempKey: "t1" } },
       ],
       dependencySpecs: [],
     });
