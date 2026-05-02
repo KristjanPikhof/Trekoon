@@ -89,10 +89,21 @@ export async function executeDaemonRequest(request: DaemonRequest): Promise<Daem
       exitCode: 1,
     };
   } catch (error: unknown) {
-    const message: string = error instanceof Error ? error.stack ?? error.message : String(error);
+    // Never include the stack in the response envelope: stacks contain
+    // absolute filesystem paths and may carry secret-bearing error text.
+    // The stack is still surfaced locally on the daemon's stderr for
+    // operator-side debugging.
+    if (error instanceof Error && typeof error.stack === "string") {
+      // eslint-disable-next-line no-console
+      console.error("[trekoon daemon] dispatch failure:", error.stack);
+    } else {
+      // eslint-disable-next-line no-console
+      console.error("[trekoon daemon] dispatch failure:", error);
+    }
+    const sanitized: string = safeErrorMessage(error, "unknown error");
     return {
       stdout: "",
-      stderr: `Daemon dispatch failure: ${message}\n`,
+      stderr: `Daemon dispatch failure: ${sanitized}\n`,
       exitCode: 1,
     };
   }
