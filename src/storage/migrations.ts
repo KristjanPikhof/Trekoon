@@ -561,7 +561,7 @@ export function readMigrationVersionMarker(db: Database): number | null {
       return null;
     }
 
-    const raw: string = Bun.file(markerPath).text();
+    const raw: string = readFileSync(markerPath, "utf8");
     const version: number = parseInt(raw.trim(), 10);
     if (!Number.isFinite(version) || version < 0) {
       return null;
