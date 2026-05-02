@@ -35,6 +35,35 @@ function recordId(value: unknown): string | null {
   return typeof id === "string" && id.length > 0 ? id : null;
 }
 
+/**
+ * Extract the (version, updatedAt) tuple used to detect content changes.
+ *
+ * `updatedAt` is bumped on every domain write; `version` is incremented in
+ * lockstep at the SQLite layer. Comparing the tuple lets us bail out cheaply
+ * when neither has moved, avoiding the JSON.stringify hot path that fires on
+ * every WAL tick — including ticks where only non-content shape changed
+ * (e.g. dependency reordering of an unrelated record produced an array
+ * identity change but no semantic delta for the entity in question).
+ */
+function recordChangeKey(value: unknown): { version: number | null; updatedAt: number | null } {
+  if (!value || typeof value !== "object") {
+    return { version: null, updatedAt: null };
+  }
+  const versionRaw = (value as { version?: unknown }).version;
+  const updatedAtRaw = (value as { updatedAt?: unknown }).updatedAt;
+  return {
+    version: typeof versionRaw === "number" ? versionRaw : null,
+    updatedAt: typeof updatedAtRaw === "number" ? updatedAtRaw : null,
+  };
+}
+
+function changeKeyEqual(
+  a: { version: number | null; updatedAt: number | null },
+  b: { version: number | null; updatedAt: number | null },
+): boolean {
+  return a.version === b.version && a.updatedAt === b.updatedAt;
+}
+
 function diffById(previous: readonly unknown[] | undefined, current: readonly unknown[] | undefined): CollectionDiff {
   const previousIndex = new Map<string, unknown>();
   for (const record of previous ?? []) {
@@ -54,7 +83,13 @@ function diffById(previous: readonly unknown[] | undefined, current: readonly un
 
     seen.add(id);
     const previousRecord = previousIndex.get(id);
-    if (!previousRecord || JSON.stringify(previousRecord) !== JSON.stringify(record)) {
+    if (!previousRecord) {
+      upserted.push(record);
+      continue;
+    }
+    // Tuple compare on (version, updatedAt) — both move in lockstep on every
+    // domain write. Equal tuple → no content change → skip the upsert.
+    if (!changeKeyEqual(recordChangeKey(previousRecord), recordChangeKey(record))) {
       upserted.push(record);
     }
   }
