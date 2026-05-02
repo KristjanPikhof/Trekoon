@@ -332,18 +332,24 @@ export function openTrekoonDatabase(
   }
 
   if (isDaemonInProcessCacheEnabled()) {
+    const cacheKey: string = paths.databaseFile;
     const cachedHandle: TrekoonDatabase = {
       db,
       paths,
       diagnostics,
       close(): void {
-        // No-op: the daemon owns the lifetime, freed via closeCachedDatabases().
+        // The daemon owns the lifetime (freed via closeCachedDatabases()), but
+        // we still need to track in-use refcount so eviction does not close a
+        // handle that an in-flight request is still using.
+        releaseCachedDatabase(cacheKey);
       },
     };
     // Bound the cache before insertion so a daemon serving many distinct
-    // cwds doesn't accumulate open FDs without limit.
+    // cwds doesn't accumulate open FDs without limit. Eviction will skip
+    // entries that other requests are currently borrowing.
     evictLruIfNeeded();
-    cachedDatabases.set(paths.databaseFile, cachedHandle);
+    // Initial refcount = 1 reflects the borrow taken by THIS caller.
+    cachedDatabases.set(cacheKey, { handle: cachedHandle, refcount: 1 });
     return cachedHandle;
   }
 
