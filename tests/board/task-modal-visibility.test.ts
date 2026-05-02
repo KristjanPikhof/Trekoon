@@ -105,28 +105,32 @@ describe("task modal visibility actions", () => {
     expect(state.taskModalOpen).toBe(false);
   });
 
-  test("dropTaskStatus updates selection without opening modal even with prior selection", () => {
+  test("dropTaskStatus does not open or change modal selection when none was open", () => {
     const { model, actions, api } = buildHarness();
     actions.selectTask("task-1");
     actions.closeTask();
     expect(model.getState().taskModalOpen).toBe(false);
+    expect(model.getState().selectedTaskId).toBeNull();
 
     actions.dropTaskStatus("task-2", "done");
 
-    expect(model.getState().selectedTaskId).toBe("task-2");
+    // Drag is a status change only; do not hijack selection.
+    expect(model.getState().selectedTaskId).toBeNull();
     expect(model.getState().taskModalOpen).toBe(false);
     expect(api.patchTask).toHaveBeenCalled();
   });
 
-  test("dropTaskStatus closes a previously open modal when dragging another card", () => {
+  test("dropTaskStatus does not close or change selection when another task modal is open", () => {
     const { model, actions } = buildHarness();
     actions.selectTask("task-1");
     expect(model.getState().taskModalOpen).toBe(true);
+    expect(model.getState().selectedTaskId).toBe("task-1");
 
     actions.dropTaskStatus("task-2", "done");
 
-    expect(model.getState().selectedTaskId).toBe("task-2");
-    expect(model.getState().taskModalOpen).toBe(false);
+    // The currently-open modal MUST NOT be hijacked by an unrelated drag.
+    expect(model.getState().selectedTaskId).toBe("task-1");
+    expect(model.getState().taskModalOpen).toBe(true);
   });
 
   test("openEpic clears taskModalOpen", () => {
