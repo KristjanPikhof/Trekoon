@@ -289,6 +289,10 @@ describe("sync command", (): void => {
   });
 
   test("prunes expired completed idempotency rows while preserving fresh replay", (): void => {
+    // The prune sweep is throttled to once per 60s per process (System
+    // Hardening 0.4.2, finding 27). Reset the module-level throttle so this
+    // test exercises the actual DELETE path regardless of test ordering.
+    __resetIdempotencyPruneThrottleForTests();
     const workspace: string = createWorkspace();
     initializeRepository(workspace);
 
