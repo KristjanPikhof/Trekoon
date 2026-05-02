@@ -75,17 +75,17 @@ function authedUrl(path: string): string {
   return `${boardServer.origin}${path}${sep}token=etag-token`;
 }
 
-function readUpdatedAt(entityKind: "epic" | "task" | "subtask", id: string): number {
+function readVersion(entityKind: "epic" | "task" | "subtask", id: string): number {
   const database = openTrekoonDatabase(workspace);
   try {
     const domain = new TrackerDomain(database.db);
     if (entityKind === "epic") {
-      return domain.getEpicOrThrow(id).updatedAt;
+      return domain.getEpicOrThrow(id).version;
     }
     if (entityKind === "task") {
-      return domain.getTaskOrThrow(id).updatedAt;
+      return domain.getTaskOrThrow(id).version;
     }
-    return domain.getSubtaskOrThrow(id).updatedAt;
+    return domain.getSubtaskOrThrow(id).version;
   } finally {
     database.close();
   }
@@ -102,26 +102,26 @@ describe("board PATCH If-Match preconditions", (): void => {
   });
 
   test("PATCH /api/epics/:id with matching If-Match succeeds", async (): Promise<void> => {
-    const updatedAt = readUpdatedAt("epic", seeded.epicId);
+    const version = readVersion("epic", seeded.epicId);
     const response = await fetch(authedUrl(`/api/epics/${encodeURIComponent(seeded.epicId)}`), {
       method: "PATCH",
       headers: {
         "content-type": "application/json",
-        "if-match": String(updatedAt),
+        "if-match": String(version),
       },
       body: JSON.stringify({ title: "Matched Rename" }),
     });
     expect(response.status).toBe(200);
   });
 
-  test("PATCH /api/epics/:id with stale If-Match returns 409 with currentUpdatedAt", async (): Promise<void> => {
-    const updatedAt = readUpdatedAt("epic", seeded.epicId);
-    const staleTimestamp = updatedAt - 1;
+  test("PATCH /api/epics/:id with stale If-Match returns 409 with currentVersion", async (): Promise<void> => {
+    const version = readVersion("epic", seeded.epicId);
+    const staleVersion = version - 1;
     const response = await fetch(authedUrl(`/api/epics/${encodeURIComponent(seeded.epicId)}`), {
       method: "PATCH",
       headers: {
         "content-type": "application/json",
-        "if-match": String(staleTimestamp),
+        "if-match": String(staleVersion),
       },
       body: JSON.stringify({ title: "Should Not Apply" }),
     });
@@ -131,17 +131,17 @@ describe("board PATCH If-Match preconditions", (): void => {
     expect(body.error.code).toBe("precondition_failed");
     expect(body.error.details.entityKind).toBe("epic");
     expect(body.error.details.entityId).toBe(seeded.epicId);
-    expect(body.error.details.currentUpdatedAt).toBe(updatedAt);
-    expect(body.error.details.providedUpdatedAt).toBe(staleTimestamp);
+    expect(body.error.details.currentVersion).toBe(version);
+    expect(body.error.details.providedVersion).toBe(staleVersion);
   });
 
   test("PATCH /api/tasks/:id with stale If-Match returns 409", async (): Promise<void> => {
-    const updatedAt = readUpdatedAt("task", seeded.taskId);
+    const version = readVersion("task", seeded.taskId);
     const response = await fetch(authedUrl(`/api/tasks/${encodeURIComponent(seeded.taskId)}`), {
       method: "PATCH",
       headers: {
         "content-type": "application/json",
-        "if-match": String(updatedAt - 100),
+        "if-match": String(version - 1),
       },
       body: JSON.stringify({ title: "Stale" }),
     });
@@ -149,16 +149,16 @@ describe("board PATCH If-Match preconditions", (): void => {
     const body = await response.json();
     expect(body.error.code).toBe("precondition_failed");
     expect(body.error.details.entityKind).toBe("task");
-    expect(body.error.details.currentUpdatedAt).toBe(updatedAt);
+    expect(body.error.details.currentVersion).toBe(version);
   });
 
   test("PATCH /api/subtasks/:id with stale If-Match returns 409", async (): Promise<void> => {
-    const updatedAt = readUpdatedAt("subtask", seeded.subtaskId);
+    const version = readVersion("subtask", seeded.subtaskId);
     const response = await fetch(authedUrl(`/api/subtasks/${encodeURIComponent(seeded.subtaskId)}`), {
       method: "PATCH",
       headers: {
         "content-type": "application/json",
-        "if-match": String(updatedAt - 100),
+        "if-match": String(version - 1),
       },
       body: JSON.stringify({ title: "Stale" }),
     });
@@ -169,12 +169,12 @@ describe("board PATCH If-Match preconditions", (): void => {
   });
 
   test("PATCH /api/epics/:id/cascade with stale If-Match returns 409", async (): Promise<void> => {
-    const updatedAt = readUpdatedAt("epic", seeded.epicId);
+    const version = readVersion("epic", seeded.epicId);
     const response = await fetch(authedUrl(`/api/epics/${encodeURIComponent(seeded.epicId)}/cascade`), {
       method: "PATCH",
       headers: {
         "content-type": "application/json",
-        "if-match": String(updatedAt - 100),
+        "if-match": String(version - 1),
       },
       body: JSON.stringify({ status: "in_progress" }),
     });
@@ -200,12 +200,12 @@ describe("board PATCH If-Match preconditions", (): void => {
   });
 
   test("PATCH /api/epics/:id with quoted If-Match value matches", async (): Promise<void> => {
-    const updatedAt = readUpdatedAt("epic", seeded.epicId);
+    const version = readVersion("epic", seeded.epicId);
     const response = await fetch(authedUrl(`/api/epics/${encodeURIComponent(seeded.epicId)}`), {
       method: "PATCH",
       headers: {
         "content-type": "application/json",
-        "if-match": `"${updatedAt}"`,
+        "if-match": `"${version}"`,
       },
       body: JSON.stringify({ title: "Quoted If-Match" }),
     });
@@ -213,12 +213,12 @@ describe("board PATCH If-Match preconditions", (): void => {
   });
 
   test("PATCH /api/epics/:id with W/-prefixed weak ETag matches", async (): Promise<void> => {
-    const updatedAt = readUpdatedAt("epic", seeded.epicId);
+    const version = readVersion("epic", seeded.epicId);
     const response = await fetch(authedUrl(`/api/epics/${encodeURIComponent(seeded.epicId)}`), {
       method: "PATCH",
       headers: {
         "content-type": "application/json",
-        "if-match": `W/"${updatedAt}"`,
+        "if-match": `W/"${version}"`,
       },
       body: JSON.stringify({ title: "Weak ETag Rename" }),
     });
@@ -226,12 +226,12 @@ describe("board PATCH If-Match preconditions", (): void => {
   });
 
   test("PATCH /api/epics/:id with bare W/<digits> weak ETag matches", async (): Promise<void> => {
-    const updatedAt = readUpdatedAt("epic", seeded.epicId);
+    const version = readVersion("epic", seeded.epicId);
     const response = await fetch(authedUrl(`/api/epics/${encodeURIComponent(seeded.epicId)}`), {
       method: "PATCH",
       headers: {
         "content-type": "application/json",
-        "if-match": `W/${updatedAt}`,
+        "if-match": `W/${version}`,
       },
       body: JSON.stringify({ title: "Weak ETag Bare" }),
     });
@@ -239,12 +239,12 @@ describe("board PATCH If-Match preconditions", (): void => {
   });
 
   test("PATCH /api/epics/:id with W/-prefixed stale ETag returns 409", async (): Promise<void> => {
-    const updatedAt = readUpdatedAt("epic", seeded.epicId);
+    const version = readVersion("epic", seeded.epicId);
     const response = await fetch(authedUrl(`/api/epics/${encodeURIComponent(seeded.epicId)}`), {
       method: "PATCH",
       headers: {
         "content-type": "application/json",
-        "if-match": `W/"${updatedAt - 1}"`,
+        "if-match": `W/"${version - 1}"`,
       },
       body: JSON.stringify({ title: "Should Not Apply" }),
     });
@@ -272,26 +272,26 @@ describe("board PATCH If-Match preconditions", (): void => {
   // Trekoon task 02a08a41-93a9-4c30-95be-0f9bf2478632 / system-hardening-0.4.2
   // P0 finding 2: previously the route layer issued the If-Match check
   // BEFORE entering the write transaction, so two concurrent PATCHes that
-  // each saw the same `updatedAt` could both pass the check and the second
+  // each saw the same token could both pass the check and the second
   // one would silently overwrite the first. The CAS variants in
   // MutationService now perform the precondition INSIDE
   // BEGIN IMMEDIATE — exactly one writer can win the race.
-  test("two concurrent PATCHes with same If-Match: exactly one returns 200, the other returns 409 with advanced currentUpdatedAt", async (): Promise<void> => {
-    const baselineUpdatedAt = readUpdatedAt("task", seeded.taskId);
+  test("two concurrent PATCHes with same If-Match: exactly one returns 200, the other returns 409 with advanced currentVersion", async (): Promise<void> => {
+    const baselineVersion = readVersion("task", seeded.taskId);
 
     const issuePatch = (label: string): Promise<Response> =>
       fetch(authedUrl(`/api/tasks/${encodeURIComponent(seeded.taskId)}`), {
         method: "PATCH",
         headers: {
           "content-type": "application/json",
-          "if-match": String(baselineUpdatedAt),
+          "if-match": String(baselineVersion),
         },
         body: JSON.stringify({ title: `Concurrent rename: ${label}` }),
       });
 
     // Fire both PATCHes from the same loop tick so they race for the
     // BEGIN IMMEDIATE lock. SQLite serialises them; the late writer
-    // observes the now-advanced updated_at and the SQL CAS clause
+    // observes the now-advanced version and the SQL CAS clause
     // produces zero affected rows -> PreconditionFailedError -> 409.
     const [responseA, responseB] = await Promise.all([
       issuePatch("A"),
@@ -307,14 +307,14 @@ describe("board PATCH If-Match preconditions", (): void => {
     expect(conflictBody.error.code).toBe("precondition_failed");
     expect(conflictBody.error.details.entityKind).toBe("task");
     expect(conflictBody.error.details.entityId).toBe(seeded.taskId);
-    expect(conflictBody.error.details.providedUpdatedAt).toBe(baselineUpdatedAt);
-    // Losing reader observes the freshly-advanced updatedAt: strictly
-    // greater than the baseline they sent (the winner bumped it).
-    expect(conflictBody.error.details.currentUpdatedAt).toBeGreaterThan(baselineUpdatedAt);
+    expect(conflictBody.error.details.providedVersion).toBe(baselineVersion);
+    // Losing reader observes the freshly-advanced version: strictly greater
+    // than the baseline they sent (the winner bumped it).
+    expect(conflictBody.error.details.currentVersion).toBeGreaterThan(baselineVersion);
 
-    // And exactly one row update landed: the persisted updatedAt should
+    // And exactly one row update landed: the persisted version should
     // match the value the losing 409 reported.
-    const persistedUpdatedAt = readUpdatedAt("task", seeded.taskId);
-    expect(persistedUpdatedAt).toBe(conflictBody.error.details.currentUpdatedAt);
+    const persistedVersion = readVersion("task", seeded.taskId);
+    expect(persistedVersion).toBe(conflictBody.error.details.currentVersion);
   });
 });
