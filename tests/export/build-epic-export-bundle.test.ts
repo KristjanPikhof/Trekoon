@@ -121,9 +121,10 @@ describe("buildEpicExportBundle", () => {
 
   test("handles epic with no tasks", () => {
     const cwd = createWorkspace();
-    const { domain, db } = createDomain(cwd);
+    const { domain, db, seed } = createDomain(cwd);
+    void db;
 
-    const epic = domain.createEpic({ title: "Empty epic", description: "No tasks here" });
+    const epic = seed((d) => d.createEpic({ title: "Empty epic", description: "No tasks here" }));
     const bundle = buildEpicExportBundle(domain, epic.id);
 
     expect(bundle.tasks).toHaveLength(0);
