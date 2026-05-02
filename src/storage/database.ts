@@ -304,10 +304,17 @@ function releaseCachedDatabase(key: string): void {
 }
 
 export function closeCachedDatabases(): void {
-  for (const entry of cachedDatabases.values()) {
+  for (const [key, entry] of cachedDatabases) {
+    if (entry.refcount > 0) {
+      // eslint-disable-next-line no-console
+      console.warn(
+        `[trekoon daemon] leaving cached database open during shutdown because it is still borrowed: ${key}`,
+      );
+      continue;
+    }
     closeCachedHandle(entry.handle);
+    cachedDatabases.delete(key);
   }
-  cachedDatabases.clear();
   warnedOnTransientOvergrowth = false;
 }
 
