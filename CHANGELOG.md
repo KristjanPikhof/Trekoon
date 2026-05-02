@@ -4,6 +4,15 @@ All notable changes to Trekoon are documented in this file.
 
 ## 0.4.3 - Unreleased
 
+### Added
+
+- Add Codex as a supported Trekoon skill install target via
+  `trekoon skills install --link --editor codex` and global skill installs.
+- Add universal harness guidance to the Trekoon skill for local progress
+  displays, subagent-preferred lane execution, structured questions, review
+  agents, and Trekoon evidence recording across Codex, Claude Code, OpenCode,
+  Pi, and similar harnesses.
+
 ### Changed
 
 - Harden board live updates with version-based `If-Match`, cookie-only SSE
