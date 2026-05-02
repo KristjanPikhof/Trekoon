@@ -617,6 +617,7 @@ any `ok: false` response will be one of the following strings.
 | `already_done` | Entity is already in `done` status; transition is a no-op. |
 | `already_resolved` | Conflict was resolved by another process before this write. |
 | `ambiguous_legacy_state` | Legacy worktree state is ambiguous and cannot be automatically resolved. |
+| `backpressure` | SSE snapshot stream disconnected a slow client whose queued bytes exceeded the hard limit. |
 | `backup_already_exists` | A backup file already exists at the target path; overwrite was not requested. |
 | `backup_database_missing` | Source database file not found when attempting to create a backup. |
 | `backup_failed` | Backup operation failed (I/O or copy error). |
