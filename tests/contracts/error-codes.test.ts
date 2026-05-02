@@ -48,7 +48,7 @@ function scanSourceCodes(): Set<string> {
         const text = readFileSync(full, "utf8");
         let match: RegExpExecArray | null;
         while ((match = codePattern.exec(text)) !== null) {
-          codes.add(match[1]);
+          codes.add(match[1]!);
         }
         codePattern.lastIndex = 0;
       }
