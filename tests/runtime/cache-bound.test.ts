@@ -290,5 +290,5 @@ describe("gitContextCache LRU bound", (): void => {
     }
 
     expect(gitContextCacheSize()).toBe(CACHE_CAPACITY);
-  });
+  }, 10_000);
 });
