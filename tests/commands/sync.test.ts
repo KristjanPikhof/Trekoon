@@ -9,9 +9,21 @@ import { afterEach, describe, expect, test } from "bun:test";
 import { runSync } from "../../src/commands/sync";
 import { MutationService } from "../../src/domain/mutation-service";
 import { appendEventWithGitContext } from "../../src/sync/event-writes";
+import { resolveGitContext } from "../../src/sync/git-context";
 import { syncResolve } from "../../src/sync/service";
 import { openTrekoonDatabase } from "../../src/storage/database";
 import { resolveStoragePaths } from "../../src/storage/path";
+
+/**
+ * Resolve the (worktree_path, current_branch) tuple that `syncPull` /
+ * `syncResolve` would tag conflict rows with for `workspace`. Tests that
+ * seed `sync_conflicts` directly must use this scope so the production
+ * scoped queries (list, count, resolveAll cleanup) can find the rows.
+ */
+function conflictScopeFor(workspace: string): { worktreePath: string; currentBranch: string } {
+  const git = resolveGitContext(workspace);
+  return { worktreePath: git.worktreePath, currentBranch: git.branchName ?? "" };
+}
 
 const tempDirs: string[] = [];
 
