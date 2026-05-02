@@ -402,8 +402,11 @@ describe("owner field roundtrip", (): void => {
 
     try {
       const domain = new TrackerDomain(storage.db);
-      const epic = domain.createEpic({ title: "Owner Epic", description: "desc" });
-      const task = domain.createTask({ epicId: epic.id, title: "Owned task", description: "desc" });
+      const { task } = writeTransaction(storage.db, () => {
+        const epic = domain.createEpic({ title: "Owner Epic", description: "desc" });
+        const createdTask = domain.createTask({ epicId: epic.id, title: "Owned task", description: "desc" });
+        return { task: createdTask };
+      });
 
       expect(writeTransaction(storage.db, () => domain.updateTask(task.id, { owner: "alice" })).owner).toBe("alice");
       expect(writeTransaction(storage.db, () => domain.updateTask(task.id, { owner: null })).owner).toBeNull();
