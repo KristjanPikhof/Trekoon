@@ -269,7 +269,7 @@ export class MutationService {
 
       this.#domain.deleteEpic(id);
 
-      const epicDeleteEventId = this.#emitEpicDeleted(id);
+      this.#emitEpicDeleted(id);
 
       for (const task of tasks) {
         const taskDeleteEventId = this.#emitTaskDeleted(task.id);
@@ -278,8 +278,6 @@ export class MutationService {
           this.#emitSubtaskDeleted(subtask.id, { taskId: task.id, sourceEventId: taskDeleteEventId });
         }
       }
-
-      void epicDeleteEventId;
     });
   }
 
