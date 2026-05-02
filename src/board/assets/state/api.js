@@ -501,3 +501,94 @@ export function createApi(model, options) {
     },
   };
 }
+
+/**
+ * Subscribe the board client to /api/snapshot/stream.
+ *
+ * Receives `snapshotDelta` events emitted by the per-server-instance event bus
+ * (own server mutations + WAL-watcher-derived deltas from external CLI writes)
+ * and applies them via `model.applySnapshotDelta`. Idempotent merge means
+ * re-applying a delta we already saw via the mutation response is harmless.
+ *
+ * Returns a `dispose()` function that closes the EventSource and stops
+ * processing further events.
+ *
+ * @param {object} model - Store with `applySnapshotDelta` method
+ * @param {object} options
+ * @param {string} options.sessionToken - Auth token (forwarded as ?token=)
+ * @param {function} options.rerender - Trigger UI rerender after applying deltas
+ * @param {typeof EventSource} [options.EventSourceCtor] - Constructor override for tests
+ * @param {string} [options.path] - Override stream path; default /api/snapshot/stream
+ * @returns {{ dispose: () => void, eventSource: EventSource | null }}
+ */
+export function subscribeSnapshotStream(model, options) {
+  const {
+    sessionToken,
+    rerender,
+    EventSourceCtor = typeof EventSource !== "undefined" ? EventSource : null,
+    path = "/api/snapshot/stream",
+  } = options ?? {};
+
+  if (!EventSourceCtor) {
+    return { dispose: () => {}, eventSource: null };
+  }
+
+  // EventSource cannot set custom headers, so the auth token rides as a query
+  // parameter. Server `extractToken` already accepts ?token=.
+  const url = sessionToken && sessionToken.length > 0
+    ? `${path}?token=${encodeURIComponent(sessionToken)}`
+    : path;
+
+  let disposed = false;
+  const eventSource = new EventSourceCtor(url);
+
+  const handleSnapshotDelta = (event) => {
+    if (disposed) return;
+    const raw = typeof event?.data === "string" ? event.data : "";
+    if (raw.length === 0) return;
+    let payload;
+    try {
+      payload = JSON.parse(raw);
+    } catch {
+      return;
+    }
+    const delta = payload?.snapshotDelta;
+    if (!delta || typeof delta !== "object") return;
+    model.applySnapshotDelta(delta);
+    if (typeof rerender === "function") rerender();
+  };
+
+  const handleSnapshot = (event) => {
+    if (disposed) return;
+    const raw = typeof event?.data === "string" ? event.data : "";
+    if (raw.length === 0) return;
+    let payload;
+    try {
+      payload = JSON.parse(raw);
+    } catch {
+      return;
+    }
+    const snapshot = payload?.snapshot;
+    if (!snapshot || typeof snapshot !== "object") return;
+    if (typeof model.replaceSnapshot === "function") {
+      model.replaceSnapshot(snapshot);
+      if (typeof rerender === "function") rerender();
+    }
+  };
+
+  eventSource.addEventListener("snapshotDelta", handleSnapshotDelta);
+  eventSource.addEventListener("snapshot", handleSnapshot);
+
+  return {
+    eventSource,
+    dispose() {
+      if (disposed) return;
+      disposed = true;
+      try {
+        eventSource.close();
+      } catch {
+        // best-effort
+      }
+    },
+  };
+}
