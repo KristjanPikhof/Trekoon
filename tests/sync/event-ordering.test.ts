@@ -25,6 +25,11 @@ import { openTrekoonDatabase, writeTransaction } from "../../src/storage/databas
 import { migrateDatabase } from "../../src/storage/migrations";
 import { MutationService } from "../../src/domain/mutation-service";
 import { withTransactionEventContext } from "../../src/sync/event-writes";
+import { type ResolvedGitContext } from "../../src/sync/git-context";
+
+function fakeGitContext(workspace: string, branchName = "main"): ResolvedGitContext {
+  return { worktreePath: workspace, branchName, headSha: null, persistedAt: Date.now() };
+}
 
 // ---------------------------------------------------------------------------
 // Workspace / temp-dir helpers
