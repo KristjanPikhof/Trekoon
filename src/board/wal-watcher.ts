@@ -175,7 +175,7 @@ export function startWalWatcher(options: WalWatcherOptions): WalWatcher {
     }
 
     try {
-      const fresh = buildBoardSnapshot(domain);
+      const fresh = buildSnapshot(domain);
 
       const epicsDiff = diffById(lastSnapshot.epics, fresh.epics);
       const tasksDiff = diffById(lastSnapshot.tasks, fresh.tasks);
