@@ -8,6 +8,7 @@ interface MockEventSourceInstance {
   readyState: number;
   listeners: Map<string, Set<(event: { data?: string }) => void>>;
   closed: boolean;
+  onerror: (() => void) | null;
   emit(eventName: string, data: unknown): void;
 }
 
