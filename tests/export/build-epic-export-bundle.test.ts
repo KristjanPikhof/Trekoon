@@ -155,11 +155,15 @@ describe("buildEpicExportBundle", () => {
 
   test("includes all tasks with stable ordering", () => {
     const cwd = createWorkspace();
-    const { domain, db } = createDomain(cwd);
+    const { domain, db, seed } = createDomain(cwd);
+    void db;
 
-    const epic = domain.createEpic({ title: "Order test", description: "Check ordering" });
-    const t1 = domain.createTask({ epicId: epic.id, title: "First", description: "A" });
-    const t2 = domain.createTask({ epicId: epic.id, title: "Second", description: "B" });
+    const { epic, t1, t2 } = seed((d) => {
+      const createdEpic = d.createEpic({ title: "Order test", description: "Check ordering" });
+      const createdT1 = d.createTask({ epicId: createdEpic.id, title: "First", description: "A" });
+      const createdT2 = d.createTask({ epicId: createdEpic.id, title: "Second", description: "B" });
+      return { epic: createdEpic, t1: createdT1, t2: createdT2 };
+    });
 
     const bundle = buildEpicExportBundle(domain, epic.id);
 
