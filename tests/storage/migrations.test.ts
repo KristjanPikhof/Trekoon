@@ -384,6 +384,69 @@ describe("migrate backup CLI", (): void => {
     expect(result.error?.code).toBe("unknown_option");
   });
 
+  test("subcommand --retain trims sibling count to N", async (): Promise<void> => {
+    const workspace: string = createWorkspace();
+    const storage = openTrekoonDatabase(workspace);
+    storage.close();
+
+    // Pre-populate four backups directly via the helper.
+    const baseMs: number = new Date("2026-05-02T13:45:30.000Z").getTime();
+    for (let i = 0; i < 4; i += 1) {
+      createMigrationBackup({
+        cwd: workspace,
+        now: new Date(baseMs + i * 1000),
+        retain: 100,
+      });
+    }
+
+    const result = await runMigrate({
+      args: ["backup", "--retain", "2"],
+      cwd: workspace,
+      mode: "toon",
+    });
+
+    expect(result.ok).toBeTrue();
+    const data = result.data as {
+      retain: number;
+      retainedCount: number;
+      prunedPaths: string[];
+    };
+    expect(data.retain).toBe(2);
+    expect(data.retainedCount).toBe(2);
+    expect(data.prunedPaths.length).toBeGreaterThan(0);
+    expect(listBackups(workspace).length).toBe(2);
+  });
+
+  test("subcommand rejects --retain with non-integer value", async (): Promise<void> => {
+    const workspace: string = createWorkspace();
+    const storage = openTrekoonDatabase(workspace);
+    storage.close();
+
+    const result = await runMigrate({
+      args: ["backup", "--retain", "abc"],
+      cwd: workspace,
+      mode: "toon",
+    });
+
+    expect(result.ok).toBeFalse();
+    expect(result.error?.code).toBe("invalid_input");
+  });
+
+  test("subcommand rejects --retain 0", async (): Promise<void> => {
+    const workspace: string = createWorkspace();
+    const storage = openTrekoonDatabase(workspace);
+    storage.close();
+
+    const result = await runMigrate({
+      args: ["backup", "--retain", "0"],
+      cwd: workspace,
+      mode: "toon",
+    });
+
+    expect(result.ok).toBeFalse();
+    expect(result.error?.code).toBe("invalid_input");
+  });
+
   test("subcommand fails cleanly when DB is missing", async (): Promise<void> => {
     const workspace: string = createWorkspace();
     // Do not initialize.
