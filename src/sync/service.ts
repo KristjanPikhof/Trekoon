@@ -950,24 +950,28 @@ function removeConflictsForEntityIds(
   if (entityIds.length === 0) {
     return;
   }
-  const placeholders = entityIds.map(() => "?").join(", ");
-  if (excludeConflictId !== undefined) {
-    db.query(
-      `DELETE FROM sync_conflicts
-       WHERE entity_kind = ?
-         AND entity_id IN (${placeholders})
-         AND worktree_path = ?
-         AND current_branch = ?
-         AND id != ?;`,
-    ).run(entityKind, ...entityIds, scope.worktreePath, scope.currentBranch, excludeConflictId);
-  } else {
-    db.query(
-      `DELETE FROM sync_conflicts
-       WHERE entity_kind = ?
-         AND entity_id IN (${placeholders})
-         AND worktree_path = ?
-         AND current_branch = ?;`,
-    ).run(entityKind, ...entityIds, scope.worktreePath, scope.currentBranch);
+
+  for (let offset = 0; offset < entityIds.length; offset += RESOLVE_ALL_CHUNK_SIZE) {
+    const chunkIds = entityIds.slice(offset, offset + RESOLVE_ALL_CHUNK_SIZE);
+    const placeholders = chunkIds.map(() => "?").join(", ");
+    if (excludeConflictId !== undefined) {
+      db.query(
+        `DELETE FROM sync_conflicts
+         WHERE entity_kind = ?
+           AND entity_id IN (${placeholders})
+           AND worktree_path = ?
+           AND current_branch = ?
+           AND id != ?;`,
+      ).run(entityKind, ...chunkIds, scope.worktreePath, scope.currentBranch, excludeConflictId);
+    } else {
+      db.query(
+        `DELETE FROM sync_conflicts
+         WHERE entity_kind = ?
+           AND entity_id IN (${placeholders})
+           AND worktree_path = ?
+           AND current_branch = ?;`,
+      ).run(entityKind, ...chunkIds, scope.worktreePath, scope.currentBranch);
+    }
   }
 }
 
@@ -2176,6 +2180,8 @@ export function listSyncConflicts(cwd: string, mode: SyncConflictMode): SyncConf
 
 export function getSyncConflict(cwd: string, conflictId: string): SyncConflictDetail {
   const storage = openTrekoonDatabase(cwd);
+  const git = resolveGitContext(cwd);
+  const scope: ConflictScope = scopeFromGitContext(git);
 
   try {
     const conflict = storage.db
@@ -2184,10 +2190,12 @@ export function getSyncConflict(cwd: string, conflictId: string): SyncConflictDe
         SELECT id, event_id, entity_kind, entity_id, field_name, ours_value, theirs_value, resolution, created_at, updated_at, worktree_path, current_branch
         FROM sync_conflicts
         WHERE id = ?
+          AND worktree_path = ?
+          AND current_branch = ?
         LIMIT 1;
         `,
       )
-      .get(conflictId) as ConflictRow | null;
+      .get(conflictId, scope.worktreePath, scope.currentBranch) as ConflictRow | null;
 
     if (!conflict) {
       throw new Error(`Conflict '${conflictId}' not found.`);
@@ -2231,17 +2239,19 @@ export function getSyncConflict(cwd: string, conflictId: string): SyncConflictDe
   }
 }
 
-function lookupPendingConflict(db: Database, conflictId: string): ConflictRow {
+function lookupPendingConflict(db: Database, conflictId: string, scope: ConflictScope): ConflictRow {
   const conflict = db
     .query(
       `
       SELECT id, event_id, entity_kind, entity_id, field_name, ours_value, theirs_value, resolution, created_at, updated_at, worktree_path, current_branch
       FROM sync_conflicts
       WHERE id = ?
+        AND worktree_path = ?
+        AND current_branch = ?
       LIMIT 1;
       `,
     )
-    .get(conflictId) as ConflictRow | null;
+    .get(conflictId, scope.worktreePath, scope.currentBranch) as ConflictRow | null;
 
   if (!conflict) {
     throw new Error(`Conflict '${conflictId}' not found.`);
@@ -2257,6 +2267,7 @@ function lookupPendingConflict(db: Database, conflictId: string): ConflictRow {
 export function syncResolve(cwd: string, conflictId: string, resolution: SyncResolution): ResolveSummary {
   const storage = openTrekoonDatabase(cwd);
   const git = resolveGitContext(cwd);
+  const scope: ConflictScope = scopeFromGitContext(git);
 
   try {
     persistGitContext(storage.db, git);
@@ -2266,7 +2277,7 @@ export function syncResolve(cwd: string, conflictId: string, resolution: SyncRes
     // atomic.  Without this, two concurrent resolves could both pass
     // the check and double-resolve the same conflict.
     const conflict = writeTransaction(storage.db, (): ConflictRow => {
-      const row = lookupPendingConflict(storage.db, conflictId);
+      const row = lookupPendingConflict(storage.db, conflictId, scope);
       resolveConflictRow(storage.db, row, resolution, git);
       return row;
     });
@@ -2286,9 +2297,11 @@ export function syncResolve(cwd: string, conflictId: string, resolution: SyncRes
 // Preview is read-only — no git context persistence needed.
 export function syncResolvePreview(cwd: string, conflictId: string, resolution: SyncResolution): ResolvePreviewSummary {
   const storage = openTrekoonDatabase(cwd);
+  const git = resolveGitContext(cwd);
+  const scope: ConflictScope = scopeFromGitContext(git);
 
   try {
-    const conflict = lookupPendingConflict(storage.db, conflictId);
+    const conflict = lookupPendingConflict(storage.db, conflictId, scope);
 
     const oursValue: unknown = parseConflictValue(conflict.ours_value);
     const theirsValue: unknown = parseConflictValue(conflict.theirs_value);
@@ -2343,7 +2356,11 @@ function queryPendingConflictIds(
   return (db.query(sql).all(...params) as ConflictOrderRow[]).map((row) => row.id);
 }
 
-function queryPendingConflictsByIds(db: Database, conflictIds: readonly string[]): readonly ConflictRow[] {
+function queryPendingConflictsByIds(
+  db: Database,
+  conflictIds: readonly string[],
+  scope: ConflictScope,
+): readonly ConflictRow[] {
   if (conflictIds.length === 0) {
     return [];
   }
@@ -2354,10 +2371,13 @@ function queryPendingConflictsByIds(db: Database, conflictIds: readonly string[]
       `
       SELECT id, event_id, entity_kind, entity_id, field_name, ours_value, theirs_value, resolution, created_at, updated_at, worktree_path, current_branch
       FROM sync_conflicts
-      WHERE resolution = 'pending' AND id IN (${placeholders});
+      WHERE resolution = 'pending'
+        AND id IN (${placeholders})
+        AND worktree_path = ?
+        AND current_branch = ?;
       `,
     )
-    .all(...conflictIds) as ConflictRow[];
+    .all(...conflictIds, scope.worktreePath, scope.currentBranch) as ConflictRow[];
 
   const rowById = new Map(rows.map((row) => [row.id, row]));
 
@@ -2397,7 +2417,7 @@ export function syncResolveAll(
 
       for (let offset = 0; offset < orderedConflictIds.length; offset += RESOLVE_ALL_CHUNK_SIZE) {
         const chunkIds = orderedConflictIds.slice(offset, offset + RESOLVE_ALL_CHUNK_SIZE);
-        const chunkConflicts = queryPendingConflictsByIds(storage.db, chunkIds);
+        const chunkConflicts = queryPendingConflictsByIds(storage.db, chunkIds, scope);
 
         if (chunkConflicts.length !== chunkIds.length) {
           throw new DomainError({
