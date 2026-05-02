@@ -2,12 +2,14 @@ import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
+import { Database } from "bun:sqlite";
 import { afterEach, describe, expect, test } from "bun:test";
 
 import { runEpic } from "../../src/commands/epic";
 import { runSuggest } from "../../src/commands/suggest";
 import { TrackerDomain } from "../../src/domain/tracker-domain";
-import { openTrekoonDatabase } from "../../src/storage/database";
+import { openTrekoonDatabase, writeTransaction } from "../../src/storage/database";
+import { migrateDatabase } from "../../src/storage/migrations";
 
 const tempDirs: string[] = [];
 
