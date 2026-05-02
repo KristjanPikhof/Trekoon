@@ -245,11 +245,7 @@ export class MutationService {
         validateStatusTransition(existing.status, input.status, "epic", id);
       }
       const epic = this.#domain.updateEpic(id, input);
-      this.#appendEntityEvent("epic", epic.id, ENTITY_OPERATIONS.epic.updated, {
-        title: epic.title,
-        description: epic.description,
-        status: epic.status,
-      });
+      this.#emitEpicUpdated(epic);
       return epic;
     });
   }
