@@ -106,6 +106,12 @@ Key consequences:
 Treat every write as a mutation of shared repo-wide state, not branch-scoped
 state.
 
+**Conflicts are scoped per worktree + branch.** `sync_conflicts` rows are
+recorded with the originating worktree path and current branch, so resolving a
+conflict in one worktree never erases a peer worktree's conflict on the same
+entity. `sync conflicts list` and `sync resolve` from a given worktree only
+see and act on rows scoped to that worktree's branch.
+
 ## Worktree diagnostics and destructive scope
 
 - Inspect machine-readable storage fields when debugging worktrees:
