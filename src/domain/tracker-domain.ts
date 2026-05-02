@@ -440,13 +440,7 @@ export class TrackerDomain {
       };
     }
 
-    if (!this.#db.inTransaction) {
-      throw new DomainError({
-        code: "invalid_state",
-        message: "createTaskBatch must be called inside a writeTransaction",
-        details: { entity: "task" },
-      });
-    }
+    this.#assertInTransaction("createTaskBatch");
 
     const TASK_COLS_PER_ROW = 7; // id, epic_id, title, description, status, created_at, updated_at (version is literal 1)
     const WRITE_CHUNK_SIZE: number = Math.floor(SQLITE_MAX_VARIABLES / TASK_COLS_PER_ROW);
