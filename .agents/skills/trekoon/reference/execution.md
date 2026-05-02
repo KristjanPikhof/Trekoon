@@ -397,7 +397,7 @@ Run `session` again at the start of each new conversation session.
 | Start of session | `session` or `session --epic <id>` |
 | Unsure what to do next | `suggest` or `suggest --epic <id>` |
 | Quick progress check | `epic progress <epic-id>` |
-| Claim a task | `task update <id> --status in_progress` |
+| Claim a task | `task claim <id> --owner <name>` |
 | Assign ownership | `task update <id> --owner <name>` |
 | Log progress | `task update <id> --append "..."` |
 | Mark done | `task done <id>` |
