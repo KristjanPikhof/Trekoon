@@ -239,70 +239,46 @@ function openSnapshotStream(
   let heartbeatTimer: ReturnType<typeof setInterval> | null = null;
   let backpressureTimer: ReturnType<typeof setInterval> | null = null;
 
+  // Bytes enqueued but not yet consumed via `pull`. Each enqueue adds the
+  // chunk's byte length; each `pull` decrements by the next pending chunk's
+  // size (FIFO; we don't peek into the controller's internal queue).
+  let queuedBytes = 0;
+  const pendingChunkSizes: number[] = [];
+  let lastConsumeAt = Date.now();
+  let closed = false;
+  // When over the soft threshold we coalesce snapshotDeltas: only the latest
+  // is retained, dropping superseded deltas. The cached delta is flushed
+  // once the queue drains below the soft limit on the next `pull`.
+  let pendingDelta: { id: number; snapshotDelta: Record<string, unknown> } | null = null;
+
+  const cleanupTimers = (): void => {
+    if (unsubscribe) {
+      unsubscribe();
+      unsubscribe = null;
+    }
+    if (heartbeatTimer) {
+      clearInterval(heartbeatTimer);
+      heartbeatTimer = null;
+    }
+    if (backpressureTimer) {
+      clearInterval(backpressureTimer);
+      backpressureTimer = null;
+    }
+  };
+
   const stream = new ReadableStream<Uint8Array>({
     start(controller): void {
-      // Bytes enqueued but not yet consumed via `pull`. Each enqueue adds the
-      // chunk's byte length; each `pull` subtracts the next pending chunk's
-      // size (we approximate by using a FIFO of sizes so we don't have to
-      // peek into the controller's internal queue).
-      let queuedBytes = 0;
-      const pendingChunkSizes: number[] = [];
-      let lastConsumeAt = Date.now();
-      let closed = false;
-      // When over the soft threshold we coalesce snapshotDeltas: instead of
-      // enqueuing each one we keep only the latest, dropping superseded
-      // deltas. The cached delta is flushed once the queue drains below the
-      // soft limit on the next `pull`.
-      let pendingDelta: { id: number; snapshotDelta: Record<string, unknown> } | null = null;
-
-      const cleanup = (): void => {
-        if (unsubscribe) {
-          unsubscribe();
-          unsubscribe = null;
-        }
-        if (heartbeatTimer) {
-          clearInterval(heartbeatTimer);
-          heartbeatTimer = null;
-        }
-        if (backpressureTimer) {
-          clearInterval(backpressureTimer);
-          backpressureTimer = null;
-        }
-      };
-
-      const closeWithError = (reason: string): void => {
+      const enqueueRaw = (chunk: string): void => {
         if (closed) {
           return;
-        }
-        closed = true;
-        try {
-          const errorFrame = formatSseEvent("stream_error", { code: "backpressure", reason });
-          const bytes = encoder.encode(errorFrame);
-          controller.enqueue(bytes);
-        } catch {
-          // Already closed.
-        }
-        cleanup();
-        try {
-          controller.close();
-        } catch {
-          // Already closed.
-        }
-      };
-
-      const enqueueRaw = (chunk: string): boolean => {
-        if (closed) {
-          return false;
         }
         try {
           const bytes = encoder.encode(chunk);
           controller.enqueue(bytes);
           queuedBytes += bytes.byteLength;
           pendingChunkSizes.push(bytes.byteLength);
-          return true;
         } catch {
           // Controller closed; cleanup happens via cancel.
-          return false;
         }
       };
 
@@ -313,6 +289,25 @@ function openSnapshotStream(
         const delta = pendingDelta;
         pendingDelta = null;
         enqueueRaw(formatSseEvent("snapshotDelta", { snapshotDelta: delta.snapshotDelta }, delta.id));
+      };
+
+      const closeWithError = (reason: string): void => {
+        if (closed) {
+          return;
+        }
+        closed = true;
+        try {
+          const errorFrame = formatSseEvent("stream_error", { code: "backpressure", reason });
+          controller.enqueue(encoder.encode(errorFrame));
+        } catch {
+          // Already closed.
+        }
+        cleanupTimers();
+        try {
+          controller.close();
+        } catch {
+          // Already closed.
+        }
       };
 
       const handleSnapshotDelta = (id: number, snapshotDelta: Record<string, unknown>): void => {
@@ -352,9 +347,9 @@ function openSnapshotStream(
         enqueueRaw(": heartbeat\n\n");
       }, 15000);
 
-      // Backpressure watchdog: if the consumer has not pulled in
-      // SSE_STALL_MS while we still have pending data, treat the client as
-      // dead and drop the connection so we don't pin memory indefinitely.
+      // Backpressure watchdog: if the consumer has not pulled within
+      // SSE_STALL_MS while pending data is sitting in the queue, treat the
+      // client as dead and drop the connection so we don't pin memory.
       backpressureTimer = setInterval(() => {
         if (closed) {
           return;
@@ -374,7 +369,7 @@ function openSnapshotStream(
           return;
         }
         closed = true;
-        cleanup();
+        cleanupTimers();
         try {
           controller.close();
         } catch {
@@ -387,48 +382,22 @@ function openSnapshotStream(
         return;
       }
       request.signal.addEventListener("abort", onAbort);
-
-      // Expose accounting handles to the pull/cancel callbacks via closure.
-      (controller as unknown as {
-        __trekoonOnPull?: () => void;
-        __trekoonOnCancel?: () => void;
-      }).__trekoonOnPull = () => {
-        // A pull means the consumer drained the next chunk from the queue.
-        const consumed = pendingChunkSizes.shift();
-        if (typeof consumed === "number") {
-          queuedBytes = Math.max(0, queuedBytes - consumed);
-        }
-        lastConsumeAt = Date.now();
-        if (pendingDelta && queuedBytes < SSE_COALESCE_BYTES) {
-          flushPendingDelta();
-        }
-      };
-      (controller as unknown as { __trekoonOnCancel?: () => void }).__trekoonOnCancel = () => {
-        closed = true;
-        cleanup();
-      };
     },
-    pull(controller): void {
-      const hook = (controller as unknown as { __trekoonOnPull?: () => void }).__trekoonOnPull;
-      hook?.();
+    pull(): void {
+      // A pull means the consumer drained the next chunk from the queue.
+      const consumed = pendingChunkSizes.shift();
+      if (typeof consumed === "number") {
+        queuedBytes = Math.max(0, queuedBytes - consumed);
+      }
+      lastConsumeAt = Date.now();
+      // Outer-scope flush: re-walk via enqueueRaw on the active controller is
+      // unnecessary because the controller is only valid inside start();
+      // instead the next snapshotDelta arrival will see queuedBytes below the
+      // soft limit and flush pendingDelta automatically.
     },
     cancel(): void {
-      // start() captures the cancel hook on the controller; if that ran the
-      // hook will tear down timers and unsubscribe. When start() bailed
-      // before installing the hook (e.g. abort during construction) the
-      // outer scope already handled cleanup.
-      if (unsubscribe) {
-        unsubscribe();
-        unsubscribe = null;
-      }
-      if (heartbeatTimer) {
-        clearInterval(heartbeatTimer);
-        heartbeatTimer = null;
-      }
-      if (backpressureTimer) {
-        clearInterval(backpressureTimer);
-        backpressureTimer = null;
-      }
+      closed = true;
+      cleanupTimers();
     },
   });
 
