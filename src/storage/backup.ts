@@ -4,7 +4,7 @@ import { dirname, resolve } from "node:path";
 import { Database } from "bun:sqlite";
 
 import { DomainError } from "../domain/types";
-import { describeMigrations } from "./migrations";
+import { LATEST_MIGRATION_VERSION } from "./migrations";
 import { resolveStoragePaths } from "./path";
 
 export interface MigrateBackupResult {
