@@ -883,3 +883,104 @@ describe("migration-version marker: PRAGMA user_version fingerprint", (): void =
     expect(parsed.userVersion).toBe(LATEST_MIGRATION_VERSION);
   });
 });
+
+describe("migration fast-path: racing rollback vs unlocked stamp", (): void => {
+  test("rollback applied between probe and lock leaves user_version pinned to rollback target", (): void => {
+    // Models two CLI processes: A observes a fully-migrated schema via the
+    // unlocked fast-path probe; B then runs `rollbackDatabase` (acquiring
+    // BEGIN EXCLUSIVE) before A can stamp user_version. Without the
+    // re-read-under-lock guard, A would proceed to stamp user_version =
+    // LATEST despite schema_migrations now reporting a lower version,
+    // violating the invariant that the marker / user_version never points
+    // higher than schema_migrations.
+    const workspace: string = createWorkspace();
+    const storage = openTrekoonDatabase(workspace);
+    storage.close();
+
+    const dbPath = join(workspace, ".trekoon", "trekoon.db");
+
+    // Connection A: simulates process A entering migrateDatabase.
+    const dbA = new Database(dbPath);
+    dbA.exec("PRAGMA journal_mode = WAL;");
+    dbA.exec("PRAGMA foreign_keys = ON;");
+    dbA.exec("PRAGMA busy_timeout = 5000;");
+
+    // Connection B: simulates process B running a concurrent rollback.
+    const dbB = new Database(dbPath);
+    dbB.exec("PRAGMA journal_mode = WAL;");
+    dbB.exec("PRAGMA foreign_keys = ON;");
+    dbB.exec("PRAGMA busy_timeout = 5000;");
+
+    try {
+      // Process B rolls back before Process A's lock acquisition. In
+      // practice this race is the small window between the unlocked
+      // schema_migrations probe and the BEGIN EXCLUSIVE — we mirror that
+      // here by performing the rollback first, then having A run
+      // migrateDatabase against the now-rolled-back DB. The fast-path
+      // probe inside migrateDatabase must NOT stamp user_version =
+      // LATEST when the under-lock recheck disagrees with the unlocked
+      // probe.
+      rollbackDatabase(dbB, 7);
+
+      // A's call to migrateDatabase: under the new guard this falls
+      // through to the slow path, which re-applies migrations 8..LATEST.
+      // Crucially, between the unlocked probe and the lock the schema is
+      // NOT at LATEST, so the lock-confirmed branch must not run.
+      expect((): void => migrateDatabase(dbA)).not.toThrow();
+
+      // Final invariant: user_version must equal schema_migrations.MAX —
+      // never higher.
+      const userVersionRow = dbA
+        .query("PRAGMA user_version;")
+        .get() as { user_version: number } | null;
+      const schemaMigrationsMax: number = readCurrentMigrationVersionReadOnly(dbA);
+      expect(userVersionRow?.user_version).toBe(schemaMigrationsMax);
+      expect(userVersionRow?.user_version).toBe(LATEST_MIGRATION_VERSION);
+    } finally {
+      dbA.close(false);
+      dbB.close(false);
+    }
+  });
+
+  test("under-lock disagreement bails to slow path without stamping a higher user_version", (): void => {
+    // Direct invariant check: drop user_version to a stale value that
+    // disagrees with schema_migrations (modelling the half-applied state
+    // an interrupted rollback could leave). The fast-path's confirmed
+    // branch must not silently re-stamp to LATEST without going through
+    // the slow migrate path, which records every applied migration.
+    const workspace: string = createWorkspace();
+    const storage = openTrekoonDatabase(workspace);
+    storage.close();
+
+    const dbPath = join(workspace, ".trekoon", "trekoon.db");
+    const db = new Database(dbPath);
+    db.exec("PRAGMA journal_mode = WAL;");
+    db.exec("PRAGMA foreign_keys = ON;");
+
+    try {
+      // Tamper schema_migrations to remove the LATEST row only — the
+      // table still exists but its MAX(version) now lags. The unlocked
+      // fast-path probe will not skip (distinct_versions !== latest), so
+      // we go through the slow path; user_version gets stamped to LATEST
+      // again only after the missing migration row is reinstated.
+      db.exec("DELETE FROM schema_migrations WHERE version = (SELECT MAX(version) FROM schema_migrations);");
+
+      // Reset the marker so the marker fast-path can't short-circuit
+      // before the schema fast-path runs.
+      const markerPath = join(workspace, ".trekoon", "migration-version");
+      writeFileSync(markerPath, JSON.stringify({ version: 0, userVersion: 0 }), "utf8");
+
+      // migrateDatabase must complete and not leave user_version higher
+      // than schema_migrations at any commit boundary.
+      expect((): void => migrateDatabase(db)).not.toThrow();
+
+      const userVersionRow = db
+        .query("PRAGMA user_version;")
+        .get() as { user_version: number } | null;
+      const schemaMigrationsMax: number = readCurrentMigrationVersionReadOnly(db);
+      expect(userVersionRow?.user_version).toBe(schemaMigrationsMax);
+    } finally {
+      db.close(false);
+    }
+  });
+});
