@@ -297,6 +297,112 @@ export class MutationService {
   }
 
   /**
+   * Atomically append text to a task's description using a single SQL
+   * `description = description || ?` expression inside a write transaction.
+   *
+   * This eliminates the read-modify-write TOCTOU race that existed when
+   * callers read the description, computed the new value in application code,
+   * then issued a separate update write.  Two concurrent appends targeting
+   * the same task will each hold their own BEGIN IMMEDIATE lock in turn and
+   * see the other's text already committed, so neither write is lost.
+   *
+   * The separator matches the `appendLine` helper used across the CLI:
+   * an empty description gets the text directly, a non-empty description
+   * gets a `\n` prefix on the appended text.
+   *
+   * Optional `status` is validated through the normal status-machine checker
+   * and applied atomically in the same statement so combined
+   * `--append --status` flows remain a single write.
+   */
+  appendToTaskDescription(input: {
+    taskId: string;
+    append: string;
+    status?: string | undefined;
+    owner?: string | null | undefined;
+  }): TaskRecord {
+    return this.#writeTransaction((): TaskRecord => {
+      const existing = this.#domain.getTaskOrThrow(input.taskId);
+      if (input.status !== undefined) {
+        validateStatusTransition(existing.status, input.status, "task", input.taskId);
+      }
+      const separator = existing.description.length > 0 ? "\n" : "";
+      const now = Date.now();
+      const nextStatus = input.status ?? existing.status;
+      const nextOwner = input.owner !== undefined
+        ? (input.owner ?? null)
+        : existing.owner;
+      this.#db
+        .query(
+          "UPDATE tasks SET description = description || ?, status = ?, owner = ?, updated_at = ?, version = version + 1 WHERE id = ?;",
+        )
+        .run(separator + input.append, nextStatus, nextOwner, now, input.taskId);
+      const task = this.#domain.getTaskOrThrow(input.taskId);
+      this.#emitTaskUpdated(task);
+      return task;
+    });
+  }
+
+  /**
+   * Atomically append text to a subtask's description.
+   * Same semantics as `appendToTaskDescription`.
+   */
+  appendToSubtaskDescription(input: {
+    subtaskId: string;
+    append: string;
+    status?: string | undefined;
+    owner?: string | null | undefined;
+  }): SubtaskRecord {
+    return this.#writeTransaction((): SubtaskRecord => {
+      const existing = this.#domain.getSubtaskOrThrow(input.subtaskId);
+      if (input.status !== undefined) {
+        validateStatusTransition(existing.status, input.status, "subtask", input.subtaskId);
+      }
+      const separator = existing.description.length > 0 ? "\n" : "";
+      const now = Date.now();
+      const nextStatus = input.status ?? existing.status;
+      const nextOwner = input.owner !== undefined
+        ? (input.owner ?? null)
+        : existing.owner;
+      this.#db
+        .query(
+          "UPDATE subtasks SET description = description || ?, status = ?, owner = ?, updated_at = ?, version = version + 1 WHERE id = ?;",
+        )
+        .run(separator + input.append, nextStatus, nextOwner, now, input.subtaskId);
+      const subtask = this.#domain.getSubtaskOrThrow(input.subtaskId);
+      this.#emitSubtaskUpdated(subtask);
+      return subtask;
+    });
+  }
+
+  /**
+   * Atomically append text to an epic's description.
+   * Same semantics as `appendToTaskDescription`.
+   */
+  appendToEpicDescription(input: {
+    epicId: string;
+    append: string;
+    status?: string | undefined;
+  }): EpicRecord {
+    return this.#writeTransaction((): EpicRecord => {
+      const existing = this.#domain.getEpicOrThrow(input.epicId);
+      if (input.status !== undefined) {
+        validateStatusTransition(existing.status, input.status, "epic", input.epicId);
+      }
+      const separator = existing.description.length > 0 ? "\n" : "";
+      const now = Date.now();
+      const nextStatus = input.status ?? existing.status;
+      this.#db
+        .query(
+          "UPDATE epics SET description = description || ?, status = ?, updated_at = ? WHERE id = ?;",
+        )
+        .run(separator + input.append, nextStatus, now, input.epicId);
+      const epic = this.#domain.getEpicOrThrow(input.epicId);
+      this.#emitEpicUpdated(epic);
+      return epic;
+    });
+  }
+
+  /**
    * Mark a task `done` atomically in a single write transaction.
    *
    * Background (Trekoon task 4a0111c4-6400-4a77-b4f3-d9ad863e47db / system
