@@ -164,7 +164,7 @@ describe("stable mutationId for retry compare", () => {
           ? JSON.stringify({ ok: true, data: {} })
           : JSON.stringify({ error: { code: "e", message: "fail" } }),
       } as Response;
-    };
+    }) as typeof fetch;
 
     const api = createApi(model, {
       sessionToken: "tok",
