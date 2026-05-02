@@ -78,9 +78,11 @@ describe("setDragFeedback memoizes by primitive key", () => {
       renderCount += 1;
     });
 
-    // First call sets feedback and rerenders.
+    // First call sets feedback, invalidates the board-state memo, and rerenders.
+    const before = model.getBoardState();
     actions.setDragFeedback({ targetStatus: "in_progress", kind: "valid" });
     expect(renderCount).toBe(1);
+    expect(model.getBoardState()).not.toBe(before);
 
     // Subsequent dragover events allocate fresh objects with the same content.
     // These must NOT cause additional rerenders.
