@@ -460,6 +460,7 @@ function dependencyEventIdentity(event: StoredEvent): DependencyEventIdentity | 
 
 function entityFieldConflict(
   localDb: Database,
+  currentBranch: string,
   sourceBranch: string,
   event: StoredEvent,
   fieldName: string,
@@ -481,7 +482,7 @@ function entityFieldConflict(
       FROM events
       WHERE entity_kind = ?
         AND entity_id = ?
-        AND (git_branch IS NULL OR git_branch != ?)
+        AND git_branch = ?
         AND (
           created_at < ?
           OR (created_at = ? AND id < ?)
@@ -493,7 +494,7 @@ function entityFieldConflict(
       .all(
         event.entity_kind,
         event.entity_id,
-        sourceBranch,
+        currentBranch,
         beforeCreatedAt,
         beforeCreatedAt,
         beforeId,
