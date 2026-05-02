@@ -438,6 +438,22 @@ const MIGRATIONS: readonly Migration[] = [
       }
     },
   },
+  {
+    version: 11,
+    name: "0011_sync_conflicts_worktree_branch_scope",
+    up(db: Database): void {
+      migrateSyncConflictsScope(db);
+    },
+    down(db: Database): void {
+      // Dropping columns requires a table rewrite in SQLite (PRAGMA) — not
+      // strictly reversible without potential data loss. We drop the new
+      // indexes; the columns persist with their default empty-string values
+      // so a re-up no-ops cleanly.
+      for (const statement of SYNC_CONFLICTS_SCOPE_DOWN_STATEMENTS) {
+        db.exec(statement);
+      }
+    },
+  },
 ];
 
 function migrationTableExists(db: Database): boolean {
