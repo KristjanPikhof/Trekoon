@@ -114,6 +114,15 @@ export interface WalWatcherOptions {
    * burst of write events that SQLite emits within a single transaction.
    */
   readonly debounceMs?: number;
+  /**
+   * Log every Nth reconcile failure at warn level. Defaults to 5.
+   */
+  readonly logEveryNthFailure?: number;
+  /**
+   * Optional logger override; defaults to `console.warn`. Used by tests to
+   * assert failure-counter behavior without polluting stderr.
+   */
+  readonly logger?: (message: string, error: unknown) => void;
 }
 
 export interface WalWatcher {
