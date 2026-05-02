@@ -458,6 +458,93 @@ function dependencyEventIdentity(event: StoredEvent): DependencyEventIdentity | 
   return dependencyEventIdentityFromFields(payloadValidation.fields);
 }
 
+/**
+ * Memoized lookup table for "ours" field values keyed by
+ * `${entity_kind}|${entity_id}|${field_name}` on the current branch.
+ *
+ * Entries:
+ *   - undefined: not yet probed
+ *   - {found:false}: probed, no event on currentBranch touches this field
+ *   - {found:true,value}: probed, most recent serialized local value found
+ */
+type OursLookupResult =
+  | { readonly found: false }
+  | { readonly found: true; readonly value: string | null };
+
+type OursValueCache = Map<string, OursLookupResult>;
+
+function createOursValueCache(): OursValueCache {
+  return new Map<string, OursLookupResult>();
+}
+
+function oursCacheKey(entityKind: string, entityId: string, fieldName: string): string {
+  return `${entityKind}|${entityId}|${fieldName}`;
+}
+
+/**
+ * Fast O(1)-per-call probe (after first lookup is memoized) for the most
+ * recent local-branch event that touched a given (entity, field).
+ *
+ * Uses the `idx_events_entity_branch_cursor` index plus SQLite JSON1
+ * (`json_type`) to find the newest event whose payload has the field key,
+ * with a single LIMIT 1 query — replacing the previous unbounded batched
+ * history walk.
+ *
+ * Returns undefined when no event on `currentBranch` for `(entityKind,
+ * entityId)` has the field in its payload; otherwise the serialized
+ * local value (matching `serializeValue(payload.fields[field])`).
+ */
+function lookupOursFieldValue(
+  localDb: Database,
+  cache: OursValueCache,
+  currentBranch: string,
+  entityKind: string,
+  entityId: string,
+  fieldName: string,
+): string | null | undefined {
+  const key = oursCacheKey(entityKind, entityId, fieldName);
+  const cached = cache.get(key);
+  if (cached !== undefined) {
+    return cached.found ? cached.value : undefined;
+  }
+
+  // json_type returns SQL NULL only when the JSON path does not exist.
+  // It returns the string 'null' when the field is explicitly null —
+  // we treat that as a real value (matching the legacy walk's behavior
+  // where only `typeof undefined` skipped a key).
+  const path = `$.fields.${fieldName}`;
+  const row = localDb
+    .query(
+      `
+      SELECT json_extract(payload, ?) AS value, json_type(payload, ?) AS jt
+      FROM events
+      WHERE entity_kind = ?
+        AND entity_id = ?
+        AND git_branch = ?
+        AND json_type(payload, ?) IS NOT NULL
+      ORDER BY created_at DESC, id DESC
+      LIMIT 1;
+      `,
+    )
+    .get(path, path, entityKind, entityId, currentBranch, path) as
+    | { value: unknown; jt: string | null }
+    | null;
+
+  if (row === null || row.jt === null) {
+    cache.set(key, { found: false });
+    return undefined;
+  }
+
+  // Reconstruct serialized local value matching
+  // `serializeValue(JSON.parse(payload).fields[field])`.
+  // For JSON nulls, json_extract returns SQL NULL; we represent ours as "null".
+  // For other types we re-serialize using JSON.stringify on the JSON-extracted value.
+  const ours: string | null = row.jt === "null" ? "null" : JSON.stringify(row.value);
+
+  cache.set(key, { found: true, value: ours });
+  return ours;
+}
+
 function entityFieldConflict(
   localDb: Database,
   currentBranch: string | null,
@@ -465,17 +552,73 @@ function entityFieldConflict(
   event: StoredEvent,
   fieldName: string,
   incomingValue: unknown,
+  oursCache: OursValueCache,
 ): { oursValue: string | null; theirsValue: string | null } | null {
   // Detached HEAD has no named branch — no local-branch events can conflict.
   if (currentBranch === null) {
     return null;
   }
 
+  // Current-row short-circuit: live entity already matches the incoming
+  // value, so applying the incoming event is a no-op — no conflict possible.
   const currentValue = currentEntityFieldValue(localDb, event.entity_kind, event.entity_id, fieldName);
-  if (serializeValue(currentValue) === serializeValue(incomingValue)) {
+  const theirsValue = serializeValue(incomingValue);
+  if (serializeValue(currentValue) === theirsValue) {
     return null;
   }
 
+  // Dependency events use identity-tuple matching (entity_id can be reused
+  // across distinct dependencies). Fall back to the legacy filtered scan;
+  // dependency events are bounded by per-entity history depth and not the
+  // hot path that the optimization targets.
+  const incomingDependencyIdentity = dependencyEventIdentity(event);
+  if (incomingDependencyIdentity !== null) {
+    return entityFieldConflictDependencyWalk(
+      localDb,
+      currentBranch,
+      event,
+      fieldName,
+      theirsValue,
+      incomingDependencyIdentity,
+    );
+  }
+
+  // Fast path: indexed + memoized probe for "most recent local event
+  // touching this field on this entity".
+  const oursValue = lookupOursFieldValue(
+    localDb,
+    oursCache,
+    currentBranch,
+    event.entity_kind,
+    event.entity_id,
+    fieldName,
+  );
+
+  if (oursValue === undefined) {
+    return null;
+  }
+
+  if (oursValue === theirsValue) {
+    return null;
+  }
+
+  return { oursValue, theirsValue };
+}
+
+/**
+ * Slow-path conflict detection for dependency events. Preserves the legacy
+ * batched history walk because dependency identity (source/depends_on tuple)
+ * must match the incoming event — a static-field probe is not sufficient
+ * when distinct dependencies share an entity_id.
+ */
+function entityFieldConflictDependencyWalk(
+  localDb: Database,
+  currentBranch: string,
+  event: StoredEvent,
+  fieldName: string,
+  theirsValue: string | null,
+  incomingDependencyIdentity: DependencyEventIdentity,
+): { oursValue: string | null; theirsValue: string | null } | null {
   let beforeCreatedAt = Number.MAX_SAFE_INTEGER;
   let beforeId = "\uffff";
 
