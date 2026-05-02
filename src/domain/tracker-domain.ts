@@ -1066,6 +1066,9 @@ export class TrackerDomain {
       });
     }
 
+    const sourceKind = this.resolveNodeKind(normalizedSourceId);
+    const dependsOnKind = this.resolveNodeKind(normalizedDependsOnId);
+
     const existing = this.#db
       .query(
         "SELECT id, source_id, source_kind, depends_on_id, depends_on_kind, created_at, updated_at FROM dependencies WHERE source_id = ? AND depends_on_id = ?;",
