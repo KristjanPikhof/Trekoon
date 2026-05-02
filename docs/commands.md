@@ -84,6 +84,11 @@ Board API endpoints (all require token authentication):
 | `POST` | `/api/dependencies` | Add dependency edge (sourceId, dependsOnId) |
 | `DELETE` | `/api/dependencies?sourceId=...&dependsOnId=...` | Remove dependency |
 
+**Note:** the SSE auth token rides as a `?token=` query parameter on
+`/api/snapshot/stream` (EventSource cannot set custom headers), so it may
+appear in reverse-proxy access logs; treat access logs as sensitive if the
+board is exposed beyond localhost.
+
 Board mutations from any source — board UI, CLI in another shell, or another
 worktree — propagate to every connected client through the SSE stream. The CLI
 side is driven by a WAL-watcher that diffs the snapshot when
