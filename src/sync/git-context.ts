@@ -1,5 +1,6 @@
 import { type Database } from "bun:sqlite";
 
+import { writeTransaction } from "../storage/database";
 import { resolveStoragePaths } from "../storage/path";
 import { type GitContextSnapshot } from "./types";
 
