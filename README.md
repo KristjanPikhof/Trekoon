@@ -209,9 +209,12 @@ shell, worktree, or browser tab show up live without a manual refresh.
 | Check epic progress | `trekoon epic progress <id>` |
 | Export epic to Markdown | `trekoon epic export <id>` |
 | Claim a task atomically | `trekoon task claim <id> --owner <owner>` |
+| Claim a subtask atomically | `trekoon subtask claim <id> --owner <owner>` |
 | Mark a task done | `trekoon task done <id>` |
 | Sync across worktrees | `trekoon sync pull --from main` |
 | Back up the DB before migrations | `trekoon migrate backup` |
+| Reveal full board token | `trekoon board open --reveal-token` |
+| Run experimental daemon | `trekoon serve` (experimental) |
 | Get help | `trekoon [command] -h` |
 
 Every command supports `--toon`, `--json`, `--compact` for structured output.
