@@ -64,19 +64,21 @@ export function gitContextCacheSize(): number {
 export function resolveGitContext(cwd: string, persistedAt: number = Date.now()): ResolvedGitContext {
   const storagePaths = resolveStoragePaths(cwd);
   const worktreePath: string = storagePaths.worktreeRoot;
+  const headStatKey: string | null = readHeadStatKey(worktreePath);
 
   const cached: GitContextCore | undefined = gitContextCache.get(worktreePath);
-  if (cached !== undefined) {
-    return { ...cached, persistedAt };
+  if (cached !== undefined && cached.headStatKey === headStatKey) {
+    const { worktreePath: _, headStatKey: __, ...rest } = cached;
+    return { ...rest, persistedAt };
   }
 
   const branchName: string | null = runGit(["branch", "--show-current"], cwd);
   const headSha: string | null = runGit(["rev-parse", "HEAD"], cwd);
 
-  const core: GitContextCore = { worktreePath, branchName, headSha };
+  const core: GitContextCore = { worktreePath, branchName, headSha, headStatKey };
   gitContextCache.set(worktreePath, core);
 
-  return { ...core, persistedAt };
+  return { worktreePath, branchName, headSha, persistedAt };
 }
 
 function persistGitContextInner(db: Database, git: GitContextSnapshot, persistedAt: number): void {
