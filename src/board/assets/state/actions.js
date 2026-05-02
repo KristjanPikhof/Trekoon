@@ -444,6 +444,9 @@ export function createBoardActions(options) {
       const nextKey = feedback ? `${feedback.targetStatus}|${feedback.kind}` : null;
       if (prevKey === nextKey) return;
       store.dragFeedback = feedback;
+      if (typeof model.invalidateBoardStateMemo === "function") {
+        model.invalidateBoardStateMemo();
+      }
       rerender();
     },
     dropTaskStatus(taskId, nextStatus) {
