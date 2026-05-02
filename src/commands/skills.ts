@@ -10,11 +10,11 @@ import { type CliContext, type CliResult } from "../runtime/command-types";
 
 const SKILLS_USAGE = [
   "Usage:",
-  "  trekoon skills install [--link --editor opencode|claude|pi] [--to <path>] [--allow-outside-repo]",
-  "  trekoon skills install -g|--global [--editor opencode|claude|pi]",
+  "  trekoon skills install [--link --editor opencode|claude|codex|pi] [--to <path>] [--allow-outside-repo]",
+  "  trekoon skills install -g|--global [--editor opencode|claude|codex|pi]",
   "  trekoon skills update",
 ].join("\n");
-const EDITOR_NAMES = ["opencode", "claude", "pi"] as const;
+const EDITOR_NAMES = ["opencode", "claude", "codex", "pi"] as const;
 const ALLOW_OUTSIDE_REPO_FLAG = "allow-outside-repo";
 
 type EditorName = (typeof EDITOR_NAMES)[number];
@@ -86,6 +86,10 @@ function resolveLinkRoot(cwd: string, editor: EditorName, toOverride: string | u
 
   if (editor === "claude") {
     return join(cwd, ".claude", "skills");
+  }
+
+  if (editor === "codex") {
+    return join(cwd, ".codex", "skills");
   }
 
   return join(cwd, ".pi", "skills");
@@ -222,6 +226,10 @@ function resolveEditorConfigDir(cwd: string, editor: EditorName): string {
     return join(cwd, ".claude");
   }
 
+  if (editor === "codex") {
+    return join(cwd, ".codex");
+  }
+
   return join(cwd, ".pi");
 }
 
@@ -233,6 +241,10 @@ function resolveGlobalEditorSkillsDir(editor: EditorName): string {
 
   if (editor === "claude") {
     return join(home, ".claude", "skills");
+  }
+
+  if (editor === "codex") {
+    return join(home, ".codex", "skills");
   }
 
   return join(home, ".pi", "skills");
@@ -542,7 +554,7 @@ function runSkillsInstall(context: CliContext): CliResult {
 
   // Validate editor early (shared by both modes).
   if (rawEditor !== undefined && !EDITOR_NAMES.includes(rawEditor as EditorName)) {
-    return invalidInput("skills.install", "Invalid --editor value. Use: opencode, claude, pi", {
+    return invalidInput("skills.install", "Invalid --editor value. Use: opencode, claude, codex, pi", {
       editor: rawEditor,
       allowedEditors: EDITOR_NAMES,
     });
@@ -588,7 +600,7 @@ function runSkillsInstall(context: CliContext): CliResult {
   }
 
   if (wantsLink && rawEditor === undefined) {
-    return invalidArgs("skills install --link requires --editor opencode|claude|pi.");
+    return invalidArgs("skills install --link requires --editor opencode|claude|codex|pi.");
   }
 
   const editor: EditorName | undefined = rawEditor as EditorName | undefined;
