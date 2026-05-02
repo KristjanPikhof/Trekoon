@@ -1991,12 +1991,14 @@ describe("sync command", (): void => {
   test("resolving owner conflicts writes sql null instead of text null", async (): Promise<void> => {
     const workspace: string = createWorkspace();
     initializeRepository(workspace);
+    runGit(workspace, ["checkout", "-b", "feature/resolve-null-owner"]);
 
     const epicId = randomUUID();
     const taskId = randomUUID();
     const now = Date.now();
     const conflictId = randomUUID();
     const eventId = randomUUID();
+    const scope = conflictScopeFor(workspace);
 
     {
       const storage = openTrekoonDatabase(workspace);
@@ -2014,15 +2016,25 @@ describe("sync command", (): void => {
           .run(eventId, taskId, JSON.stringify({ fields: { owner: null } }), now + 1, now + 1);
         storage.db
           .query(
-            "INSERT INTO sync_conflicts (id, event_id, entity_kind, entity_id, field_name, ours_value, theirs_value, resolution, created_at, updated_at, version) VALUES (?, ?, 'task', ?, 'owner', ?, ?, 'pending', ?, ?, 1);",
+            `INSERT INTO sync_conflicts (id, event_id, entity_kind, entity_id, field_name, ours_value, theirs_value, resolution, created_at, updated_at, version, worktree_path, current_branch)
+             VALUES (?, ?, 'task', ?, 'owner', ?, ?, 'pending', ?, ?, 1, ?, ?);`,
           )
-          .run(conflictId, eventId, taskId, JSON.stringify("alice"), JSON.stringify(null), now + 2, now + 2);
+          .run(
+            conflictId,
+            eventId,
+            taskId,
+            JSON.stringify("alice"),
+            JSON.stringify(null),
+            now + 2,
+            now + 2,
+            scope.worktreePath,
+            scope.currentBranch,
+          );
       } finally {
         storage.close();
       }
     }
 
-    runGit(workspace, ["checkout", "-b", "feature/resolve-null-owner"]);
     const result = syncResolve(workspace, conflictId, "theirs");
     expect(result.resolution).toBe("theirs");
 
