@@ -91,6 +91,17 @@ All notable changes to Trekoon are documented in this file.
 - `escapeHtml` covers all five HTML-significant characters.
 - `selectVisibleEpics` memo no longer caches stale results across hour
   boundaries.
+- Daemon server idle timeout disabled so the process does not exit
+  between infrequent calls.
+- Daemon transport no longer retries a request after a successful write,
+  preventing duplicate mutations on socket disconnect mid-response.
+- `task update --append` and `task update --status` now run the same
+  dependency check as `task done`; blocked-by-unresolved-dep tasks
+  cannot be silently advanced via update.
+- Stack traces are redacted from daemon error envelopes and log output
+  before they can leak filesystem paths or secret-bearing strings.
+- Sync pull processes events in chunked per-batch transactions, avoiding
+  SQLite variable-limit errors on large pulls.
 
 ### Security and hardening (cr-expert remediation)
 
