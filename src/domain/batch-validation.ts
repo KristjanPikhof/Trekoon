@@ -294,44 +294,7 @@ export function collectDependencyBatchIssues(
       continue;
     }
 
-    // Reject parent-task → child-subtask and child-subtask → parent-task deps.
-    if (spec.sourceKind === "task" && spec.dependsOnKind === "subtask") {
-      const subtask = reader.getSubtask(spec.dependsOnId);
-      if (subtask && subtask.taskId === spec.sourceId) {
-        issues.push({
-          index: spec.index,
-          type: "parent_to_child",
-          sourceId: spec.sourceId,
-          dependsOnId: spec.dependsOnId,
-          details: {
-            source: { kind: spec.sourceKind, id: spec.sourceId },
-            target: { kind: spec.dependsOnKind, id: spec.dependsOnId },
-            reason: "parent_to_child",
-            offendingEdge: { parentTaskId: spec.sourceId, childSubtaskId: spec.dependsOnId },
-          },
-        });
-        continue;
-      }
-    }
 
-    if (spec.sourceKind === "subtask" && spec.dependsOnKind === "task") {
-      const subtask = reader.getSubtask(spec.sourceId);
-      if (subtask && subtask.taskId === spec.dependsOnId) {
-        issues.push({
-          index: spec.index,
-          type: "parent_to_child",
-          sourceId: spec.sourceId,
-          dependsOnId: spec.dependsOnId,
-          details: {
-            source: { kind: spec.sourceKind, id: spec.sourceId },
-            target: { kind: spec.dependsOnKind, id: spec.dependsOnId },
-            reason: "parent_to_child",
-            offendingEdge: { parentTaskId: spec.dependsOnId, childSubtaskId: spec.sourceId },
-          },
-        });
-        continue;
-      }
-    }
 
     if (wouldCreateCycleInAdjacency(adjacency, spec.sourceId, spec.dependsOnId)) {
       issues.push({
