@@ -13,6 +13,26 @@ function createMockContainer() {
   return { container, getHtml() { return html; } };
 }
 
+/** Extract the class attribute value from the div that has data-drop-status="<status>". */
+function getDropColumnClasses(html: string, status: string): string {
+  // The column div has its class attribute before data-drop-status, so we match
+  // the opening <div> tag that contains both class="..." and data-drop-status="<status>".
+  const tagMatch = html.match(new RegExp(`<div[^>]*data-drop-status="${status}"[^>]*>`));
+  if (!tagMatch) return "";
+  const classMatch = tagMatch[0].match(/class="([^"]*)"/);
+  return classMatch ? classMatch[1] : "";
+}
+
+const baseStore = {
+  copyFeedback: null,
+  notesPanelOpen: false,
+  isMutating: false,
+  selectedEpicId: "epic-1",
+  view: "kanban",
+  taskStatusFilter: { todo: true, blocked: true, in_progress: true, done: true },
+  dragFeedback: null,
+};
+
 const baseProps = {
   selectedEpic: {
     id: "epic-1",
@@ -28,15 +48,7 @@ const baseProps = {
     { id: "task-1", title: "Task A", status: "todo", description: "", subtasks: [], blockedBy: [], updatedAt: 1000 },
     { id: "task-2", title: "Task B", status: "in_progress", description: "", subtasks: [], blockedBy: [], updatedAt: 1000 },
   ],
-  store: {
-    copyFeedback: null,
-    notesPanelOpen: false,
-    isMutating: false,
-    selectedEpicId: "epic-1",
-    view: "kanban",
-    taskStatusFilter: null,
-    dragFeedback: null,
-  },
+  store: baseStore,
 };
 
 describe("drag feedback persistence across rerender", () => {
@@ -44,7 +56,7 @@ describe("drag feedback persistence across rerender", () => {
     const { container, getHtml } = createMockContainer();
     const workspace = createWorkspace().mount(container);
 
-    workspace.update({ ...baseProps, store: { ...baseProps.store, dragFeedback: null } });
+    workspace.update({ ...baseProps, store: { ...baseStore, dragFeedback: null } });
     const html = getHtml();
 
     expect(html).not.toContain("board-drop-valid");
@@ -57,19 +69,15 @@ describe("drag feedback persistence across rerender", () => {
 
     workspace.update({
       ...baseProps,
-      store: {
-        ...baseProps.store,
-        dragFeedback: { targetStatus: "in_progress", kind: "valid" },
-      },
+      store: { ...baseStore, dragFeedback: { targetStatus: "in_progress", kind: "valid" } },
     });
     const html = getHtml();
 
     expect(html).toContain("board-drop-valid");
     expect(html).not.toContain("board-drop-invalid");
 
-    // The valid class should be on the in_progress column drop target, not on others.
-    const inProgressColMatch = html.match(/data-drop-status="in_progress"[^>]*/);
-    expect(inProgressColMatch?.[0]).toContain("board-drop-valid");
+    const classes = getDropColumnClasses(html, "in_progress");
+    expect(classes).toContain("board-drop-valid");
   });
 
   test("board-drop-invalid class is present on the target column after rerender", () => {
@@ -78,18 +86,15 @@ describe("drag feedback persistence across rerender", () => {
 
     workspace.update({
       ...baseProps,
-      store: {
-        ...baseProps.store,
-        dragFeedback: { targetStatus: "done", kind: "invalid" },
-      },
+      store: { ...baseStore, dragFeedback: { targetStatus: "blocked", kind: "invalid" } },
     });
     const html = getHtml();
 
     expect(html).toContain("board-drop-invalid");
     expect(html).not.toContain("board-drop-valid");
 
-    const doneColMatch = html.match(/data-drop-status="done"[^>]*/);
-    expect(doneColMatch?.[0]).toContain("board-drop-invalid");
+    const classes = getDropColumnClasses(html, "blocked");
+    expect(classes).toContain("board-drop-invalid");
   });
 
   test("feedback class is applied to the correct column, not siblings", () => {
@@ -98,19 +103,16 @@ describe("drag feedback persistence across rerender", () => {
 
     workspace.update({
       ...baseProps,
-      store: {
-        ...baseProps.store,
-        dragFeedback: { targetStatus: "todo", kind: "valid" },
-      },
+      store: { ...baseStore, dragFeedback: { targetStatus: "todo", kind: "valid" } },
     });
     const html = getHtml();
 
-    const todoColMatch = html.match(/data-drop-status="todo"[^>]*/);
-    const inProgressColMatch = html.match(/data-drop-status="in_progress"[^>]*/);
+    const todoClasses = getDropColumnClasses(html, "todo");
+    const inProgressClasses = getDropColumnClasses(html, "in_progress");
 
-    expect(todoColMatch?.[0]).toContain("board-drop-valid");
-    expect(inProgressColMatch?.[0]).not.toContain("board-drop-valid");
-    expect(inProgressColMatch?.[0]).not.toContain("board-drop-invalid");
+    expect(todoClasses).toContain("board-drop-valid");
+    expect(inProgressClasses).not.toContain("board-drop-valid");
+    expect(inProgressClasses).not.toContain("board-drop-invalid");
   });
 
   test("clearing dragFeedback removes feedback classes from rerendered output", () => {
@@ -120,14 +122,14 @@ describe("drag feedback persistence across rerender", () => {
     // First render with feedback
     workspace.update({
       ...baseProps,
-      store: { ...baseProps.store, dragFeedback: { targetStatus: "in_progress", kind: "valid" } },
+      store: { ...baseStore, dragFeedback: { targetStatus: "in_progress", kind: "valid" } },
     });
     expect(getHtml()).toContain("board-drop-valid");
 
     // Second render clearing feedback (simulates dragend / drop completing)
     workspace.update({
       ...baseProps,
-      store: { ...baseProps.store, dragFeedback: null },
+      store: { ...baseStore, dragFeedback: null },
     });
     expect(getHtml()).not.toContain("board-drop-valid");
     expect(getHtml()).not.toContain("board-drop-invalid");
