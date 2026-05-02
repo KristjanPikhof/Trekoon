@@ -382,12 +382,29 @@ trekoon --daemon session
 ```
 
 If no daemon is reachable, the client transparently falls back to the in-process
-one-shot path. Calls run against the daemon return identical envelopes to the
-in-process call (modulo the per-request `requestId` and `persistedAt` fields).
+one-shot path. Calls run against the daemon return envelopes equivalent to the
+in-process call modulo:
+
+- The per-request `requestId` and `persistedAt` fields.
+- Environment variables. The client's `process.env` is **not** forwarded over
+  the socket; the daemon process uses the environment captured at `trekoon
+  serve` startup. If a command's behavior depends on an env var (e.g. an
+  override flag), set it before launching the daemon — not on the client side.
+
+The daemon request contract is `{argv, cwd}` only — there is no per-call env
+channel. This narrows the secret-leak surface area and keeps the equivalence
+claim crisp.
 
 Security:
 
 - Socket file mode `0o600`; parent `.trekoon/` directory forced to `0o700`.
+- The umask is tightened to `0o077` around `server.listen()` so the socket
+  inode is created with restrictive perms (no TOCTOU window before chmod).
+- Daemon error envelopes return a sanitized message only — no stack trace,
+  which would otherwise leak filesystem paths or secret-bearing error text.
+  Stacks are still routed to the daemon's local `console.error` for operator
+  debugging.
+- Client env is not transmitted over the socket (see equivalence note above).
 - Stale sockets from prior crashes are unlinked at startup.
 - On `Ctrl-C` / `SIGTERM` the socket is unlinked and the cached database
   connection is closed.
