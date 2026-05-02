@@ -525,15 +525,19 @@ describe("board URL/store integration", () => {
     mockWindow.window.location.hash = "#task=task-1&subtask=subtask-1";
     globalThis.window = mockWindow.window as unknown as Window & typeof globalThis;
 
-    const model = createStore(createSnapshot());
+    const snapshot = {
+      ...createSnapshot(),
+      subtasks: [
+        { id: "subtask-1", taskId: "task-1", title: "Subtask 1", status: "todo" },
+      ],
+    };
+    const model = createStore(snapshot);
     syncUrlHash(model);
 
-    expect(model.getBoardState()).toMatchObject({
-      selectedTaskId: "task-1",
-      selectedSubtaskId: "subtask-1",
-      taskModalOpen: true,
-      subtaskModalOpen: true,
-    });
+    expect(model.getBoardState().selectedTaskId).toBe("task-1");
+    expect(model.getBoardState().selectedSubtaskId).toBe("subtask-1");
+    expect(model.getBoardState().taskModalOpen).toBe(true);
+    expect(model.getBoardState().subtaskModalOpen).toBe(true);
   });
 
   test("conflicting epic and task deep links canonicalize to the task owning epic", () => {
