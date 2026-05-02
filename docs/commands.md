@@ -26,6 +26,7 @@ the quickest way to get started, read [Quickstart](quickstart.md) first.
 - `trekoon skills install -g|--global [--editor opencode|claude|pi]`
 - `trekoon skills update`
 - `trekoon wipe --yes`
+- `trekoon serve` (experimental — daemon spike, see below)
 
 ## Global options
 
