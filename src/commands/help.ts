@@ -172,7 +172,7 @@ const EPIC_HELP = [
 ].join("\n");
 
 const TASK_HELP = [
-  "Usage: trekoon task <create|create-many|list|show|ready|next|done|search|replace|update|delete> [options]",
+  "Usage: trekoon task <create|create-many|list|show|ready|next|done|search|replace|update|delete|claim> [options]",
   "",
   "Create-many:",
   "  trekoon task create-many --epic <epic-id> --task <spec> [--task <spec> ...]",
