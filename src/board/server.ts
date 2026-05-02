@@ -272,6 +272,7 @@ export function startBoardServer(options: StartBoardServerOptions = {}): BoardSe
     hostname: "127.0.0.1",
     port,
     stop(): void {
+      eventBus.close();
       server.stop(true);
       database.close();
     },
