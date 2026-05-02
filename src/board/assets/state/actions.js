@@ -430,7 +430,8 @@ export function createBoardActions(options) {
       if (!task || !nextStatus || task.status === nextStatus) {
         return;
       }
-      transition({ selectedTaskId: taskId, taskModalOpen: false }, { rerenderBoard: false });
+      // Drag/drop is a status change only; do not mutate selection or modal state,
+      // otherwise dropping a card while another task modal is open hijacks it.
       api.patchTask(taskId, { status: nextStatus }, (snapshot) => updateTaskInSnapshot(snapshot, taskId, { status: nextStatus }, normalizeSnapshot));
     },
     changeEpicStatus(epicId, newStatus) {
