@@ -975,6 +975,65 @@ export class MutationService {
     });
   }
 
+  /**
+   * Atomic If-Match CAS variant of {@link updateSubtask}. Mirrors
+   * {@link updateTaskWithIfMatch} except subtask `description` may be
+   * empty (matches `normalizeSubtaskDescription` semantics).
+   */
+  updateSubtaskWithIfMatch(
+    id: string,
+    ifMatchUpdatedAt: number,
+    input: { title?: string | undefined; description?: string | undefined; status?: string | undefined; owner?: string | null | undefined },
+  ): SubtaskRecord {
+    return this.#writeTransaction((): SubtaskRecord => {
+      const existing = this.#domain.getSubtaskOrThrow(id);
+
+      const nextTitle = input.title !== undefined
+        ? assertSubtaskFieldNonEmpty("title", input.title)
+        : existing.title;
+      // Subtask description allows empty strings — mirror
+      // normalizeSubtaskDescription rather than asserting non-empty.
+      const nextDescription = input.description !== undefined
+        ? input.description.trim()
+        : existing.description;
+      const nextStatus = input.status !== undefined
+        ? assertSubtaskFieldNonEmpty("status", input.status)
+        : existing.status;
+      const normalizedOwner = normalizeOwnerInput(input.owner);
+      const nextOwner = normalizedOwner === undefined ? existing.owner : normalizedOwner;
+
+      if (input.status !== undefined) {
+        validateStatusTransition(existing.status, nextStatus, "subtask", id);
+      }
+      this.#domain.assertNoUnresolvedDependenciesForStatusTransition(id, "subtask", existing.status, nextStatus);
+
+      const now: number = Date.now();
+      const result = this.#db
+        .query(
+          `UPDATE subtasks
+              SET title = ?, description = ?, status = ?, owner = ?, updated_at = ?, version = version + 1
+            WHERE id = ?
+              AND updated_at = ?
+           RETURNING id`,
+        )
+        .get(nextTitle, nextDescription, nextStatus, nextOwner, now, id, ifMatchUpdatedAt) as { id: string } | null;
+
+      if (result === null) {
+        const current = this.#domain.getSubtaskOrThrow(id);
+        throw new PreconditionFailedError({
+          entityKind: "subtask",
+          entityId: id,
+          currentUpdatedAt: current.updatedAt,
+          providedUpdatedAt: ifMatchUpdatedAt,
+        });
+      }
+
+      const subtask = this.#domain.getSubtaskOrThrow(id);
+      this.#emitSubtaskUpdated(subtask);
+      return subtask;
+    });
+  }
+
   deleteSubtask(id: string): { deletedDependencyIds: string[] } {
     return this.#writeTransaction((): { deletedDependencyIds: string[] } => {
       const touchingDependencies = this.#domain.listDependenciesTouchingNode(id);
