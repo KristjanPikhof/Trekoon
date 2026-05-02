@@ -541,7 +541,7 @@ describe("SQLite concurrent write stress tests", () => {
     /**
      * Helper: initialise a git workspace and return a Trekoon DB path + cwd.
      */
-    function setupTrekoonWorkspace(prefix: string): { dbFile: string; workspace: string } {
+    function setupTrekoonWorkspace(prefix: string): string {
       const workspace = mkdtempSync(join(tmpdir(), prefix));
       tempDirs.push(workspace);
       execFileSync("git", ["init"], { cwd: workspace, stdio: "ignore" });
@@ -552,10 +552,9 @@ describe("SQLite concurrent write stress tests", () => {
         ["-c", "user.name=Trekoon Tests", "-c", "user.email=tests@trekoon.local", "commit", "-m", "Init"],
         { cwd: workspace, stdio: "ignore" },
       );
-      const setup = openTrekoonDatabase(workspace);
-      const dbFile = setup.paths.databaseFile;
-      setup.close();
-      return { dbFile, workspace };
+      // Run migrations by opening and immediately closing the database.
+      openTrekoonDatabase(workspace).close();
+      return workspace;
     }
 
     test("5 concurrent appendToTaskDescription calls preserve all appended notes", () => {
