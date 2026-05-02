@@ -117,6 +117,7 @@ The skill bundles three reference documents that agents load on demand:
 
 | Agent needs to... | Skill reads | What it covers |
 | --- | --- | --- |
+| Coordinate across harnesses | `reference/harness-primitives.md` | Universal subagent, question, local task display, review, and evidence-recording guidance |
 | Plan a feature | `reference/planning.md` | Decomposition, writing standard, dependency modeling, validation |
 | Execute an epic | `reference/execution.md` | Graph building, lane grouping, sub-agent dispatch, verification (universal) |
 | Execute with Agent Teams | `reference/execution-with-team.md` | TeamCreate/SendMessage, parallel Claude Code instances in tmux |
@@ -145,6 +146,11 @@ Execute only:
 /trekoon <epic-id> execute
 ```
 
+For non-trivial execution, the skill prefers subagents for independent Trekoon
+lanes when the harness supports it. The parent agent keeps the user oriented
+with local todo/task tools, coordinates dependencies, and records durable state
+in Trekoon.
+
 Plan and execute end to end:
 
 ```
@@ -154,9 +160,11 @@ dependency order until the epic is complete
 
 ## Agent Teams
 
-For larger epics, Trekoon supports Claude Code Agent Teams. Instead of
-sequential sub-agents, you get real parallel Claude Code instances coordinated
-through `TeamCreate` and `SendMessage`, each running in its own tmux pane.
+For larger epics, Trekoon can use the current harness's native subagent
+mechanism to offload non-trivial independent lanes. Claude Code Agent Teams are
+one runtime-specific option: instead of sequential sub-agents, you get real
+parallel Claude Code instances coordinated through `TeamCreate` and
+`SendMessage`, each running in its own tmux pane.
 
 Requires Claude Code env variable `CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS=true`.
 
