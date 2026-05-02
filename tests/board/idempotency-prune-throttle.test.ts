@@ -60,7 +60,7 @@ describe("MutationService#pruneExpiredIdempotencyKeys throttle", (): void => {
       };
 
       const buildClaim = (key: string): {
-        scope: string;
+        scope: "subtask";
         idempotencyKey: string;
         requestFingerprint: string;
         conflictMessage: string;
