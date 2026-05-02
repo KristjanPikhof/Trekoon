@@ -565,35 +565,30 @@ function parseIfMatchHeader(request: Request): number | null {
 
   // RFC 7232 §3.1 allows a strong ETag (`"<value>"`) or a weak ETag
   // (`W/"<value>"`). Trekoon does not differentiate strong from weak
-  // semantics — a millisecond updatedAt is exact either way — so we
+  // semantics — the entity version token is exact either way — so we
   // accept both shapes. The wildcard `*` is intentionally NOT supported:
   // it would mean "any current representation matches" and would defeat
   // the whole purpose of the optimistic-concurrency check, so we surface
   // it as 400 invalid_input below rather than treating it as a no-op.
   const stripped = raw.trim().replace(/^W\//iu, "");
   const trimmed = stripped.replace(/^"+|"+$/g, "");
-  if (trimmed.length === 0) {
-    return null;
-  }
-
-  const parsed = Number(trimmed);
-  if (!Number.isFinite(parsed) || !Number.isInteger(parsed)) {
+  if (!/^(0|[1-9]\d*)$/u.test(trimmed)) {
     throw new DomainError({
       code: "invalid_input",
       message:
-        "If-Match header must be an integer updatedAt millisecond timestamp (RFC 7232 strong or W/-prefixed weak ETag); the `*` wildcard is not supported",
+        "If-Match header must be a non-negative integer version token (RFC 7232 strong or W/-prefixed weak ETag); the `*` wildcard is not supported",
       details: { header: "If-Match", value: raw },
     });
   }
 
-  return parsed;
+  return Number(trimmed);
 }
 
 interface PreconditionFailedDetails {
   readonly entityKind: "epic" | "task" | "subtask";
   readonly entityId: string;
-  readonly currentUpdatedAt: number;
-  readonly providedUpdatedAt: number;
+  readonly currentVersion: number;
+  readonly providedVersion: number;
 }
 
 function preconditionFailedResponse(details: PreconditionFailedDetails): Response {
@@ -601,12 +596,12 @@ function preconditionFailedResponse(details: PreconditionFailedDetails): Respons
     ok: false,
     error: {
       code: "precondition_failed",
-      message: "If-Match version does not match current updatedAt",
+      message: "If-Match version does not match current version",
       details: {
         entityKind: details.entityKind,
         entityId: details.entityId,
-        currentUpdatedAt: details.currentUpdatedAt,
-        providedUpdatedAt: details.providedUpdatedAt,
+        currentVersion: details.currentVersion,
+        providedVersion: details.providedVersion,
       },
     },
   });
@@ -1007,14 +1002,14 @@ export function createBoardApiHandler(context: BoardRouteContext): (request: Req
       });
     } catch (error: unknown) {
       // PreconditionFailedError is a typed signal from the *WithIfMatch
-      // CAS variants. It carries the freshly-fetched currentUpdatedAt so
+      // CAS variants. It carries the freshly-fetched currentVersion so
       // the 409 payload is always consistent with the post-rollback state.
       if (error instanceof PreconditionFailedError) {
         return preconditionFailedResponse({
           entityKind: error.entityKind,
           entityId: error.entityId,
-          currentUpdatedAt: error.currentUpdatedAt,
-          providedUpdatedAt: error.providedUpdatedAt,
+          currentVersion: error.currentVersion,
+          providedVersion: error.providedVersion,
         });
       }
 
