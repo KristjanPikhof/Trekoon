@@ -32,10 +32,19 @@ plan-to-completion workflow from one install:
     execution-with-team.md      <- Agent Teams pattern (Claude Code only)
 ```
 
-The agent loads the relevant reference on demand: `harness-primitives.md` for
-runtime-neutral agent behavior, `planning.md` when asked to plan, `execution.md`
-when asked to execute, and `execution-with-team.md` only for explicit Claude
-Code Agent Teams execution.
+The command shape determines what the agent loads:
+
+| User command | Required references |
+| --- | --- |
+| `/trekoon plan <goal>` | `harness-primitives.md`, then `planning.md` |
+| `/trekoon <id>` | `SKILL.md` only, unless deeper analysis is needed |
+| `/trekoon <id> analyze` | `SKILL.md` plus targeted Trekoon reads |
+| `/trekoon <id> execute` | `harness-primitives.md`, then `execution.md` |
+| `/trekoon <id> team execute` | `harness-primitives.md`, then `execution-with-team.md` |
+
+`harness-primitives.md` is loaded before planning or execution because those
+modes may need structured questions, local progress displays, subagent
+delegation, review agents, and runtime-specific orchestration.
 
 ## Install the skill
 
