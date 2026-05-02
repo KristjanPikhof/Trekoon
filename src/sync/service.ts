@@ -1626,7 +1626,15 @@ export function syncPull(cwd: string, sourceBranch: string): PullSummary {
               continue;
             }
 
-            const conflict = entityFieldConflict(storage.db, git.branchName, sourceBranch, incoming, fieldName, value);
+            const conflict = entityFieldConflict(
+              storage.db,
+              git.branchName,
+              sourceBranch,
+              incoming,
+              fieldName,
+              value,
+              oursCache,
+            );
 
             if (conflict) {
               withheldConflictCount += 1;
