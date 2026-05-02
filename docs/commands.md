@@ -289,6 +289,44 @@ trekoon --toon sync conflicts show <conflict-id>
 `list` defaults to `--mode pending`. Use `--mode all` to include resolved
 conflicts.
 
+## Migrate commands
+
+### `migrate status`
+
+```bash
+trekoon --toon migrate status
+```
+
+Reports `currentVersion`, `latestVersion`, and pending migration count.
+
+### `migrate rollback`
+
+```bash
+trekoon --toon migrate rollback [--to-version <n>]
+```
+
+Rolls back schema migrations one version (default) or down to `--to-version`.
+Migrations 0004, 0005, and 0006 are irreversible (ALTER TABLE plus dependency
+data cleanup). Rolling back below those versions errors with code
+`migration_down_unsupported`. Take a backup first; restore by copying the
+backup over `.trekoon/trekoon.db`.
+
+### `migrate backup`
+
+```bash
+trekoon --toon migrate backup
+```
+
+Snapshots `.trekoon/trekoon.db` to a timestamped sibling file
+(`trekoon.db.backup-<ISO8601>`) using SQLite `VACUUM INTO`. The source database
+is opened read-only, so a backup never mutates live state. Returns
+`backupPath`, `bytes`, `migrationVersion`, and `latestVersion` for machine
+consumers. Backups stay inside `.trekoon/` and are gitignored along with the
+rest of the directory.
+
+To restore from a backup: stop any process holding the DB, then copy the
+backup file over `.trekoon/trekoon.db`.
+
 ## Related docs
 
 - [Quickstart](quickstart.md)
