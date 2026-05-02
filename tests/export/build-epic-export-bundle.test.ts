@@ -4,10 +4,12 @@ import { join } from "node:path";
 
 import { afterEach, describe, expect, test } from "bun:test";
 
+import { type Database } from "bun:sqlite";
+
 import { TrackerDomain } from "../../src/domain/tracker-domain";
 import { buildEpicExportBundle } from "../../src/export/build-epic-export-bundle";
 import { EXPORT_SCHEMA_VERSION } from "../../src/export/types";
-import { openTrekoonDatabase } from "../../src/storage/database";
+import { openTrekoonDatabase, writeTransaction } from "../../src/storage/database";
 
 const tempDirs: string[] = [];
 
