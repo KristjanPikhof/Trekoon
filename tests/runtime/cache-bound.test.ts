@@ -106,11 +106,13 @@ describe("daemon-mode cachedDatabases LRU bound", (): void => {
     openTrekoonDatabase(newWorkspace).close();
     expect(cachedDatabasesSize()).toBe(CACHE_CAPACITY);
 
-    // Re-opening the touched workspace should still be a cache hit
-    // (instance equality is preserved across calls).
+    // Re-opening the touched workspace should still be a cache hit. The
+    // wrapper objects are per-call (so diagnostics can be refreshed on each
+    // hit), but the underlying SQLite connection is the same shared
+    // instance — that is what proves the cache served both calls.
     const handleA = openTrekoonDatabase(firstWorkspace);
     const handleB = openTrekoonDatabase(firstWorkspace);
-    expect(handleA).toBe(handleB);
+    expect(handleA.db).toBe(handleB.db);
     handleA.close();
     handleB.close();
   });
