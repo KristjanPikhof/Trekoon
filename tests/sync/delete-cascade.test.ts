@@ -325,6 +325,62 @@ describe("applyDelete clears sync_conflicts on task cascade delete", (): void =>
     expect(countConflicts(storage2.db)).toBe(0);
     storage2.close();
   });
+
+  test("task cascade cleanup chunks thousands of subtask conflicts", (): void => {
+    const workspace = createWorkspace();
+    const MAIN = "main";
+    const FEATURE = "feature/x";
+
+    mockGitContext(workspace, FEATURE);
+
+    const storage = openTrekoonDatabase(workspace);
+    const db = storage.db;
+
+    const epicId = randomUUID();
+    const taskId = randomUUID();
+    const subtaskIds = Array.from({ length: 5_000 }, (): string => randomUUID());
+    const fakeEventId = randomUUID();
+
+    const seedRows = db.transaction((): void => {
+      insertEpic(db, epicId, "Epic with many subtasks");
+      insertTask(db, taskId, epicId, "Task with many subtasks");
+      for (const subtaskId of subtaskIds) {
+        insertSubtask(db, subtaskId, taskId, "Subtask");
+        insertConflict(db, {
+          eventId: fakeEventId,
+          entityKind: "subtask",
+          entityId: subtaskId,
+          fieldName: "title",
+          oursValue: '"ours"',
+          theirsValue: '"theirs"',
+        });
+      }
+    });
+    seedRows();
+
+    expect(countConflicts(db)).toBe(5_000);
+
+    insertEvent(db, {
+      entityKind: "task",
+      entityId: taskId,
+      operation: "task.deleted",
+      branch: MAIN,
+      payload: {},
+      createdAt: Date.now() + 1000,
+    });
+
+    storage.close();
+
+    syncPull(workspace, MAIN);
+
+    const reopened = openTrekoonDatabase(workspace);
+    try {
+      expect(countConflicts(reopened.db)).toBe(0);
+      expect(reopened.db.query("SELECT COUNT(*) AS c FROM subtasks WHERE task_id = ?;").get(taskId)).toEqual({ c: 0 });
+    } finally {
+      reopened.close();
+    }
+  }, 15_000);
 });
 
 // ---------------------------------------------------------------------------
