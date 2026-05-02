@@ -155,7 +155,7 @@ describe("board server", (): void => {
     const boardServer = startBoardServer({ cwd: workspace, token: "manual-open-token" });
 
     try {
-      const response = await fetch(boardServer.fallbackUrl);
+      const response = await fetch(boardServer.url);
       const body = await response.text();
 
       expect(response.status).toBe(200);
