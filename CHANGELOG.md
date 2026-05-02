@@ -2,6 +2,24 @@
 
 All notable changes to Trekoon are documented in this file.
 
+## 0.4.3 - Unreleased
+
+### Changed
+
+- Harden board live updates with version-based `If-Match`, cookie-only SSE
+  auth, backpressure-safe snapshots, and reconnect cleanup.
+- Scope sync conflict resolution to the active worktree and branch, including
+  large cascade cleanup.
+
+### Fixed
+
+- Prevent duplicate WAL publishes, stale live-update notices, stale retry IDs,
+  and leaked board tokens in API or SSE URLs.
+- Tighten daemon safety around socket permissions, cwd scope, busy connections,
+  post-write errors, and borrowed database handles.
+- Preserve migration root errors when rollback also fails, with the rollback
+  failure attached as the cause.
+
 ## 0.4.2
 
 ### Experimental
