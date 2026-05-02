@@ -374,9 +374,12 @@ describe("WAL watcher diff and resilience", (): void => {
     });
 
     try {
-      const response = await handler(new Request(`http://board.test/api/tasks/${task.id}?token=route-token`, {
+      const response = await handler(new Request(`http://board.test/api/tasks/${task.id}`, {
         method: "PATCH",
-        headers: { "content-type": "application/json" },
+        headers: {
+          "content-type": "application/json",
+          authorization: "Bearer route-token",
+        },
         body: JSON.stringify({ title: "After" }),
       }));
       expect(response.status).toBe(200);
@@ -409,8 +412,11 @@ describe("board server WAL watcher integration", (): void => {
     const boardServer = startBoardServer({ cwd: workspace, token: "wal-token" });
 
     try {
-      const sseResponse = await fetch(`${boardServer.origin}/api/snapshot/stream?token=wal-token`, {
-        headers: { accept: "text/event-stream" },
+      const sseResponse = await fetch(`${boardServer.origin}/api/snapshot/stream`, {
+        headers: {
+          accept: "text/event-stream",
+          cookie: `trekoon_board_session=${encodeURIComponent("wal-token")}`,
+        },
       });
       expect(sseResponse.status).toBe(200);
       if (!sseResponse.body) {
@@ -461,8 +467,11 @@ describe("board server WAL watcher integration", (): void => {
     const boardServer = startBoardServer({ cwd: workspace, token: "wal-append-token" });
 
     try {
-      const sseResponse = await fetch(`${boardServer.origin}/api/snapshot/stream?token=wal-append-token`, {
-        headers: { accept: "text/event-stream" },
+      const sseResponse = await fetch(`${boardServer.origin}/api/snapshot/stream`, {
+        headers: {
+          accept: "text/event-stream",
+          cookie: `trekoon_board_session=${encodeURIComponent("wal-append-token")}`,
+        },
       });
       expect(sseResponse.status).toBe(200);
       if (!sseResponse.body) {
