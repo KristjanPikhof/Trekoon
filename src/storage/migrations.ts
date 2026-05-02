@@ -602,6 +602,18 @@ function recordMigration(db: Database, migration: Migration): void {
 const MIGRATION_VERSION_MARKER_FILENAME = "migration-version";
 
 /**
+ * On-disk marker payload. The legacy v1 format was a bare integer. v2 stores a
+ * JSON object so we can pin the marker to a content fingerprint of the DB
+ * (PRAGMA user_version) instead of relying on filesystem mtimes — which the
+ * old defensive check could not distinguish from a DB restored from a backup
+ * with an older user_version but a newer mtime.
+ */
+interface MarkerPayload {
+  readonly version: number;
+  readonly userVersion: number;
+}
+
+/**
  * Derive the path to the migration-version marker file from the database
  * connection's filename. Returns null for in-memory databases.
  */
@@ -614,8 +626,81 @@ function resolveMarkerPath(db: Database): string | null {
 }
 
 /**
- * Read the migration version stored in the marker file.
- * Returns null when the file is absent, unreadable, or malformed.
+ * Read `PRAGMA user_version` from the connection. SQLite stores this as a
+ * 32-bit signed integer in the database header — every restore-from-backup
+ * naturally carries the original `user_version` along with the bytes.
+ */
+function readUserVersion(db: Database): number {
+  const row = db.query("PRAGMA user_version;").get() as { user_version: number } | null;
+  return row?.user_version ?? 0;
+}
+
+/**
+ * Set `PRAGMA user_version`. Used as a content-stamp written inside the same
+ * transaction that applies (or rolls back) migrations so the DB header is
+ * always authoritative for the current schema state — independent of the
+ * sidecar marker file.
+ *
+ * NOTE: PRAGMA does not support parameter binding. The caller must pass an
+ * integer or a value that will throw at the SQL level otherwise.
+ */
+function setUserVersion(db: Database, version: number): void {
+  if (!Number.isInteger(version) || version < 0) {
+    throw new Error(`PRAGMA user_version must be a non-negative integer (got ${version}).`);
+  }
+  db.exec(`PRAGMA user_version = ${version};`);
+}
+
+/**
+ * Read the marker payload from disk. Falls back to parsing the legacy v1
+ * format (bare integer) so previously-installed markers still work without a
+ * cold reset.
+ */
+function readMarkerPayload(markerPath: string): MarkerPayload | null {
+  try {
+    if (!existsSync(markerPath)) {
+      return null;
+    }
+
+    const raw: string = readFileSync(markerPath, "utf8").trim();
+    if (raw.length === 0) {
+      return null;
+    }
+
+    if (raw.startsWith("{")) {
+      const parsed = JSON.parse(raw) as Partial<MarkerPayload>;
+      const version: number | undefined = parsed.version;
+      const userVersion: number | undefined = parsed.userVersion;
+      if (
+        typeof version !== "number" ||
+        !Number.isFinite(version) ||
+        version < 0 ||
+        typeof userVersion !== "number" ||
+        !Number.isFinite(userVersion) ||
+        userVersion < 0
+      ) {
+        return null;
+      }
+      return { version, userVersion };
+    }
+
+    // Legacy v1 format: bare integer. Treat it as having no fingerprint;
+    // returning userVersion: -1 forces canSkipProbeViaMarker to fall through
+    // to the slow path, which then rewrites the marker in v2 form.
+    const legacyVersion: number = parseInt(raw, 10);
+    if (!Number.isFinite(legacyVersion) || legacyVersion < 0) {
+      return null;
+    }
+    return { version: legacyVersion, userVersion: -1 };
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Read the migration version stored in the marker file. Returns null when the
+ * file is absent, unreadable, or malformed. Kept for backwards-compatible
+ * test/inspection use; the in-process fast-path uses {@link readMarkerPayload}.
  */
 export function readMigrationVersionMarker(db: Database): number | null {
   const markerPath: string | null = resolveMarkerPath(db);
@@ -623,48 +708,91 @@ export function readMigrationVersionMarker(db: Database): number | null {
     return null;
   }
 
+  const payload: MarkerPayload | null = readMarkerPayload(markerPath);
+  return payload?.version ?? null;
+}
+
+interface WriteMarkerResult {
+  readonly written: boolean;
+  readonly skipped: boolean;
+}
+
+/**
+ * Internal marker writer that surfaces the outcome to callers. Writes
+ * atomically via temp + rename. Returns `{written:false}` on filesystem
+ * errors so callers (e.g. {@link rollbackDatabase}) can attempt a stale-marker
+ * cleanup instead of silently leaving a misleading hint on disk.
+ */
+function writeMarkerPayload(
+  db: Database,
+  payload: MarkerPayload,
+): WriteMarkerResult {
+  const markerPath: string | null = resolveMarkerPath(db);
+  if (!markerPath) {
+    return { written: false, skipped: true };
+  }
+
   try {
-    if (!existsSync(markerPath)) {
-      return null;
-    }
-
-    const raw: string = readFileSync(markerPath, "utf8");
-    const version: number = parseInt(raw.trim(), 10);
-    if (!Number.isFinite(version) || version < 0) {
-      return null;
-    }
-
-    return version;
+    mkdirSync(dirname(markerPath), { recursive: true });
+    const tmpPath = `${markerPath}.tmp`;
+    writeFileSync(tmpPath, JSON.stringify(payload), "utf8");
+    renameSync(tmpPath, markerPath);
+    return { written: true, skipped: false };
   } catch {
-    return null;
+    return { written: false, skipped: false };
+  }
+}
+
+/**
+ * Best-effort: remove a stale marker so the next cold start re-probes the
+ * schema. Used when a fresh marker write fails after a rollback (or other
+ * version-changing op) to avoid leaving the previous version's marker on disk
+ * pointing at a now-incorrect schema state.
+ */
+function unlinkMarkerIfExists(db: Database): void {
+  const markerPath: string | null = resolveMarkerPath(db);
+  if (!markerPath) {
+    return;
+  }
+  try {
+    if (existsSync(markerPath)) {
+      unlinkSync(markerPath);
+    }
+  } catch {
+    // Defense-in-depth — the worst case is that the next cold start spends
+    // one extra schema probe noticing the marker mismatch.
   }
 }
 
 /**
  * Write the migration version to the marker file atomically (temp + rename).
- * Silently no-ops for in-memory databases or on write errors.
+ * Public, backwards-compatible signature. Reads the current PRAGMA user_version
+ * from the connection so fast-path consumers can verify the marker against the
+ * DB header on the next call.
  */
 export function writeMigrationVersionMarker(db: Database, version: number): void {
   const markerPath: string | null = resolveMarkerPath(db);
   if (!markerPath) {
     return;
   }
-
-  try {
-    mkdirSync(dirname(markerPath), { recursive: true });
-    const tmpPath = `${markerPath}.tmp`;
-    writeFileSync(tmpPath, String(version), "utf8");
-    renameSync(tmpPath, markerPath);
-  } catch {
-    // Best-effort: never let a marker write failure break migrations.
-  }
+  const userVersion: number = readUserVersion(db);
+  writeMarkerPayload(db, { version, userVersion });
 }
 
 /**
  * Determine whether the marker file allows skipping the schema probe query.
  * Returns true only when:
- *   1. The marker file exists and parses to `LATEST_MIGRATION_VERSION`.
- *   2. The marker's mtime is newer than the database file's mtime (defensive).
+ *   1. The marker file exists, parses cleanly, and reports
+ *      `version === LATEST_MIGRATION_VERSION`.
+ *   2. The DB's PRAGMA user_version matches the marker's recorded user_version
+ *      AND equals `LATEST_MIGRATION_VERSION`.
+ *
+ * The user_version match is the load-bearing freshness check — replacing the
+ * previous mtime heuristic, which could not distinguish a DB restored from an
+ * older backup (older user_version, fresh mtime) from a healthy current DB.
+ * Restoring a backup brings the original user_version with the bytes, so the
+ * pragma check naturally fails over to the slow path even when the marker
+ * file is "newer" than the DB on disk.
  */
 function canSkipProbeViaMarker(db: Database): boolean {
   const markerPath: string | null = resolveMarkerPath(db);
@@ -673,20 +801,28 @@ function canSkipProbeViaMarker(db: Database): boolean {
   }
 
   try {
-    const markerVersion: number | null = readMigrationVersionMarker(db);
-    if (markerVersion !== LATEST_MIGRATION_VERSION) {
+    const payload: MarkerPayload | null = readMarkerPayload(markerPath);
+    if (!payload) {
       return false;
     }
 
-    // Defensive: ensure the marker is not stale relative to the DB file.
+    if (payload.version !== LATEST_MIGRATION_VERSION) {
+      return false;
+    }
+
+    if (payload.userVersion !== LATEST_MIGRATION_VERSION) {
+      // Legacy v1 markers report userVersion: -1; force probe so the marker
+      // gets rewritten in v2 form.
+      return false;
+    }
+
     const dbFile: string = db.filename;
-    if (!existsSync(dbFile)) {
+    if (!dbFile || !existsSync(dbFile)) {
       return false;
     }
 
-    const markerMtime: number = statSync(markerPath).mtimeMs;
-    const dbMtime: number = statSync(dbFile).mtimeMs;
-    return markerMtime >= dbMtime;
+    const dbUserVersion: number = readUserVersion(db);
+    return dbUserVersion === payload.userVersion;
   } catch {
     return false;
   }
