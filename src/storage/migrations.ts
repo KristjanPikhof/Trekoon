@@ -800,4 +800,9 @@ export function rollbackDatabase(db: Database, targetVersion: number): RollbackS
       rolledBackMigrations,
     };
   });
+
+  // Update the marker so the next start reflects the new version.
+  writeMigrationVersionMarker(db, targetVersion);
+
+  return summary;
 }
