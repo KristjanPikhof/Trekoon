@@ -479,9 +479,11 @@ export async function bootLegacyBoard(options = {}) {
       rerender,
     });
     if (typeof window !== "undefined" && typeof window.addEventListener === "function") {
-      window.addEventListener("beforeunload", () => {
+      const disposeSnapshotSubscription = () => {
         snapshotSubscription.dispose();
-      }, { once: true });
+      };
+      window.addEventListener("beforeunload", disposeSnapshotSubscription, { once: true });
+      window.addEventListener("pagehide", disposeSnapshotSubscription, { once: true });
     }
 
     // Actions for delegation
