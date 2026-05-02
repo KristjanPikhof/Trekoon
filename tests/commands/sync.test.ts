@@ -3613,6 +3613,67 @@ describe("sync command", (): void => {
     }
   });
 
+  test("resolve-by-id APIs reject conflicts outside the current worktree scope", async (): Promise<void> => {
+    const workspace: string = createWorkspace();
+    initializeRepository(workspace);
+    runGit(workspace, ["checkout", "-b", "feature/scope-a"]);
+
+    const currentScope = conflictScopeFor(workspace);
+    const conflictId = randomUUID();
+    const eventId = randomUUID();
+    const entityId = randomUUID();
+    const now = Date.now();
+
+    {
+      const storage = openTrekoonDatabase(workspace);
+      try {
+        storage.db
+          .query(
+            "INSERT INTO events (id, entity_kind, entity_id, operation, payload, git_branch, git_head, created_at, updated_at, version) VALUES (?, 'task', ?, 'task.updated', ?, 'main', NULL, ?, ?, 1);",
+          )
+          .run(eventId, entityId, JSON.stringify({ fields: { title: "remote" } }), now, now);
+        storage.db
+          .query(
+            `INSERT INTO sync_conflicts (id, event_id, entity_kind, entity_id, field_name, ours_value, theirs_value, resolution, created_at, updated_at, version, worktree_path, current_branch)
+             VALUES (?, ?, 'task', ?, 'title', ?, ?, 'pending', ?, ?, 1, ?, ?);`,
+          )
+          .run(
+            conflictId,
+            eventId,
+            entityId,
+            JSON.stringify("local"),
+            JSON.stringify("remote"),
+            now + 1,
+            now + 1,
+            `${currentScope.worktreePath}-other`,
+            currentScope.currentBranch,
+          );
+      } finally {
+        storage.close();
+      }
+    }
+
+    expect((): void => {
+      getSyncConflict(workspace, conflictId);
+    }).toThrow("not found");
+    expect((): void => {
+      syncResolvePreview(workspace, conflictId, "ours");
+    }).toThrow("not found");
+    expect((): void => {
+      syncResolve(workspace, conflictId, "ours");
+    }).toThrow("not found");
+
+    let batchError: unknown = null;
+    try {
+      syncResolveAll(workspace, "ours", {}, { expectedConflictIds: [conflictId] });
+    } catch (error: unknown) {
+      batchError = error;
+    }
+
+    expect(batchError).not.toBeNull();
+    expect((batchError as { code?: string }).code).toBe("conflict_set_changed");
+  });
+
   test("resolution event created_at is strictly after prior events", async (): Promise<void> => {
     const { workspace, conflictId } = await setupConflictWorkspace("feature/monotonic-resolve-ts");
 
