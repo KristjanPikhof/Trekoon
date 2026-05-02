@@ -36,7 +36,7 @@ afterEach((): void => {
 describe("renderMarkdown", () => {
   test("renders frontmatter with epic metadata", () => {
     const cwd = createWorkspace();
-    const domain = createDomain(cwd);
+    const { domain, db } = createDomain(cwd);
     const epic = domain.createEpic({ title: "My Epic", description: "A description" });
     const bundle = buildEpicExportBundle(domain, epic.id);
     const md = renderMarkdown(bundle);
@@ -49,7 +49,7 @@ describe("renderMarkdown", () => {
 
   test("renders title as h1", () => {
     const cwd = createWorkspace();
-    const domain = createDomain(cwd);
+    const { domain, db } = createDomain(cwd);
     const epic = domain.createEpic({ title: "Ship the Export", description: "We need this" });
     const bundle = buildEpicExportBundle(domain, epic.id);
     const md = renderMarkdown(bundle);
@@ -59,7 +59,7 @@ describe("renderMarkdown", () => {
 
   test("renders summary table with counts", () => {
     const cwd = createWorkspace();
-    const domain = createDomain(cwd);
+    const { domain, db } = createDomain(cwd);
     const epic = domain.createEpic({ title: "Summary Test", description: "Check counts" });
     domain.createTask({ epicId: epic.id, title: "T1", description: "D1" });
     domain.createTask({ epicId: epic.id, title: "T2", description: "D2" });
@@ -72,7 +72,7 @@ describe("renderMarkdown", () => {
 
   test("renders task index with id-based anchors", () => {
     const cwd = createWorkspace();
-    const domain = createDomain(cwd);
+    const { domain, db } = createDomain(cwd);
     const epic = domain.createEpic({ title: "Index Test", description: "Check index" });
     const task = domain.createTask({ epicId: epic.id, title: "First Task", description: "D1" });
     const bundle = buildEpicExportBundle(domain, epic.id);
@@ -84,7 +84,7 @@ describe("renderMarkdown", () => {
 
   test("renders task details with id and status", () => {
     const cwd = createWorkspace();
-    const domain = createDomain(cwd);
+    const { domain, db } = createDomain(cwd);
     const epic = domain.createEpic({ title: "Detail Test", description: "Check detail" });
     const task = domain.createTask({ epicId: epic.id, title: "A Task", description: "Task description here" });
     const bundle = buildEpicExportBundle(domain, epic.id);
@@ -98,7 +98,7 @@ describe("renderMarkdown", () => {
 
   test("renders subtasks as checklist items", () => {
     const cwd = createWorkspace();
-    const domain = createDomain(cwd);
+    const { domain, db } = createDomain(cwd);
     const epic = domain.createEpic({ title: "Subtask Test", description: "Check subtask rendering" });
     const task = domain.createTask({ epicId: epic.id, title: "Parent", description: "Has subtasks" });
     domain.createSubtask({ taskId: task.id, title: "Sub A", description: "First sub" });
@@ -112,7 +112,7 @@ describe("renderMarkdown", () => {
 
   test("marks done subtasks with checked checkbox", () => {
     const cwd = createWorkspace();
-    const domain = createDomain(cwd);
+    const { domain, db } = createDomain(cwd);
     const epic = domain.createEpic({ title: "Done Sub Test", description: "Check done sub" });
     const task = domain.createTask({ epicId: epic.id, title: "Parent", description: "Has done sub" });
     const sub = domain.createSubtask({ taskId: task.id, title: "Done Sub", description: "Completed" });
@@ -126,7 +126,7 @@ describe("renderMarkdown", () => {
 
   test("renders dependency table when deps exist", () => {
     const cwd = createWorkspace();
-    const domain = createDomain(cwd);
+    const { domain, db } = createDomain(cwd);
     const epic = domain.createEpic({ title: "Dep Render Test", description: "Check dep table" });
     const t1 = domain.createTask({ epicId: epic.id, title: "First", description: "A" });
     const t2 = domain.createTask({ epicId: epic.id, title: "Second", description: "B" });
@@ -140,7 +140,7 @@ describe("renderMarkdown", () => {
 
   test("renders external nodes section when cross-epic deps exist", () => {
     const cwd = createWorkspace();
-    const domain = createDomain(cwd);
+    const { domain, db } = createDomain(cwd);
     const epicA = domain.createEpic({ title: "Epic A", description: "First" });
     const epicB = domain.createEpic({ title: "Epic B", description: "Second" });
     const taskA = domain.createTask({ epicId: epicA.id, title: "Task A", description: "In A" });
@@ -155,7 +155,7 @@ describe("renderMarkdown", () => {
 
   test("renders footer with snapshot disclaimer", () => {
     const cwd = createWorkspace();
-    const domain = createDomain(cwd);
+    const { domain, db } = createDomain(cwd);
     const epic = domain.createEpic({ title: "Footer Test", description: "Check footer" });
     const bundle = buildEpicExportBundle(domain, epic.id);
     const md = renderMarkdown(bundle);
@@ -165,7 +165,7 @@ describe("renderMarkdown", () => {
 
   test("escapes pipe characters in table cells", () => {
     const cwd = createWorkspace();
-    const domain = createDomain(cwd);
+    const { domain, db } = createDomain(cwd);
     const epic = domain.createEpic({ title: "Pipe Test", description: "Check pipe escaping" });
     domain.createTask({ epicId: epic.id, title: "Fix [auth] | retry", description: "Has pipes" });
     const bundle = buildEpicExportBundle(domain, epic.id);
@@ -183,7 +183,7 @@ describe("renderMarkdown", () => {
 
   test("escapes brackets and backticks in inline text", () => {
     const cwd = createWorkspace();
-    const domain = createDomain(cwd);
+    const { domain, db } = createDomain(cwd);
     const epic = domain.createEpic({ title: "Bracket Test", description: "Check bracket escaping" });
     const task = domain.createTask({ epicId: epic.id, title: "Parent", description: "D" });
     domain.createSubtask({ taskId: task.id, title: "Fix `code` and [link]", description: "Has special chars" });
@@ -197,7 +197,7 @@ describe("renderMarkdown", () => {
 
   test("handles multiline descriptions in subtasks", () => {
     const cwd = createWorkspace();
-    const domain = createDomain(cwd);
+    const { domain, db } = createDomain(cwd);
     const epic = domain.createEpic({ title: "Multiline Test", description: "Check multiline" });
     const task = domain.createTask({ epicId: epic.id, title: "Parent", description: "D" });
     domain.createSubtask({ taskId: task.id, title: "Sub", description: "Line one\nLine two\nLine three" });
@@ -212,7 +212,7 @@ describe("renderMarkdown", () => {
 
   test("duplicate task titles produce unique anchors", () => {
     const cwd = createWorkspace();
-    const domain = createDomain(cwd);
+    const { domain, db } = createDomain(cwd);
     const epic = domain.createEpic({ title: "Dup Test", description: "Check duplicate anchors" });
     const t1 = domain.createTask({ epicId: epic.id, title: "Same Name", description: "First" });
     const t2 = domain.createTask({ epicId: epic.id, title: "Same Name", description: "Second" });
@@ -227,7 +227,7 @@ describe("renderMarkdown", () => {
 
   test("escapes external node titles containing pipes in table", () => {
     const cwd = createWorkspace();
-    const domain = createDomain(cwd);
+    const { domain, db } = createDomain(cwd);
     const epicA = domain.createEpic({ title: "Epic A", description: "First" });
     const epicB = domain.createEpic({ title: "Epic B", description: "Second" });
     const taskA = domain.createTask({ epicId: epicA.id, title: "Task A", description: "In A" });
@@ -247,7 +247,7 @@ describe("renderMarkdown", () => {
 
   test("omits empty sections for empty epic", () => {
     const cwd = createWorkspace();
-    const domain = createDomain(cwd);
+    const { domain, db } = createDomain(cwd);
     const epic = domain.createEpic({ title: "Empty", description: "Nothing" });
     const bundle = buildEpicExportBundle(domain, epic.id);
     const md = renderMarkdown(bundle);
