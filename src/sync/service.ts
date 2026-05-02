@@ -813,7 +813,7 @@ function hasLocalDependencyEditsTouchingNodes(db: Database, nodeIds: readonly st
 
 function hasLocalDependencyEditsForIdentity(
   db: Database,
-  sourceBranch: string,
+  currentBranch: string,
   identity: DependencyEventIdentity,
 ): boolean {
   const row = db
@@ -822,7 +822,7 @@ function hasLocalDependencyEditsForIdentity(
       SELECT 1
       FROM events
       WHERE entity_kind = 'dependency'
-        AND (git_branch IS NULL OR git_branch != ?)
+        AND git_branch = ?
         AND json_extract(payload, '$.fields.source_id') = ?
         AND json_extract(payload, '$.fields.source_kind') = ?
         AND json_extract(payload, '$.fields.depends_on_id') = ?
@@ -830,7 +830,7 @@ function hasLocalDependencyEditsForIdentity(
       LIMIT 1;
       `,
     )
-    .get(sourceBranch, identity.sourceId, identity.sourceKind, identity.dependsOnId, identity.dependsOnKind);
+    .get(currentBranch, identity.sourceId, identity.sourceKind, identity.dependsOnId, identity.dependsOnKind);
 
   return row !== null;
 }
