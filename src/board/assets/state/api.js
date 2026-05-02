@@ -317,7 +317,10 @@ export function createMutationQueue(model, rerender) {
 
   return {
     enqueue(mutation) {
-      queue.push(mutation);
+      queue.push({
+        ...mutation,
+        mutationId: mutation.mutationId ?? crypto.randomUUID(),
+      });
       processNext();
     },
 
