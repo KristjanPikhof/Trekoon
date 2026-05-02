@@ -281,6 +281,7 @@ export class TrackerDomain {
   }
 
   createEpic(input: { title: string; description: string; status?: string | undefined }): EpicRecord {
+    this.#assertInTransaction("createEpic");
     const now: number = Date.now();
     const id: string = randomUUID();
     const title: string = assertNonEmpty("title", input.title);
