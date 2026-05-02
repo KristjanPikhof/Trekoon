@@ -349,6 +349,94 @@ export class MutationService {
     });
   }
 
+  /**
+   * Mark a task `done` atomically in a single write transaction.
+   *
+   * Background (Trekoon task 4a0111c4-6400-4a77-b4f3-d9ad863e47db / system
+   * hardening): the legacy `task done` handler issued two separate
+   * `updateTask` mutations whenever the task was in `todo` or `blocked`
+   * (auto-stepping through `in_progress` to satisfy the public status-machine
+   * checker). Each `updateTask` ran in its own `BEGIN IMMEDIATE` transaction,
+   * so a crash, kill, or thrown exception between the two writes could leave
+   * the task wedged in `in_progress` forever — even though the user had
+   * asked to mark it done.
+   *
+   * This method consolidates the operation into one transaction and bypasses
+   * `validateStatusTransition`. THIS IS THE ONE INTENTIONAL DIRECT-STATUS-WRITE
+   * EXCEPTION in the codebase: every other status mutation MUST go through the
+   * public transition checker. The bypass is safe here because the resulting
+   * status (`done`) is a documented terminal target reachable from every
+   * non-`done` status (`todo`, `blocked`, `in_progress`) in the status
+   * machine. See docs/machine-contracts.md for the canonical exceptions list.
+   *
+   * Contract:
+   *  - On success: task row is `done`; exactly one `task.updated` event is
+   *    emitted (no intermediate `in_progress` event); pre-blocked reverse
+   *    deps are captured inside the same transaction so the unblocked-array
+   *    computed by the caller is consistent with the post-COMMIT snapshot.
+   *  - On failure (throw): `ROLLBACK` restores the original status — task is
+   *    NEVER observable in `in_progress` due to a partial done.
+   *
+   * The caller supplies `computeSnapshot` which runs inside the transaction
+   * AFTER the row has been flipped to `done`. This is where the command
+   * layer computes readiness / unblocked / next without leaking
+   * `buildTaskReadiness` into the domain layer.
+   */
+  markTaskDoneAtomically<T>(input: {
+    taskId: string;
+    computeSnapshot: (params: {
+      domain: TrackerDomain;
+      completed: TaskRecord;
+      preBlockedReverseDepIds: readonly string[];
+    }) => T;
+  }): T {
+    return this.#writeTransaction((): T => {
+      const existing = this.#domain.getTaskOrThrow(input.taskId);
+
+      if (existing.status === "done") {
+        throw new DomainError({
+          code: "already_done",
+          message: "Task is already done",
+          details: { id: input.taskId },
+        });
+      }
+
+      // Snapshot direct task-level reverse-dep blockers BEFORE the status
+      // flip so the post-write snapshot can diff "newly-unblocked" tasks.
+      const reverseDeps = this.#domain.listReverseDependencies(input.taskId);
+      const directRevDepTaskIds = reverseDeps
+        .filter((rd) => rd.isDirect && rd.kind === "task")
+        .map((rd) => rd.id);
+      const preDepStatuses = this.#domain.batchResolveDependencyStatuses(directRevDepTaskIds);
+      const preBlockedReverseDepIds = directRevDepTaskIds.filter((id) => {
+        const resolved = preDepStatuses.get(id);
+        return resolved !== undefined && resolved.blockers.length > 0;
+      });
+
+      // Direct UPDATE bypassing validateStatusTransition. See method-doc
+      // comment above for the rationale: this is the ONLY allowed direct
+      // status write in the codebase; do not copy this pattern elsewhere.
+      const now: number = Date.now();
+      this.#db
+        .query("UPDATE tasks SET status = ?, updated_at = ?, version = version + 1 WHERE id = ?;")
+        .run("done", now, input.taskId);
+
+      const completed = this.#domain.getTaskOrThrow(input.taskId);
+
+      // Emit exactly one task.updated event. Payload shape matches the
+      // canonical #emitTaskUpdated contract — sync consumers see a single
+      // logical "task became done" transition, never a phantom intermediate
+      // in_progress step.
+      this.#emitTaskUpdated(completed);
+
+      return input.computeSnapshot({
+        domain: this.#domain,
+        completed,
+        preBlockedReverseDepIds,
+      });
+    });
+  }
+
   updateTaskStatusCascade(id: string, status: string): StatusCascadePlan {
     return this.#writeTransaction((): StatusCascadePlan => {
       const plan = this.#domain.planStatusCascade("task", id, status);
