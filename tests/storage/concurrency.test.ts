@@ -917,3 +917,109 @@ describe("SQLite concurrent write stress tests", () => {
     });
   });
 });
+
+describe("daemon cache hit: surfaces fresh recovery diagnostics", () => {
+  function createCommittedGitRepository(workspace: string): void {
+    execFileSync("git", ["init"], { cwd: workspace, stdio: "ignore" });
+    writeFileSync(join(workspace, "README.md"), "# Trekoon\n", "utf8");
+    execFileSync("git", ["add", "README.md"], { cwd: workspace, stdio: "ignore" });
+    execFileSync(
+      "git",
+      [
+        "-c",
+        "user.name=Trekoon Tests",
+        "-c",
+        "user.email=tests@trekoon.local",
+        "commit",
+        "-m",
+        "Initial commit",
+      ],
+      { cwd: workspace, stdio: "ignore" },
+    );
+  }
+
+  test("cache hit re-runs inspectWorktreeDatabaseState; tracked .trekoon mismatch made post-open surfaces recoveryRequired", () => {
+    const workspace: string = createTempDir();
+    createCommittedGitRepository(workspace);
+
+    // Enable daemon-mode in-process cache for this test only.
+    const previousFlag: string | undefined = process.env.TREKOON_DAEMON_INPROCESS;
+    process.env.TREKOON_DAEMON_INPROCESS = "1";
+
+    try {
+      // First open: clean state -> fills cache, recoveryRequired=false.
+      const first = openTrekoonDatabase(workspace);
+      try {
+        expect(first.diagnostics.recoveryRequired).toBe(false);
+        expect(first.diagnostics.recoveryStatus).toBe("no_legacy_state");
+      } finally {
+        first.close();
+      }
+
+      expect(cachedDatabasesSize()).toBeGreaterThanOrEqual(1);
+
+      // Out-of-band mutation: introduce a tracked .trekoon file, exactly the
+      // shape an operator could create between two daemon requests. Without
+      // the cache-hit re-inspect, the second open would silently return the
+      // cached handle's stale `recoveryRequired=false` snapshot.
+      mkdirSync(join(workspace, ".trekoon"), { recursive: true });
+      const trackedFile: string = join(workspace, ".trekoon", "tracked.txt");
+      writeFileSync(trackedFile, "tracked state\n", "utf8");
+      execFileSync("git", ["add", "-f", trackedFile], { cwd: workspace, stdio: "ignore" });
+
+      // Second open: cache hit. Diagnostics must reflect the freshly-required
+      // recovery, not the snapshot taken at first-open time.
+      const second = openTrekoonDatabase(workspace);
+      try {
+        expect(second.diagnostics.recoveryRequired).toBe(true);
+        expect(second.diagnostics.recoveryStatus).toBe("tracked_ignored_mismatch");
+        expect(second.diagnostics.trackedStorageFiles.length).toBeGreaterThan(0);
+      } finally {
+        second.close();
+      }
+    } finally {
+      // Restore env + clean cache so other tests aren't polluted.
+      closeCachedDatabases();
+      if (previousFlag === undefined) {
+        delete process.env.TREKOON_DAEMON_INPROCESS;
+      } else {
+        process.env.TREKOON_DAEMON_INPROCESS = previousFlag;
+      }
+    }
+  });
+
+  test("cache hit on a clean worktree keeps recoveryRequired=false", () => {
+    const workspace: string = createTempDir();
+    createCommittedGitRepository(workspace);
+
+    const previousFlag: string | undefined = process.env.TREKOON_DAEMON_INPROCESS;
+    process.env.TREKOON_DAEMON_INPROCESS = "1";
+
+    try {
+      const first = openTrekoonDatabase(workspace);
+      try {
+        expect(first.diagnostics.recoveryRequired).toBe(false);
+      } finally {
+        first.close();
+      }
+
+      const second = openTrekoonDatabase(workspace);
+      try {
+        // No out-of-band changes — fresh inspect must match the original
+        // healthy snapshot. This guards against false positives in the
+        // re-inspect path.
+        expect(second.diagnostics.recoveryRequired).toBe(false);
+        expect(second.diagnostics.recoveryStatus).toBe("no_legacy_state");
+      } finally {
+        second.close();
+      }
+    } finally {
+      closeCachedDatabases();
+      if (previousFlag === undefined) {
+        delete process.env.TREKOON_DAEMON_INPROCESS;
+      } else {
+        process.env.TREKOON_DAEMON_INPROCESS = previousFlag;
+      }
+    }
+  });
+});
