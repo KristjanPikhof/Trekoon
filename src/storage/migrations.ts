@@ -1,6 +1,23 @@
 import { Database } from "bun:sqlite";
 
+import { DomainError } from "../domain/types";
 import { BASE_SCHEMA_STATEMENTS, SCHEMA_VERSION } from "./schema";
+
+const BACKUP_HINT = "Run 'trekoon migrate backup' to snapshot .trekoon/trekoon.db before any manual recovery.";
+
+function migrationDownUnsupported(migrationName: string, version: number): DomainError {
+  return new DomainError({
+    code: "migration_down_unsupported",
+    message:
+      `Migration ${migrationName} is irreversible: rolling back below version ${version} is not supported. ` +
+      `${BACKUP_HINT}`,
+    details: {
+      migrationName,
+      version,
+      backupCommand: "trekoon migrate backup",
+    },
+  });
+}
 
 const BASE_MIGRATION_VERSION = 1;
 const BASE_MIGRATION_NAME = `0001_base_schema_v${SCHEMA_VERSION}`;
