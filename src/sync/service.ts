@@ -1510,7 +1510,10 @@ function shouldWithholdDeleteCascadeEvent(
     return false;
   }
 
-  const isDeleteCascadeEvent = event.operation === "dependency.removed" || event.operation === "subtask.deleted";
+  const isDeleteCascadeEvent =
+    event.operation === "dependency.removed"
+    || event.operation === "subtask.deleted"
+    || event.operation === "task.deleted";
   if (!isDeleteCascadeEvent) {
     return false;
   }
