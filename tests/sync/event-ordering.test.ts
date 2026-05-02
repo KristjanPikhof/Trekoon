@@ -432,3 +432,116 @@ describe("Snapshot consistency", () => {
     conn2.close(false);
   });
 });
+
+// ---------------------------------------------------------------------------
+// Section 4: Pull batching — chunked write transactions, crash-safe cursor
+// ---------------------------------------------------------------------------
+
+describe("syncPull chunked transactions", () => {
+  test("aborting mid-pull leaves cursor advanced for committed batches; next pull resumes", () => {
+    const workspace = createWorkspace("trekoon-pull-batch-");
+    const SOURCE = "main";
+    mockGitContext(workspace, SOURCE);
+
+    const storage = openTrekoonDatabase(workspace);
+    const db = storage.db;
+
+    // Seed 500 events on `main` (= exactly two SYNC_PULL_BATCH_SIZE=250 batches).
+    // Same-branch fast path will iterate them in two passes through
+    // queryBranchEventsSinceBatch.
+    const TOTAL = 500;
+    const baseTs = Date.now();
+    const insertEvent = db.prepare(
+      `INSERT INTO events (id, entity_kind, entity_id, operation, payload, git_branch, git_head, created_at, updated_at, version)
+       VALUES (?, 'epic', ?, 'epic.created', '{"fields":{}}', ?, NULL, ?, ?, 1);`,
+    );
+    db.exec("BEGIN;");
+    for (let i = 0; i < TOTAL; i++) {
+      insertEvent.run(randomUUID(), randomUUID(), SOURCE, baseTs + i, baseTs + i);
+    }
+    db.exec("COMMIT;");
+    storage.close();
+
+    // First pull: throw on the SECOND call to queryBranchEventsSinceBatch.
+    // The first batch (250 events) has already been committed by the first
+    // writeTransaction; the cursor must reflect that commit so the next
+    // pull can resume from it.
+    const realQuery = branchDb.queryBranchEventsSinceBatch;
+    let callCount = 0;
+    mock.module("../../src/sync/branch-db", () => ({
+      ...branchDb,
+      queryBranchEventsSinceBatch: (
+        d: Database,
+        branch: string,
+        cursorToken: string,
+        limit?: number,
+      ) => {
+        callCount += 1;
+        if (callCount === 2) {
+          throw new Error("synthetic mid-pull abort");
+        }
+        return realQuery(d, branch, cursorToken, limit);
+      },
+    }));
+
+    let firstPullThrew = false;
+    try {
+      syncPull(workspace, SOURCE);
+    } catch (error) {
+      firstPullThrew = true;
+      expect((error as Error).message).toContain("synthetic mid-pull abort");
+    }
+    expect(firstPullThrew).toBe(true);
+
+    // Inspect cursor state after the abort: must reflect the last
+    // fully-committed batch, NOT zero (would be the case with single
+    // outer-tx semantics, where the abort rolls everything back).
+    const reopened = openTrekoonDatabase(workspace);
+    const cursorRow = reopened.db
+      .query(
+        `SELECT cursor_token, last_event_at FROM sync_cursors
+         WHERE owner_scope = 'worktree' AND owner_worktree_path = ? AND source_branch = ?
+         LIMIT 1;`,
+      )
+      .get(workspace, SOURCE) as { cursor_token: string; last_event_at: number } | null;
+
+    expect(cursorRow).not.toBeNull();
+    // Cursor token format: "<created_at>:<id>". The committed batch
+    // contains exactly the first 250 events, so created_at must equal
+    // baseTs + 249.
+    const committedTs = Number(cursorRow!.cursor_token.split(":")[0]);
+    expect(committedTs).toBe(baseTs + 249);
+    expect(cursorRow!.last_event_at).toBe(baseTs + 249);
+
+    // Also verify the events table holds exactly the committed batch's
+    // rows (the source 500) — they live there from the seed; the test
+    // exercises the cursor invariant, not row presence.
+    const evCount = reopened.db
+      .query(`SELECT COUNT(*) AS c FROM events WHERE git_branch = ?;`)
+      .get(SOURCE) as { c: number };
+    expect(evCount.c).toBe(TOTAL);
+    reopened.close();
+
+    // Second pull: clear the throw and run again. It should resume from
+    // the cursor and process the remaining 250 events without error.
+    mock.module("../../src/sync/branch-db", () => ({ ...branchDb }));
+
+    const summary = syncPull(workspace, SOURCE);
+    // Same-branch fast path emits scannedEvents but appliedEvents=0.
+    expect(summary.scannedEvents).toBe(TOTAL - 250);
+    expect(summary.sameBranch).toBe(true);
+
+    const finalCursor = openTrekoonDatabase(workspace);
+    const finalRow = finalCursor.db
+      .query(
+        `SELECT cursor_token FROM sync_cursors
+         WHERE owner_scope = 'worktree' AND owner_worktree_path = ? AND source_branch = ?
+         LIMIT 1;`,
+      )
+      .get(workspace, SOURCE) as { cursor_token: string } | null;
+    expect(finalRow).not.toBeNull();
+    const finalTs = Number(finalRow!.cursor_token.split(":")[0]);
+    expect(finalTs).toBe(baseTs + TOTAL - 1);
+    finalCursor.close();
+  });
+});
