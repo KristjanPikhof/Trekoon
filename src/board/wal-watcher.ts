@@ -22,35 +22,36 @@ import { TrackerDomain } from "../domain/tracker-domain";
 import { type BoardEventBus } from "./event-bus";
 import { buildBoardSnapshot } from "./snapshot";
 
-interface SnapshotRecord {
-  readonly id: string;
-  readonly updatedAt?: number;
-}
-
 interface CollectionDiff {
-  readonly upserted: Record<string, unknown>[];
+  readonly upserted: unknown[];
   readonly deletedIds: string[];
 }
 
-function diffById(
-  previous: readonly Record<string, unknown>[] | undefined,
-  current: readonly Record<string, unknown>[] | undefined,
-): CollectionDiff {
-  const previousIndex = new Map<string, Record<string, unknown>>();
+function recordId(value: unknown): string | null {
+  if (!value || typeof value !== "object") {
+    return null;
+  }
+  const id = (value as { id?: unknown }).id;
+  return typeof id === "string" && id.length > 0 ? id : null;
+}
+
+function diffById(previous: readonly unknown[] | undefined, current: readonly unknown[] | undefined): CollectionDiff {
+  const previousIndex = new Map<string, unknown>();
   for (const record of previous ?? []) {
-    if (record && typeof (record as SnapshotRecord).id === "string") {
-      previousIndex.set((record as SnapshotRecord).id, record);
+    const id = recordId(record);
+    if (id !== null) {
+      previousIndex.set(id, record);
     }
   }
 
-  const upserted: Record<string, unknown>[] = [];
+  const upserted: unknown[] = [];
   const seen = new Set<string>();
   for (const record of current ?? []) {
-    if (!record || typeof (record as SnapshotRecord).id !== "string") {
+    const id = recordId(record);
+    if (id === null) {
       continue;
     }
 
-    const id = (record as SnapshotRecord).id;
     seen.add(id);
     const previousRecord = previousIndex.get(id);
     if (!previousRecord || JSON.stringify(previousRecord) !== JSON.stringify(record)) {
