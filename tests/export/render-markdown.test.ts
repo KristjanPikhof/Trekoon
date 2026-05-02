@@ -116,8 +116,8 @@ describe("renderMarkdown", () => {
     const epic = domain.createEpic({ title: "Done Sub Test", description: "Check done sub" });
     const task = domain.createTask({ epicId: epic.id, title: "Parent", description: "Has done sub" });
     const sub = domain.createSubtask({ taskId: task.id, title: "Done Sub", description: "Completed" });
-    domain.updateSubtask(sub.id, { status: "in_progress" });
-    domain.updateSubtask(sub.id, { status: "done" });
+    writeTransaction(db, () => domain.updateSubtask(sub.id, { status: "in_progress" }));
+    writeTransaction(db, () => domain.updateSubtask(sub.id, { status: "done" }));
     const bundle = buildEpicExportBundle(domain, epic.id);
     const md = renderMarkdown(bundle);
 
