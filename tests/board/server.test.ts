@@ -116,7 +116,7 @@ describe("board server", (): void => {
     firstServer.stop();
 
     const secondServer = startBoardServer({ cwd: workspace, token: "second-token" });
-    const secondResponse = await fetch(secondServer.url);
+    const secondResponse = await fetchFollowingTokenRedirect(secondServer.url, "second-token");
 
     expect(secondServer.port).toBe(firstServer.port);
     expect(secondResponse.status).toBe(200);
