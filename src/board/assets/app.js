@@ -281,7 +281,7 @@ export async function bootLegacyBoard(options = {}) {
         // Attach the document-level focus trap only while an overlay is actually
         // open. This avoids the microtask window where Tab keydowns get swallowed
         // by a stale handler with no overlay to confine to.
-        attachOverlayFocusTrap();
+        overlayFocusTrap.attach();
         queueMicrotask(() => focusOverlay(nextOverlay));
         return;
       }
@@ -291,7 +291,7 @@ export async function bootLegacyBoard(options = {}) {
         unlockBackgroundScroll();
         setBackgroundInert(false);
       }
-      detachOverlayFocusTrap();
+      overlayFocusTrap.detach();
       queueMicrotask(() => restoreOverlayFocus());
     }
 
