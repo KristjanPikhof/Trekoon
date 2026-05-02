@@ -838,6 +838,83 @@ export class MutationService {
     });
   }
 
+  // -- Centralized event-emission helpers ------------------------------------
+  // Each helper builds the payload for a single (entity, op) pair from the
+  // entity record. Payload shapes here MUST match the historical inline
+  // construction byte-for-byte: sync correctness depends on it.
+
+  #emitEpicCreated(epic: EpicRecord): string {
+    return this.#appendEntityEvent("epic", epic.id, ENTITY_OPERATIONS.epic.created, {
+      title: epic.title,
+      description: epic.description,
+      status: epic.status,
+    });
+  }
+
+  #emitEpicUpdated(epic: EpicRecord): string {
+    return this.#appendEntityEvent("epic", epic.id, ENTITY_OPERATIONS.epic.updated, {
+      title: epic.title,
+      description: epic.description,
+      status: epic.status,
+    });
+  }
+
+  #emitEpicDeleted(epicId: string): string {
+    return this.#appendEntityEvent("epic", epicId, ENTITY_OPERATIONS.epic.deleted, {});
+  }
+
+  #emitTaskCreated(task: TaskRecord): string {
+    return this.#appendEntityEvent("task", task.id, ENTITY_OPERATIONS.task.created, {
+      epic_id: task.epicId,
+      title: task.title,
+      description: task.description,
+      status: task.status,
+    });
+  }
+
+  #emitTaskUpdated(task: TaskRecord): string {
+    return this.#appendEntityEvent("task", task.id, ENTITY_OPERATIONS.task.updated, {
+      epic_id: task.epicId,
+      title: task.title,
+      description: task.description,
+      status: task.status,
+      owner: task.owner,
+    });
+  }
+
+  #emitTaskDeleted(taskId: string): string {
+    return this.#appendEntityEvent("task", taskId, ENTITY_OPERATIONS.task.deleted, {});
+  }
+
+  #emitSubtaskCreated(subtask: SubtaskRecord): string {
+    return this.#appendEntityEvent("subtask", subtask.id, ENTITY_OPERATIONS.subtask.created, {
+      task_id: subtask.taskId,
+      title: subtask.title,
+      description: subtask.description,
+      status: subtask.status,
+    });
+  }
+
+  #emitSubtaskUpdated(subtask: SubtaskRecord): string {
+    return this.#appendEntityEvent("subtask", subtask.id, ENTITY_OPERATIONS.subtask.updated, {
+      task_id: subtask.taskId,
+      title: subtask.title,
+      description: subtask.description,
+      status: subtask.status,
+      owner: subtask.owner,
+    });
+  }
+
+  #emitSubtaskDeleted(
+    subtaskId: string,
+    cascade?: { taskId: string; sourceEventId: string } | undefined,
+  ): string {
+    const fields: Record<string, unknown> = cascade
+      ? { task_id: cascade.taskId, source_event_id: cascade.sourceEventId }
+      : {};
+    return this.#appendEntityEvent("subtask", subtaskId, ENTITY_OPERATIONS.subtask.deleted, fields);
+  }
+
   #completeAtomicIdempotentMutation(
     claim: AtomicIdempotencyClaim,
     mutate: () => AtomicIdempotencyCompletedResult,
