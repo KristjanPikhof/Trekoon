@@ -424,9 +424,9 @@ Security:
 - On `Ctrl-C` / `SIGTERM` the socket is unlinked and the cached database
   connection is closed.
 
-Spike acceptance signal (see `bench/daemon-session.ts`): the daemon path runs a
-`session` call several times faster than the cold one-shot CLI by reusing the
-held-open SQLite connection across requests.
+Performance (see `bench/daemon-session.ts`): daemon median < 10 ms,
+cold one-shot median > 50 ms — roughly a 5–10× latency reduction for
+repeated calls by reusing the held-open SQLite connection.
 
 ## Related docs
 
