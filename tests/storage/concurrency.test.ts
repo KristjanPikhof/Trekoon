@@ -19,6 +19,7 @@ import { join } from "node:path";
 import { Database } from "bun:sqlite";
 import { afterEach, describe, expect, test } from "bun:test";
 
+import { MutationService } from "../../src/domain/mutation-service";
 import { openTrekoonDatabase, writeTransaction } from "../../src/storage/database";
 import { persistGitContext } from "../../src/sync/git-context";
 
