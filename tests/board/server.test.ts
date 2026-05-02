@@ -50,6 +50,32 @@ async function occupyPort(): Promise<{ blocker: NetServer; port: number }> {
   };
 }
 
+// Token-revoke-on-rotation: when the first GET carries `?token=` the server
+// responds 302 with Set-Cookie, then the cookie carries auth on the
+// redirect. Bun's fetch follows redirects but does NOT carry cookies across
+// them, so tests have to do the cookie hop manually.
+async function fetchFollowingTokenRedirect(
+  url: string,
+  token: string,
+  init?: RequestInit,
+): Promise<Response> {
+  const initial = await fetch(url, { ...init, redirect: "manual" });
+  if (initial.status !== 302) {
+    return initial;
+  }
+  const location = initial.headers.get("location") ?? "/";
+  const targetUrl = location.startsWith("http")
+    ? location
+    : `${new URL(url).origin}${location}`;
+  return fetch(targetUrl, {
+    ...init,
+    headers: {
+      ...(init?.headers as Record<string, string> | undefined),
+      cookie: `trekoon_board_session=${encodeURIComponent(token)}`,
+    },
+  });
+}
+
 async function closeBlocker(blocker: NetServer): Promise<void> {
   await new Promise<void>((resolve, reject) => {
     blocker.close((error?: Error | null) => {
