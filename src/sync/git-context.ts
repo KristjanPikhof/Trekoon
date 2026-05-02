@@ -40,10 +40,32 @@ interface GitDirInfo {
   readonly commonDir: string | null;
 }
 
+/**
+ * Process-level cache, keyed by worktree path. Bounded LRU so a long-running
+ * daemon serving requests for many distinct cwds (e.g. running across
+ * unrelated clones) does not grow this map without bound.
+ */
+const GIT_CONTEXT_CACHE_CAPACITY = 16;
 const gitContextCache: Map<string, GitContextCore> = new Map();
 
 /** Cache of worktree path → resolved gitdir + commondir, populated lazily. */
 const gitDirCache: Map<string, GitDirInfo> = new Map();
+
+function evictLruIfNeeded<K, V>(map: Map<K, V>, capacity: number): void {
+  while (map.size >= capacity) {
+    const oldestKey = map.keys().next().value;
+    if (oldestKey === undefined) {
+      return;
+    }
+    map.delete(oldestKey);
+  }
+}
+
+function touchEntry<K, V>(map: Map<K, V>, key: K, value: V): void {
+  // Re-insert so this key moves to the MRU end of the insertion-order.
+  map.delete(key);
+  map.set(key, value);
+}
 
 function statKey(prefix: string, path: string): string | null {
   try {
