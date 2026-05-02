@@ -538,6 +538,58 @@ error:
   message: "Pending conflicts changed before batch resolution could be applied."
 ```
 
+## Error code registry
+
+All machine-visible error codes emitted by Trekoon. Every `error.code` value in
+any `ok: false` response will be one of the following strings.
+
+| Code | Description |
+|---|---|
+| `already_done` | Entity is already in `done` status; transition is a no-op. |
+| `already_resolved` | Conflict was resolved by another process before this write. |
+| `ambiguous_legacy_state` | Legacy worktree state is ambiguous and cannot be automatically resolved. |
+| `backup_already_exists` | A backup file already exists at the target path; overwrite was not requested. |
+| `backup_database_missing` | Source database file not found when attempting to create a backup. |
+| `backup_failed` | Backup operation failed (I/O or copy error). |
+| `cancelled` | Operation was cancelled by the user (e.g. confirmation prompt rejected). |
+| `confirmation_required` | Human-mode operation requires explicit confirmation before proceeding. |
+| `conflict_set_changed` | Batch conflict set changed between preview and confirmed write. |
+| `database_busy` | SQLite database is locked; retry after a short wait. |
+| `dependency_blocked` | Cascade update blocked because one or more descendants have unresolved dependencies. |
+| `disallowed_field` | Sync resolve attempted to write a field that is not on the allow-list. |
+| `events_failed` | Event log query or export failed. |
+| `install_failed` | Skill installation failed (file copy or permission error). |
+| `internal_error` | Unexpected internal error; inspect server logs for details. |
+| `invalid_args` | Required positional arguments are missing or malformed. |
+| `invalid_dependency` | Dependency edge is invalid (self-loop, wrong entity type, or duplicate). |
+| `invalid_input` | One or more option values failed validation. |
+| `invalid_path` | File path is invalid for the requested operation (e.g. path is a directory). |
+| `invalid_source` | Source entity for a dependency or sync operation does not exist or is of wrong kind. |
+| `invalid_state` | Entity or system is in a state that does not permit the requested operation. |
+| `invalid_subcommand` | Unrecognised subcommand for this command group. |
+| `legacy_import_failed` | Import from a legacy (pre-`.trekoon`) data directory failed. |
+| `migrate_failed` | Database schema migration failed. |
+| `migration_down_unsupported` | Down-migrations are not supported; only forward migrations are allowed. |
+| `missing_asset` | Expected bundled asset (skill file, template) was not found. |
+| `no_matching_conflicts` | `sync resolve --all` filters matched zero pending conflicts. |
+| `not_found` | Requested entity (epic, task, subtask, dependency) does not exist. |
+| `orphaned_external_node` | Dependency graph contains a node that belongs to a different epic. |
+| `outside_repo_target` | Skill install target path is outside the repository root. |
+| `permission_denied` | File-system permission denied for the requested path. |
+| `precondition_failed` | `If-Match` precondition header did not match the entity's current `updatedAt`. |
+| `row_not_found` | Sync resolve target row no longer exists in the database. |
+| `status_transition_invalid` | Requested status transition is not permitted by the status machine. |
+| `stream_unavailable` | SSE snapshot stream is not available (board not initialised or shutting down). |
+| `sync_failed` | Sync pull or push operation failed. |
+| `tracked_ignored_mismatch` | Worktree is tracked by Trekoon but its path is in `.gitignore`, or vice-versa. |
+| `unauthorized` | Request lacks valid authentication credentials. |
+| `unhandled_command` | Command matched a known group but no case handled the subcommand. |
+| `unknown_command` | Top-level command token is not recognised. |
+| `unknown_option` | An option flag passed to the command is not recognised. |
+| `unsupported_entity_kind` | Sync resolve encountered an entity kind that the writer does not handle. |
+| `update_failed` | Skill update failed (download, copy, or permission error). |
+| `wrong_entity_type` | Operation requires a specific entity kind but a different kind was supplied. |
+
 ## Related docs
 
 - [Quickstart](quickstart.md)
