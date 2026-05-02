@@ -57,10 +57,8 @@ function isCursorStale(db: Database, cursorToken: string, sourceBranch: string):
     return false;
   }
 
-  // Check if the event referenced by the cursor still exists.
-  // If the cursor references a specific event id, check for it.
-  // Otherwise, check if any event at or after the cursor timestamp exists
-  // on the source branch.
+  // Check if the event referenced by the cursor still exists in the live
+  // events table. If found, the cursor position is valid.
   if (id.length > 0) {
     const row = db
       .query("SELECT id FROM events WHERE id = ? LIMIT 1;")
@@ -70,20 +68,52 @@ function isCursorStale(db: Database, cursorToken: string, sourceBranch: string):
     }
   }
 
-  // The referenced event is gone. Check if there are any events on the
-  // source branch at or after the cursor timestamp — if not, the cursor
-  // may simply be at the end of the stream.
+  // Compute the earliest retained created_at across both the live events
+  // table and event_archive (pruned events). If the cursor predates that
+  // minimum, history before the cursor has been lost and re-bootstrap is
+  // required.
+  const minRow = db
+    .query(
+      `SELECT MIN(min_ts) AS min_ts FROM (
+         SELECT MIN(created_at) AS min_ts FROM events
+         UNION ALL
+         SELECT MIN(created_at) AS min_ts FROM event_archive
+       );`,
+    )
+    .get() as { min_ts: number | null } | null;
+
+  const minTs: number | null = minRow?.min_ts ?? null;
+
+  // If there are no events at all, the cursor may simply be ahead of an
+  // empty log — not stale.
+  if (minTs === null) {
+    return false;
+  }
+
+  // Cursor predates the earliest retained event: the history window has
+  // been pruned past the cursor's position.
+  if (createdAt < minTs) {
+    return true;
+  }
+
+  // The referenced event is gone but the cursor timestamp is within the
+  // retained window. Check if there are any events on the source branch at
+  // or after the cursor timestamp across both tables — if there are, events
+  // between the cursor and the oldest remaining event were pruned.
   const newerRow = db
     .query(
-      `SELECT id FROM events
-       WHERE git_branch = ? AND created_at >= ?
+      `SELECT id FROM (
+         SELECT id, created_at FROM events
+         WHERE git_branch = ? AND created_at >= ?
+         UNION ALL
+         SELECT id, created_at FROM event_archive
+         WHERE git_branch = ? AND created_at >= ?
+       )
        ORDER BY created_at ASC, id ASC
        LIMIT 1;`,
     )
-    .get(sourceBranch, createdAt) as { id: string } | null;
+    .get(sourceBranch, createdAt, sourceBranch, createdAt) as { id: string } | null;
 
-  // If there are newer events but our referenced event is gone,
-  // events between the cursor and the oldest remaining event were pruned.
   return newerRow !== null;
 }
 
