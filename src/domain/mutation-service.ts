@@ -54,16 +54,19 @@ function assertNonEmptyField(field: string, value: string): string {
 }
 
 /**
- * Local mirror of `normalizeOwner` from tracker-domain. Trims string
- * owners, treats blank-after-trim as `null` (clears the owner), passes
- * an explicit `null` through unchanged.
+ * Local mirror of `normalizeOwner` from tracker-domain. `undefined`
+ * preserves the existing owner; `null` or blank-after-trim clears it;
+ * any other string is trimmed and stored.
  */
-function normalizeOwnerInput(owner: string | null | undefined): string | null {
-  if (owner === undefined || owner === null) {
+function normalizeOwnerInput(owner: string | null | undefined): string | null | undefined {
+  if (owner === undefined) {
+    return undefined;
+  }
+  if (owner === null) {
     return null;
   }
   const trimmed = owner.trim();
-  return trimmed.length === 0 ? null : trimmed;
+  return trimmed.length > 0 ? trimmed : null;
 }
 
 const assertEpicFieldNonEmpty = assertNonEmptyField;
