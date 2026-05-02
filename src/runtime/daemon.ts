@@ -1,6 +1,7 @@
 import { chmodSync, existsSync, mkdirSync, unlinkSync, statSync } from "node:fs";
 import { connect, createServer, type Server, type Socket } from "node:net";
 import { dirname } from "node:path";
+import { safeErrorMessage } from "../commands/error-utils";
 import { closeCachedDatabases } from "../storage/database";
 import { resolveStoragePaths } from "../storage/path";
 
