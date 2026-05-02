@@ -20,6 +20,7 @@ interface BoardRouteContext {
   readonly db: Database;
   readonly cwd: string;
   readonly token: string;
+  readonly eventBus?: BoardEventBus;
 }
 
 interface BoardRouteError {
