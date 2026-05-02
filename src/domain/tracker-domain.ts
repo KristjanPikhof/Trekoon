@@ -1111,9 +1111,7 @@ export class TrackerDomain {
             ? "dependency batch contains missing ids"
             : firstIssue?.type === "duplicate"
               ? "dependency batch contains duplicate edges"
-              : firstIssue?.type === "parent_to_child"
-                ? "dependency batch contains parent-to-child edges"
-                : "dependency batch contains cycles",
+              : "dependency batch contains cycles",
         details: {
           issues: orderedIssues,
           firstIssue,
