@@ -308,19 +308,25 @@ candidate. Use this:
 
 ### 2. Claim work explicitly
 
-Once you know which task to work on, claim it:
+Once you know which task to work on, claim it atomically with `task claim`.
+`--owner` is required:
 
 ```bash
-trekoon --toon task update <task-id> --status in_progress
+trekoon --toon task claim <task-id> --owner <name>
 ```
 
-Optionally assign ownership when multiple agents or people are working:
+`task claim` sets `status=in_progress` and `owner=<name>` in a single
+compare-and-swap. It succeeds only when the task is in `todo` or `blocked`
+and is not already claimed by a different owner.
+
+For other (non-claim) status transitions such as moving to `blocked`, use
+`task update --status`:
 
 ```bash
-trekoon --toon task update <task-id> --status in_progress --owner <name>
+trekoon --toon task update <task-id> --status blocked
 ```
 
-Owner is for tracking who is responsible. Set it on tasks or subtasks:
+To update ownership separately (e.g. reassign without claiming):
 
 ```bash
 trekoon --toon task update <task-id> --owner alice
