@@ -22,7 +22,7 @@ import { TrackerDomain } from "../domain/tracker-domain";
 import { type BoardEventBus } from "./event-bus";
 import { buildBoardSnapshot, type BoardSnapshot } from "./snapshot";
 
-const IN_PROCESS_WAL_SUPPRESS_MS = 100;
+const IN_PROCESS_WAL_SUPPRESS_MS = 500;
 
 interface CollectionDiff {
   readonly upserted: unknown[];
@@ -181,12 +181,18 @@ export function startWalWatcher(options: WalWatcherOptions): WalWatcher {
   let debounceTimer: ReturnType<typeof setTimeout> | null = null;
   let closed = false;
   let failures = 0;
+  let lastSuppressedInProcessWriteAt = 0;
 
   function reconcile(): void {
     if (closed) {
       return;
     }
-    if (Date.now() - options.eventBus.lastInProcessWriteAt <= IN_PROCESS_WAL_SUPPRESS_MS) {
+    const inProcessWriteAt = options.eventBus.lastInProcessWriteAt;
+    if (
+      inProcessWriteAt > lastSuppressedInProcessWriteAt &&
+      Date.now() - inProcessWriteAt <= IN_PROCESS_WAL_SUPPRESS_MS
+    ) {
+      lastSuppressedInProcessWriteAt = inProcessWriteAt;
       return;
     }
 
