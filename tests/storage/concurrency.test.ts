@@ -571,10 +571,7 @@ describe("SQLite concurrent write stress tests", () => {
       const NOTE_PREFIX = "note-from-appender-";
 
       // Each connection appends a distinct note to the same task
-      const conns = Array.from({ length: APPENDER_COUNT }, () => {
-        const conn = openTrekoonDatabase(workspace);
-        return conn;
-      });
+      const conns = Array.from({ length: APPENDER_COUNT }, () => openTrekoonDatabase(workspace));
 
       for (let i = 0; i < APPENDER_COUNT; i++) {
         const conn = conns[i]!;
