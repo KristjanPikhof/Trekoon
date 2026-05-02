@@ -139,3 +139,18 @@ export function safeErrorMessage(error: unknown, fallback: string): string {
   const message = readErrorMessage(error);
   return message === null ? fallback : sanitizeErrorMessage(message);
 }
+
+/**
+ * Redact a stack trace before logging. Routes the input through
+ * `redactSensitive` (the canonical secret-stripping pass) so absolute paths
+ * and any inline credentials are scrubbed. The function is intentionally
+ * shallow — additional heuristics (e.g. JWT shape detection) live in
+ * `redactSensitive` itself so future contributors only need to extend that
+ * single regex pipeline.
+ */
+export function redactStack(stack: string | undefined): string {
+  if (typeof stack !== "string" || stack.length === 0) {
+    return "";
+  }
+  return redactSensitive(stack);
+}
