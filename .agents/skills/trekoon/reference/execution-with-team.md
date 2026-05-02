@@ -111,9 +111,7 @@ Agent:
     them completed.
 
     Before starting each Trekoon task, claim it in Trekoon:
-      trekoon --toon task update <trekoon-task-id> --status in_progress --owner <your-name>
-    (Note: once the t-skill-claim primitive ships in Epic B, use that command
-    instead — it combines status + owner in one atomic step.)
+      trekoon --toon task claim <trekoon-task-id> --owner <your-name>
 
     Status machine rules:
     - todo -> in_progress -> done (valid)
