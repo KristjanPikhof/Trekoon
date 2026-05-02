@@ -883,13 +883,36 @@ export function migrateDatabase(db: Database): void {
   // transactional migration path for non-current/legacy schemas.
   if (isSchemaCurrentFastPath(db, latestVersion)) {
     migrateBoardIdempotencyState(db);
-    // Stamp the DB header so subsequent fast-path checks have a fingerprint
-    // to verify against, even if this is the first run after the v1 marker
-    // format upgrade or a restored-from-backup DB whose schema_migrations
-    // happens to match latest.
-    setUserVersion(db, latestVersion);
-    writeMigrationVersionMarker(db, latestVersion);
-    return;
+
+    // Re-confirm the schema state under an EXCLUSIVE lock before stamping
+    // the DB header. Without the lock, a concurrent rollback in another
+    // process can interleave between the unlocked probe above and the
+    // setUserVersion call below, leaving PRAGMA user_version pointing at a
+    // higher version than schema_migrations actually reflects. If the
+    // recheck disagrees we bail to the slow migrate path which will
+    // re-apply any missing migrations transactionally.
+    let fastPathConfirmed = false;
+    runExclusive(db, (): void => {
+      if (currentVersion(db) !== latestVersion) {
+        return;
+      }
+      // Stamp the DB header inside the same exclusive transaction so the
+      // user_version cannot diverge from schema_migrations on commit.
+      // This also covers first runs after the v1 marker format upgrade and
+      // restored-from-backup DBs whose schema_migrations happens to match
+      // latest but whose user_version still trails.
+      setUserVersion(db, latestVersion);
+      fastPathConfirmed = true;
+    });
+
+    if (fastPathConfirmed) {
+      // Persist the marker so the next cold start can short-circuit. The
+      // marker is a sidecar hint — even if this write fails, the DB header
+      // (stamped inside the tx above) remains authoritative.
+      writeMigrationVersionMarker(db, latestVersion);
+      return;
+    }
+    // Disagreement: fall through to the slow path below.
   }
 
   runExclusive(db, (): void => {
