@@ -8,10 +8,14 @@ import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
-import { afterEach, beforeEach, describe, expect, spyOn, test } from "bun:test";
+import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 
 import { runSession } from "../../src/commands/session";
-import { clearGitContextCache, resolveGitContext } from "../../src/sync/git-context";
+import {
+  clearGitContextCache,
+  gitContextCacheSize,
+  resolveGitContext,
+} from "../../src/sync/git-context";
 import { clearStoragePathCache } from "../../src/storage/path";
 
 const SESSION_COUNT = 5;
@@ -37,13 +41,12 @@ function initGitRepository(workspace: string): void {
 }
 
 beforeEach((): void => {
-  // Ensure each test starts with cold caches for correct isolation.
+  // Start each test with cold caches for correct isolation.
   clearGitContextCache();
   clearStoragePathCache();
 });
 
 afterEach((): void => {
-  // Restore caches and clean up workspaces.
   clearGitContextCache();
   clearStoragePathCache();
   while (tempDirs.length > 0) {
@@ -55,49 +58,54 @@ afterEach((): void => {
 });
 
 describe("git context cache", (): void => {
-  test("resolveGitContext is memoized: git subprocess runs exactly once per worktree", (): void => {
+  test("cache starts empty and is populated on first resolveGitContext call", (): void => {
     const cwd = createWorkspace();
     initGitRepository(cwd);
 
-    // Spy on the git subprocess launcher used by git-context.ts.
-    const spy = spyOn(Bun, "spawnSync");
+    expect(gitContextCacheSize()).toBe(0);
+    resolveGitContext(cwd);
+    expect(gitContextCacheSize()).toBe(1);
+  });
+
+  test("repeated calls with the same cwd do not grow the cache beyond 1 entry", (): void => {
+    const cwd = createWorkspace();
+    initGitRepository(cwd);
+
+    resolveGitContext(cwd);
+    resolveGitContext(cwd);
+    resolveGitContext(cwd);
+
+    // Cache must contain exactly one entry for this worktree.
+    expect(gitContextCacheSize()).toBe(1);
+  });
+
+  test("all cached results share the same branch and sha", (): void => {
+    const cwd = createWorkspace();
+    initGitRepository(cwd);
 
     const first = resolveGitContext(cwd);
     const second = resolveGitContext(cwd);
     const third = resolveGitContext(cwd);
 
-    // All three results share the same branch / sha values.
     expect(second.branchName).toBe(first.branchName);
     expect(second.headSha).toBe(first.headSha);
     expect(third.branchName).toBe(first.branchName);
     expect(third.headSha).toBe(first.headSha);
-
-    // The first call invokes git twice (branch --show-current + rev-parse HEAD).
-    // Subsequent calls must be cache hits — zero additional git subprocess calls.
-    const gitCalls = spy.mock.calls.filter(
-      (args) => Array.isArray(args[0]) && args[0][0] === "git",
-    );
-    expect(gitCalls.length).toBe(2);
-
-    spy.mockRestore();
   });
 
-  test("clearGitContextCache forces a fresh git lookup on next call", (): void => {
+  test("clearGitContextCache resets the cache to empty", (): void => {
     const cwd = createWorkspace();
     initGitRepository(cwd);
 
-    const spy = spyOn(Bun, "spawnSync");
+    resolveGitContext(cwd);
+    expect(gitContextCacheSize()).toBe(1);
 
-    resolveGitContext(cwd); // populates cache — 2 git calls
     clearGitContextCache();
-    resolveGitContext(cwd); // cache cleared — 2 more git calls
+    expect(gitContextCacheSize()).toBe(0);
 
-    const gitCalls = spy.mock.calls.filter(
-      (args) => Array.isArray(args[0]) && args[0][0] === "git",
-    );
-    expect(gitCalls.length).toBe(4);
-
-    spy.mockRestore();
+    // After clearing, the next call must re-populate (cache grows back to 1).
+    resolveGitContext(cwd);
+    expect(gitContextCacheSize()).toBe(1);
   });
 });
 
@@ -106,7 +114,7 @@ describe("session startup performance", (): void => {
     const cwd = createWorkspace();
     initGitRepository(cwd);
 
-    // Warm-up: one session call outside the measurement window.
+    // Warm-up: one session call to pre-populate caches (not measured).
     await runSession({ cwd, mode: "json", args: [] });
 
     const start = performance.now();
@@ -117,5 +125,17 @@ describe("session startup performance", (): void => {
     const elapsed = performance.now() - start;
 
     expect(elapsed).toBeLessThan(PERF_BUDGET_MS);
+  });
+
+  test("git context cache has exactly 1 entry after multiple session calls to the same workspace", async (): Promise<void> => {
+    const cwd = createWorkspace();
+    initGitRepository(cwd);
+
+    for (let i = 0; i < SESSION_COUNT; i++) {
+      await runSession({ cwd, mode: "json", args: [] });
+    }
+
+    // All session calls target the same worktree — only one cache entry expected.
+    expect(gitContextCacheSize()).toBe(1);
   });
 });
