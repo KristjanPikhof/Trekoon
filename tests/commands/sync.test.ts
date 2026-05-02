@@ -858,10 +858,18 @@ describe("sync command", (): void => {
 
     const secondaryStorage = openTrekoonDatabase(secondary);
     try {
+      const secondaryScope = conflictScopeFor(secondary);
       const epic = secondaryStorage.db.query("SELECT title FROM epics WHERE id = ?;").get(epicId) as { title: string } | null;
       const conflict = secondaryStorage.db
-        .query("SELECT resolution FROM sync_conflicts WHERE event_id = 'source-update-event' AND field_name = 'title' LIMIT 1;")
-        .get() as { resolution: string } | null;
+        .query(
+          `SELECT resolution FROM sync_conflicts
+           WHERE event_id = 'source-update-event'
+             AND field_name = 'title'
+             AND worktree_path = ?
+             AND current_branch = ?
+           LIMIT 1;`,
+        )
+        .get(secondaryScope.worktreePath, secondaryScope.currentBranch) as { resolution: string } | null;
 
       // Scoped resolution: primary's resolve event carries primary's
       // worktree_path/current_branch in its payload. Secondary's pull rejects
