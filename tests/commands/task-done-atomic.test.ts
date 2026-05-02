@@ -228,6 +228,51 @@ describe("task done atomic", (): void => {
     }
   });
 
+  test("blocked task with unresolved dep fails atomically with dependency_blocked", (): void => {
+    const { db, service, domain } = createInMemoryDb();
+    const epic = service.createEpic({ title: "E", description: "d" });
+    const upstream = service.createTask({ epicId: epic.id, title: "U", description: "d", status: "todo" });
+    const downstream = service.createTask({ epicId: epic.id, title: "D", description: "d", status: "todo" });
+    service.addDependency(downstream.id, upstream.id);
+
+    // Drive downstream into `blocked` via the public API so the atomic done
+    // call has the same starting condition as the production callsite.
+    const blocked = service.updateTask(downstream.id, { status: "blocked" });
+    expect(blocked.status).toBe("blocked");
+
+    // Upstream is still NOT done — dep is unresolved. The atomic done call
+    // must throw dependency_blocked BEFORE issuing the direct UPDATE bypass.
+    let caught: unknown;
+    try {
+      service.markTaskDoneAtomically({
+        taskId: downstream.id,
+        computeSnapshot: (): never => {
+          throw new Error("should not reach computeSnapshot when dep is blocked");
+        },
+      });
+    } catch (error) {
+      caught = error;
+    }
+
+    expect(caught).toBeDefined();
+    const err = caught as { code?: string; details?: { unresolvedDependencyIds?: readonly string[] } };
+    expect(err.code).toBe("dependency_blocked");
+    expect(err.details?.unresolvedDependencyIds).toEqual([upstream.id]);
+
+    // Atomic rollback: row is still `blocked`, never flipped to `done` or
+    // wedged in `in_progress`.
+    const after = domain.getTaskOrThrow(downstream.id);
+    expect(after.status).toBe("blocked");
+
+    // No `task.updated{status: done}` event leaked from the rolled-back txn.
+    const events = listEventsForEntity(db, "task", downstream.id);
+    const doneEvents = events.filter(
+      (e) => e.operation === "task.updated"
+        && (JSON.parse(e.payload) as { fields: { status: string } }).fields.status === "done",
+    );
+    expect(doneEvents.length).toBe(0);
+  });
+
   test("already done returns already_done error", async (): Promise<void> => {
     const cwd = createWorkspace();
     const epicCreated = await runEpic({
