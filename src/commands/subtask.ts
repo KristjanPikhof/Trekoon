@@ -934,6 +934,68 @@ export async function runSubtask(context: CliContext): Promise<CliResult> {
           data: { subtask },
         });
       }
+      case "claim": {
+        const claimUnknownOption = findUnknownOption(parsed, CLAIM_OPTIONS);
+        if (claimUnknownOption !== undefined) {
+          return unknownOption("subtask.claim", claimUnknownOption, CLAIM_OPTIONS);
+        }
+
+        const missingClaimOption = readMissingOptionValue(parsed.missingOptionValues, "owner");
+        if (missingClaimOption !== undefined) {
+          return failMissingOptionValue("subtask.claim", missingClaimOption);
+        }
+
+        const subtaskId: string = parsed.positional[1] ?? "";
+        if (subtaskId.length === 0) {
+          return failResult({
+            command: "subtask.claim",
+            human: "Provide a subtask id. Usage: trekoon subtask claim <id> --owner <owner>",
+            data: { code: "invalid_input" },
+            error: {
+              code: "invalid_input",
+              message: "Missing subtask id",
+            },
+          });
+        }
+
+        const owner: string | undefined = readOption(parsed.options, "owner");
+        if (owner === undefined || owner.trim().length === 0) {
+          return failResult({
+            command: "subtask.claim",
+            human: "--owner is required. Usage: trekoon subtask claim <id> --owner <owner>",
+            data: { code: "invalid_input", option: "owner" },
+            error: {
+              code: "invalid_input",
+              message: "Missing required option --owner",
+            },
+          });
+        }
+
+        const claimResult = mutations.claimSubtask({ subtaskId, owner });
+
+        if (claimResult.claimed) {
+          return okResult({
+            command: "subtask.claim",
+            human: `Claimed subtask ${subtaskId} for ${owner}`,
+            data: {
+              claimed: true,
+              currentOwner: claimResult.currentOwner,
+              currentStatus: claimResult.currentStatus,
+              subtask: claimResult.subtask,
+            },
+          });
+        }
+
+        return okResult({
+          command: "subtask.claim",
+          human: `Subtask ${subtaskId} not claimed: status=${claimResult.currentStatus}, owner=${claimResult.currentOwner ?? "none"}`,
+          data: {
+            claimed: false,
+            currentOwner: claimResult.currentOwner,
+            currentStatus: claimResult.currentStatus,
+          },
+        });
+      }
       case "delete": {
         const subtaskId: string = parsed.positional[1] ?? "";
         const result = mutations.deleteSubtask(subtaskId);
@@ -947,7 +1009,7 @@ export async function runSubtask(context: CliContext): Promise<CliResult> {
       default:
         return failResult({
           command: "subtask",
-          human: "Usage: trekoon subtask <create|create-many|list|search|replace|update|delete>",
+          human: "Usage: trekoon subtask <create|create-many|list|search|replace|update|delete|claim>",
           data: {
             args: context.args,
           },
