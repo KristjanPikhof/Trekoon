@@ -46,6 +46,16 @@ function seed(workspace: string): SeedResult {
 let workspace: string = "";
 let boardServer: BoardServerInfo | null = null;
 let seeded: SeedResult = { epicId: "", taskId: "", subtaskId: "" };
+const nativeFetch = globalThis.fetch;
+
+function fetch(
+  input: Parameters<typeof globalThis.fetch>[0],
+  init?: Parameters<typeof globalThis.fetch>[1],
+): ReturnType<typeof globalThis.fetch> {
+  const headers = new Headers(init?.headers);
+  headers.set("authorization", "Bearer etag-token");
+  return nativeFetch(input, { ...init, headers });
+}
 
 beforeEach((): void => {
   workspace = createWorkspace();
@@ -71,8 +81,7 @@ function authedUrl(path: string): string {
   if (!boardServer) {
     throw new Error("Board server not initialized");
   }
-  const sep = path.includes("?") ? "&" : "?";
-  return `${boardServer.origin}${path}${sep}token=etag-token`;
+  return `${boardServer.origin}${path}`;
 }
 
 function readVersion(entityKind: "epic" | "task" | "subtask", id: string): number {
