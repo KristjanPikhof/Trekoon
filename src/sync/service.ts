@@ -861,7 +861,12 @@ function findConflictForResolutionEvent(
   db: Database,
   event: StoredEvent,
   payload: ResolutionEventPayload,
+  receiverScope: ConflictScope,
 ): ConflictRow | null {
+  // Always restrict the lookup to the receiver's active worktree+branch.
+  // The sync_conflicts table is shared across worktrees, so a single
+  // (event_id, entity, field) tuple can have multiple rows — one per
+  // observer scope. Resolving must only touch this receiver's row.
   if (typeof payload.source_event_id === "string" && payload.source_event_id.length > 0) {
     const bySourceEvent = db
       .query(
@@ -872,11 +877,20 @@ function findConflictForResolutionEvent(
           AND entity_kind = ?
           AND entity_id = ?
           AND field_name = ?
+          AND worktree_path = ?
+          AND current_branch = ?
         ORDER BY CASE WHEN resolution = 'pending' THEN 0 ELSE 1 END, created_at ASC, id ASC
         LIMIT 1;
         `,
       )
-      .get(payload.source_event_id, event.entity_kind, event.entity_id, payload.field) as ConflictRow | null;
+      .get(
+        payload.source_event_id,
+        event.entity_kind,
+        event.entity_id,
+        payload.field,
+        receiverScope.worktreePath,
+        receiverScope.currentBranch,
+      ) as ConflictRow | null;
 
     if (bySourceEvent) {
       return bySourceEvent;
@@ -896,10 +910,19 @@ function findConflictForResolutionEvent(
         AND entity_kind = ?
         AND entity_id = ?
         AND field_name = ?
+        AND worktree_path = ?
+        AND current_branch = ?
       LIMIT 1;
       `,
     )
-    .get(payload.conflict_id, event.entity_kind, event.entity_id, payload.field) as ConflictRow | null;
+    .get(
+      payload.conflict_id,
+      event.entity_kind,
+      event.entity_id,
+      payload.field,
+      receiverScope.worktreePath,
+      receiverScope.currentBranch,
+    ) as ConflictRow | null;
 }
 
 function removeDependenciesTouchingNode(db: Database, nodeId: string): void {
