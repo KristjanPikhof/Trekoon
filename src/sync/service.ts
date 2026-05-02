@@ -875,9 +875,13 @@ function applyPendingDeleteCascadeResolution(db: Database, conflict: ConflictRow
 function applyConflictTheirsResolution(db: Database, conflict: ConflictRow): void {
   if (conflict.field_name === "__delete__") {
     if (conflict.entity_kind === "task") {
-      removeTaskSubtree(db, conflict.entity_id);
+      const subtasks = removeTaskSubtree(db, conflict.entity_id);
+      const subtaskIds = subtasks.map((s) => s.id);
+      removeConflictsForEntityIds(db, "subtask", subtaskIds);
+      removeConflictsForEntityIds(db, "task", [conflict.entity_id]);
     } else if (conflict.entity_kind === "subtask") {
       removeDependenciesTouchingNode(db, conflict.entity_id);
+      removeConflictsForEntityIds(db, "subtask", [conflict.entity_id]);
     }
     applyPendingDeleteCascadeResolution(db, conflict);
     deleteSingleEntity(db, conflict.entity_kind, conflict.entity_id, { allowMissing: true });
