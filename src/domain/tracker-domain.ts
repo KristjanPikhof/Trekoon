@@ -1354,44 +1354,56 @@ export class TrackerDomain {
   }
 
   /**
-   * Resolves dependency statuses for multiple tasks using a single prepared
-   * statement executed once per task ID.  This avoids the previous N+1 pattern
-   * where each task required separate getTaskOrThrow/getSubtaskOrThrow calls
-   * per dependency.
+   * Resolves dependency statuses for multiple tasks using chunked
+   * WHERE source_id IN (?...) queries — the same pattern as
+   * #collectStatusCascadeBlockers.  This reduces N queries to
+   * ceil(N/999), eliminating the previous per-ID N+1 loop.
    */
   batchResolveDependencyStatuses(
     taskIds: readonly string[],
   ): Map<string, { totalDependencies: number; blockers: Array<{ id: string; kind: "task" | "subtask"; status: string }> }> {
+    type DepStatusRow = {
+      source_id: string;
+      depends_on_id: string;
+      depends_on_kind: "task" | "subtask";
+      dep_status: string | null;
+    };
+
     const result = new Map<string, { totalDependencies: number; blockers: Array<{ id: string; kind: "task" | "subtask"; status: string }> }>();
 
     if (taskIds.length === 0) {
       return result;
     }
 
-    // Use a static parameterised query per task ID rather than interpolating
-    // a dynamic IN-list into the SQL string.  This is consistent with every
-    // other query in TrackerDomain and avoids any placeholder-count confusion.
-    const stmt = this.#db.query(
-      `SELECT d.source_id, d.depends_on_id, d.depends_on_kind, COALESCE(t.status, s.status) AS dep_status
-       FROM dependencies d
-       LEFT JOIN tasks t ON d.depends_on_kind = 'task' AND d.depends_on_id = t.id
-       LEFT JOIN subtasks s ON d.depends_on_kind = 'subtask' AND d.depends_on_id = s.id
-       WHERE d.source_id = ?
-       ORDER BY d.created_at ASC, d.id ASC;`,
-    );
-
+    // Pre-populate so every requested ID has an entry, even with no deps.
     for (const taskId of taskIds) {
-      const entry = { totalDependencies: 0, blockers: [] as Array<{ id: string; kind: "task" | "subtask"; status: string }> };
-      result.set(taskId, entry);
+      result.set(taskId, { totalDependencies: 0, blockers: [] });
+    }
 
-      const rows = stmt.all(taskId) as Array<{
-        source_id: string;
-        depends_on_id: string;
-        depends_on_kind: "task" | "subtask";
-        dep_status: string | null;
-      }>;
+    // Batch-fetch all dependency rows with their target statuses using chunked
+    // IN queries with JOINs.  ceil(N/999) queries instead of N.
+    for (let offset = 0; offset < taskIds.length; offset += SQLITE_MAX_VARIABLES) {
+      const chunkIds = taskIds.slice(offset, offset + SQLITE_MAX_VARIABLES);
+      const inPlaceholders: string = chunkIds.map(() => "?").join(", ");
+
+      const rows = this.#db
+        .query(
+          `SELECT d.source_id, d.depends_on_id, d.depends_on_kind,
+                  COALESCE(t.status, s.status) AS dep_status
+           FROM dependencies d
+           LEFT JOIN tasks t ON d.depends_on_kind = 'task' AND d.depends_on_id = t.id
+           LEFT JOIN subtasks s ON d.depends_on_kind = 'subtask' AND d.depends_on_id = s.id
+           WHERE d.source_id IN (${inPlaceholders})
+           ORDER BY d.created_at ASC, d.id ASC;`,
+        )
+        .all(...chunkIds) as DepStatusRow[];
 
       for (const row of rows) {
+        const entry = result.get(row.source_id);
+        if (entry === undefined) {
+          continue;
+        }
+
         entry.totalDependencies += 1;
 
         // Skip orphaned dependency rows (target deleted).
