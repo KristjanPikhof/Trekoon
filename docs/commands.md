@@ -185,6 +185,41 @@ trekoon subtask update <subtask-id> --owner "agent-2"
 
 Also accepted on `PATCH /api/tasks/{id}` and `PATCH /api/subtasks/{id}`.
 
+## Task claim
+
+```bash
+trekoon task claim <task-id> --owner <owner>
+trekoon subtask claim <subtask-id> --owner <owner>
+```
+
+Atomically claim a task (or subtask) using a SQL compare-and-swap. Sets
+`status=in_progress` and `owner=<owner>` only when:
+
+- The task is in `todo` or `blocked` status, **and**
+- The `owner` column is `NULL` or already equal to `<owner>` (re-entrant claim)
+
+Two concurrent `task claim` calls racing on the same task return exactly one
+`claimed: true`. The loser gets `claimed: false` with `currentOwner` and
+`currentStatus` reflecting the winner's write.
+
+`--owner` is required.
+
+Response envelope:
+
+```text
+ok: true
+command: task.claim | subtask.claim
+data:
+  claimed: true | false
+  currentOwner: <owner> | null
+  currentStatus: in_progress | todo | blocked | done
+  task | subtask: { ...full record... }   # present only when claimed=true
+```
+
+When `claimed` is false, `task`/`subtask` is absent. `currentOwner` tells you
+who holds the lock. `currentStatus` tells you why the claim failed (already
+`done`, or `in_progress` by another owner).
+
 ## Task done
 
 `trekoon task done <task-id>` marks a task complete and returns the next ready
