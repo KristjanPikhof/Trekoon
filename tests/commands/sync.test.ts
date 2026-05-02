@@ -847,8 +847,13 @@ describe("sync command", (): void => {
         .query("SELECT resolution FROM sync_conflicts WHERE event_id = 'source-update-event' AND field_name = 'title' LIMIT 1;")
         .get() as { resolution: string } | null;
 
-      expect(epic?.title).toBe("Remote title");
-      expect(conflict?.resolution).toBe("theirs");
+      // Scoped resolution: primary's resolve event carries primary's
+      // worktree_path/current_branch in its payload. Secondary's pull rejects
+      // it as a cross-scope replay so secondary's pending conflict is
+      // preserved and its local title is untouched. Each worktree must run
+      // its own `sync resolve` for its own pending row.
+      expect(epic?.title).toBe("Local title");
+      expect(conflict?.resolution).toBe("pending");
     } finally {
       secondaryStorage.close();
     }
