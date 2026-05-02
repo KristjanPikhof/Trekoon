@@ -123,6 +123,7 @@ describe("board command", (): void => {
     expect(result.command).toBe("board.open");
     expect(result.human).toContain("Board ready at http://127.0.0.1:4321");
     expect(result.human).toContain("Open manually if needed: http://127.0.0.1:4321");
+    expect(result.human).not.toContain("secret-token");
     expect(result.data).toEqual({
       install: {
         action: "installed",
@@ -131,20 +132,17 @@ describe("board command", (): void => {
       },
       server: {
         origin: "http://127.0.0.1:4321",
-        url: "http://127.0.0.1:4321/?token=secret-token",
         fallbackUrl: "http://127.0.0.1:4321",
         hostname: "127.0.0.1",
         port: 4321,
-        token: "secret-token",
       },
       launch: {
         launched: true,
-        url: "http://127.0.0.1:4321/?token=secret-token",
         command: "open",
-        args: ["http://127.0.0.1:4321/?token=secret-token"],
         errorMessage: null,
       },
     });
+    expect(JSON.stringify(result.data)).not.toContain("secret-token");
   });
 
   test("reports fallback URL when browser launch fails", async (): Promise<void> => {
