@@ -2295,10 +2295,12 @@ export function syncResolveAllPreview(
   filters: ResolveAllQueryFilters,
 ): ResolveAllPreviewSummary {
   const storage = openTrekoonDatabase(cwd);
+  const git = resolveGitContext(cwd);
+  const scope: ConflictScope = scopeFromGitContext(git);
   const normalizedFilters: ResolveAllFilters = normalizeResolveAllFilters(filters);
 
   try {
-    const conflictIds = queryPendingConflictIds(storage.db, filters);
+    const conflictIds = queryPendingConflictIds(storage.db, filters, scope);
 
     if (conflictIds.length === 0) {
       throw new DomainError({
