@@ -134,64 +134,61 @@ describe("findActiveEpic selection logic", (): void => {
 });
 
 // ---------------------------------------------------------------------------
-// findActiveEpic unit-level tests via TrackerDomain directly
+// findActiveEpic unit-level tests via TrackerDomain + in-memory DB
 // ---------------------------------------------------------------------------
 
+function createMemoryDomain(): { db: Database; domain: TrackerDomain } {
+  const db = new Database(":memory:");
+  db.exec("PRAGMA foreign_keys = ON;");
+  migrateDatabase(db);
+  const domain = new TrackerDomain(db);
+  return { db, domain };
+}
+
 describe("TrackerDomain.findActiveEpic", (): void => {
-  function openDomain(cwd: string): TrackerDomain {
-    const db = openTrekoonDatabase(cwd);
-    tempDirs.push(cwd); // already registered, but db.close handled by GC in tests
-    return new TrackerDomain(db.db);
-  }
-
   test("returns in_progress epic when one exists", (): void => {
-    const cwd = createWorkspace();
-    initializeRepository(cwd);
-    const db = openTrekoonDatabase(cwd);
-    const domain = new TrackerDomain(db.db);
+    const { db, domain } = createMemoryDomain();
 
-    const epic = domain.writeTransaction(() =>
-      domain.createEpic({ title: "IP Epic", description: "desc", status: "in_progress" }),
-    );
+    let epicId!: string;
+    writeTransaction(db, (): void => {
+      const epic = domain.createEpic({ title: "IP Epic", description: "desc", status: "in_progress" });
+      epicId = epic.id;
+    });
 
     const active = domain.findActiveEpic();
-    expect(active?.id).toBe(epic.id);
+    expect(active?.id).toBe(epicId);
 
-    db.close();
+    db.close(false);
   });
 
   test("returns most-recently-updated todo when no in_progress exists", (): void => {
-    const cwd = createWorkspace();
-    initializeRepository(cwd);
-    const db = openTrekoonDatabase(cwd);
-    const domain = new TrackerDomain(db.db);
+    const { db, domain } = createMemoryDomain();
 
-    domain.writeTransaction(() => {
+    writeTransaction(db, (): void => {
       domain.createEpic({ title: "Old Todo", description: "desc" });
     });
 
     // Small delay to ensure distinct updated_at timestamps
     Bun.sleepSync(2);
 
-    const newer = domain.writeTransaction(() =>
-      domain.createEpic({ title: "New Todo", description: "desc" }),
-    );
+    let newerId!: string;
+    writeTransaction(db, (): void => {
+      const newer = domain.createEpic({ title: "New Todo", description: "desc" });
+      newerId = newer.id;
+    });
 
     const active = domain.findActiveEpic();
-    expect(active?.id).toBe(newer.id);
+    expect(active?.id).toBe(newerId);
 
-    db.close();
+    db.close(false);
   });
 
   test("returns null when no epics exist", (): void => {
-    const cwd = createWorkspace();
-    initializeRepository(cwd);
-    const db = openTrekoonDatabase(cwd);
-    const domain = new TrackerDomain(db.db);
+    const { db, domain } = createMemoryDomain();
 
     const active = domain.findActiveEpic();
     expect(active).toBeNull();
 
-    db.close();
+    db.close(false);
   });
 });
