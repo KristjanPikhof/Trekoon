@@ -1,4 +1,4 @@
-import { existsSync, mkdirSync, renameSync, statSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, readFileSync, renameSync, statSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 
 import { Database } from "bun:sqlite";
