@@ -118,7 +118,7 @@ describe("buildEpicExportBundle", () => {
     const epic = domain.createEpic({ title: "Status test", description: "Mixed statuses" });
     const t1 = domain.createTask({ epicId: epic.id, title: "T1", description: "D1" });
     domain.createTask({ epicId: epic.id, title: "T2", description: "D2" });
-    domain.updateTask(t1.id, { status: "in_progress" });
+    writeTransaction(db, () => domain.updateTask(t1.id, { status: "in_progress" }));
 
     const bundle = buildEpicExportBundle(domain, epic.id);
 
