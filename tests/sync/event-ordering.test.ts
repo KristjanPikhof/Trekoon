@@ -375,7 +375,7 @@ describe("Snapshot consistency", () => {
 
     // Writer 1 commits first
     writeTransaction(conn1, (): void => {
-      withTransactionEventContext(conn1, workspace, (): void => {
+      withTransactionEventContext(conn1, fakeGitContext(workspace), (): void => {
         const ts = (conn1
           .query("SELECT COALESCE(MAX(created_at), 0) + 1 AS ts FROM events;")
           .get() as { ts: number }).ts;
