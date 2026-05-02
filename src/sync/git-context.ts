@@ -35,10 +35,15 @@ interface GitContextCore {
   readonly gitDir: string | null;
 }
 
+interface GitDirInfo {
+  readonly gitDir: string | null;
+  readonly commonDir: string | null;
+}
+
 const gitContextCache: Map<string, GitContextCore> = new Map();
 
-/** Cache of worktree path → absolute gitdir, populated lazily. */
-const gitDirCache: Map<string, string | null> = new Map();
+/** Cache of worktree path → resolved gitdir + commondir, populated lazily. */
+const gitDirCache: Map<string, GitDirInfo> = new Map();
 
 function statKey(prefix: string, path: string): string | null {
   try {
