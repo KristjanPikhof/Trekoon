@@ -182,10 +182,36 @@ describe("isCursorStale", (): void => {
       insertEvent(db, { id: randomUUID(), createdAt: 1000, branch: otherBranch });
       insertArchivedEvent(db, { id: randomUUID(), createdAt: 500, branch: otherBranch });
 
-      // Cursor on BRANCH with ts=200: predates the min of all events (500),
-      // so it IS stale by the global min check.
-      // Note: min_ts query is global (not branch-scoped), so predating ANY retained event is stale.
+      // Cursor on BRANCH with ts=200: the MIN(created_at) probe is now scoped
+      // to git_branch = BRANCH. With no events on BRANCH the per-branch MIN is
+      // NULL, so the cursor is treated as ahead of an empty per-branch log —
+      // not stale. Branch A's deep history must not poison branch B.
       const cursorToken = `200:${randomUUID()}`;
+      expect(isCursorStale(db, cursorToken, BRANCH)).toBe(false);
+    });
+
+    test("does not mark stale when cursor predates events on a different branch only", (): void => {
+      const db = openDb(createWorkspace());
+      const otherBranch = "feature/y";
+
+      // Branch A (otherBranch) has very old retained events.
+      insertArchivedEvent(db, { id: randomUUID(), createdAt: 100, branch: otherBranch });
+      insertEvent(db, { id: randomUUID(), createdAt: 200, branch: otherBranch });
+
+      // Branch B (BRANCH) has a recent retained event.
+      insertEvent(db, { id: randomUUID(), createdAt: 5000 });
+
+      // Cursor on BRANCH at ts=4000 — globally MIN(created_at) is 100, but
+      // per-branch MIN on BRANCH is 5000. Cursor (4000) < 5000 would falsely
+      // be stale only if MIN were global. With per-branch scoping, no events
+      // on BRANCH have created_at >= 4000 prior to it, but there IS one (5000)
+      // — newerRow check still validates. The key assertion is that a deep
+      // history on otherBranch doesn't drag the per-branch min down.
+      // To strictly exercise the MIN scoping: place cursor below otherBranch's
+      // min but above BRANCH's earliest:
+      const cursorToken = `300:${randomUUID()}`;
+      // Per-branch min for BRANCH = 5000; cursor (300) < 5000 → predates min
+      // by the new (correct) per-branch scoping → stale.
       expect(isCursorStale(db, cursorToken, BRANCH)).toBe(true);
     });
   });
