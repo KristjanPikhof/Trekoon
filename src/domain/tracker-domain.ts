@@ -1464,7 +1464,7 @@ export class TrackerDomain {
     return row !== null;
   }
 
-  private assertNoUnresolvedDependenciesForStatusTransition(
+  assertNoUnresolvedDependenciesForStatusTransition(
     id: string,
     kind: DependencyNodeKind,
     existingStatus: string,
