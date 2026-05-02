@@ -1,6 +1,6 @@
 import { chmodSync, existsSync, mkdirSync, unlinkSync, statSync } from "node:fs";
 import { connect, createServer, type Server, type Socket } from "node:net";
-import { dirname } from "node:path";
+import { dirname, relative, resolve } from "node:path";
 import { redactStack, safeErrorMessage } from "../commands/error-utils";
 import { closeCachedDatabases } from "../storage/database";
 import { resolveStoragePaths } from "../storage/path";
@@ -46,6 +46,7 @@ const MAX_TOTAL_BUFFERED_BYTES = 8 * MAX_REQUEST_BYTES;
 const DEFAULT_MAX_CONNECTIONS = 32;
 /** Idle/incomplete-request timeout for a server-side socket. */
 const SERVER_SOCKET_IDLE_MS = 5_000;
+const OWNER_ONLY_MASK = 0o077;
 
 /**
  * Pre-write transport failure: the daemon socket was unreachable or the
@@ -119,6 +120,30 @@ function debugLog(prefix: string, payload: unknown): void {
   }
   // eslint-disable-next-line no-console
   console.error(prefix);
+}
+
+function formatMode(mode: number): string {
+  // eslint-disable-next-line no-bitwise
+  return `0o${(mode & 0o777).toString(8).padStart(3, "0")}`;
+}
+
+function assertOwnerOnlyMode(path: string, label: string): void {
+  const stats = statSync(path);
+  // eslint-disable-next-line no-bitwise
+  if ((stats.mode & OWNER_ONLY_MASK) !== 0) {
+    throw new Error(`${label} at ${path} must be owner-only; got ${formatMode(stats.mode)}`);
+  }
+}
+
+function isPathWithin(candidatePath: string, rootPath: string): boolean {
+  const candidate: string = resolve(candidatePath);
+  const root: string = resolve(rootPath);
+  const pathToCandidate: string = relative(root, candidate);
+  return pathToCandidate === "" || (!pathToCandidate.startsWith("..") && !resolve(pathToCandidate).startsWith("/"));
+}
+
+function isAllowedRequestCwd(cwd: string, allowedRoots: readonly string[]): boolean {
+  return allowedRoots.some((root: string): boolean => isPathWithin(cwd, root));
 }
 
 /**
@@ -202,16 +227,18 @@ export async function startDaemonServer(options: StartDaemonOptions = {}): Promi
   const socketPath: string = options.socketPath ?? resolveDaemonSocketPath(cwd);
   const socketDir: string = dirname(socketPath);
   const maxConnections: number = options.maxConnections ?? DEFAULT_MAX_CONNECTIONS;
+  const daemonStoragePaths = resolveStoragePaths(cwd);
+  const allowedRequestRoots: readonly string[] = [
+    daemonStoragePaths.worktreeRoot,
+    daemonStoragePaths.storageDir,
+  ];
 
   if (!existsSync(socketDir)) {
     mkdirSync(socketDir, { recursive: true, mode: 0o700 });
   }
   // Tighten parent dir perms even if it pre-existed.
-  try {
-    chmodSync(socketDir, 0o700);
-  } catch {
-    // best effort; not all filesystems honour this
-  }
+  chmodSync(socketDir, 0o700);
+  assertOwnerOnlyMode(socketDir, "daemon socket directory");
 
   // Stale socket from a previous crashed run.
   safeUnlink(socketPath);
@@ -220,23 +247,20 @@ export async function startDaemonServer(options: StartDaemonOptions = {}): Promi
   // buffered. Used to enforce both the per-server connection cap and a
   // global upper bound on memory pressure across all in-flight requests.
   const liveSockets: Set<Socket> = new Set<Socket>();
+  const processingSockets: Set<Socket> = new Set<Socket>();
+  const inFlightRequests: Set<Promise<void>> = new Set<Promise<void>>();
   let totalBufferedBytes = 0;
 
   const server: Server = createServer((socket: Socket): void => {
     if (liveSockets.size >= maxConnections) {
-      try {
-        socket.write(
-          `${JSON.stringify({
-            stdout: "",
-            stderr: "Daemon: daemon_busy (too many concurrent connections)\n",
-            exitCode: 1,
-          })}\n`,
-        );
-      } catch {
-        // best effort
-      }
-      socket.end();
-      socket.destroy();
+      const busyEnvelope: string = `${JSON.stringify({
+        stdout: "",
+        stderr: "Daemon: daemon_busy (too many concurrent connections)\n",
+        exitCode: 1,
+      })}\n`;
+      socket.write(busyEnvelope, (): void => {
+        socket.end();
+      });
       return;
     }
 
@@ -322,7 +346,12 @@ export async function startDaemonServer(options: StartDaemonOptions = {}): Promi
       // meaningful; the dispatcher controls the lifetime from here.
       socket.setTimeout(0);
 
-      void handlePayload(payload, socket);
+      processingSockets.add(socket);
+      const requestPromise = handlePayload(payload, socket, allowedRequestRoots).finally((): void => {
+        processingSockets.delete(socket);
+        inFlightRequests.delete(requestPromise);
+      });
+      inFlightRequests.add(requestPromise);
     });
 
     socket.on("error", (error: Error): void => {
@@ -354,8 +383,13 @@ export async function startDaemonServer(options: StartDaemonOptions = {}): Promi
   // race when other code allocates fds during startup.
   try {
     chmodSync(socketPath, 0o600);
-  } catch {
-    // best effort
+    assertOwnerOnlyMode(socketPath, "daemon socket");
+  } catch (error: unknown) {
+    await new Promise<void>((resolve): void => {
+      server.close((): void => resolve());
+    });
+    safeUnlink(socketPath);
+    throw error;
   }
 
   if (!options.silent) {
@@ -365,10 +399,24 @@ export async function startDaemonServer(options: StartDaemonOptions = {}): Promi
   const handle: DaemonServerHandle = {
     socketPath,
     server,
-    close: (): Promise<void> =>
-      new Promise<void>((resolve): void => {
-        // Force-close any sockets still parked on the connection cap path so
-        // server.close() resolves promptly during test teardown.
+    close: async (): Promise<void> => {
+      const serverClosed = new Promise<void>((resolve): void => {
+        server.close((): void => resolve());
+      });
+      // Force-close idle sockets so server.close() resolves promptly during
+      // test teardown, but let in-flight dispatches finish before DB shutdown.
+      for (const sock of liveSockets) {
+        if (processingSockets.has(sock)) {
+          continue;
+        }
+        try {
+          sock.destroy();
+        } catch {
+          // best effort
+        }
+      }
+      await Promise.allSettled([...inFlightRequests]);
+      for (const sock of liveSockets) {
         for (const sock of liveSockets) {
           try {
             sock.destroy();
@@ -376,21 +424,25 @@ export async function startDaemonServer(options: StartDaemonOptions = {}): Promi
             // best effort
           }
         }
-        liveSockets.clear();
-        totalBufferedBytes = 0;
-        server.close((): void => {
-          safeUnlink(socketPath);
-          closeCachedDatabases();
-          delete process.env.TREKOON_DAEMON_INPROCESS;
-          resolve();
-        });
-      }),
+      }
+      await serverClosed;
+      liveSockets.clear();
+      processingSockets.clear();
+      totalBufferedBytes = 0;
+      safeUnlink(socketPath);
+      closeCachedDatabases();
+      delete process.env.TREKOON_DAEMON_INPROCESS;
+    },
   };
 
   return handle;
 }
 
-async function handlePayload(payload: string, socket: Socket): Promise<void> {
+async function handlePayload(
+  payload: string,
+  socket: Socket,
+  allowedRequestRoots: readonly string[],
+): Promise<void> {
   let response: DaemonResponse;
   try {
     const parsed: unknown = JSON.parse(payload);
@@ -398,6 +450,12 @@ async function handlePayload(payload: string, socket: Socket): Promise<void> {
       response = {
         stdout: "",
         stderr: "Daemon: invalid request payload\n",
+        exitCode: 1,
+      };
+    } else if (!isAllowedRequestCwd(parsed.cwd, allowedRequestRoots)) {
+      response = {
+        stdout: "",
+        stderr: "Daemon: request cwd is outside the daemon worktree/storage scope\n",
         exitCode: 1,
       };
     } else {
@@ -472,7 +530,7 @@ export async function sendDaemonRequest(
     // socket buffer. Any subsequent error/timeout MUST surface as
     // PostWriteError because the daemon may have already executed the
     // mutation.
-    let postWrite = false;
+    let writeAttempted = false;
 
     const fail = (error: unknown): void => {
       if (settled) {
@@ -485,7 +543,7 @@ export async function sendDaemonRequest(
       } catch {
         // best effort
       }
-      if (postWrite) {
+      if (writeAttempted) {
         const cause: unknown = error;
         const message: string = error instanceof Error ? error.message : String(error);
         reject(new PostWriteError(`daemon may have committed; do not retry: ${message}`, cause));
@@ -517,15 +575,16 @@ export async function sendDaemonRequest(
 
     socket.on("connect", (): void => {
       const wireBytes: string = `${JSON.stringify(request)}${REQUEST_TERMINATOR}`;
+      writeAttempted = true;
       socket.write(wireBytes, (writeError?: Error | null): void => {
         if (writeError) {
           fail(writeError);
           return;
         }
-        // The bytes are buffered into the kernel socket; from this point
-        // on the daemon may execute the request. Any error/timeout that
-        // follows must be classified as PostWriteError.
-        postWrite = true;
+        // Callback confirmation is intentionally retained as a second signal
+        // for future diagnostics; classification flips synchronously before
+        // socket.write can return so write-then-error races are post-write.
+        writeAttempted = true;
       });
     });
 
