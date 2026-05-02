@@ -237,6 +237,15 @@ export function openTrekoonDatabase(
   if (isDaemonInProcessCacheEnabled()) {
     const cached = cachedDatabases.get(paths.databaseFile);
     if (cached) {
+      // Honor autoMigrate on the cached-handle path: a previous request that
+      // opened this DB with `{autoMigrate: false}` (e.g. migrate-status) may
+      // have left the schema below LATEST_MIGRATION_VERSION. The next request
+      // that asks for autoMigrate (the default) must still get a migrated DB.
+      if ((options.autoMigrate ?? true) && readCurrentMigrationVersionReadOnly(cached.db) < LATEST_MIGRATION_VERSION) {
+        migrateDatabase(cached.db);
+      }
+      // Refresh LRU position on access.
+      touchCachedDatabase(paths.databaseFile, cached);
       return cached;
     }
   }
