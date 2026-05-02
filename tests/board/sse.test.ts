@@ -202,7 +202,7 @@ describe("board SSE snapshot stream", (): void => {
     }
   });
 
-  test("unsubscribes a slow client that never reads when queued bytes pass the 1MB hard limit", async (): Promise<void> => {
+  test("coalesces snapshotDeltas behind the soft threshold so a slow client cannot OOM", async (): Promise<void> => {
     const cwd: string = createWorkspace();
     prepareBoardAssets(cwd);
     const storage = openTrekoonDatabase(cwd);
@@ -215,38 +215,89 @@ describe("board SSE snapshot stream", (): void => {
         token: "slow-client-token",
         eventBus,
       });
-
       const response = await handler(
         new Request("http://board.test/api/snapshot/stream?token=slow-client-token"),
       );
       expect(response.status).toBe(200);
-      expect(response.body).not.toBeNull();
-
-      // Hold a reference to the body but never read it. The stream's internal
-      // queue grows on each enqueue; the route must trip the 1MB hard cap and
-      // tear the connection down (unsubscribe + close).
       const body = response.body as ReadableStream<Uint8Array>;
-
-      // Build a delta payload of ~50KB so 100 publishes exceeds the 1MB hard
-      // limit. The exact shape doesn't matter — only the byte size matters
-      // for backpressure accounting.
-      const filler = "x".repeat(50_000);
-      const largeDelta = { filler };
 
       // 1 subscriber == this stream.
       expect(eventBus.subscriberCount).toBe(1);
 
+      // Publish 100 deltas of ~50KB each. Without coalescing this would
+      // accumulate ~5MB in the controller's internal queue. The route must
+      // detect the slow consumer (no `pull` ever happens because the body
+      // stream is never read) and switch to keeping only the latest delta —
+      // the subscriber stays attached but memory stays bounded around the
+      // soft cap.
+      const filler = "x".repeat(50_000);
       for (let i = 0; i < 100; i += 1) {
-        eventBus.publishSnapshotDelta(largeDelta);
+        eventBus.publishSnapshotDelta({ filler, idx: i });
       }
 
-      // The stream's start callback runs synchronously; backpressure logic in
-      // handleSnapshotDelta is invoked on each publish. Once queuedBytes >=
-      // 1MB the listener calls cleanup() which unsubscribes from the bus.
+      expect(eventBus.subscriberCount).toBe(1);
+      await body.cancel().catch(() => {});
+      expect(eventBus.subscriberCount).toBe(0);
+    } finally {
+      eventBus.close();
+      storage.close();
+    }
+  });
+
+  test("unsubscribes a slow client and emits an error frame when queued bytes pass the 1MB hard cap", async (): Promise<void> => {
+    const cwd: string = createWorkspace();
+    prepareBoardAssets(cwd);
+    const storage = openTrekoonDatabase(cwd);
+    const eventBus = createBoardEventBus();
+
+    try {
+      const handler = createBoardApiHandler({
+        db: storage.db,
+        cwd,
+        token: "hard-cap-token",
+        eventBus,
+      });
+      const response = await handler(
+        new Request("http://board.test/api/snapshot/stream?token=hard-cap-token"),
+      );
+      expect(response.status).toBe(200);
+      const body = response.body as ReadableStream<Uint8Array>;
+
+      expect(eventBus.subscriberCount).toBe(1);
+
+      // First delta is so large its single enqueue pushes the queue past the
+      // 1MB hard cap on its own. The next enqueue (heartbeat, second delta)
+      // will see queuedBytes >= SSE_MAX_QUEUED_BYTES and tear the stream
+      // down. We trigger that via a second publish so the test runs
+      // immediately rather than waiting on the heartbeat timer.
+      const oversizedFiller = "x".repeat(1_500_000);
+      eventBus.publishSnapshotDelta({ filler: oversizedFiller, kind: "first" });
+      // Second publish: queuedBytes is now ≥ 1MB, so handleSnapshotDelta
+      // calls closeWithError → cleanupTimers → unsubscribe.
+      eventBus.publishSnapshotDelta({ filler: "x", kind: "trip" });
+
       expect(eventBus.subscriberCount).toBe(0);
 
-      // Cancel the body so the test exits cleanly even though we never read.
-      await body.cancel().catch(() => {});
+      // The error frame is emitted before the close. Reading it off the
+      // stream should yield the JSON payload our route formats.
+      const reader = body.getReader();
+      const decoder = new TextDecoder();
+      let combined = "";
+      // Read until done or we see the stream_error event.
+      // eslint-disable-next-line no-constant-condition
+      while (true) {
+        const { value, done } = await reader.read();
+        if (done) {
+          break;
+        }
+        combined += decoder.decode(value, { stream: true });
+        if (combined.includes("event: stream_error")) {
+          break;
+        }
+      }
+      expect(combined).toContain("event: stream_error");
+      expect(combined).toContain("\"code\":\"backpressure\"");
+      await reader.cancel().catch(() => {});
     } finally {
       eventBus.close();
       storage.close();
