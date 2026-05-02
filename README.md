@@ -114,7 +114,7 @@ trekoon skills install --link --editor codex    # editor link (.codex/skills/tre
 trekoon update                  # refresh all installed skills
 ```
 
-The skill bundles three reference documents that agents load on demand:
+The skill bundles reference documents that agents load on demand:
 
 | Agent needs to... | Skill reads | What it covers |
 | --- | --- | --- |
