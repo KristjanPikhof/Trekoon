@@ -1769,33 +1769,7 @@ export class TrackerDomain {
     searchText: string,
     fields: readonly SearchField[],
   ): readonly SearchEntityMatch[] {
-    const matches: SearchEntityMatch[] = [];
-
-    for (const node of nodes) {
-      const matchedFields: SearchFieldMatch[] = [];
-      for (const field of fields) {
-        const count = countMatches(node[field], searchText);
-        if (count > 0) {
-          matchedFields.push({
-            field,
-            count,
-            snippet: buildMatchSnippet(node[field], searchText),
-          });
-        }
-      }
-
-      if (matchedFields.length === 0) {
-        continue;
-      }
-
-      matches.push({
-        kind: node.kind,
-        id: node.id,
-        fields: matchedFields,
-      });
-    }
-
-    return matches;
+    return collectSearchMatches(nodes, searchText, fields);
   }
 
   private wouldCreateCycle(sourceId: string, dependsOnId: string): boolean {
