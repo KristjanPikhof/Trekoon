@@ -413,6 +413,18 @@ export function createBoardActions(options) {
       const task = getTaskById(taskId);
       return task?.status ?? null;
     },
+    /**
+     * Record the current drag-over feedback in store state so it survives a
+     * rerender triggered by an unrelated event (e.g. a server SSE push).
+     * Pass null to clear feedback (dragend / drop / dragleave).
+     *
+     * @param {{ targetStatus: string, kind: 'valid'|'invalid' }|null} feedback
+     */
+    setDragFeedback(feedback) {
+      if (store.dragFeedback === feedback) return;
+      store.dragFeedback = feedback;
+      rerender();
+    },
     dropTaskStatus(taskId, nextStatus) {
       const task = getTaskById(taskId);
       if (!task || !nextStatus || task.status === nextStatus) {
