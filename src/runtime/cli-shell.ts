@@ -36,6 +36,7 @@ const SUPPORTED_ROOT_COMMANDS: readonly string[] = [
   "suggest",
   "update",
   "wipe",
+  "serve",
 ];
 
 export interface ParsedInvocation {
