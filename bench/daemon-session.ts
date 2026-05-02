@@ -21,7 +21,7 @@ import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { performance } from "node:perf_hooks";
 
-import { sendDaemonRequest } from "../src/runtime/daemon";
+import { isDaemonSocketPresent, resolveDaemonSocketPath, sendDaemonRequest } from "../src/runtime/daemon";
 
 const ITERATIONS = 5;
 const REPO_ROOT = resolve(import.meta.dir, "..");
