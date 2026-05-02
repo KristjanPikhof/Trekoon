@@ -60,6 +60,7 @@ const QUICKSTART_TEXT = [
   "  Ready queue:           trekoon --toon task ready [--limit <n>] [--epic <id>]",
   "  Next candidate:        trekoon --toon task next [--epic <id>]",
   "  Export epic to MD:     trekoon --toon epic export <epic-id> [--path <path>] [--overwrite]",
+  "  Snapshot the DB:       trekoon --toon migrate backup",
   "",
   "6) List and view defaults",
   "  Default scope: open work (in_progress, todo), limit 10.",
