@@ -311,9 +311,6 @@ function openSnapshotStream(
       };
 
       const handleSnapshotDelta = (id: number, snapshotDelta: Record<string, unknown>): void => {
-        if (process.env.TREKOON_DEBUG_SSE) {
-          console.log("[sse-debug] handleSnapshotDelta id=", id, "queuedBytes=", queuedBytes, "closed=", closed);
-        }
         if (closed) {
           return;
         }
