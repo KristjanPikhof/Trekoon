@@ -79,7 +79,11 @@ export async function runBoard(context: CliContext): Promise<CliResult> {
   const subcommand: string | undefined = parsed.positional[0];
 
   const revealToken: boolean = parsed.flags.has("reveal-token");
-  const allowedFlags = new Set(subcommand === "open" ? ["reveal-token"] : []);
+  const allowedFlags = new Set<string>(
+    subcommand !== undefined && subcommand in FLAGS_BY_SUBCOMMAND
+      ? FLAGS_BY_SUBCOMMAND[subcommand]
+      : [],
+  );
   const disallowedFlags = [...parsed.flags].filter((flag) => !allowedFlags.has(flag));
 
   if (parsed.options.size > 0 || disallowedFlags.length > 0) {
