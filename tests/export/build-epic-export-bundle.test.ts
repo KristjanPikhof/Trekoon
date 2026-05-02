@@ -24,6 +24,10 @@ function createDomain(cwd: string): TrackerDomain {
   return new TrackerDomain(db.db);
 }
 
+function getDomainDb(domain: TrackerDomain): Database {
+  return (domain as unknown as { ["#db"]: Database })["#db"] ?? (domain as unknown as { db: Database }).db;
+}
+
 afterEach((): void => {
   while (tempDirs.length > 0) {
     const next = tempDirs.pop();
