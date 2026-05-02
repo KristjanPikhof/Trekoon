@@ -444,7 +444,7 @@ export async function bootLegacyBoard(options = {}) {
         });
       }
 
-      subtaskModal.update(showTasks && taskModalOpen && selectedSubtask ? {
+      subtaskModal.update(showTasks && taskModalOpen && subtaskModalOpen ? {
         subtask: selectedSubtask,
         isMutating: store.isMutating,
       } : null);
