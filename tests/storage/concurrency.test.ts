@@ -586,12 +586,8 @@ describe("SQLite concurrent write stress tests", () => {
         conn.close();
       }
 
-      // Read final description from a fresh connection
+      // Read final description from a fresh connection.
       const readDb = openTrekoonDatabase(workspace);
-      const readMutations = new MutationService(readDb.db, workspace);
-      // Use domain via a one-off updateTask (read path: use getTaskOrThrow via MutationService)
-      // We read via the public TrackerDomain API indirectly by doing a no-op updateTask
-      // Actually we need to read the task. Let's do it via a raw SQL query on the db.
       const row = readDb.db.query("SELECT description FROM tasks WHERE id = ?;").get(task.id) as { description: string };
       readDb.close();
 
