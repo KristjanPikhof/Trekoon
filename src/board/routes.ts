@@ -484,6 +484,15 @@ export function createBoardApiHandler(context: BoardRouteContext): (request: Req
     const url = new URL(request.url);
     const requestLabel = `${request.method} ${url.pathname}`;
     const requestToken = extractToken(request, url);
+    // Plain `!==` instead of a constant-time compare is a deliberate choice
+    // (System Hardening 0.4.2, finding 32). The board server only binds to
+    // 127.0.0.1, the session token is a 256-bit cryptographically-random
+    // value rotated per board-server lifetime, and the comparison happens
+    // against an in-memory string — there is no remote-timing side-channel
+    // realistic enough to attack. Adopting `crypto.timingSafeEqual` would
+    // also require handling length-mismatch as a separate non-leaking case.
+    // Re-evaluate this decision if the board server ever listens on a
+    // non-loopback interface or uses a low-entropy / static token.
     if (requestToken !== context.token) {
       return jsonResponse(401, {
         ok: false,
