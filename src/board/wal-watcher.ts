@@ -106,12 +106,7 @@ export function startWalWatcher(options: WalWatcherOptions): WalWatcher {
       return;
     }
 
-    const fresh = buildBoardSnapshot(new TrackerDomain(options.db)) as Record<string, unknown> & {
-      epics: Record<string, unknown>[];
-      tasks: Record<string, unknown>[];
-      subtasks: Record<string, unknown>[];
-      dependencies: Record<string, unknown>[];
-    };
+    const fresh = buildBoardSnapshot(new TrackerDomain(options.db));
 
     const epicsDiff = diffById(lastSnapshot.epics, fresh.epics);
     const tasksDiff = diffById(lastSnapshot.tasks, fresh.tasks);
