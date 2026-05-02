@@ -1,5 +1,6 @@
 import { Database } from "bun:sqlite";
 
+import { DEPENDENCY_GATED_STATUSES } from "./dependency-rules";
 import {
   type DependencyNodeKind,
   type DependencyRecord,
@@ -13,7 +14,6 @@ import {
   type TaskTreeDetailed,
 } from "./types";
 
-const DEPENDENCY_GATED_STATUSES = new Set<string>(["in_progress", "done"]);
 const CASCADE_BLOCKER_SQLITE_MAX_VARIABLES = 999;
 
 /**
