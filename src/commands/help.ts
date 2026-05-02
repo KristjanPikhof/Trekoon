@@ -13,6 +13,7 @@ const ROOT_HELP = [
   "  --json       Structured JSON output",
   "  --toon       TOON-encoded output (preferred for agents)",
   "  --compat <mode>  Machine compatibility mode",
+  "  --daemon     (experimental) Route the call through trekoon serve over a Unix socket",
   "  --help       Show help for root or a command",
   "  --version    Print CLI version",
   "",
