@@ -882,7 +882,7 @@ function latestLocalDependencyOperationForIdentity(
 
 function hasLocalDependencyRemovalForIdentity(
   db: Database,
-  sourceBranch: string,
+  currentBranch: string,
   identity: DependencyEventIdentity,
 ): boolean {
   const row = db
@@ -892,7 +892,7 @@ function hasLocalDependencyRemovalForIdentity(
       FROM events
       WHERE entity_kind = 'dependency'
         AND operation = 'dependency.removed'
-        AND (git_branch IS NULL OR git_branch != ?)
+        AND git_branch = ?
         AND json_extract(payload, '$.fields.source_id') = ?
         AND json_extract(payload, '$.fields.depends_on_id') = ?
         AND (
@@ -906,7 +906,7 @@ function hasLocalDependencyRemovalForIdentity(
       LIMIT 1;
       `,
     )
-    .get(sourceBranch, identity.sourceId, identity.dependsOnId, identity.sourceKind, identity.dependsOnKind);
+    .get(currentBranch, identity.sourceId, identity.dependsOnId, identity.sourceKind, identity.dependsOnKind);
 
   return row !== null;
 }
