@@ -566,7 +566,7 @@ export function createStore(initialSnapshot, options = {}) {
      * @returns {object|null}
      */
     getSelectedTask() {
-      return deriveBoardState(state).selectedTask;
+      return boardStateMemo.get(state).selectedTask;
     },
   };
 }
