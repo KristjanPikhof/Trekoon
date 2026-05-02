@@ -77,8 +77,7 @@ export function resolveGitContext(cwd: string, persistedAt: number = Date.now())
 
   const cached: GitContextCore | undefined = gitContextCache.get(worktreePath);
   if (cached !== undefined && cached.headStatKey === headStatKey) {
-    const { worktreePath: _, headStatKey: __, ...rest } = cached;
-    return { ...rest, persistedAt };
+    return { worktreePath: cached.worktreePath, branchName: cached.branchName, headSha: cached.headSha, persistedAt };
   }
 
   const branchName: string | null = runGit(["branch", "--show-current"], cwd);
