@@ -557,4 +557,215 @@ describe("SQLite concurrent write stress tests", () => {
       ).toBe(TOTAL_EXPECTED_ROWS);
     });
   });
+
+  describe("Scenario 5 - persistGitContext multi-session (zero SQLITE_BUSY)", () => {
+    /**
+     * Simulates 5 parallel `session` invocations each calling persistGitContext
+     * against a shared TrekoonDatabase file.  persistGitContext must self-acquire
+     * BEGIN IMMEDIATE so that none of the concurrent writers races a deferred-to-
+     * immediate lock promotion.  Acceptance: zero SQLITE_BUSY errors.
+     */
+    test("5 concurrent persistGitContext calls produce zero SQLITE_BUSY errors", async () => {
+      // Create a real git repo so openTrekoonDatabase resolves paths correctly.
+      const workspace: string = mkdtempSync(join(tmpdir(), "trekoon-pgc-concurrent-"));
+      tempDirs.push(workspace);
+
+      execFileSync("git", ["init"], { cwd: workspace, stdio: "ignore" });
+      writeFileSync(join(workspace, "README.md"), "# Trekoon\n", "utf8");
+      execFileSync("git", ["add", "README.md"], { cwd: workspace, stdio: "ignore" });
+      execFileSync(
+        "git",
+        ["-c", "user.name=Trekoon Tests", "-c", "user.email=tests@trekoon.local", "commit", "-m", "Init"],
+        { cwd: workspace, stdio: "ignore" },
+      );
+
+      // Open once to run migrations so git_context table exists.
+      const setup = openTrekoonDatabase(workspace);
+      const dbFile: string = setup.paths.databaseFile;
+      setup.close();
+
+      const SESSION_COUNT = 5;
+      const CALLS_PER_SESSION = 10;
+
+      // Each "session" opens its own Database connection (matching how separate
+      // process invocations behave) and fires CALLS_PER_SESSION writes.
+      function runSession(sessionId: number): { busyErrors: number; otherErrors: number; successes: number } {
+        const conn = new Database(dbFile);
+        conn.exec("PRAGMA busy_timeout = 15000;");
+        conn.exec("PRAGMA journal_mode = WAL;");
+
+        let busyErrors = 0;
+        let otherErrors = 0;
+        let successes = 0;
+
+        for (let i = 0; i < CALLS_PER_SESSION; i++) {
+          try {
+            persistGitContext(conn, {
+              worktreePath: workspace,
+              branchName: `session-${sessionId}`,
+              headSha: `deadbeef${sessionId.toString().padStart(2, "0")}${i.toString().padStart(2, "0")}`,
+            });
+            successes++;
+          } catch (err) {
+            if (err instanceof Error) {
+              const msg = err.message.toLowerCase();
+              if (msg.includes("database is locked") || msg.includes("sqlite_busy")) {
+                busyErrors++;
+              } else {
+                otherErrors++;
+              }
+            } else {
+              otherErrors++;
+            }
+          }
+        }
+
+        conn.close(false);
+        return { busyErrors, otherErrors, successes };
+      }
+
+      // Interleave all sessions round-robin to maximise lock contention.
+      // Each session gets its own connection; we iterate seq × session in
+      // nested order so competing writes are as close together as possible.
+      const conns: Database[] = [];
+      const state = Array.from({ length: SESSION_COUNT }, (_, i) => ({
+        sessionId: i,
+        successes: 0,
+        busyErrors: 0,
+        otherErrors: 0,
+      }));
+
+      for (let i = 0; i < SESSION_COUNT; i++) {
+        const conn = new Database(dbFile);
+        conn.exec("PRAGMA busy_timeout = 15000;");
+        conn.exec("PRAGMA journal_mode = WAL;");
+        conns.push(conn);
+      }
+
+      for (let seq = 0; seq < CALLS_PER_SESSION; seq++) {
+        for (let s = 0; s < SESSION_COUNT; s++) {
+          const conn = conns[s]!;
+          const st = state[s]!;
+          try {
+            persistGitContext(conn, {
+              worktreePath: workspace,
+              branchName: `session-${s}`,
+              headSha: `deadbeef${s.toString().padStart(2, "0")}${seq.toString().padStart(2, "0")}`,
+            });
+            st.successes++;
+          } catch (err) {
+            if (err instanceof Error) {
+              const msg = err.message.toLowerCase();
+              if (msg.includes("database is locked") || msg.includes("sqlite_busy")) {
+                st.busyErrors++;
+              } else {
+                st.otherErrors++;
+              }
+            } else {
+              st.otherErrors++;
+            }
+          }
+        }
+      }
+
+      for (const conn of conns) {
+        conn.close(false);
+      }
+
+      const totalBusyErrors = state.reduce((sum, s) => sum + s.busyErrors, 0);
+      const totalOtherErrors = state.reduce((sum, s) => sum + s.otherErrors, 0);
+      const totalSuccesses = state.reduce((sum, s) => sum + s.successes, 0);
+      const totalAttempts = SESSION_COUNT * CALLS_PER_SESSION;
+
+      console.log("\n  [persistGitContext multi-session]");
+      console.log(`    Sessions: ${SESSION_COUNT}, calls/session: ${CALLS_PER_SESSION}`);
+      console.log(`    Total attempts: ${totalAttempts}`);
+      console.log(`    Successes: ${totalSuccesses}`);
+      console.log(`    SQLITE_BUSY errors: ${totalBusyErrors}`);
+      console.log(`    Other errors: ${totalOtherErrors}`);
+
+      expect(totalAttempts).toBe(SESSION_COUNT * CALLS_PER_SESSION);
+      // persistGitContext must produce zero SQLITE_BUSY errors because it
+      // self-acquires BEGIN IMMEDIATE when not already inside a transaction.
+      expect(totalBusyErrors).toBe(0);
+      expect(totalSuccesses).toBe(totalAttempts);
+    });
+
+    test("5 concurrent persistGitContext calls via Promise.all produce zero SQLITE_BUSY errors", async () => {
+      const workspace: string = mkdtempSync(join(tmpdir(), "trekoon-pgc-parallel-"));
+      tempDirs.push(workspace);
+
+      execFileSync("git", ["init"], { cwd: workspace, stdio: "ignore" });
+      writeFileSync(join(workspace, "README.md"), "# Trekoon\n", "utf8");
+      execFileSync("git", ["add", "README.md"], { cwd: workspace, stdio: "ignore" });
+      execFileSync(
+        "git",
+        ["-c", "user.name=Trekoon Tests", "-c", "user.email=tests@trekoon.local", "commit", "-m", "Init"],
+        { cwd: workspace, stdio: "ignore" },
+      );
+
+      const setup = openTrekoonDatabase(workspace);
+      const dbFile: string = setup.paths.databaseFile;
+      setup.close();
+
+      const SESSION_COUNT = 5;
+      const CALLS_PER_SESSION = 20;
+
+      function runSessionAsync(sessionId: number): Promise<{ busyErrors: number; otherErrors: number; successes: number }> {
+        return Promise.resolve().then(() => {
+          const conn = new Database(dbFile);
+          conn.exec("PRAGMA busy_timeout = 15000;");
+          conn.exec("PRAGMA journal_mode = WAL;");
+
+          let busyErrors = 0;
+          let otherErrors = 0;
+          let successes = 0;
+
+          for (let i = 0; i < CALLS_PER_SESSION; i++) {
+            try {
+              persistGitContext(conn, {
+                worktreePath: workspace,
+                branchName: `session-${sessionId}`,
+                headSha: `cafebabe${sessionId.toString().padStart(2, "0")}${i.toString().padStart(2, "0")}`,
+              });
+              successes++;
+            } catch (err) {
+              if (err instanceof Error) {
+                const msg = err.message.toLowerCase();
+                if (msg.includes("database is locked") || msg.includes("sqlite_busy")) {
+                  busyErrors++;
+                } else {
+                  otherErrors++;
+                }
+              } else {
+                otherErrors++;
+              }
+            }
+          }
+
+          conn.close(false);
+          return { busyErrors, otherErrors, successes };
+        });
+      }
+
+      const results = await Promise.all(
+        Array.from({ length: SESSION_COUNT }, (_, i) => runSessionAsync(i)),
+      );
+
+      const totalBusyErrors = results.reduce((sum, r) => sum + r.busyErrors, 0);
+      const totalOtherErrors = results.reduce((sum, r) => sum + r.otherErrors, 0);
+      const totalSuccesses = results.reduce((sum, r) => sum + r.successes, 0);
+      const totalAttempts = SESSION_COUNT * CALLS_PER_SESSION;
+
+      console.log("\n  [persistGitContext Promise.all parallel]");
+      console.log(`    Sessions: ${SESSION_COUNT}, calls/session: ${CALLS_PER_SESSION}`);
+      console.log(`    Total attempts: ${totalAttempts}`);
+      console.log(`    Successes: ${totalSuccesses}`);
+      console.log(`    SQLITE_BUSY errors: ${totalBusyErrors}`);
+      console.log(`    Other errors: ${totalOtherErrors}`);
+
+      expect(totalBusyErrors).toBe(0);
+      expect(totalSuccesses).toBe(totalAttempts);
+    });
+  });
 });
