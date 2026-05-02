@@ -260,6 +260,14 @@ const SUBTASK_HELP = [
   "  trekoon subtask update <subtask-id> --all --status done|todo",
   "  Accepted for consistency, but just updates the one subtask (no descendants).",
   "  Don't combine positional ID + --all with --ids, --append, --description, or --title.",
+  "",
+  "Claim:",
+  "  trekoon subtask claim <subtask-id> --owner <owner>",
+  "  Atomically claim a subtask using SQL compare-and-swap.",
+  "  Sets status=in_progress and owner=<owner> only when the subtask is todo or blocked",
+  "  and the owner field is NULL or already set to <owner>.",
+  "  Returns claimed (true|false), currentOwner, currentStatus, and the full subtask record on success.",
+  "  Two concurrent claim calls return exactly one claimed=true.",
 ].join("\n");
 
 const DEP_HELP = [
