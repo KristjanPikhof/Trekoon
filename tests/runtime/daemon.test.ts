@@ -155,4 +155,93 @@ describe("daemon dispatch", (): void => {
     expect(path.endsWith("daemon.sock")).toBeTrue();
     expect(path).toContain(".trekoon");
   });
+
+  test("DaemonRequest contract has no env field; older clients with env are tolerated", async (): Promise<void> => {
+    // Type-level: DaemonRequest is {argv, cwd} only. Construct one and ensure
+    // the in-process executor still works without env.
+    const workspace = createWorkspace();
+    initGitRepository(workspace);
+
+    const initParsed = parseInvocation(["--toon", "init"], { stdoutIsTTY: false });
+    const initResult = await executeShell(initParsed, workspace);
+    expect(initResult.ok).toBeTrue();
+
+    const direct = await executeDaemonRequest({
+      argv: ["--toon", "session"],
+      cwd: workspace,
+    });
+    expect(direct.exitCode).toBe(0);
+
+    // Ensure the validator still accepts a payload that includes a stray
+    // legacy `env` field (older clients) without rejecting the request — env
+    // is silently ignored by the server.
+    mkdirSync(join(workspace, ".trekoon"), { recursive: true });
+    const socketPath = join(workspace, ".trekoon", "daemon.sock");
+    const handle = await startDaemonServer({ socketPath, cwd: workspace, silent: true });
+    try {
+      const legacyPayload = {
+        argv: ["--toon", "--version"],
+        cwd: workspace,
+        env: { TREKOON_LEGACY_FIELD: "ignored" },
+      } as unknown as { argv: readonly string[]; cwd: string };
+      const response = await sendDaemonRequest(socketPath, legacyPayload);
+      expect(response.exitCode).toBe(0);
+      expect(response.stdout).toContain("version");
+    } finally {
+      await handle.close();
+    }
+  });
+
+  test("tryDaemonDispatch does not forward client process.env over the socket", async (): Promise<void> => {
+    // Spin up a tiny socket server that captures the raw bytes the client
+    // sent and asserts no `env` field appears on the wire. We use a generic
+    // node:net server (not startDaemonServer) so the test doesn't need the
+    // tracker DB plumbing.
+    const { createServer } = await import("node:net");
+    const { tryDaemonDispatch } = await import("../../src/runtime/daemon");
+
+    const workspace = createWorkspace();
+    mkdirSync(join(workspace, ".trekoon"), { recursive: true });
+    const socketPath = join(workspace, ".trekoon", "daemon.sock");
+
+    let captured = "";
+    const captureServer = createServer((socket): void => {
+      socket.setEncoding("utf8");
+      socket.on("data", (chunk: string): void => {
+        captured += chunk;
+        if (captured.includes("\n")) {
+          // Reply with a minimal valid DaemonResponse so the client resolves.
+          socket.write(`${JSON.stringify({ stdout: "", stderr: "", exitCode: 0 })}\n`);
+          socket.end();
+        }
+      });
+    });
+    await new Promise<void>((resolve, reject): void => {
+      captureServer.once("error", reject);
+      captureServer.listen(socketPath, (): void => {
+        captureServer.removeListener("error", reject);
+        resolve();
+      });
+    });
+
+    const previousCwd = process.cwd();
+    process.chdir(workspace);
+    // Inject a sentinel into the client env so we can assert it never reaches
+    // the wire.
+    process.env.TREKOON_TEST_DO_NOT_LEAK = "leak-canary-9c1";
+    try {
+      await tryDaemonDispatch(["--toon", "session"]);
+    } finally {
+      delete process.env.TREKOON_TEST_DO_NOT_LEAK;
+      process.chdir(previousCwd);
+      await new Promise<void>((resolve): void => captureServer.close((): void => resolve()));
+    }
+
+    expect(captured.length).toBeGreaterThan(0);
+    const parsedRequest = JSON.parse(captured.trim()) as Record<string, unknown>;
+    expect(Array.isArray(parsedRequest.argv)).toBeTrue();
+    expect(typeof parsedRequest.cwd).toBe("string");
+    expect("env" in parsedRequest).toBeFalse();
+    expect(captured).not.toContain("leak-canary-9c1");
+  });
 });
