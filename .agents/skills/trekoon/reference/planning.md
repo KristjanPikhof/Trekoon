@@ -12,10 +12,13 @@ tradeoffs, ask the user before writing. Present options with clear tradeoffs.
 Use multi-select for independent features that can be combined; use single-select
 for mutually exclusive choices.
 
-Use the harness's interactive user-question tool when you need clarification:
+Use the harness's interactive user-question tool when you need clarification,
+when available:
 
 - OpenCode: `question`
 - Claude Code: `AskUserQuestion`
+- Codex/Pi/other harnesses: use the native question tool if exposed; otherwise
+  ask one concise plain-text question
 
 Do not hide planning-critical questions inside a long narrative response.
 
