@@ -123,6 +123,11 @@ export interface WalWatcherOptions {
    * assert failure-counter behavior without polluting stderr.
    */
   readonly logger?: (message: string, error: unknown) => void;
+  /**
+   * Optional snapshot builder override. Defaults to {@link buildBoardSnapshot}.
+   * Tests inject a throwing or stubbed builder to exercise failure paths.
+   */
+  readonly buildSnapshot?: (domain: TrackerDomain) => BoardSnapshot;
 }
 
 export interface WalWatcher {
