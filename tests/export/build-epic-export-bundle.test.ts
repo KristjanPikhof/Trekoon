@@ -79,9 +79,9 @@ describe("buildEpicExportBundle", () => {
     const bundle = buildEpicExportBundle(domain, epic.id);
 
     expect(bundle.dependencies).toHaveLength(1);
-    expect(bundle.dependencies[0].internal).toBe(true);
-    expect(bundle.dependencies[0].sourceId).toBe(task2.id);
-    expect(bundle.dependencies[0].dependsOnId).toBe(task1.id);
+    expect(bundle.dependencies[0]!.internal).toBe(true);
+    expect(bundle.dependencies[0]!.sourceId).toBe(task2.id);
+    expect(bundle.dependencies[0]!.dependsOnId).toBe(task1.id);
     expect(bundle.blockedBy.get(task2.id)).toEqual([task1.id]);
     expect(bundle.blocks.get(task1.id)).toEqual([task2.id]);
     expect(bundle.externalNodes).toHaveLength(0);
