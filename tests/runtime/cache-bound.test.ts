@@ -237,9 +237,12 @@ describe("daemon-mode autoMigrate-honoring on cached handles", (): void => {
 
     // Second open with default options (autoMigrate: true) MUST migrate the
     // cached handle to LATEST_MIGRATION_VERSION rather than silently returning
-    // the under-migrated cached connection.
+    // the under-migrated cached connection. The wrapper is per-call (so each
+    // request can carry refreshed diagnostics), but the underlying SQLite
+    // connection is the same cached instance — assert on `db` identity, not
+    // wrapper identity.
     const secondHandle = openTrekoonDatabase(workspace);
-    expect(secondHandle).toBe(firstHandle); // same cached instance
+    expect(secondHandle.db).toBe(firstHandle.db); // same cached connection
     expect(readCurrentMigrationVersionReadOnly(secondHandle.db)).toBe(LATEST_MIGRATION_VERSION);
   });
 });
