@@ -57,6 +57,7 @@ const QUICKSTART_TEXT = [
   "  Filtered list:         trekoon --toon task list --status in_progress,todo --limit 20",
   "  Paginate:              trekoon --toon task list --cursor <n>",
   "  Bulk update:           trekoon --toon task update --ids id1,id2 --append \"...\" --status in_progress",
+  "  Atomic claim:          trekoon --toon task claim <task-id> --owner <owner>",
   "  Ready queue:           trekoon --toon task ready [--limit <n>] [--epic <id>]",
   "  Next candidate:        trekoon --toon task next [--epic <id>]",
   "  Export epic to MD:     trekoon --toon epic export <epic-id> [--path <path>] [--overwrite]",
