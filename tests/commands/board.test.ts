@@ -179,6 +179,7 @@ describe("board command", (): void => {
     expect(result.human).toContain("Board ready at http://127.0.0.1:4321");
     expect(result.human).toContain("Browser launch failed: mock browser failure");
     expect(result.human).toContain("Open manually if needed: http://127.0.0.1:4321");
+    expect(result.human).not.toContain("secret-token");
     expect(result.data).toEqual({
       install: {
         action: "unchanged",
@@ -187,20 +188,77 @@ describe("board command", (): void => {
       },
       server: {
         origin: "http://127.0.0.1:4321",
-        url: "http://127.0.0.1:4321/?token=secret-token",
         fallbackUrl: "http://127.0.0.1:4321/?token=secret-token",
         hostname: "127.0.0.1",
         port: 4321,
-        token: "secret-token",
       },
       launch: {
         launched: false,
-        url: "http://127.0.0.1:4321/?token=secret-token",
         command: "open",
-        args: ["http://127.0.0.1:4321/?token=secret-token"],
         errorMessage: "mock browser failure",
       },
     });
+  });
+
+  test("redacts token by default and surfaces it when --reveal-token is set", async (): Promise<void> => {
+    setBoardCommandHooksForTests({
+      ensureInstalled: () => mockInstallResult("installed"),
+      startBoardServer: () => ({
+        origin: "http://127.0.0.1:4321",
+        url: "http://127.0.0.1:4321/?token=hidden-secret",
+        fallbackUrl: "http://127.0.0.1:4321",
+        hostname: "127.0.0.1",
+        port: 4321,
+        token: "hidden-secret",
+        stop(): void {
+          // no-op in tests
+        },
+      }),
+      openBoardInBrowser: async (url) => ({
+        launched: true,
+        url,
+        command: "open",
+        args: [url],
+        errorMessage: null,
+      }),
+    });
+
+    const defaultResult = await runBoard({
+      cwd: "/tmp/workspace",
+      mode: "toon",
+      args: ["open"],
+    });
+
+    expect(defaultResult.ok).toBeTrue();
+    expect(JSON.stringify(defaultResult.data)).not.toContain("hidden-secret");
+    expect(defaultResult.human).not.toContain("hidden-secret");
+
+    const revealedResult = await runBoard({
+      cwd: "/tmp/workspace",
+      mode: "toon",
+      args: ["open", "--reveal-token"],
+    });
+
+    expect(revealedResult.ok).toBeTrue();
+    expect(JSON.stringify(revealedResult.data)).toContain("hidden-secret");
+    expect(revealedResult.human).toContain("hidden-secret");
+    expect(revealedResult.human).toContain("do not share");
+  });
+
+  test("rejects --reveal-token on subcommands other than open", async (): Promise<void> => {
+    setBoardCommandHooksForTests({
+      updateInstalled: () => mockInstallResult("updated"),
+    });
+
+    const result = await runBoard({
+      cwd: "/tmp/workspace",
+      mode: "toon",
+      args: ["update", "--reveal-token"],
+    });
+
+    expect(result.ok).toBeFalse();
+    expect(result.command).toBe("board.update");
+    expect(result.error?.code).toBe("invalid_input");
   });
 
   test("surfaces install failures with stable codes", async (): Promise<void> => {
