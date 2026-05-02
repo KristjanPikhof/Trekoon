@@ -1,0 +1,161 @@
+import { mkdtempSync, mkdirSync, rmSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { dirname, join } from "node:path";
+
+import { afterEach, describe, expect, test } from "bun:test";
+
+import { startBoardServer } from "../../src/board/server";
+import { resolveStoragePaths } from "../../src/storage/path";
+
+const tempDirs: string[] = [];
+
+function createWorkspace(): string {
+  const workspace: string = mkdtempSync(join(tmpdir(), "trekoon-board-auth-"));
+  tempDirs.push(workspace);
+  return workspace;
+}
+
+function prepareBoardAssets(workspace: string): void {
+  const paths = resolveStoragePaths(workspace);
+  mkdirSync(dirname(paths.boardEntryFile), { recursive: true });
+  writeFileSync(
+    paths.boardEntryFile,
+    "<html><head><title>Trekoon Board</title></head><body><div id=\"app\">board</div></body></html>\n",
+    "utf8",
+  );
+}
+
+afterEach((): void => {
+  while (tempDirs.length > 0) {
+    const next: string | undefined = tempDirs.pop();
+    if (next) {
+      rmSync(next, { recursive: true, force: true });
+    }
+  }
+});
+
+describe("board server auth", (): void => {
+  test("returns 401 with no snapshot or token when no credentials are provided", async (): Promise<void> => {
+    const workspace: string = createWorkspace();
+    prepareBoardAssets(workspace);
+
+    const boardServer = startBoardServer({ cwd: workspace, token: "secret-token-value" });
+
+    try {
+      const response = await fetch(boardServer.fallbackUrl);
+      const body = await response.text();
+
+      expect(response.status).toBe(401);
+      expect(body).not.toContain("secret-token-value");
+      expect(body).not.toContain("trekoon-board-bootstrap");
+      expect(body).not.toContain('"snapshot":');
+      expect(body).not.toContain('"token":');
+    } finally {
+      boardServer.stop();
+    }
+  });
+
+  test("returns 401 with no snapshot or token for deep routes without credentials", async (): Promise<void> => {
+    const workspace: string = createWorkspace();
+    prepareBoardAssets(workspace);
+
+    const boardServer = startBoardServer({ cwd: workspace, token: "deep-route-token" });
+
+    try {
+      const response = await fetch(`${boardServer.origin}/epics/some-epic`);
+      const body = await response.text();
+
+      expect(response.status).toBe(401);
+      expect(body).not.toContain("deep-route-token");
+      expect(body).not.toContain("trekoon-board-bootstrap");
+      expect(body).not.toContain('"snapshot":');
+    } finally {
+      boardServer.stop();
+    }
+  });
+
+  test("returns 401 when an invalid query token is supplied", async (): Promise<void> => {
+    const workspace: string = createWorkspace();
+    prepareBoardAssets(workspace);
+
+    const boardServer = startBoardServer({ cwd: workspace, token: "valid-token" });
+
+    try {
+      const response = await fetch(`${boardServer.origin}/?token=wrong-token`);
+      const body = await response.text();
+
+      expect(response.status).toBe(401);
+      expect(body).not.toContain("valid-token");
+      expect(body).not.toContain("trekoon-board-bootstrap");
+    } finally {
+      boardServer.stop();
+    }
+  });
+
+  test("serves bootstrap and sets HttpOnly cookie when valid query token is provided", async (): Promise<void> => {
+    const workspace: string = createWorkspace();
+    prepareBoardAssets(workspace);
+
+    const boardServer = startBoardServer({ cwd: workspace, token: "session-token" });
+
+    try {
+      const response = await fetch(boardServer.url);
+      const body = await response.text();
+
+      expect(response.status).toBe(200);
+      expect(body).toContain("trekoon-board-bootstrap");
+      expect(body).toContain('"token":"session-token"');
+
+      const setCookie = response.headers.get("set-cookie");
+      expect(setCookie).not.toBeNull();
+      expect(setCookie ?? "").toContain("trekoon_board_session=session-token");
+      expect(setCookie ?? "").toContain("HttpOnly");
+      expect(setCookie ?? "").toContain("SameSite=Strict");
+    } finally {
+      boardServer.stop();
+    }
+  });
+
+  test("accepts session cookie as valid credentials without query token", async (): Promise<void> => {
+    const workspace: string = createWorkspace();
+    prepareBoardAssets(workspace);
+
+    const boardServer = startBoardServer({ cwd: workspace, token: "cookie-only-token" });
+
+    try {
+      const response = await fetch(boardServer.fallbackUrl, {
+        headers: {
+          cookie: `trekoon_board_session=${encodeURIComponent("cookie-only-token")}`,
+        },
+      });
+      const body = await response.text();
+
+      expect(response.status).toBe(200);
+      expect(body).toContain("trekoon-board-bootstrap");
+    } finally {
+      boardServer.stop();
+    }
+  });
+
+  test("rejects invalid cookie credentials", async (): Promise<void> => {
+    const workspace: string = createWorkspace();
+    prepareBoardAssets(workspace);
+
+    const boardServer = startBoardServer({ cwd: workspace, token: "real-token" });
+
+    try {
+      const response = await fetch(boardServer.fallbackUrl, {
+        headers: {
+          cookie: "trekoon_board_session=fake-cookie",
+        },
+      });
+      const body = await response.text();
+
+      expect(response.status).toBe(401);
+      expect(body).not.toContain("real-token");
+      expect(body).not.toContain("trekoon-board-bootstrap");
+    } finally {
+      boardServer.stop();
+    }
+  });
+});
