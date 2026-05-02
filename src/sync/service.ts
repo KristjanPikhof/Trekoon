@@ -1462,8 +1462,8 @@ export function syncPull(cwd: string, sourceBranch: string): PullSummary {
           }
 
           const isDeleteWithLocalEdits =
-            (incoming.operation.endsWith(".deleted") && hasLocalDeleteCascadeEdits(storage.db, incoming, sourceBranch)) ||
-            (incoming.operation === "dependency.removed" && hasLocalDependencyDeleteConflict(storage.db, incoming, sourceBranch));
+            (incoming.operation.endsWith(".deleted") && hasLocalDeleteCascadeEdits(storage.db, incoming, git.branchName)) ||
+            (incoming.operation === "dependency.removed" && hasLocalDependencyDeleteConflict(storage.db, incoming, git.branchName));
           if (isDeleteWithLocalEdits) {
             createConflict(storage.db, incoming, "__delete__", null, "Entity deleted on source branch");
             createdConflicts += 1;
