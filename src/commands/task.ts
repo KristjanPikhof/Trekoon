@@ -1180,10 +1180,9 @@ export async function runTask(context: CliContext): Promise<CliResult> {
 
           const targets = updateAll ? [...domain.listTasks()] : ids.map((id) => domain.getTaskOrThrow(id));
           const tasks = targets.map((target) =>
-            mutations.updateTask(target.id, {
-              status,
-              description: append === undefined ? undefined : appendLine(target.description, append),
-            }),
+            append !== undefined
+              ? mutations.appendToTaskDescription({ taskId: target.id, append, status })
+              : mutations.updateTask(target.id, { status }),
           );
 
           return okResult({
