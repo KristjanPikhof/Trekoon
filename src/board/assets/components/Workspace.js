@@ -166,7 +166,7 @@ function renderWorkspaceHeader(props) {
 // ---------------------------------------------------------------------------
 
 function renderKanbanColumns(props) {
-  const { visibleTasks, selectedTaskId, isMutating, taskStatusFilter } = props;
+  const { visibleTasks, selectedTaskId, isMutating, taskStatusFilter, dragFeedback } = props;
   const filter = taskStatusFilter || { ...DEFAULT_STATUS_FILTER };
 
   const columnsMarkup = STATUS_ORDER
@@ -177,6 +177,12 @@ function renderKanbanColumns(props) {
     const content = columnTasks.length === 0
       ? renderEmptyState(`No ${columnTitle.toLowerCase()} work`, "Adjust search or switch epics to inspect more tasks.")
       : columnTasks.map((task) => renderTaskCard({ task, selected: selectedTaskId === task.id, isMutating })).join("");
+
+    // Re-apply drag-feedback class from store so a rerender during drag does
+    // not silently wipe the visual feedback that was set by handleDragover.
+    const feedbackClass = dragFeedback?.targetStatus === status
+      ? (dragFeedback.kind === "valid" ? " board-drop-valid" : " board-drop-invalid")
+      : "";
 
     return `
       <section class="board-column board-column--dense ${secondaryPanelClasses("flex min-h-[20rem] min-w-0 flex-col p-3")}" aria-labelledby="column-${status}">
@@ -190,7 +196,7 @@ function renderKanbanColumns(props) {
           </div>
           ${columnTasks.length > 0 ? `<span class="board-column__count text-xs font-medium text-[var(--board-text-soft)]">${columnTasks.length === 1 ? "1 task" : `${columnTasks.length} tasks`}</span>` : ""}
         </header>
-        <div class="board-column__tasks mt-3 grid min-h-0 flex-1 content-start gap-2.5 overflow-auto pr-1 overscroll-contain" id="column-${status}" data-drop-status="${escapeHtml(status)}">${content}</div>
+        <div class="board-column__tasks mt-3 grid min-h-0 flex-1 content-start gap-2.5 overflow-auto pr-1 overscroll-contain${feedbackClass}" id="column-${status}" data-drop-status="${escapeHtml(status)}">${content}</div>
       </section>
     `;
   }).join("");
