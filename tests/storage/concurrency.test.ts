@@ -635,7 +635,7 @@ describe("SQLite concurrent write stress tests", () => {
     });
 
     test("5 concurrent appendToEpicDescription calls preserve all appended notes", () => {
-      const { dbFile, workspace } = setupTrekoonWorkspace("trekoon-append-epic-");
+      const workspace = setupTrekoonWorkspace("trekoon-append-epic-");
 
       const seedDb = openTrekoonDatabase(workspace);
       const seedMutations = new MutationService(seedDb.db, workspace);
