@@ -276,6 +276,7 @@ export function startWalWatcher(options: WalWatcherOptions): WalWatcher {
 
   return {
     reconcile,
+    failureCount: (): number => failures,
     close(): void {
       closed = true;
       if (debounceTimer) {
