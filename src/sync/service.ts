@@ -371,10 +371,18 @@ function saveCursor(
   });
 }
 
-function countPendingConflicts(db: Database): number {
+function countPendingConflicts(db: Database, scope: ConflictScope): number {
   const row = db
-    .query("SELECT COUNT(*) AS count FROM sync_conflicts WHERE resolution = 'pending';")
-    .get() as { count: number } | null;
+    .query(
+      `
+      SELECT COUNT(*) AS count
+      FROM sync_conflicts
+      WHERE resolution = 'pending'
+        AND worktree_path = ?
+        AND current_branch = ?;
+      `,
+    )
+    .get(scope.worktreePath, scope.currentBranch) as { count: number } | null;
 
   return row?.count ?? 0;
 }
