@@ -1,7 +1,7 @@
 import { chmodSync, existsSync, mkdirSync, unlinkSync, statSync } from "node:fs";
 import { connect, createServer, type Server, type Socket } from "node:net";
 import { dirname } from "node:path";
-import { safeErrorMessage } from "../commands/error-utils";
+import { redactStack, safeErrorMessage } from "../commands/error-utils";
 import { closeCachedDatabases } from "../storage/database";
 import { resolveStoragePaths } from "../storage/path";
 
@@ -40,6 +40,41 @@ export interface DaemonResponse {
 
 const REQUEST_TERMINATOR = "\n";
 const MAX_REQUEST_BYTES = 1_000_000;
+/** Maximum bytes buffered across all open server sockets at once. */
+const MAX_TOTAL_BUFFERED_BYTES = 8 * MAX_REQUEST_BYTES;
+/** Default cap on concurrent open server-side sockets. */
+const DEFAULT_MAX_CONNECTIONS = 32;
+/** Idle/incomplete-request timeout for a server-side socket. */
+const SERVER_SOCKET_IDLE_MS = 5_000;
+
+/**
+ * Pre-write transport failure: the daemon socket was unreachable or the
+ * request never made it onto the wire. Safe to fall back to in-process
+ * dispatch — no server-side mutation could have run.
+ */
+export class PreWriteTransportError extends Error {
+  public readonly cause: unknown;
+  public constructor(message: string, cause?: unknown) {
+    super(message);
+    this.name = "PreWriteTransportError";
+    this.cause = cause;
+  }
+}
+
+/**
+ * Post-write transport failure: the request bytes were already flushed to
+ * the daemon socket when the failure occurred. The server may have
+ * committed the mutation. The CLI must NOT silently re-run the command in
+ * process — exit non-zero so the caller can decide.
+ */
+export class PostWriteError extends Error {
+  public readonly cause: unknown;
+  public constructor(message: string, cause?: unknown) {
+    super(message);
+    this.name = "PostWriteError";
+    this.cause = cause;
+  }
+}
 
 /**
  * Resolve the canonical Unix socket path for the given working directory.
@@ -58,6 +93,32 @@ function safeUnlink(path: string): void {
       throw error;
     }
   }
+}
+
+function isPreWriteTransportCode(code: string | undefined): boolean {
+  return (
+    code === "ENOENT"
+    || code === "ECONNREFUSED"
+    || code === "EACCES"
+    || code === "EPERM"
+    || code === "ETIMEDOUT"
+  );
+}
+
+function debugLog(prefix: string, payload: unknown): void {
+  if (process.env.TREKOON_DEBUG === "1") {
+    // eslint-disable-next-line no-console
+    console.error(prefix, payload);
+    return;
+  }
+  if (payload instanceof Error) {
+    const message: string = safeErrorMessage(payload, "unknown error");
+    // eslint-disable-next-line no-console
+    console.error(`${prefix} ${message}`);
+    return;
+  }
+  // eslint-disable-next-line no-console
+  console.error(prefix);
 }
 
 /**
@@ -92,10 +153,13 @@ export async function executeDaemonRequest(request: DaemonRequest): Promise<Daem
     // Never include the stack in the response envelope: stacks contain
     // absolute filesystem paths and may carry secret-bearing error text.
     // The stack is still surfaced locally on the daemon's stderr for
-    // operator-side debugging.
+    // operator-side debugging, with secrets redacted unless TREKOON_DEBUG=1.
     if (error instanceof Error && typeof error.stack === "string") {
+      const stack: string = process.env.TREKOON_DEBUG === "1"
+        ? error.stack
+        : redactStack(error.stack);
       // eslint-disable-next-line no-console
-      console.error("[trekoon daemon] dispatch failure:", error.stack);
+      console.error("[trekoon daemon] dispatch failure:", stack);
     } else {
       // eslint-disable-next-line no-console
       console.error("[trekoon daemon] dispatch failure:", error);
@@ -120,6 +184,8 @@ export interface StartDaemonOptions {
   readonly cwd?: string;
   /** Suppress stdout banner; used by tests. */
   readonly silent?: boolean;
+  /** Override the default concurrent connection cap. */
+  readonly maxConnections?: number;
 }
 
 /**
@@ -135,6 +201,7 @@ export async function startDaemonServer(options: StartDaemonOptions = {}): Promi
   const cwd: string = options.cwd ?? process.cwd();
   const socketPath: string = options.socketPath ?? resolveDaemonSocketPath(cwd);
   const socketDir: string = dirname(socketPath);
+  const maxConnections: number = options.maxConnections ?? DEFAULT_MAX_CONNECTIONS;
 
   if (!existsSync(socketDir)) {
     mkdirSync(socketDir, { recursive: true, mode: 0o700 });
@@ -149,26 +216,95 @@ export async function startDaemonServer(options: StartDaemonOptions = {}): Promi
   // Stale socket from a previous crashed run.
   safeUnlink(socketPath);
 
+  // Tracks open server-side sockets and the bytes each one currently has
+  // buffered. Used to enforce both the per-server connection cap and a
+  // global upper bound on memory pressure across all in-flight requests.
+  const liveSockets: Set<Socket> = new Set<Socket>();
+  let totalBufferedBytes = 0;
+
   const server: Server = createServer((socket: Socket): void => {
+    if (liveSockets.size >= maxConnections) {
+      try {
+        socket.write(
+          `${JSON.stringify({
+            stdout: "",
+            stderr: "Daemon: daemon_busy (too many concurrent connections)\n",
+            exitCode: 1,
+          })}\n`,
+        );
+      } catch {
+        // best effort
+      }
+      socket.end();
+      socket.destroy();
+      return;
+    }
+
+    liveSockets.add(socket);
     let buffer = "";
     let aborted = false;
+    let perSocketBytes = 0;
 
     socket.setEncoding("utf8");
+    // Reject sockets that connect, never send a terminator, and sit idle —
+    // these accumulate file descriptors and buffer memory otherwise.
+    socket.setTimeout(SERVER_SOCKET_IDLE_MS);
+
+    const releaseBuffered = (): void => {
+      totalBufferedBytes -= perSocketBytes;
+      perSocketBytes = 0;
+    };
+
+    const onClose = (): void => {
+      liveSockets.delete(socket);
+      releaseBuffered();
+    };
+
+    socket.on("timeout", (): void => {
+      if (aborted) {
+        return;
+      }
+      aborted = true;
+      try {
+        socket.write(
+          `${JSON.stringify({
+            stdout: "",
+            stderr: "Daemon: incomplete request (socket idle timeout)\n",
+            exitCode: 1,
+          })}\n`,
+        );
+      } catch {
+        // best effort
+      }
+      socket.end();
+      socket.destroy();
+    });
 
     socket.on("data", (chunk: string): void => {
       if (aborted) {
         return;
       }
+      const chunkBytes: number = Buffer.byteLength(chunk, "utf8");
       buffer += chunk;
-      if (buffer.length > MAX_REQUEST_BYTES) {
+      perSocketBytes += chunkBytes;
+      totalBufferedBytes += chunkBytes;
+
+      if (buffer.length > MAX_REQUEST_BYTES || totalBufferedBytes > MAX_TOTAL_BUFFERED_BYTES) {
         aborted = true;
-        socket.write(
-          `${JSON.stringify({
-            stdout: "",
-            stderr: "Daemon request exceeded max bytes\n",
-            exitCode: 1,
-          })}\n`,
-        );
+        const reason: string = totalBufferedBytes > MAX_TOTAL_BUFFERED_BYTES
+          ? "daemon_busy (server buffer pressure)"
+          : "request exceeded max bytes";
+        try {
+          socket.write(
+            `${JSON.stringify({
+              stdout: "",
+              stderr: `Daemon: ${reason}\n`,
+              exitCode: 1,
+            })}\n`,
+          );
+        } catch {
+          // best effort
+        }
         socket.end();
         return;
       }
@@ -181,40 +317,41 @@ export async function startDaemonServer(options: StartDaemonOptions = {}): Promi
       aborted = true;
       const payload: string = buffer.slice(0, terminatorIndex);
       buffer = "";
+      releaseBuffered();
+      // Once we have a complete request the idle timer is no longer
+      // meaningful; the dispatcher controls the lifetime from here.
+      socket.setTimeout(0);
 
       void handlePayload(payload, socket);
     });
 
-    socket.on("error", (): void => {
-      // Ignore transport errors; the client either retries or the daemon stays up.
+    socket.on("error", (error: Error): void => {
+      // Surface as a debug-level redacted log; never as a bare empty handler.
+      debugLog("[trekoon daemon] socket error:", error);
     });
+
+    socket.on("close", onClose);
   });
 
-  // Tighten the umask BEFORE server.listen() so the socket inode is created
-  // with mode 0o600 from inception. This closes the TOCTOU window between the
-  // bind() syscall and the post-listen chmodSync. The chmodSync below remains
-  // as a defence-in-depth fallback for filesystems where umask is ignored at
-  // socket creation (some network FS / overlay FS edge cases).
-  const previousUmask: number = process.umask(0o077);
-  try {
-    await new Promise<void>((resolve, reject): void => {
-      const onError = (error: Error): void => {
-        server.removeListener("listening", onListening);
-        reject(error);
-      };
-      const onListening = (): void => {
-        server.removeListener("error", onError);
-        resolve();
-      };
-      server.once("error", onError);
-      server.once("listening", onListening);
-      server.listen(socketPath);
-    });
-  } finally {
-    process.umask(previousUmask);
-  }
+  await new Promise<void>((resolve, reject): void => {
+    const onError = (error: Error): void => {
+      server.removeListener("listening", onListening);
+      reject(error);
+    };
+    const onListening = (): void => {
+      server.removeListener("error", onError);
+      resolve();
+    };
+    server.once("error", onError);
+    server.once("listening", onListening);
+    server.listen(socketPath);
+  });
 
-  // Defence-in-depth: re-assert owner-only mode after listen succeeds.
+  // Owner-only mode is enforced by the pre-created 0o700 parent directory
+  // plus this post-listen chmod. We deliberately do NOT wrap server.listen
+  // in a process.umask() override: that mutates global process state for
+  // every concurrent operation and was the source of an audit-flagged
+  // race when other code allocates fds during startup.
   try {
     chmodSync(socketPath, 0o600);
   } catch {
@@ -230,6 +367,17 @@ export async function startDaemonServer(options: StartDaemonOptions = {}): Promi
     server,
     close: (): Promise<void> =>
       new Promise<void>((resolve): void => {
+        // Force-close any sockets still parked on the connection cap path so
+        // server.close() resolves promptly during test teardown.
+        for (const sock of liveSockets) {
+          try {
+            sock.destroy();
+          } catch {
+            // best effort
+          }
+        }
+        liveSockets.clear();
+        totalBufferedBytes = 0;
         server.close((): void => {
           safeUnlink(socketPath);
           closeCachedDatabases();
@@ -258,10 +406,14 @@ async function handlePayload(payload: string, socket: Socket): Promise<void> {
   } catch (error: unknown) {
     // Sanitize and never include a stack — the wire envelope must not leak
     // filesystem paths or secret-bearing error text. The stack stays on the
-    // daemon's local stderr for operator debugging.
+    // daemon's local stderr for operator debugging, redacted unless
+    // TREKOON_DEBUG=1 explicitly opts in to raw output.
     if (error instanceof Error && typeof error.stack === "string") {
+      const stack: string = process.env.TREKOON_DEBUG === "1"
+        ? error.stack
+        : redactStack(error.stack);
       // eslint-disable-next-line no-console
-      console.error("[trekoon daemon] payload parse error:", error.stack);
+      console.error("[trekoon daemon] payload parse error:", stack);
     }
     const sanitized: string = safeErrorMessage(error, "invalid payload");
     response = {
@@ -302,8 +454,10 @@ export interface DaemonClientResult extends DaemonResponse {
 
 /**
  * Send a single request to a running daemon. Resolves with the parsed
- * response. Throws on transport-level failures (the caller falls back to the
- * in-process path on throw).
+ * response. Throws `PreWriteTransportError` for connect-time failures (the
+ * caller may safely fall back to in-process dispatch) and `PostWriteError`
+ * once the request bytes have been flushed (the caller MUST surface the
+ * failure rather than retrying — the daemon may have already committed).
  */
 export async function sendDaemonRequest(
   socketPath: string,
@@ -314,20 +468,65 @@ export async function sendDaemonRequest(
     const socket: Socket = connect(socketPath);
     let buffer = "";
     let settled = false;
+    // Flips to true the moment the request bytes are flushed to the kernel
+    // socket buffer. Any subsequent error/timeout MUST surface as
+    // PostWriteError because the daemon may have already executed the
+    // mutation.
+    let postWrite = false;
+
+    const fail = (error: unknown): void => {
+      if (settled) {
+        return;
+      }
+      settled = true;
+      clearTimeout(timer);
+      try {
+        socket.destroy();
+      } catch {
+        // best effort
+      }
+      if (postWrite) {
+        const cause: unknown = error;
+        const message: string = error instanceof Error ? error.message : String(error);
+        reject(new PostWriteError(`daemon may have committed; do not retry: ${message}`, cause));
+        return;
+      }
+      if (error instanceof Error) {
+        const code: string | undefined = (error as NodeJS.ErrnoException).code;
+        if (isPreWriteTransportCode(code)) {
+          reject(new PreWriteTransportError(error.message, error));
+          return;
+        }
+        reject(new PreWriteTransportError(error.message, error));
+        return;
+      }
+      reject(new PreWriteTransportError(String(error), error));
+    };
 
     const timer = setTimeout((): void => {
       if (settled) {
         return;
       }
-      settled = true;
-      socket.destroy(new Error("daemon request timeout"));
-      reject(new Error(`daemon request timed out after ${timeoutMs}ms`));
+      // Build the timeout error before we settle so the post/pre-write
+      // classifier picks up the current `postWrite` flag.
+      const timeoutError = new Error(`daemon request timed out after ${timeoutMs}ms`);
+      fail(timeoutError);
     }, timeoutMs);
 
     socket.setEncoding("utf8");
 
     socket.on("connect", (): void => {
-      socket.write(`${JSON.stringify(request)}${REQUEST_TERMINATOR}`);
+      const wireBytes: string = `${JSON.stringify(request)}${REQUEST_TERMINATOR}`;
+      socket.write(wireBytes, (writeError?: Error | null): void => {
+        if (writeError) {
+          fail(writeError);
+          return;
+        }
+        // The bytes are buffered into the kernel socket; from this point
+        // on the daemon may execute the request. Any error/timeout that
+        // follows must be classified as PostWriteError.
+        postWrite = true;
+      });
     });
 
     socket.on("data", (chunk: string): void => {
@@ -335,12 +534,7 @@ export async function sendDaemonRequest(
     });
 
     socket.on("error", (error: Error): void => {
-      if (settled) {
-        return;
-      }
-      settled = true;
-      clearTimeout(timer);
-      reject(error);
+      fail(error);
     });
 
     socket.on("end", (): void => {
@@ -353,12 +547,16 @@ export async function sendDaemonRequest(
         const trimmed: string = buffer.trim();
         const parsed: unknown = JSON.parse(trimmed);
         if (!isDaemonResponse(parsed)) {
-          reject(new Error("daemon returned malformed response"));
+          // We did receive a (malformed) response, so the request was
+          // post-write — surface as PostWriteError so the CLI does not
+          // silently re-run.
+          reject(new PostWriteError("daemon returned malformed response"));
           return;
         }
         resolve({ ...parsed, transport: "daemon" });
       } catch (error: unknown) {
-        reject(error instanceof Error ? error : new Error(String(error)));
+        const message: string = error instanceof Error ? error.message : String(error);
+        reject(new PostWriteError(`daemon response parse error: ${message}`, error));
       }
     });
   });
@@ -414,8 +612,10 @@ export async function runDaemonForeground(options: StartDaemonOptions = {}): Pro
 
 /**
  * Try to dispatch the invocation through the daemon. Returns the rendered
- * response on success, or `null` when no daemon is reachable so the caller
- * can fall back to in-process dispatch.
+ * response on success, or `null` ONLY when the failure happened pre-write
+ * (no bytes left this process). Post-write failures are rethrown as
+ * `PostWriteError` so the caller can exit non-zero rather than
+ * re-executing in-process — the daemon may have committed.
  */
 export async function tryDaemonDispatch(argv: readonly string[]): Promise<DaemonClientResult | null> {
   const cwd: string = process.cwd();
@@ -428,7 +628,12 @@ export async function tryDaemonDispatch(argv: readonly string[]): Promise<Daemon
     // The daemon owns its own environment (set at `trekoon serve` startup);
     // client env is deliberately NOT forwarded over the socket.
     return await sendDaemonRequest(socketPath, { argv: [...argv], cwd });
-  } catch {
-    return null;
+  } catch (error: unknown) {
+    if (error instanceof PreWriteTransportError) {
+      return null;
+    }
+    // PostWriteError or any unclassified failure must surface so src/index.ts
+    // can refuse to silently re-run the command.
+    throw error;
   }
 }
