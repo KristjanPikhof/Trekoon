@@ -204,20 +204,26 @@ export function createApi(model, options) {
   let lastFailedMutation = null;
 
   function enqueueMutation(definition) {
+    // Assign a stable identity token so success callbacks can clear
+    // lastFailedMutation by id rather than by function-reference equality
+    // (inline arrow functions are never the same reference across retries).
+    const mutationId = crypto.randomUUID();
+    const tagged = { ...definition, mutationId };
+
     queue.enqueue({
-      ...definition,
+      ...tagged,
       onSuccess(data) {
-        if (lastFailedMutation?.request === definition.request) {
+        if (lastFailedMutation?.mutationId === mutationId) {
           lastFailedMutation = null;
         }
-        if (typeof definition.onSuccess === "function") {
-          definition.onSuccess(data);
+        if (typeof tagged.onSuccess === "function") {
+          tagged.onSuccess(data);
         }
       },
       onError(error) {
-        lastFailedMutation = definition;
-        if (typeof definition.onError === "function") {
-          definition.onError(error);
+        lastFailedMutation = tagged;
+        if (typeof tagged.onError === "function") {
+          tagged.onError(error);
         }
       },
     });
