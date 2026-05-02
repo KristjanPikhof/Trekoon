@@ -455,6 +455,69 @@ export class MutationService {
   }
 
   /**
+   * Atomic If-Match CAS variant of {@link updateTask}.  See
+   * {@link updateEpicWithIfMatch} for the rationale; the key difference is
+   * that tasks also enforce dependency-gating via
+   * `assertNoUnresolvedDependenciesForStatusTransition` for status
+   * transitions and may set/clear `owner`.
+   */
+  updateTaskWithIfMatch(
+    id: string,
+    ifMatchUpdatedAt: number,
+    input: { title?: string | undefined; description?: string | undefined; status?: string | undefined; owner?: string | null | undefined },
+  ): TaskRecord {
+    return this.#writeTransaction((): TaskRecord => {
+      const existing = this.#domain.getTaskOrThrow(id);
+
+      const nextTitle = input.title !== undefined
+        ? assertTaskFieldNonEmpty("title", input.title)
+        : existing.title;
+      const nextDescription = input.description !== undefined
+        ? assertTaskFieldNonEmpty("description", input.description)
+        : existing.description;
+      const nextStatus = input.status !== undefined
+        ? assertTaskFieldNonEmpty("status", input.status)
+        : existing.status;
+      const normalizedOwner = normalizeOwnerInput(input.owner);
+      const nextOwner = normalizedOwner === undefined ? existing.owner : normalizedOwner;
+
+      if (input.status !== undefined) {
+        validateStatusTransition(existing.status, nextStatus, "task", id);
+      }
+      // Dependency gating mirrors domain.updateTask. Even when the status
+      // is unchanged this is a no-op because
+      // assertNoUnresolvedDependenciesForStatusTransition short-circuits
+      // when from === to.
+      this.#domain.assertNoUnresolvedDependenciesForStatusTransition(id, "task", existing.status, nextStatus);
+
+      const now: number = Date.now();
+      const result = this.#db
+        .query(
+          `UPDATE tasks
+              SET title = ?, description = ?, status = ?, owner = ?, updated_at = ?, version = version + 1
+            WHERE id = ?
+              AND updated_at = ?
+           RETURNING id`,
+        )
+        .get(nextTitle, nextDescription, nextStatus, nextOwner, now, id, ifMatchUpdatedAt) as { id: string } | null;
+
+      if (result === null) {
+        const current = this.#domain.getTaskOrThrow(id);
+        throw new PreconditionFailedError({
+          entityKind: "task",
+          entityId: id,
+          currentUpdatedAt: current.updatedAt,
+          providedUpdatedAt: ifMatchUpdatedAt,
+        });
+      }
+
+      const task = this.#domain.getTaskOrThrow(id);
+      this.#emitTaskUpdated(task);
+      return task;
+    });
+  }
+
+  /**
    * Atomically append text to a task's description using a single SQL
    * `description = description || ?` expression inside a write transaction.
    *
