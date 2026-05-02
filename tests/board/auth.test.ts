@@ -111,7 +111,9 @@ describe("board server auth", (): void => {
       expect(setCookie).not.toBeNull();
       expect(setCookie ?? "").toContain("trekoon_board_session=session-token");
       expect(setCookie ?? "").toContain("HttpOnly");
+      expect(setCookie ?? "").toContain("Max-Age=86400");
       expect(setCookie ?? "").toContain("SameSite=Strict");
+      expect(redirect.headers.get("referrer-policy")).toBe("no-referrer");
 
       const location = redirect.headers.get("location");
       expect(location).not.toBeNull();
@@ -175,6 +177,50 @@ describe("board server auth", (): void => {
       expect(response.status).toBe(401);
       expect(body).not.toContain("real-token");
       expect(body).not.toContain("trekoon-board-bootstrap");
+    } finally {
+      boardServer.stop();
+    }
+  });
+
+  test("rejects token query parameters on API routes", async (): Promise<void> => {
+    const workspace: string = createWorkspace();
+    prepareBoardAssets(workspace);
+
+    const boardServer = startBoardServer({ cwd: workspace, token: "api-query-token" });
+
+    try {
+      const response = await fetch(`${boardServer.origin}/api/snapshot?token=api-query-token`);
+      const body = await response.json() as { ok: boolean; error: { code: string } };
+
+      expect(response.status).toBe(401);
+      expect(body.ok).toBe(false);
+      expect(body.error.code).toBe("unauthorized");
+    } finally {
+      boardServer.stop();
+    }
+  });
+
+  test("snapshot stream authenticates with cookie but rejects query tokens", async (): Promise<void> => {
+    const workspace: string = createWorkspace();
+    prepareBoardAssets(workspace);
+
+    const boardServer = startBoardServer({ cwd: workspace, token: "sse-cookie-token" });
+
+    try {
+      const queryResponse = await fetch(`${boardServer.origin}/api/snapshot/stream?token=sse-cookie-token`, {
+        headers: { accept: "text/event-stream" },
+      });
+      expect(queryResponse.status).toBe(401);
+
+      const cookieResponse = await fetch(`${boardServer.origin}/api/snapshot/stream`, {
+        headers: {
+          accept: "text/event-stream",
+          cookie: `trekoon_board_session=${encodeURIComponent("sse-cookie-token")}`,
+        },
+      });
+      expect(cookieResponse.status).toBe(200);
+      expect(cookieResponse.headers.get("content-type")).toContain("text/event-stream");
+      await cookieResponse.body?.cancel().catch(() => {});
     } finally {
       boardServer.stop();
     }
