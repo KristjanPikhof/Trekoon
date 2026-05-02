@@ -6,7 +6,6 @@ import {
   type CompactEpicExpandResult,
   type CompactDependencyBatchAddResult,
   type CompactDependencySpec,
-  type CompactEntityRef,
   type CompactSubtaskBatchCreateResult,
   type CompactSubtaskSpec,
   type CompactTaskBatchCreateResult,
