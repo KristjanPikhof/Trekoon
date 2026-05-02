@@ -441,8 +441,8 @@ const SUGGEST_HELP = [
 
 const SKILLS_HELP = [
   "Usage:",
-  "  trekoon skills install [--link --editor opencode|claude|pi] [--to <path>] [--allow-outside-repo]",
-  "  trekoon skills install -g|--global [--editor opencode|claude|pi]",
+  "  trekoon skills install [--link --editor opencode|claude|codex|pi] [--to <path>] [--allow-outside-repo]",
+  "  trekoon skills install -g|--global [--editor opencode|claude|codex|pi]",
   "  trekoon skills update",
   "",
   "Installs or refreshes the Trekoon skill so AI agents can plan and execute.",
@@ -451,7 +451,7 @@ const SKILLS_HELP = [
   "  Creates a symlink at .agents/skills/trekoon pointing to the bundled source,",
   "  so the skill always matches the installed CLI version.",
   "  --link            Also create an editor symlink named 'trekoon'.",
-  "  --editor <name>   Required with --link (opencode|claude|pi).",
+  "  --editor <name>   Required with --link (opencode|claude|codex|pi).",
   "  --to <path>       Override the symlink root for --link only.",
   "  --allow-outside-repo  Allow links outside the repo (requires --link).",
   "",
