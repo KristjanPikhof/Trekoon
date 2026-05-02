@@ -13,7 +13,9 @@ import {
   LATEST_MIGRATION_VERSION,
   migrateDatabase,
   readCurrentMigrationVersionReadOnly,
+  readMigrationVersionMarker,
   rollbackDatabase,
+  writeMigrationVersionMarker,
 } from "../../src/storage/migrations";
 import { resolveStoragePaths } from "../../src/storage/path";
 
