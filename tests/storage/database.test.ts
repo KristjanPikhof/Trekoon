@@ -668,7 +668,7 @@ describe("storage lifecycle", (): void => {
         .query("SELECT COALESCE(MAX(version), 0) AS version FROM schema_migrations;")
         .get() as { version: number };
 
-      expect(row.version).toBe(10);
+      expect(row.version).toBe(11);
     } finally {
       storage.close();
     }
@@ -679,10 +679,10 @@ describe("storage lifecycle", (): void => {
     const storage = openTrekoonDatabase(workspace);
 
     try {
-      const summary = rollbackDatabase(storage.db, 10);
+      const summary = rollbackDatabase(storage.db, 11);
 
-      expect(summary.fromVersion).toBe(10);
-      expect(summary.toVersion).toBe(10);
+      expect(summary.fromVersion).toBe(11);
+      expect(summary.toVersion).toBe(11);
       expect(summary.rolledBack).toBe(0);
       expect(summary.rolledBackMigrations).toEqual([]);
     } finally {
