@@ -44,6 +44,13 @@ const SENSITIVE_TAG_PATTERN =
 // catches bare occurrences that remain (e.g. "got Bearer eyJ..." or "auth: Basic dXNl...").
 const STANDALONE_AUTH_SCHEME_PATTERN = /\b(Bearer|Basic)\s+([A-Za-z0-9._\-+/=]+)/giu;
 
+// JWT shape heuristic: three base64url segments separated by dots, each starting
+// with a base64url-encoded JSON header/payload/signature. The first two segments
+// of any JWT begin with "eyJ" because they encode JSON objects (`{"...`).
+// Catches bare JWTs that slip past the keyed and Bearer/Basic patterns above
+// (e.g. raw token pasted into an error message without an "Authorization:" prefix).
+const JWT_PATTERN = /\beyJ[A-Za-z0-9_\-]+\.eyJ[A-Za-z0-9_\-]+\.[A-Za-z0-9_\-]+/gu;
+
 export function redactSensitive(input: string): string {
   const keyRedacted = input.replace(
     SENSITIVE_KEY_PATTERN,
@@ -53,10 +60,11 @@ export function redactSensitive(input: string): string {
     SENSITIVE_TAG_PATTERN,
     (_match, openTag) => `${openTag}REDACTED`,
   );
-  return tagRedacted.replace(
+  const authRedacted = tagRedacted.replace(
     STANDALONE_AUTH_SCHEME_PATTERN,
     (_match, scheme) => `${scheme} REDACTED`,
   );
+  return authRedacted.replace(JWT_PATTERN, "REDACTED");
 }
 
 function sanitizeErrorMessage(message: string): string {
