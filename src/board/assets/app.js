@@ -387,7 +387,7 @@ export async function bootLegacyBoard(options = {}) {
         taskModal.update(null);
       }
 
-      if (!showTasks || !taskModalOpen || !selectedSubtask) {
+      if (!showTasks || !taskModalOpen || !subtaskModalOpen) {
         subtaskModal.update(null);
       }
 
