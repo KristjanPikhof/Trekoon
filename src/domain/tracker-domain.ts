@@ -565,6 +565,7 @@ export class TrackerDomain {
   }
 
   deleteTask(id: string): void {
+    this.#assertInTransaction("deleteTask");
     const normalizedTaskId: string = assertNonEmpty("id", id);
     this.getTaskOrThrow(normalizedTaskId);
 
