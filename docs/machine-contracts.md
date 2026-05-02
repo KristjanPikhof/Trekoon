@@ -254,6 +254,12 @@ data:
 Transition details are in `data`, not `error.details`. `error` only has `code`
 and `message`.
 
+**Allowed bypass:** `task done` performs an atomic single-transaction direct
+write to `done` from any non-`done` status (`todo`, `blocked`, `in_progress`),
+emitting one `task.updated` event — there is no intermediate `in_progress`
+event when starting from `todo`/`blocked`. This is the only sanctioned
+bypass of the status-machine checker.
+
 ## Epic progress
 
 ```bash
