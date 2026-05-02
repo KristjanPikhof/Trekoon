@@ -174,7 +174,7 @@ describe("Concurrent writers", () => {
     for (let i = 0; i < WRITER_COUNT; i++) {
       const { service } = services[i]!;
       try {
-        service.createEpic({ title: `Epic ${i}`, description: `desc ${i}` });
+        service.createEpic({ title: `Epic ${i}`, description: `description for epic ${i}` });
         successes++;
       } catch (error) {
         if (isSqliteUniqueError(error)) {
