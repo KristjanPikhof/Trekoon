@@ -416,7 +416,15 @@ function parseIfMatchHeader(request: Request): number | null {
     return null;
   }
 
-  const trimmed = raw.trim().replace(/^"+|"+$/g, "");
+  // RFC 7232 §3.1 allows a strong ETag (`"<value>"`) or a weak ETag
+  // (`W/"<value>"`). Trekoon does not differentiate strong from weak
+  // semantics — a millisecond updatedAt is exact either way — so we
+  // accept both shapes. The wildcard `*` is intentionally NOT supported:
+  // it would mean "any current representation matches" and would defeat
+  // the whole purpose of the optimistic-concurrency check, so we surface
+  // it as 400 invalid_input below rather than treating it as a no-op.
+  const stripped = raw.trim().replace(/^W\//iu, "");
+  const trimmed = stripped.replace(/^"+|"+$/g, "");
   if (trimmed.length === 0) {
     return null;
   }
@@ -425,7 +433,8 @@ function parseIfMatchHeader(request: Request): number | null {
   if (!Number.isFinite(parsed) || !Number.isInteger(parsed)) {
     throw new DomainError({
       code: "invalid_input",
-      message: "If-Match header must be an integer updatedAt millisecond timestamp",
+      message:
+        "If-Match header must be an integer updatedAt millisecond timestamp (RFC 7232 strong or W/-prefixed weak ETag); the `*` wildcard is not supported",
       details: { header: "If-Match", value: raw },
     });
   }
