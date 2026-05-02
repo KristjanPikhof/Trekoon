@@ -215,7 +215,7 @@ describe("TrackerDomain transaction guards", (): void => {
     assertTransactionGuard(() =>
       domain.createSubtaskBatch({
         taskId,
-        specs: [{ tempKey: "s1", title: "Subtask C", parent: { kind: "id", id: taskId } }],
+        specs: [{ tempKey: "s1", title: "Subtask C", description: "", parent: { kind: "id", id: taskId } }],
       }),
     );
     db.close(false);
