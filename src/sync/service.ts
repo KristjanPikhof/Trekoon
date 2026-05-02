@@ -551,21 +551,29 @@ function lookupOursFieldValue(
   // It returns the string 'null' when the field is explicitly null —
   // we treat that as a real value (matching the legacy walk's behavior
   // where only `typeof undefined` skipped a key).
-  const path = `$.fields.${fieldName}`;
+  //
+  // Defense-in-depth: pass fieldName as a SQLite bind value rather than
+  // interpolating it into the JS path string. The caller already gates
+  // fieldName via SAFE_FIELD_NAME_PATTERN, but binding ensures the value
+  // is never spliced into the path expression on the JS side. SQLite
+  // concatenates `'$.fields.' || ?` server-side; if the bound value were
+  // somehow malformed, the JSON-path parser rejects the whole expression
+  // (`bad JSON path`) instead of silently widening the query.
   const row = localDb
     .query(
       `
-      SELECT json_extract(payload, ?) AS value, json_type(payload, ?) AS jt
+      SELECT json_extract(payload, '$.fields.' || ?) AS value,
+             json_type(payload, '$.fields.' || ?) AS jt
       FROM events
       WHERE entity_kind = ?
         AND entity_id = ?
         AND git_branch = ?
-        AND json_type(payload, ?) IS NOT NULL
+        AND json_type(payload, '$.fields.' || ?) IS NOT NULL
       ORDER BY created_at DESC, id DESC
       LIMIT 1;
       `,
     )
-    .get(path, path, entityKind, entityId, currentBranch, path) as
+    .get(fieldName, fieldName, entityKind, entityId, currentBranch, fieldName) as
     | { value: unknown; jt: string | null }
     | null;
 
