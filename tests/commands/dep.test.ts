@@ -80,6 +80,50 @@ describe("dep command", (): void => {
     expect((removed.data as { removed: number }).removed).toBe(1);
   });
 
+  test("task can wait on its own subtask (parent-subtask wait-relation)", async (): Promise<void> => {
+    // Legitimate dependency shape: a parent task declares "I cannot finish
+    // until my own subtask is done." This is the canonical use of the
+    // task->subtask edge and must NOT be treated as a self-cycle. Cycle
+    // detection only applies when the same id appears on both sides.
+    const cwd = createWorkspace();
+    const nodes = await createTaskGraph(cwd);
+
+    // Create a fresh subtask that belongs to taskA (createTaskGraph attaches
+    // the seed subtask to taskB; we need an own-task relation here).
+    const ownSubtask = await runSubtask({
+      cwd,
+      mode: "human",
+      args: ["create", "--task", nodes.taskA, "--title", "Own subtask"],
+    });
+    expect(ownSubtask.ok).toBeTrue();
+    const ownSubtaskId = (ownSubtask.data as { subtask: { id: string } }).subtask.id;
+
+    // taskA waits on its own subtask — should succeed.
+    const added = await runDep({
+      cwd,
+      mode: "human",
+      args: ["add", nodes.taskA, ownSubtaskId],
+    });
+    expect(added.ok).toBeTrue();
+
+    const listed = await runDep({ cwd, mode: "human", args: ["list", nodes.taskA] });
+    expect(listed.ok).toBeTrue();
+    const dependencies = (listed.data as {
+      dependencies: ReadonlyArray<{ dependsOnId: string; dependsOnKind?: string }>;
+    }).dependencies;
+    expect(dependencies.length).toBe(1);
+    expect(dependencies[0]?.dependsOnId).toBe(ownSubtaskId);
+
+    // Removing the wait-relation works just like any other dep edge.
+    const removed = await runDep({
+      cwd,
+      mode: "human",
+      args: ["remove", nodes.taskA, ownSubtaskId],
+    });
+    expect(removed.ok).toBeTrue();
+    expect((removed.data as { removed: number }).removed).toBe(1);
+  });
+
   test("cli dep add-many works after task create-many with --toon", async (): Promise<void> => {
     const cwd = createWorkspace();
 
