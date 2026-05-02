@@ -460,12 +460,17 @@ function dependencyEventIdentity(event: StoredEvent): DependencyEventIdentity | 
 
 function entityFieldConflict(
   localDb: Database,
-  currentBranch: string,
+  currentBranch: string | null,
   sourceBranch: string,
   event: StoredEvent,
   fieldName: string,
   incomingValue: unknown,
 ): { oursValue: string | null; theirsValue: string | null } | null {
+  // Detached HEAD has no named branch — no local-branch events can conflict.
+  if (currentBranch === null) {
+    return null;
+  }
+
   const currentValue = currentEntityFieldValue(localDb, event.entity_kind, event.entity_id, fieldName);
   if (serializeValue(currentValue) === serializeValue(incomingValue)) {
     return null;
