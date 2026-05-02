@@ -221,6 +221,7 @@ export function resolveGitContext(cwd: string, persistedAt: number = Date.now())
 
   const cached: GitContextCore | undefined = gitContextCache.get(worktreePath);
   if (cached !== undefined && cached.headStatKey === headStatKey) {
+    touchEntry(gitContextCache, worktreePath, cached);
     return { worktreePath: cached.worktreePath, branchName: cached.branchName, headSha: cached.headSha, persistedAt };
   }
 
@@ -229,6 +230,7 @@ export function resolveGitContext(cwd: string, persistedAt: number = Date.now())
 
   const { gitDir } = resolveGitDir(worktreePath);
   const core: GitContextCore = { worktreePath, branchName, headSha, headStatKey, gitDir };
+  evictLruIfNeeded(gitContextCache, GIT_CONTEXT_CACHE_CAPACITY);
   gitContextCache.set(worktreePath, core);
 
   return { worktreePath, branchName, headSha, persistedAt };
