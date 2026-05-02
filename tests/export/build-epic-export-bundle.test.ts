@@ -36,7 +36,7 @@ afterEach((): void => {
 describe("buildEpicExportBundle", () => {
   test("exports an epic with tasks and subtasks", () => {
     const cwd = createWorkspace();
-    const domain = createDomain(cwd);
+    const { domain, db } = createDomain(cwd);
 
     const epic = domain.createEpic({ title: "Export test", description: "A test epic" });
     const task1 = domain.createTask({ epicId: epic.id, title: "Task one", description: "First task" });
@@ -58,7 +58,7 @@ describe("buildEpicExportBundle", () => {
 
   test("classifies internal dependencies correctly", () => {
     const cwd = createWorkspace();
-    const domain = createDomain(cwd);
+    const { domain, db } = createDomain(cwd);
 
     const epic = domain.createEpic({ title: "Dep test", description: "Test deps" });
     const task1 = domain.createTask({ epicId: epic.id, title: "Task A", description: "First" });
@@ -78,7 +78,7 @@ describe("buildEpicExportBundle", () => {
 
   test("classifies external dependencies and resolves stubs", () => {
     const cwd = createWorkspace();
-    const domain = createDomain(cwd);
+    const { domain, db } = createDomain(cwd);
 
     const epicA = domain.createEpic({ title: "Epic A", description: "First epic" });
     const epicB = domain.createEpic({ title: "Epic B", description: "Second epic" });
@@ -100,7 +100,7 @@ describe("buildEpicExportBundle", () => {
 
   test("handles epic with no tasks", () => {
     const cwd = createWorkspace();
-    const domain = createDomain(cwd);
+    const { domain, db } = createDomain(cwd);
 
     const epic = domain.createEpic({ title: "Empty epic", description: "No tasks here" });
     const bundle = buildEpicExportBundle(domain, epic.id);
@@ -113,7 +113,7 @@ describe("buildEpicExportBundle", () => {
 
   test("counts mixed statuses correctly", () => {
     const cwd = createWorkspace();
-    const domain = createDomain(cwd);
+    const { domain, db } = createDomain(cwd);
 
     const epic = domain.createEpic({ title: "Status test", description: "Mixed statuses" });
     const t1 = domain.createTask({ epicId: epic.id, title: "T1", description: "D1" });
@@ -129,7 +129,7 @@ describe("buildEpicExportBundle", () => {
 
   test("includes all tasks with stable ordering", () => {
     const cwd = createWorkspace();
-    const domain = createDomain(cwd);
+    const { domain, db } = createDomain(cwd);
 
     const epic = domain.createEpic({ title: "Order test", description: "Check ordering" });
     const t1 = domain.createTask({ epicId: epic.id, title: "First", description: "A" });
@@ -145,7 +145,7 @@ describe("buildEpicExportBundle", () => {
 
   test("throws for non-existent epic", () => {
     const cwd = createWorkspace();
-    const domain = createDomain(cwd);
+    const { domain, db } = createDomain(cwd);
 
     expect(() => buildEpicExportBundle(domain, "non-existent-id")).toThrow();
   });
