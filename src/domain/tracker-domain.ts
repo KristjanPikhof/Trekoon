@@ -24,11 +24,8 @@ import {
   type SearchFieldMatch,
   type SearchNode,
   type SearchSummary,
-  type StatusCascadeBlocker,
-  type StatusCascadeChange,
   type StatusCascadePlan,
   type StatusCascadeRootKind,
-  type StatusCascadeScopeNode,
   type SubtaskRecord,
   type TaskTreeDetailed,
   type TaskRecord,
@@ -36,6 +33,11 @@ import {
   VALID_TRANSITIONS,
   type ValidStatus,
 } from "./types";
+import {
+  type CascadeDependencyTargetStatusRow,
+  type CascadePlannerReader,
+  planStatusCascade as planStatusCascadeImpl,
+} from "./cascade-planner";
 
 const DEFAULT_STATUS = "todo";
 const DEPENDENCY_GATED_STATUSES = new Set<string>(["in_progress", "done"]);
