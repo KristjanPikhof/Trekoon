@@ -1026,7 +1026,11 @@ function applyConflictTheirsResolution(db: Database, conflict: ConflictRow): voi
   });
 }
 
-function applyIncomingResolutionEvent(db: Database, event: StoredEvent): boolean {
+function applyIncomingResolutionEvent(
+  db: Database,
+  event: StoredEvent,
+  receiverScope: ConflictScope,
+): boolean {
   const parsed = parseJsonObject(event.payload);
   if (!parsed) {
     return false;
@@ -1043,7 +1047,7 @@ function applyIncomingResolutionEvent(db: Database, event: StoredEvent): boolean
     return false;
   }
 
-  const conflict = findConflictForResolutionEvent(db, event, resolutionPayload);
+  const conflict = findConflictForResolutionEvent(db, event, resolutionPayload, receiverScope);
   if (!conflict) {
     return false;
   }
