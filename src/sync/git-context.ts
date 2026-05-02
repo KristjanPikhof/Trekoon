@@ -55,52 +55,75 @@ function statKey(prefix: string, path: string): string | null {
 }
 
 /**
- * Resolve the absolute gitdir for a worktree path.
+ * Resolve the absolute gitdir + commondir for a worktree path.
  *
- * - In a normal (primary) repo, gitdir = `<worktree>/.git` (a directory).
+ * - In a normal (primary) repo, gitdir = commondir = `<worktree>/.git`.
  * - In a linked worktree, `<worktree>/.git` is a regular file containing
- *   `gitdir: <abs-or-rel-path>` and the real gitdir lives elsewhere
- *   (typically `<main-gitdir>/worktrees/<name>`).
+ *   `gitdir: <abs-or-rel-path>` pointing at `<main-gitdir>/worktrees/<name>`.
+ *   The commondir (where shared refs/heads live) is read from
+ *   `<gitdir>/commondir`, which contains a path (often relative) to the
+ *   primary `.git` directory.
  *
- * Reads the `.git` entry directly when possible (cheap, no subprocess) and
- * falls back to `git rev-parse --absolute-git-dir` only when the entry is
- * missing or unreadable. Result is memoized per worktree path because the
- * gitdir location only changes when a worktree is moved/recreated — safe to
- * pin for process lifetime in CLI usage.
+ * Reads the on-disk pointer files directly when possible (cheap, no
+ * subprocess) and falls back to `git rev-parse --absolute-git-dir
+ * --git-common-dir` only when the files are missing or unreadable. Result
+ * is memoized per worktree path because the location only changes when a
+ * worktree is moved/recreated — safe to pin for process lifetime in CLI use.
  */
-function resolveGitDir(worktreePath: string): string | null {
+function resolveGitDir(worktreePath: string): GitDirInfo {
   const cached = gitDirCache.get(worktreePath);
   if (cached !== undefined) {
     return cached;
   }
 
   const dotGit = join(worktreePath, ".git");
-  let resolved: string | null = null;
+  let gitDir: string | null = null;
 
   try {
     const stat = statSync(dotGit);
     if (stat.isDirectory()) {
-      resolved = dotGit;
+      gitDir = dotGit;
     } else if (stat.isFile()) {
-      // Linked worktree: parse the `gitdir: <path>` pointer.
       const raw: string = readFileSync(dotGit, "utf8").trim();
       const match = /^gitdir:\s*(.+)$/m.exec(raw);
       if (match) {
         const pointer: string = match[1]!.trim();
-        resolved = isAbsolute(pointer) ? pointer : resolvePath(worktreePath, pointer);
+        gitDir = isAbsolute(pointer) ? pointer : resolvePath(worktreePath, pointer);
       }
     }
   } catch {
     // Fall through to git rev-parse below.
   }
 
-  if (resolved === null) {
-    const fromGit: string | null = runGit(["rev-parse", "--absolute-git-dir"], worktreePath);
-    resolved = fromGit;
+  if (gitDir === null) {
+    gitDir = runGit(["rev-parse", "--absolute-git-dir"], worktreePath);
   }
 
-  gitDirCache.set(worktreePath, resolved);
-  return resolved;
+  let commonDir: string | null = gitDir;
+
+  if (gitDir !== null) {
+    // Linked worktrees record the shared refs location in <gitdir>/commondir.
+    // The file content is typically a path relative to the linked gitdir.
+    try {
+      const commonRaw: string = readFileSync(join(gitDir, "commondir"), "utf8").trim();
+      if (commonRaw.length > 0) {
+        commonDir = isAbsolute(commonRaw) ? commonRaw : resolvePath(gitDir, commonRaw);
+      }
+    } catch {
+      // Primary repos have no commondir file; commonDir stays === gitDir.
+    }
+  }
+
+  if (commonDir === null) {
+    commonDir = runGit(["rev-parse", "--git-common-dir"], worktreePath);
+    if (commonDir !== null && !isAbsolute(commonDir)) {
+      commonDir = resolvePath(worktreePath, commonDir);
+    }
+  }
+
+  const info: GitDirInfo = { gitDir, commonDir };
+  gitDirCache.set(worktreePath, info);
+  return info;
 }
 
 /**
