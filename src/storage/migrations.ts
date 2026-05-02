@@ -667,11 +667,20 @@ export function migrateDatabase(db: Database): void {
 
   const latestVersion: number = MIGRATIONS[MIGRATIONS.length - 1]?.version ?? 0;
 
-  // Fast path: avoid BEGIN EXCLUSIVE when schema is already current.
+  // Marker fast path: skip ALL probe queries when the persisted marker file
+  // records the latest version and is newer than the DB file. This saves the
+  // schema_migrations SELECT on warm CLI starts.
+  if (canSkipProbeViaMarker(db)) {
+    migrateBoardIdempotencyState(db);
+    return;
+  }
+
+  // Schema fast path: avoid BEGIN EXCLUSIVE when schema is already current.
   // This reduces startup lock contention while keeping the explicit
   // transactional migration path for non-current/legacy schemas.
   if (isSchemaCurrentFastPath(db, latestVersion)) {
     migrateBoardIdempotencyState(db);
+    writeMigrationVersionMarker(db, latestVersion);
     return;
   }
 
@@ -695,6 +704,9 @@ export function migrateDatabase(db: Database): void {
       recordMigration(db, migration);
     }
   });
+
+  // Persist the new version so the next cold start can skip the probe.
+  writeMigrationVersionMarker(db, latestVersion);
 }
 
 export const LATEST_MIGRATION_VERSION: number = MIGRATIONS[MIGRATIONS.length - 1]?.version ?? 0;
