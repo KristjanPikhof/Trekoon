@@ -826,14 +826,25 @@ function removeDependenciesTouchingNode(db: Database, nodeId: string): void {
   db.query("DELETE FROM dependencies WHERE source_id = ? OR depends_on_id = ?;").run(nodeId, nodeId);
 }
 
-function removeConflictsForEntityIds(db: Database, entityKind: string, entityIds: readonly string[]): void {
+function removeConflictsForEntityIds(
+  db: Database,
+  entityKind: string,
+  entityIds: readonly string[],
+  excludeConflictId?: string,
+): void {
   if (entityIds.length === 0) {
     return;
   }
   const placeholders = entityIds.map(() => "?").join(", ");
-  db.query(
-    `DELETE FROM sync_conflicts WHERE entity_kind = ? AND entity_id IN (${placeholders});`,
-  ).run(entityKind, ...entityIds);
+  if (excludeConflictId !== undefined) {
+    db.query(
+      `DELETE FROM sync_conflicts WHERE entity_kind = ? AND entity_id IN (${placeholders}) AND id != ?;`,
+    ).run(entityKind, ...entityIds, excludeConflictId);
+  } else {
+    db.query(
+      `DELETE FROM sync_conflicts WHERE entity_kind = ? AND entity_id IN (${placeholders});`,
+    ).run(entityKind, ...entityIds);
+  }
 }
 
 function removeTaskSubtree(db: Database, taskId: string): Array<{ id: string }> {
