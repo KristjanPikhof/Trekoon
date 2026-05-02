@@ -61,13 +61,12 @@ export function createMigrationBackup(options: CreateMigrationBackupOptions): Mi
   // VACUUM INTO writes a fully-consistent snapshot at a single transaction
   // boundary, including any uncommitted WAL state once the read transaction
   // is taken. This is the SQLite-recommended way to atomically clone a DB.
+  // Open read-only so we never mutate the live DB while snapshotting.
   const sourceDb = new Database(databaseFile, { readonly: true });
   let migrationVersion = 0;
-  let latestVersion = 0;
+  const latestVersion: number = LATEST_MIGRATION_VERSION;
   try {
-    const status = describeMigrations(sourceDb);
-    migrationVersion = status.currentVersion;
-    latestVersion = status.latestVersion;
+    migrationVersion = readCurrentMigrationVersionReadOnly(sourceDb);
     sourceDb.exec(`VACUUM INTO ${quoteForVacuumInto(backupPath)};`);
   } finally {
     sourceDb.close(false);
