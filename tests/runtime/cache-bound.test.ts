@@ -136,7 +136,7 @@ describe("daemon-mode cachedDatabases LRU bound", (): void => {
     reopened.close();
   });
 
-  test("eviction skips in-use handles and defers until release", (): void => {
+  test("eviction skips an in-use LRU entry and falls through to the next eligible candidate", (): void => {
     process.env.TREKOON_DAEMON_INPROCESS = "1";
 
     // Fill the cache to capacity, releasing each entry so they are eligible
@@ -150,37 +150,71 @@ describe("daemon-mode cachedDatabases LRU bound", (): void => {
     expect(cachedDatabasesSize()).toBe(CACHE_CAPACITY);
 
     // Re-borrow the LRU (oldest) entry without releasing — this represents an
-    // in-flight daemon request still using the handle.
+    // in-flight daemon request still holding the handle. A naive
+    // first-key-eviction would close it and the in-flight request would hit
+    // SQLITE_MISUSE on its next query.
     const lruWorkspace = workspaces[0];
-    if (lruWorkspace === undefined) {
+    const secondWorkspace = workspaces[1];
+    if (lruWorkspace === undefined || secondWorkspace === undefined) {
       throw new Error("workspaces array is unexpectedly empty");
     }
     const lruHandle = openTrekoonDatabase(lruWorkspace);
 
-    // Opening a 17th cwd MUST NOT close the in-use LRU handle. The handle
-    // must remain usable for the in-flight request.
+    // Opening a 17th cwd MUST NOT close the in-use LRU handle. With the LRU
+    // borrowed, eviction should fall through to the next-oldest releasable
+    // entry (the second workspace).
     const newWorkspace = createWorkspace();
-    const newHandle = openTrekoonDatabase(newWorkspace);
+    openTrekoonDatabase(newWorkspace).close();
+
+    // Cache stays at capacity because eviction found an eligible candidate.
+    expect(cachedDatabasesSize()).toBe(CACHE_CAPACITY);
 
     // The in-use handle is still functional — closing it under the borrower
     // would surface as SQLITE_MISUSE, which would throw here.
     const probe = lruHandle.db.query("SELECT COUNT(*) AS n FROM sqlite_master;").get() as { n: number };
     expect(probe.n).toBeGreaterThan(0);
 
-    // Cache temporarily grew past the cap because every entry was borrowed
-    // (15 just-released + 1 still-in-use + 1 new = 17 momentarily). Eviction
-    // could not run because the LRU was the only candidate and it was in use.
+    lruHandle.close();
+  });
+
+  test("eviction defers when ALL entries are in use; cache shrinks back after release", (): void => {
+    process.env.TREKOON_DAEMON_INPROCESS = "1";
+
+    // Fill the cache, keeping every handle borrowed (no close()).
+    const heldHandles: ReturnType<typeof openTrekoonDatabase>[] = [];
+    for (let index = 0; index < CACHE_CAPACITY; index += 1) {
+      heldHandles.push(openTrekoonDatabase(createWorkspace()));
+    }
+    expect(cachedDatabasesSize()).toBe(CACHE_CAPACITY);
+
+    // Opening a 17th cwd while every existing entry is borrowed must permit
+    // transient growth past the cap rather than close any in-use handle.
+    const newHandle = openTrekoonDatabase(createWorkspace());
     expect(cachedDatabasesSize()).toBe(CACHE_CAPACITY + 1);
 
-    // Release the in-use LRU. The next release should re-run eviction and
-    // bring the cache back under the cap.
-    lruHandle.close();
-    newHandle.close();
+    // Every previously-borrowed handle is still alive and queryable.
+    for (const handle of heldHandles) {
+      const probe = handle.db.query("SELECT COUNT(*) AS n FROM sqlite_master;").get() as { n: number };
+      expect(probe.n).toBeGreaterThan(0);
+    }
 
-    // Touch a fresh workspace to drive an eviction pass and confirm the
-    // previously-in-use entry is now eligible for normal eviction.
-    openTrekoonDatabase(createWorkspace()).close();
+    // Releasing one borrowed handle re-runs eviction and brings the cache
+    // back under the cap.
+    const firstHeld = heldHandles[0];
+    if (firstHeld === undefined) {
+      throw new Error("heldHandles array is unexpectedly empty");
+    }
+    firstHeld.close();
     expect(cachedDatabasesSize()).toBeLessThanOrEqual(CACHE_CAPACITY);
+
+    // Cleanup: release remaining borrowed handles.
+    for (let index = 1; index < heldHandles.length; index += 1) {
+      const handle = heldHandles[index];
+      if (handle !== undefined) {
+        handle.close();
+      }
+    }
+    newHandle.close();
   });
 });
 
