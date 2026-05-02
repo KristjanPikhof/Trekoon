@@ -2057,6 +2057,12 @@ function appendResolutionEvent(
       field: conflict.field_name,
       resolution,
       value: resolvedValue,
+      // Embed the resolved row's scope so receivers can audit which
+      // worktree/branch performed the resolution. Receivers still
+      // intersect against their OWN active scope when looking up the
+      // local row to mutate.
+      worktree_path: conflict.worktree_path,
+      current_branch: conflict.current_branch,
     }),
     gitBranch,
     gitHead,
