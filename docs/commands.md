@@ -16,7 +16,7 @@ the quickest way to get started, read [Quickstart](quickstart.md) first.
 - `trekoon subtask <create|create-many|list|search|replace|update|delete>`
 - `trekoon dep <add|add-many|remove|list|reverse>`
 - `trekoon events prune [--dry-run] [--archive] [--retention-days <n>]`
-- `trekoon migrate <status|rollback> [--to-version <n>]`
+- `trekoon migrate <status|rollback|backup> [--to-version <n>]`
 - `trekoon sync status [--from <branch>]`
 - `trekoon sync pull --from <branch>`
 - `trekoon sync resolve <conflict-id> --use ours|theirs [--dry-run]`
