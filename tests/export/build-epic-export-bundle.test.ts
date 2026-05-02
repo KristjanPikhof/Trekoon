@@ -45,8 +45,7 @@ afterEach((): void => {
 describe("buildEpicExportBundle", () => {
   test("exports an epic with tasks and subtasks", () => {
     const cwd = createWorkspace();
-    const { domain, db, seed } = createDomain(cwd);
-    void db;
+    const { domain, seed } = createDomain(cwd);
 
     const { epic, sub1 } = seed((d) => {
       const createdEpic = d.createEpic({ title: "Export test", description: "A test epic" });
@@ -71,8 +70,7 @@ describe("buildEpicExportBundle", () => {
 
   test("classifies internal dependencies correctly", () => {
     const cwd = createWorkspace();
-    const { domain, db, seed } = createDomain(cwd);
-    void db;
+    const { domain, seed } = createDomain(cwd);
 
     const { epic, task1, task2 } = seed((d) => {
       const createdEpic = d.createEpic({ title: "Dep test", description: "Test deps" });
@@ -95,8 +93,7 @@ describe("buildEpicExportBundle", () => {
 
   test("classifies external dependencies and resolves stubs", () => {
     const cwd = createWorkspace();
-    const { domain, db, seed } = createDomain(cwd);
-    void db;
+    const { domain, seed } = createDomain(cwd);
 
     const { epicA, epicB, taskB } = seed((d) => {
       const createdEpicA = d.createEpic({ title: "Epic A", description: "First epic" });
@@ -121,8 +118,7 @@ describe("buildEpicExportBundle", () => {
 
   test("handles epic with no tasks", () => {
     const cwd = createWorkspace();
-    const { domain, db, seed } = createDomain(cwd);
-    void db;
+    const { domain, seed } = createDomain(cwd);
 
     const epic = seed((d) => d.createEpic({ title: "Empty epic", description: "No tasks here" }));
     const bundle = buildEpicExportBundle(domain, epic.id);
@@ -135,8 +131,7 @@ describe("buildEpicExportBundle", () => {
 
   test("counts mixed statuses correctly", () => {
     const cwd = createWorkspace();
-    const { domain, db, seed } = createDomain(cwd);
-    void db;
+    const { domain, seed } = createDomain(cwd);
 
     const epic = seed((d) => {
       const createdEpic = d.createEpic({ title: "Status test", description: "Mixed statuses" });
@@ -155,8 +150,7 @@ describe("buildEpicExportBundle", () => {
 
   test("includes all tasks with stable ordering", () => {
     const cwd = createWorkspace();
-    const { domain, db, seed } = createDomain(cwd);
-    void db;
+    const { domain, seed } = createDomain(cwd);
 
     const { epic, t1, t2 } = seed((d) => {
       const createdEpic = d.createEpic({ title: "Order test", description: "Check ordering" });
