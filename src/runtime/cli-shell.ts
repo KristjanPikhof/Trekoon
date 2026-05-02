@@ -432,3 +432,33 @@ export async function executeShell(parsed: ParsedInvocation, cwd: string = proce
 
   return withStorageRootDiagnostics(result, cwd);
 }
+
+async function runServe(context: CliContext): Promise<CliResult> {
+  // Lazy import keeps node:net out of the normal one-shot dispatch path.
+  const { runDaemonForeground, resolveDaemonSocketPath } = await import("./daemon");
+  const socketPath: string = resolveDaemonSocketPath(context.cwd);
+
+  try {
+    await runDaemonForeground({ cwd: context.cwd, silent: context.mode !== "human" });
+    return okResult({
+      command: "serve",
+      human: `Daemon stopped (socket: ${socketPath})`,
+      data: {
+        socketPath,
+        status: "stopped",
+        experimental: true,
+      },
+    });
+  } catch (error: unknown) {
+    const message: string = error instanceof Error ? error.message : String(error);
+    return failResult({
+      command: "serve",
+      human: `Daemon failed to start: ${message}`,
+      data: { socketPath },
+      error: {
+        code: "daemon_start_failed",
+        message,
+      },
+    });
+  }
+}
