@@ -58,7 +58,8 @@ creating the graph.
 - **Dependency edge** = strict prerequisite only (do not add "nice to have"
   dependencies).
 
-All entities start in `todo`. See the status machine in the main SKILL.md.
+All entities start in `todo`. See `reference/status-machine.md` for the
+canonical transition table.
 
 Plan implications:
 - Never set initial status to anything other than `todo` in create commands.
