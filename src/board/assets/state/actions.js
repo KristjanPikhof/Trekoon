@@ -348,13 +348,21 @@ export function createBoardActions(options) {
       });
     },
     closeTask() {
-      transition({ selectedTaskId: null, selectedSubtaskId: null, taskModalOpen: false });
+      transition({
+        selectedTaskId: null,
+        selectedSubtaskId: null,
+        taskModalOpen: false,
+        subtaskModalOpen: false,
+      });
     },
     openSubtask(subtaskId) {
-      transition({ selectedSubtaskId: subtaskId || null }, { persistState: false });
+      transition(
+        { selectedSubtaskId: subtaskId || null, subtaskModalOpen: Boolean(subtaskId) },
+        { persistState: false },
+      );
     },
     closeSubtask() {
-      transition({ selectedSubtaskId: null }, { persistState: false });
+      transition({ selectedSubtaskId: null, subtaskModalOpen: false }, { persistState: false });
     },
     submitTaskForm(taskId, formData) {
       const updates = {
