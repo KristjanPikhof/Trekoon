@@ -2,208 +2,58 @@
 
 All notable changes to Trekoon are documented in this file.
 
-## 0.4.2 — Unreleased
-
-> `package.json` is still at `0.4.1`. The version bump will land in a
-> separate release commit so changelog and publish happen atomically.
+## 0.4.2 - Unreleased
 
 ### Experimental
 
-- `trekoon serve` daemon. Runs the CLI as a long-lived process listening
-  on a Unix-domain socket inside `.trekoon/daemon.sock` and reuses the
-  held-open SQLite connection across requests. Activate the client side
-  with `TREKOON_DAEMON=1` or the global `--daemon` flag; the client
-  transparently falls back to the in-process one-shot CLI when no daemon
-  is reachable. Default behavior is unchanged. Socket file mode `0o600`
-  with parent dir forced to `0o700`. Per `bench/daemon-session.ts`
-  acceptance signal: daemon median < 10 ms, cold one-shot median > 50 ms.
+- Add `trekoon serve`, an opt-in daemon that serves CLI calls over a
+  Unix-domain socket and reuses the open SQLite connection. Enable it with
+  `TREKOON_DAEMON=1` or `--daemon`; normal one-shot CLI behavior stays the
+  default. The socket is owner-only (`0o600`) in an owner-only `.trekoon`
+  directory (`0o700`).
 
 ### Added
 
-- `trekoon task claim <id> --owner <owner>` and `trekoon subtask claim <id>
-  --owner <owner>` subcommands. Backed by a SQL compare-and-swap UPDATE so two
-  concurrent claim calls on the same task yield exactly one `claimed: true`.
-  Predicate: `status IN ('todo','blocked') AND (owner IS NULL OR owner = ?)`.
-  Response includes `claimed`, `currentOwner`, `currentStatus`, and the full
-  entity record on success.
-
-- SSE board updates via `GET /api/snapshot/stream`, fed by a per-server
-  event bus. Two browsers see each other's writes without polling.
-- WAL watcher republishes external CLI writes through the same bus, so
-  mutations from another shell reach the board in about a second.
-- `If-Match` header on `PATCH` epic, task, subtask, and cascade routes.
-  Stale writes get 409 with `currentUpdatedAt`; missing header still
-  works.
-- `--reveal-token` flag on `trekoon board open`. Token is now redacted
-  from default machine output.
-- `subtaskModalOpen` flag on the board store, matching the
-  `taskModalOpen` pattern from 0.4.1.
-- Per-mutation inverse-delta rollback. Failed mutations revert their own
-  patch instead of replacing the whole snapshot, so concurrent
-  server-pushed deltas survive.
-- Stable `mutationId` on each enqueued mutation, so retries clear the
-  failure notice even with a new closure.
-- `createBoardStateMemo` for reference-stable derived state.
-  `selectVisibleEpics` re-evaluates within an hour so the 24h done-grace
-  cutoff doesn't go stale on long-open pages.
-- `dragFeedback` store field keeps drop classes across rerenders.
-- Optional cache map on `getManagedControls`, removing the O(n²) walk in
-  `preserveFormState`.
-- Lazy overlay focus trap (`runtime/focus-trap.js`) with attach/detach.
-- Canonical status-machine reference at
-  `.agents/skills/trekoon/reference/status-machine.md` and a sync
-  reference at `reference/sync.md`.
-- `trekoon migrate backup` subcommand snapshots `.trekoon/trekoon.db` to
-  a timestamped sibling file (e.g. `trekoon.db.backup-<ISO8601>`) using
-  SQLite `VACUUM INTO`. Read-only on the source, returns
-  `backupPath`/`bytes`/`migrationVersion` for machine consumers.
-- `migration_down_unsupported` error code on irreversible v4-v6
-  rollbacks. The error message points at `trekoon migrate backup` so
-  operators take a snapshot before any manual recovery.
+- Add atomic `task claim` and `subtask claim` commands for parallel agents.
+  Claims set `status=in_progress` and `owner` with SQL compare-and-swap, so
+  only one caller wins a race.
+- Add live board updates through `/api/snapshot/stream`. Board tabs now receive
+  updates from other tabs, shells, and worktrees without polling.
+- Add `If-Match` support to board PATCH routes. Stale writes return `409`
+  with `currentUpdatedAt`; clients that omit the header still work.
+- Add `trekoon migrate backup [--retain <n>]` for read-only SQLite snapshots
+  before migration recovery.
+- Add a canonical machine-visible error-code registry in the machine contract
+  docs.
 
 ### Changed
 
-- Board HTML is auth-gated. Unauthenticated `GET /` returns 401 with no
-  snapshot or token in the body; the client fetches `/api/snapshot`
-  after auth.
-- `dropTaskStatus` no longer mutates selection or modal state. Dragging
-  with another task modal open keeps the existing selection.
-- Hash deep links restore `taskModalOpen` and `subtaskModalOpen` when
-  the matching params are present.
-- `SKILL.md` rewritten as a lean router (under 250 LOC). Execution loop,
-  update, and read policies moved to `reference/execution.md`. Creation
-  and search policies moved to `reference/planning.md`. Sync flows moved
-  to `reference/sync.md`.
-- Skill recovery rule for `status_transition_invalid` and
-  `dependency_blocked` now names an explicit command sequence instead
-  of "same error twice, ask user".
-- Spawn-teammate template requires
-  `trekoon --toon task update <id> --status in_progress --owner <name>`
-  before each task.
+- Auth-gate board HTML. Unauthenticated requests no longer receive the board
+  token or inline snapshot, and `board open` redacts tokens unless
+  `--reveal-token` is passed.
+- Make `task done` a single atomic transition to `done`, with one
+  `task.updated` event and the same dependency gating used by claim/update.
+- Scope sync conflicts by worktree and branch so resolving a conflict in one
+  worktree does not hide a peer's conflict.
+- Prefer the active epic in `suggest` without loading every epic, and fall back
+  to the most recently updated todo epic.
+- Move the Trekoon skill into a smaller router with deeper execution,
+  planning, sync, and status-machine references.
 
 ### Fixed
 
-- Board token and snapshot no longer disclosed in unauthenticated HTML
-  or in default `board open` machine output.
-- Drag feedback classes survive rerenders.
-- Focus trap only listens while an overlay is open; Tab outside reaches
-  the browser again.
-- `escapeHtml` covers all five HTML-significant characters.
-- `selectVisibleEpics` memo no longer caches stale results across hour
-  boundaries.
-- Daemon server idle timeout disabled so the process does not exit
-  between infrequent calls.
-- Daemon transport no longer retries a request after a successful write,
-  preventing duplicate mutations on socket disconnect mid-response.
-- `task update --append` and `task update --status` now run the same
-  dependency check as `task done`; blocked-by-unresolved-dep tasks
-  cannot be silently advanced via update.
-- Stack traces are redacted from daemon error envelopes and log output
-  before they can leak filesystem paths or secret-bearing strings.
-- Sync pull processes events in chunked per-batch transactions, avoiding
-  SQLite variable-limit errors on large pulls.
-
-### Security and hardening (cr-expert remediation)
-
-- **Dependency gating on `task claim` and `subtask claim`.** Both atomic
-  claim paths now run the same dependency check `task done` uses, so a
-  blocked-by-unresolved-dep task can no longer be flipped into
-  `in_progress` via claim. Failures return
-  `error.code: dependency_blocked` with the unresolved dependency list,
-  and the row is left untouched (atomic rollback).
-- **Atomic `task done` enforces dependency gating.**
-  `markTaskDoneAtomically` now calls
-  `assertNoUnresolvedDependenciesForStatusTransition` before the direct
-  UPDATE and uses a positive allow-list on the source status
-  (`todo|blocked|in_progress`) so future terminal statuses can't bypass
-  the check.
-- **Centralized `DEPENDENCY_GATED_STATUSES`** in
-  `src/domain/dependency-rules.ts`. Cascade planner and tracker domain
-  share one source of truth instead of duplicating the constant.
-- **Singular `createEpic` / `createTask` / `createSubtask`** now run the
-  same `assertInTransaction` guard as the batch creators, so calling
-  them outside a `writeTransaction` raises `invalid_state` immediately
-  instead of corrupting event ordering.
-- **`resolveGitContext` moved out of the SQLite write lock.**
-  `withTransactionEventContext(db, git, fn)` accepts a pre-resolved
-  `ResolvedGitContext`, so cold-cache git invocations no longer
-  serialize parallel writers behind `BEGIN IMMEDIATE`.
-- **`isCursorStale` scopes `MIN(created_at)` per branch.** Deep history
-  on one branch no longer triggers false-stale detection on another.
-- **`sync_conflicts` is scoped per worktree + branch.** Migration `0011`
-  adds `worktree_path` and `current_branch` columns; insert / list /
-  resolve / cleanup all bind by them. Cross-worktree resolves no longer
-  erase peer conflicts on the same entity.
-- **Conflict short-circuit no longer hides field conflicts on a
-  deleted local row.** `entityFieldConflict` only short-circuits when
-  the current value is defined, so an incoming non-delete event against
-  a locally-deleted row still falls through to the history walk.
-- **`git-context.ts` cache invalidates on commit advance and linked
-  worktrees.** Cache key incorporates the resolved gitdir HEAD plus the
-  branch ref tip from `commondir`. Both `gitContextCache` and
-  `gitDirCache` are now LRU-bounded (cap 16) with proper eviction.
-- **`cachedDatabases` is LRU-bounded (cap 16)** with a passive WAL
-  checkpoint and `db.close(false)` on eviction. Cached handles honor
-  the `autoMigrate` opt: a stale handle below `LATEST_MIGRATION_VERSION`
-  re-runs `migrateDatabase` before being returned.
-- **`migrate backup --retain <n>`** keeps the last `n` timestamped
-  backups (default 10); older siblings are pruned in the same call. The
-  same-millisecond collision error names the existing file so operators
-  can identify it.
-- **Migration marker uses `PRAGMA user_version` as the fingerprint.**
-  Marker payload upgraded to JSON v2 (`{version, userVersion}`); legacy
-  bare-integer markers force a probe and rewrite. `user_version` is
-  stamped inside both the migrate and rollback transactions, so the DB
-  header is authoritative. Marker-write failures during rollback unlink
-  the stale marker rather than leaving it pointing at a higher version.
-- **Daemon error envelope is sanitized.** `executeDaemonRequest` and
-  `handlePayload` now return `error.message` only — no stack frames,
-  file paths, or secret-bearing locator strings. Stacks remain on the
-  daemon's local `console.error` for operator debugging.
-- **Daemon `DaemonRequest` wire contract drops `env`.** The client no
-  longer copies `process.env` over the socket; the daemon process uses
-  the environment captured at `trekoon serve` startup. Legacy clients
-  with a stray `env` field are still accepted, but the field is
-  ignored. Equivalence note narrowed in `docs/commands.md`.
-- **Daemon umask tightened to `0o077` around `server.listen()`** so the
-  socket inode is created with mode `0o600` from inception, with no
-  TOCTOU window before the defensive `chmodSync`.
-- **`redactSensitive` covers more shapes.** `api_key`, `apikey`,
-  `api-key`, `client_secret`, `private_key`, `cookie`, `session_id`;
-  single-quoted values, tag-style `<key>val</key>`, and standalone
-  `Bearer` / `Basic` tokens now redact correctly.
-- **Board flag allow-list per subcommand.** `trekoon board <subcommand>`
-  validates flags against `FLAGS_BY_SUBCOMMAND` so unknown flags fail
-  fast on the right subcommand, replacing the previous ad-hoc ternary.
-- **Dragover memoization** uses a primitive `<status>|<kind>` key so a
-  drag staying inside one column no longer rerenders on every tick.
-- **Sync resolve `lookupOursFieldValue` parameterizes `fieldName`** as
-  a SQLite bind value (defense in depth) while still gating by
-  `SAFE_FIELD_NAME_PATTERN`.
-- **`escapeHtml` covers the apostrophe (`'`).** All five HTML-significant
-  characters (`&`, `<`, `>`, `"`, `'`) are now escaped.
-- **SSE backpressure on `/api/snapshot/stream`.** The endpoint now caps
-  per-client queued bytes (1 MB hard limit) and disconnects slow clients
-  with a `stream_error` frame `{code: "backpressure", reason}` instead of
-  letting the queue grow unbounded. Healthy clients are unaffected.
-- **`If-Match` PATCH preconditions accept weak ETags.** Quoted, bare, and
-  weak (`W/"..."`) forms are all parsed, in line with RFC 7232, so
-  conditional updates from caches that emit weak validators now match.
-- **Board route error envelopes are redacted.** Friendly route error
-  responses go through `redactSensitive` so secret-bearing query strings,
-  headers, or filesystem paths can no longer leak through 4xx/5xx
-  bodies.
-- **Board auth redirects strip the token from the URL.** Loopback
-  redirects after auth no longer carry the bearer token in a query
-  string where it could be captured by referrer headers or browser
-  history.
-- **Idempotency-key pruning is throttled.** The pre-write prune for the
-  idempotency-keys table is now rate-limited so long-running daemons do
-  not run an unbounded `DELETE` on every mutation.
-- **Stale schema marker unlinks log on failure.** Cleanup of an
-  out-of-date `schema_version` marker file now logs the unlink error
-  instead of swallowing it silently, so operators see filesystem
-  permission issues.
+- Preserve board modal state, drag feedback, form values, focus trapping, and
+  done-grace visibility across rerenders and long-open sessions.
+- Keep optimistic board rollback local to the failed mutation so unrelated
+  live updates survive failed writes.
+- Prevent dependency bypasses in `task claim`, `subtask claim`,
+  `task update --append --status`, and atomic `task done`.
+- Make sync pulls and cascade/delete replay safer on large histories, deleted
+  local rows, and descendant delete conflicts.
+- Bound daemon and board resource use: daemon request buffers, database and git
+  caches, SSE backpressure, and idempotency-key pruning no longer grow without
+  limits.
+- Redact more secret shapes from CLI, board, and daemon error output.
 
 ## 0.4.1
 
