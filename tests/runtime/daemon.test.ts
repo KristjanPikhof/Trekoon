@@ -156,6 +156,51 @@ describe("daemon dispatch", (): void => {
     expect(path).toContain(".trekoon");
   });
 
+  test("daemon error envelopes never include a stack trace", async (): Promise<void> => {
+    const workspace = createWorkspace();
+    initGitRepository(workspace);
+
+    mkdirSync(join(workspace, ".trekoon"), { recursive: true });
+    const socketPath = join(workspace, ".trekoon", "daemon.sock");
+    const handle = await startDaemonServer({ socketPath, cwd: workspace, silent: true });
+
+    try {
+      // 1. Trigger the JSON.parse-error branch of handlePayload by feeding raw
+      //    non-JSON bytes terminated by a newline directly to the socket.
+      const { connect } = await import("node:net");
+      const parseErrorReply: string = await new Promise<string>((resolve, reject): void => {
+        const socket = connect(socketPath);
+        let buffer = "";
+        socket.setEncoding("utf8");
+        socket.on("connect", (): void => {
+          socket.write("not-json\n");
+        });
+        socket.on("data", (chunk: string): void => {
+          buffer += chunk;
+        });
+        socket.on("end", (): void => resolve(buffer));
+        socket.on("error", reject);
+      });
+
+      const parseErrorEnvelope = JSON.parse(parseErrorReply.trim()) as {
+        stdout: string;
+        stderr: string;
+        exitCode: number;
+      };
+      expect(parseErrorEnvelope.exitCode).toBe(1);
+      expect(parseErrorEnvelope.stderr).toContain("payload parse error");
+      // No stack-trace line markers ("    at ..." / "(file:///...)") should
+      // appear in the wire envelope.
+      expect(parseErrorEnvelope.stderr).not.toMatch(/^\s+at\s.+/m);
+      expect(parseErrorEnvelope.stderr).not.toContain("file://");
+      expect(parseErrorEnvelope.stderr).not.toContain(".ts:");
+      // The stderr is bounded — a stack trace would be many lines.
+      expect(parseErrorEnvelope.stderr.split("\n").length).toBeLessThanOrEqual(3);
+    } finally {
+      await handle.close();
+    }
+  });
+
   test("DaemonRequest contract has no env field; older clients with env are tolerated", async (): Promise<void> => {
     // Type-level: DaemonRequest is {argv, cwd} only. Construct one and ensure
     // the in-process executor still works without env.
