@@ -96,7 +96,7 @@ describe("Error code contract", () => {
   });
 
   it("ERROR_CODES and documented codes are exactly equal (zero drift)", () => {
-    const registeredArray = [...registeredCodes].sort();
+    const registeredArray = ([...registeredCodes] as string[]).sort();
     const documentedArray = [...documentedCodes].sort();
     expect(registeredArray).toEqual(documentedArray);
   });
