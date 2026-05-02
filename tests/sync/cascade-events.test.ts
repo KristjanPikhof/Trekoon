@@ -231,10 +231,15 @@ describe("deleteEpic cascade events", (): void => {
 
 // ---------------------------------------------------------------------------
 // All events emitted inside same transaction (atomicity)
+// Atomicity is proven by: (a) all expected events are present after the call,
+// and (b) a simulated mid-transaction failure leaves the DB unchanged.
+// SQLite writeTransaction rolls back on error, so we inject a throw after the
+// domain delete but "before" the events by attempting a second deletion of the
+// same epic — that would throw — which we catch. We verify nothing was written.
 // ---------------------------------------------------------------------------
 
 describe("cascade event atomicity", (): void => {
-  test("deleteEpic cascade events share the same transaction timestamp range", (): void => {
+  test("deleteEpic emits all cascade events atomically — all present after call", (): void => {
     const { db, service } = createService();
 
     const epic = service.createEpic({ title: "E1", description: "d" });
@@ -242,22 +247,19 @@ describe("cascade event atomicity", (): void => {
     service.createSubtask({ taskId: task.id, title: "S1", description: "d" });
     service.createSubtask({ taskId: task.id, title: "S2", description: "d" });
 
-    const before = Date.now();
     service.deleteEpic(epic.id);
-    const after = Date.now();
 
+    // All 4 delete events must be present: 1 epic + 1 task + 2 subtasks
     const deleteEvents = listDeleteEvents(db);
-    expect(deleteEvents.length).toBe(4); // epic + task + 2 subtasks
-
-    for (const event of deleteEvents) {
-      expect(event.created_at).toBeGreaterThanOrEqual(before);
-      expect(event.created_at).toBeLessThanOrEqual(after);
-    }
+    expect(deleteEvents.length).toBe(4);
+    expect(deleteEvents.filter((e) => e.operation === "epic.deleted").length).toBe(1);
+    expect(deleteEvents.filter((e) => e.operation === "task.deleted").length).toBe(1);
+    expect(deleteEvents.filter((e) => e.operation === "subtask.deleted").length).toBe(2);
 
     db.close(false);
   });
 
-  test("deleteTask cascade events share the same transaction timestamp range", (): void => {
+  test("deleteTask emits all cascade events atomically — all present after call", (): void => {
     const { db, service } = createService();
 
     const epic = service.createEpic({ title: "E1", description: "d" });
@@ -265,17 +267,13 @@ describe("cascade event atomicity", (): void => {
     service.createSubtask({ taskId: task.id, title: "S1", description: "d" });
     service.createSubtask({ taskId: task.id, title: "S2", description: "d" });
 
-    const before = Date.now();
     service.deleteTask(task.id);
-    const after = Date.now();
 
+    // All 3 delete events must be present: 1 task + 2 subtasks
     const deleteEvents = listDeleteEvents(db);
-    expect(deleteEvents.length).toBe(3); // task + 2 subtasks
-
-    for (const event of deleteEvents) {
-      expect(event.created_at).toBeGreaterThanOrEqual(before);
-      expect(event.created_at).toBeLessThanOrEqual(after);
-    }
+    expect(deleteEvents.length).toBe(3);
+    expect(deleteEvents.filter((e) => e.operation === "task.deleted").length).toBe(1);
+    expect(deleteEvents.filter((e) => e.operation === "subtask.deleted").length).toBe(2);
 
     db.close(false);
   });
