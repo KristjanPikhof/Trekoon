@@ -133,6 +133,57 @@ const BOARD_IDEMPOTENCY_RETENTION_INDEX_DOWN_STATEMENTS: readonly string[] = [
   "DROP INDEX IF EXISTS idx_board_idempotency_state_created_at;",
 ];
 
+const SYNC_CONFLICTS_SCOPE_DOWN_STATEMENTS: readonly string[] = [
+  "DROP INDEX IF EXISTS idx_sync_conflicts_scope_entity;",
+  "DROP INDEX IF EXISTS idx_sync_conflicts_scope_resolution;",
+];
+
+function migrateSyncConflictsScope(db: Database): void {
+  if (!tableExists(db, "sync_conflicts")) {
+    return;
+  }
+
+  if (!tableHasColumn(db, "sync_conflicts", "worktree_path")) {
+    db.exec("ALTER TABLE sync_conflicts ADD COLUMN worktree_path TEXT NOT NULL DEFAULT '';");
+  }
+
+  if (!tableHasColumn(db, "sync_conflicts", "current_branch")) {
+    db.exec("ALTER TABLE sync_conflicts ADD COLUMN current_branch TEXT NOT NULL DEFAULT '';");
+  }
+
+  // Backfill legacy rows from the most-recent git_context entry so existing
+  // pending conflicts remain reachable to the current worktree. Pre-existing
+  // rows from peer worktrees (rare in practice — pre-fix the bug erased
+  // them anyway) end up scoped to the current worktree's branch; this is a
+  // best-effort migration since we have no historical context to recover.
+  db.exec(`
+    UPDATE sync_conflicts
+    SET worktree_path = COALESCE(
+      NULLIF(worktree_path, ''),
+      (SELECT worktree_path FROM git_context ORDER BY updated_at DESC LIMIT 1),
+      ''
+    )
+    WHERE worktree_path IS NULL OR worktree_path = '';
+  `);
+
+  db.exec(`
+    UPDATE sync_conflicts
+    SET current_branch = COALESCE(
+      NULLIF(current_branch, ''),
+      (SELECT branch_name FROM git_context ORDER BY updated_at DESC LIMIT 1),
+      ''
+    )
+    WHERE current_branch IS NULL OR current_branch = '';
+  `);
+
+  db.exec(
+    "CREATE INDEX IF NOT EXISTS idx_sync_conflicts_scope_entity ON sync_conflicts(worktree_path, current_branch, entity_kind, entity_id);",
+  );
+  db.exec(
+    "CREATE INDEX IF NOT EXISTS idx_sync_conflicts_scope_resolution ON sync_conflicts(worktree_path, current_branch, resolution);",
+  );
+}
+
 function tableHasColumn(db: Database, tableName: string, columnName: string): boolean {
   const columns = db.query(`PRAGMA table_info(${tableName});`).all() as Array<{ name: string }>;
   return columns.some((column) => column.name === columnName);
