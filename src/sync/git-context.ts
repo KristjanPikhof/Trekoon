@@ -95,6 +95,7 @@ function statKey(prefix: string, path: string): string | null {
 function resolveGitDir(worktreePath: string): GitDirInfo {
   const cached = gitDirCache.get(worktreePath);
   if (cached !== undefined) {
+    touchEntry(gitDirCache, worktreePath, cached);
     return cached;
   }
 
