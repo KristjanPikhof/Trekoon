@@ -59,19 +59,21 @@ export async function runMigrate(context: CliContext): Promise<CliResult> {
     return usage("Missing migrate subcommand.");
   }
 
-  const missingOption = readMissingOptionValue(parsed.missingOptionValues, "to-version");
-  if (missingOption !== undefined) {
-    return failResult({
-      command: "migrate",
-      human: `Option --${missingOption} requires a value.`,
-      data: {
-        option: missingOption,
-      },
-      error: {
-        code: "invalid_input",
-        message: `Option --${missingOption} requires a value.`,
-      },
-    });
+  for (const optionName of ["to-version", "retain"] as const) {
+    const missingOption = readMissingOptionValue(parsed.missingOptionValues, optionName);
+    if (missingOption !== undefined) {
+      return failResult({
+        command: "migrate",
+        human: `Option --${missingOption} requires a value.`,
+        data: {
+          option: missingOption,
+        },
+        error: {
+          code: "invalid_input",
+          message: `Option --${missingOption} requires a value.`,
+        },
+      });
+    }
   }
 
   // The backup subcommand never opens the live DB through the standard
