@@ -58,6 +58,7 @@ function mockGitContext(workspace: string, branchName: string): void {
     }),
     persistGitContext: () => undefined,
   }));
+  setConflictScope(workspace, branchName);
 }
 
 // ---------------------------------------------------------------------------
