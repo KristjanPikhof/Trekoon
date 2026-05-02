@@ -173,7 +173,7 @@ describe("board server auth", (): void => {
 
       expect(redirect.status).toBe(302);
       expect(redirect.headers.get("location")).toBe("/nested/path");
-      expect(redirect.headers.get("location") ?? "").not.toStartWith("//");
+      expect((redirect.headers.get("location") ?? "").startsWith("//")).toBe(false);
       expect(redirect.headers.get("referrer-policy")).toBe("no-referrer");
     } finally {
       boardServer.stop();
