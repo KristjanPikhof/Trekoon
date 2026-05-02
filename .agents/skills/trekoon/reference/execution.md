@@ -1,9 +1,9 @@
 # Execution Reference
 
 **You are an orchestrator.** Execute work from Trekoon, not markdown plan files.
-Spawn and coordinate sub-agents based on the task dependency graph and subsystem
-grouping so independent lanes run in parallel and dependent lanes run
-sequentially.
+Prefer offloading non-trivial independent execution lanes to subagents when the
+harness supports it. The parent agent should preserve its context window for
+orchestration, dependency decisions, user communication, and final synthesis.
 
 **Execute mode contract:** execution is complete only when the epic is marked
 `done`, all remaining work is blocked with recorded reasons, or user input is
@@ -19,8 +19,9 @@ Use the lightest shape that still preserves momentum:
 - **Single-agent execution**: one ready task, narrow scope, or strongly coupled
   work. Use the `session → claim → work → task done → repeat` loop from
   `SKILL.md`.
-- **Orchestrated execution**: multiple ready tasks across separable lanes. This
-  file focuses on that path.
+- **Orchestrated execution**: multiple ready tasks across separable lanes. Use
+  the universal primitives in `reference/harness-primitives.md`; this file
+  defines the Trekoon-specific lane and completion protocol.
 
 Do not stop at status reporting when ready work exists.
 
@@ -79,15 +80,32 @@ trekoon --toon epic update <epic-id> --status in_progress
 This must happen once, immediately after building the execution graph. If
 execution is interrupted, the epic is at least `in_progress` rather than `todo`.
 
-## Dispatch sub-agents
+## Delegate execution lanes
 
-For each parallel lane group, spawn a sub-agent with a prompt like:
+For each non-trivial parallel lane group, ask the harness to spawn a subagent
+for a bounded Trekoon lane. Use the current harness's native mechanism when it
+is obvious; otherwise use natural-language delegation such as "spawn a
+write-capable subagent for this Trekoon execution lane."
+
+Use local todo/task tools in the parent session as a live progress display for
+the user, but keep Trekoon as the durable record.
+
+Prompt each lane subagent with this shape:
 
 ```
-Execute these Trekoon tasks IN ORDER unless task description says parallel
-subtasks:
+Spawn or act as a write-capable subagent for this Trekoon execution lane.
+
+Epic: <epic-id>
+Lane owner: <lane-name>
+Execute these Trekoon tasks IN ORDER unless task descriptions say parallel
+subtasks are safe:
 - Task <id>: <title>
 - Task <id>: <title>
+
+Scope:
+- Target files: <paths from task descriptions>
+- Read first: <paths/patterns to inspect before editing>
+- Do not touch: <paths owned by other lanes>
 
 Before starting each task:
 - claim and assign owner:
@@ -99,6 +117,8 @@ While executing:
 - complete required subtasks, update subtask statuses
 - append meaningful progress notes (do not rewrite the task description)
 - respect the status machine: todo -> in_progress -> done (never skip)
+- assume other agents may be editing unrelated files; do not revert unrelated
+  changes
 
 On completion:
 - append final verification evidence
@@ -106,6 +126,8 @@ On completion:
   (task done auto-transitions from todo/blocked through in_progress)
 - read the response: it includes unblocked downstream tasks and open
   subtask warnings — report these back
+- for non-trivial code changes, report whether a review agent/skill was run or
+  why review remains a gap
 
 If blocked:
 - append blocker reason, dependency id, and exact failing command/output
@@ -115,8 +137,15 @@ Use --compact to reduce output noise:
   trekoon --toon --compact task show <id>
 
 Only create branches, commits, or PRs if the user explicitly requested them and
-the current harness policy allows it. Always report files changed, verification
-results, and blockers.
+the current harness policy allows it.
+
+Final report:
+- Tasks completed
+- Files changed
+- Checks run and results
+- Review result or review gap
+- Trekoon task done response: unblocked, warning/openSubtaskIds, next
+- Blockers, if any
 ```
 
 ## Use task done response for orchestration
@@ -161,8 +190,14 @@ All checks must pass before marking the epic complete:
 
 ### Code review
 
-Run your code-review command/flow. Fix issues before proceeding. Poor DX/UX is
-a bug.
+For non-trivial implementation work, run a separate review pass before closing
+the task or epic. Prefer a specialized code-review agent or relevant review
+skill when available. The reviewer should inspect the actual diff and focus on
+correctness, behavioral regressions, missing tests, security, reliability,
+performance, and integration risks.
+
+For tiny documentation or mechanical changes, a separate review agent is
+optional. Still run the relevant check and record what was verified.
 
 ### Automated tests
 
@@ -186,10 +221,11 @@ inconsistent behavior, rough edges. Fix inline or document for follow-up.
 
 ### Record evidence
 
-Append verification results to Trekoon as progress notes:
+Append verification and review results to Trekoon as progress notes:
 
 ```bash
 trekoon --toon task update <task-id> --append "All 358 tests pass, lint clean"
+trekoon --toon task update <task-id> --append "Review: no blocking findings"
 ```
 
 ### Final progress check
