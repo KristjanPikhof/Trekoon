@@ -63,7 +63,7 @@ describe("buildEpicExportBundle", () => {
     const epic = domain.createEpic({ title: "Dep test", description: "Test deps" });
     const task1 = domain.createTask({ epicId: epic.id, title: "Task A", description: "First" });
     const task2 = domain.createTask({ epicId: epic.id, title: "Task B", description: "Second" });
-    domain.addDependency(task2.id, task1.id);
+    writeTransaction(db, () => domain.addDependency(task2.id, task1.id));
 
     const bundle = buildEpicExportBundle(domain, epic.id);
 
