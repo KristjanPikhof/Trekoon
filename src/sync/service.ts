@@ -1600,7 +1600,7 @@ export function syncStatus(cwd: string, sourceBranch: string): SyncStatusSummary
       sourceBranch,
       ahead: countAhead(storage.db, git.branchName, sourceBranch),
       behind: onSourceBranch ? 0 : countBranchEventsSince(storage.db, sourceBranch, cursorToken),
-      pendingConflicts: countPendingConflicts(storage.db),
+      pendingConflicts: countPendingConflicts(storage.db, scopeFromGitContext(git)),
       sameBranch: onSourceBranch,
       git,
     };
