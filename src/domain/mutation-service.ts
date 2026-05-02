@@ -35,6 +35,42 @@ import {
 } from "./types";
 
 /**
+ * Local mirror of `assertNonEmpty` from tracker-domain (which is
+ * file-local). Used by the *WithIfMatch CAS variants which build their
+ * UPDATE row directly rather than going through `domain.updateX`, so they
+ * must enforce the same non-empty-string contract on caller-provided
+ * fields.
+ */
+function assertNonEmptyField(field: string, value: string): string {
+  const normalized = value.trim();
+  if (!normalized) {
+    throw new DomainError({
+      code: "invalid_input",
+      message: `${field} must be a non-empty string`,
+      details: { field },
+    });
+  }
+  return normalized;
+}
+
+/**
+ * Local mirror of `normalizeOwner` from tracker-domain. Trims string
+ * owners, treats blank-after-trim as `null` (clears the owner), passes
+ * an explicit `null` through unchanged.
+ */
+function normalizeOwnerInput(owner: string | null | undefined): string | null {
+  if (owner === undefined || owner === null) {
+    return null;
+  }
+  const trimmed = owner.trim();
+  return trimmed.length === 0 ? null : trimmed;
+}
+
+const assertEpicFieldNonEmpty = assertNonEmptyField;
+const assertTaskFieldNonEmpty = assertNonEmptyField;
+const assertSubtaskFieldNonEmpty = assertNonEmptyField;
+
+/**
  * Thrown by the *WithIfMatch CAS variants when the supplied `If-Match`
  * `updatedAt` does not match the row currently in the database.
  *
