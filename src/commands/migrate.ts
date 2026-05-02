@@ -85,14 +85,46 @@ export async function runMigrate(context: CliContext): Promise<CliResult> {
       return unknownOptionResult("migrate.backup", unknown);
     }
 
+    const retainRaw: string | undefined = readOption(parsed.options, "retain");
+    let retain: number = DEFAULT_BACKUP_RETENTION;
+    if (retainRaw !== undefined) {
+      if (!/^\d+$/.test(retainRaw)) {
+        return failResult({
+          command: "migrate.backup",
+          human: "--retain must be a positive integer.",
+          data: { option: "retain" },
+          error: {
+            code: "invalid_input",
+            message: "--retain must be a positive integer.",
+          },
+        });
+      }
+
+      const parsedRetain: number = Number.parseInt(retainRaw, 10);
+      if (parsedRetain < 1) {
+        return failResult({
+          command: "migrate.backup",
+          human: "--retain must be at least 1 (the new backup itself).",
+          data: { option: "retain" },
+          error: {
+            code: "invalid_input",
+            message: "--retain must be at least 1 (the new backup itself).",
+          },
+        });
+      }
+
+      retain = parsedRetain;
+    }
+
     try {
-      const result = createMigrationBackup({ cwd: context.cwd });
+      const result = createMigrationBackup({ cwd: context.cwd, retain });
       return okResult({
         command: "migrate.backup",
         human: [
           `Backed up Trekoon database to ${result.backupPath}`,
           `Bytes: ${result.bytes}`,
           `Schema version at backup: ${result.migrationVersion} of ${result.latestVersion}`,
+          `Retained backups: ${result.retainedCount} (pruned ${result.prunedPaths.length})`,
         ].join("\n"),
         data: {
           backupPath: result.backupPath,
@@ -100,6 +132,9 @@ export async function runMigrate(context: CliContext): Promise<CliResult> {
           migrationVersion: result.migrationVersion,
           latestVersion: result.latestVersion,
           timestamp: result.timestamp,
+          retain,
+          retainedCount: result.retainedCount,
+          prunedPaths: result.prunedPaths,
         },
       });
     } catch (error: unknown) {
