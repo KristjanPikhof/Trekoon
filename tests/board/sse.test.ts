@@ -244,59 +244,58 @@ describe("board SSE snapshot stream", (): void => {
     }
   });
 
-  test("unsubscribes a slow client and emits an error frame when queued bytes pass the 1MB hard cap", async (): Promise<void> => {
+  test("flushes a pending full snapshot on quiet-period drain without losing sparse deltas", async (): Promise<void> => {
     const cwd: string = createWorkspace();
     prepareBoardAssets(cwd);
     const storage = openTrekoonDatabase(cwd);
     const eventBus = createBoardEventBus();
 
     try {
+      const mutations = new MutationService(storage.db, cwd);
+      const epic = mutations.createEpic({ title: "SSE backpressure epic", description: "seed" });
+      const task = mutations.createTask({ epicId: epic.id, title: "Task before", description: "seed" });
+      const subtask = mutations.createSubtask({ taskId: task.id, title: "Subtask before", description: "seed" });
       const handler = createBoardApiHandler({
         db: storage.db,
         cwd,
-        token: "hard-cap-token",
+        token: "quiet-drain-token",
         eventBus,
       });
       const response = await handler(
-        new Request("http://board.test/api/snapshot/stream?token=hard-cap-token"),
+        new Request("http://board.test/api/snapshot/stream?token=quiet-drain-token"),
       );
       expect(response.status).toBe(200);
       const body = response.body as ReadableStream<Uint8Array>;
 
       expect(eventBus.subscriberCount).toBe(1);
 
-      // First delta is so large its single enqueue pushes the queue past the
-      // 1MB hard cap on its own. The next enqueue (heartbeat, second delta)
-      // will see queuedBytes >= SSE_MAX_QUEUED_BYTES and tear the stream
-      // down. We trigger that via a second publish so the test runs
-      // immediately rather than waiting on the heartbeat timer.
-      const oversizedFiller = "x".repeat(1_500_000);
-      eventBus.publishSnapshotDelta({ filler: oversizedFiller, kind: "first" });
-      // Second publish: queuedBytes is now ≥ 1MB, so handleSnapshotDelta
-      // calls closeWithError → cleanupTimers → unsubscribe.
-      eventBus.publishSnapshotDelta({ filler: "x", kind: "trip" });
+      const taskPatch = await handler(new Request(`http://board.test/api/tasks/${encodeURIComponent(task.id)}?token=quiet-drain-token`, {
+        method: "PATCH",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ title: "Task after" }),
+      }));
+      expect(taskPatch.status).toBe(200);
+      const subtaskPatch = await handler(new Request(`http://board.test/api/subtasks/${encodeURIComponent(subtask.id)}?token=quiet-drain-token`, {
+        method: "PATCH",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ title: "Subtask after" }),
+      }));
+      expect(subtaskPatch.status).toBe(200);
 
-      expect(eventBus.subscriberCount).toBe(0);
-
-      // The error frame is emitted before the close. Reading it off the
-      // stream should yield the JSON payload our route formats.
       const reader = body.getReader();
-      const decoder = new TextDecoder();
-      let combined = "";
-      // Read until done or we see the stream_error event.
-      // eslint-disable-next-line no-constant-condition
-      while (true) {
-        const { value, done } = await reader.read();
-        if (done) {
-          break;
-        }
-        combined += decoder.decode(value, { stream: true });
-        if (combined.includes("event: stream_error")) {
-          break;
-        }
-      }
-      expect(combined).toContain("event: stream_error");
-      expect(combined).toContain("\"code\":\"backpressure\"");
+      const frames = await readSseFrames(reader, 3);
+      expect(frames[0]?.event).toBe("snapshot");
+      expect(frames[1]?.event).toBe("snapshotDelta");
+      expect(frames[2]?.event).toBe("snapshot");
+
+      const snapshot = (frames[2]?.data as {
+        snapshot?: {
+          tasks?: Array<{ id?: string; title?: string }>;
+          subtasks?: Array<{ id?: string; title?: string }>;
+        };
+      }).snapshot;
+      expect(snapshot?.tasks?.find((entry) => entry.id === task.id)?.title).toBe("Task after");
+      expect(snapshot?.subtasks?.find((entry) => entry.id === subtask.id)?.title).toBe("Subtask after");
       await reader.cancel().catch(() => {});
     } finally {
       eventBus.close();
