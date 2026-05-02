@@ -45,12 +45,16 @@ afterEach((): void => {
 describe("buildEpicExportBundle", () => {
   test("exports an epic with tasks and subtasks", () => {
     const cwd = createWorkspace();
-    const { domain, db } = createDomain(cwd);
+    const { domain, db, seed } = createDomain(cwd);
+    void db;
 
-    const epic = domain.createEpic({ title: "Export test", description: "A test epic" });
-    const task1 = domain.createTask({ epicId: epic.id, title: "Task one", description: "First task" });
-    domain.createTask({ epicId: epic.id, title: "Task two", description: "Second task" });
-    const sub1 = domain.createSubtask({ taskId: task1.id, title: "Sub one", description: "First subtask" });
+    const { epic, sub1 } = seed((d) => {
+      const createdEpic = d.createEpic({ title: "Export test", description: "A test epic" });
+      const task1 = d.createTask({ epicId: createdEpic.id, title: "Task one", description: "First task" });
+      d.createTask({ epicId: createdEpic.id, title: "Task two", description: "Second task" });
+      const createdSub1 = d.createSubtask({ taskId: task1.id, title: "Sub one", description: "First subtask" });
+      return { epic: createdEpic, sub1: createdSub1 };
+    });
 
     const bundle = buildEpicExportBundle(domain, epic.id);
 
