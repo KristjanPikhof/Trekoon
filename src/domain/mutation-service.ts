@@ -235,6 +235,50 @@ export class MutationService {
     });
   }
 
+  /**
+   * Atomic If-Match CAS variant of {@link updateEpic}.
+   *
+   * The `If-Match` precondition is enforced INSIDE the write transaction:
+   * if the row's `updated_at` no longer equals `ifMatchUpdatedAt` at the
+   * point the SQL UPDATE runs, zero rows change and we throw a typed
+   * {@link PreconditionFailedError} carrying the freshly-fetched current
+   * `updatedAt` so callers can return a 409 with deterministic data.
+   *
+   * This eliminates the read-check-then-write race the previous route-level
+   * check had: a concurrent writer could land between `parseIfMatchHeader`'s
+   * read and `mutations.updateEpic`'s BEGIN IMMEDIATE, allowing the second
+   * PATCH to silently overwrite the first.
+   */
+  updateEpicWithIfMatch(
+    id: string,
+    ifMatchUpdatedAt: number,
+    input: { title?: string | undefined; description?: string | undefined; status?: string | undefined },
+  ): EpicRecord {
+    return this.#writeTransaction((): EpicRecord => {
+      // Read existing inside the tx to (1) surface not_found before the CAS
+      // and (2) materialise the defaults that domain.updateEpic computes
+      // from the current row when individual fields are omitted.
+      const existing = this.#domain.getEpicOrThrow(id);
+
+      if (existing.updatedAt !== ifMatchUpdatedAt) {
+        throw new PreconditionFailedError({
+          entityKind: "epic",
+          entityId: id,
+          currentUpdatedAt: existing.updatedAt,
+          providedUpdatedAt: ifMatchUpdatedAt,
+        });
+      }
+
+      if (input.status !== undefined) {
+        validateStatusTransition(existing.status, input.status, "epic", id);
+      }
+
+      const epic = this.#domain.updateEpic(id, input);
+      this.#emitEpicUpdated(epic);
+      return epic;
+    });
+  }
+
   updateEpicStatusCascade(id: string, status: string): StatusCascadePlan {
     return this.#writeTransaction((): StatusCascadePlan => {
       const plan = this.#domain.planStatusCascade("epic", id, status);
