@@ -157,17 +157,33 @@ const NO_LEGACY_RECOVERY: WorktreeRecoveryDiagnostics = {
  * In normal one-shot CLI invocations this map stays empty and the cache layer
  * is bypassed entirely, so default behavior is unchanged.
  *
- * Cached handles override `close()` to be a no-op so callers that follow the
- * `try { ... } finally { db?.close(); }` pattern do not actually tear down the
- * shared connection. The daemon shutdown path calls `closeCachedDatabases()`.
+ * Cached handles override `close()` so callers that follow the
+ * `try { ... } finally { db?.close(); }` pattern do not actually tear down
+ * the shared connection — instead, `close()` decrements an in-use refcount.
+ * The daemon shutdown path calls `closeCachedDatabases()`.
  *
  * The cache is bounded LRU (insertion-order on Map; touched on access) so a
  * long-running daemon serving many distinct cwds does not accumulate open
  * SQLite connections / FDs without bound. Eviction closes the underlying
  * database after a passive WAL checkpoint.
+ *
+ * In-use protection: each `openTrekoonDatabase` call increments the entry's
+ * refcount; the matching `close()` decrements it. Eviction skips entries
+ * whose refcount is > 0 — closing them mid-query would surface as
+ * SQLITE_MISUSE on the in-flight handler. If every cached entry is in use
+ * when a new cwd is opened, we permit temporary growth past the cap and
+ * emit a single warning; the next eviction-check after a `close()` will
+ * reduce the cache back under the cap.
  */
 const CACHED_DATABASES_CAPACITY = 16;
-const cachedDatabases: Map<string, TrekoonDatabase> = new Map();
+
+interface CachedEntry {
+  readonly handle: TrekoonDatabase;
+  refcount: number;
+}
+
+const cachedDatabases: Map<string, CachedEntry> = new Map();
+let warnedOnTransientOvergrowth = false;
 
 function isDaemonInProcessCacheEnabled(): boolean {
   return process.env.TREKOON_DAEMON_INPROCESS === "1";
@@ -189,33 +205,71 @@ function closeCachedHandle(handle: TrekoonDatabase): void {
 /**
  * Evict the least-recently-used handle when the cache is at capacity. Map
  * iteration order in JS is insertion order; we re-insert on access (`touch`)
- * to model LRU semantics.
+ * to model LRU semantics. Entries whose refcount is > 0 are SKIPPED — closing
+ * an in-use handle would surface as SQLITE_MISUSE for the caller currently
+ * borrowing it. A subsequent `releaseCachedDatabase` after the caller's
+ * `close()` will re-run eviction so transient over-cap growth is bounded by
+ * the number of concurrently-borrowed entries, which is in practice tiny.
  */
 function evictLruIfNeeded(): void {
   while (cachedDatabases.size >= CACHED_DATABASES_CAPACITY) {
-    const oldestKey = cachedDatabases.keys().next().value;
-    if (oldestKey === undefined) {
-      return;
+    let evicted = false;
+    for (const [key, entry] of cachedDatabases) {
+      if (entry.refcount > 0) {
+        continue;
+      }
+      cachedDatabases.delete(key);
+      closeCachedHandle(entry.handle);
+      evicted = true;
+      break;
     }
-    const oldest = cachedDatabases.get(oldestKey);
-    cachedDatabases.delete(oldestKey);
-    if (oldest) {
-      closeCachedHandle(oldest);
+
+    if (!evicted) {
+      // Every cached entry is currently borrowed. Allow temporary growth
+      // past the cap rather than closing an in-use handle. Surface a single
+      // warning so an operator can spot pathological concurrency.
+      if (!warnedOnTransientOvergrowth) {
+        warnedOnTransientOvergrowth = true;
+        // eslint-disable-next-line no-console
+        console.warn(
+          `[trekoon daemon] all ${CACHED_DATABASES_CAPACITY} cached database handles are in use; temporarily growing cache past the cap`,
+        );
+      }
+      return;
     }
   }
 }
 
-function touchCachedDatabase(key: string, handle: TrekoonDatabase): void {
+function touchCachedDatabase(key: string, entry: CachedEntry): void {
   // Re-insert to move to the most-recently-used (tail) end of insertion order.
   cachedDatabases.delete(key);
-  cachedDatabases.set(key, handle);
+  cachedDatabases.set(key, entry);
+}
+
+/**
+ * Decrement the refcount for a cached entry. Called from the cached handle's
+ * `close()` method. After a release, re-run eviction in case the cache had
+ * grown past the cap because every entry was borrowed.
+ */
+function releaseCachedDatabase(key: string): void {
+  const entry = cachedDatabases.get(key);
+  if (!entry) {
+    return;
+  }
+  if (entry.refcount > 0) {
+    entry.refcount -= 1;
+  }
+  if (cachedDatabases.size > CACHED_DATABASES_CAPACITY) {
+    evictLruIfNeeded();
+  }
 }
 
 export function closeCachedDatabases(): void {
-  for (const handle of cachedDatabases.values()) {
-    closeCachedHandle(handle);
+  for (const entry of cachedDatabases.values()) {
+    closeCachedHandle(entry.handle);
   }
   cachedDatabases.clear();
+  warnedOnTransientOvergrowth = false;
 }
 
 /**
