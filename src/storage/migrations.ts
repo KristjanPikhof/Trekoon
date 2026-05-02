@@ -283,12 +283,7 @@ const MIGRATIONS: readonly Migration[] = [
       migrateWorktreeScopedSyncMetadata(db);
     },
     down(_db: Database): void {
-      throw new Error(
-        "Migration 0004 (worktree_scoped_sync_metadata) is irreversible. " +
-        "It adds columns via ALTER TABLE that cannot be removed without " +
-        "reconstructing tables and risking data loss. " +
-        "Rollback below version 4 is not supported.",
-      );
+      throw migrationDownUnsupported("0004_worktree_scoped_sync_metadata", 4);
     },
   },
   {
