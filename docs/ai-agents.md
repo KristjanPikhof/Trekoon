@@ -14,22 +14,28 @@ agent to:
 - append progress and blocker notes instead of rewriting descriptions
 - preview scoped replace before `--apply`
 - treat `.trekoon` as shared repo-scoped state
+- use harness-local todo/task tools as a live progress display while keeping
+  Trekoon as the durable source of truth
+- prefer subagents for non-trivial independent execution lanes when the harness
+  supports it
 
 The skill ships with reference guides so the agent can handle the full
 plan-to-completion workflow from one install:
 
 ```
 .agents/skills/trekoon/
-  SKILL.md                      <- command reference, status machine, agent loop
+  SKILL.md                      <- command router and operating contract
   reference/
+    harness-primitives.md       <- universal agent/task/question/review primitives
     planning.md                 <- decomposition, writing standard, validation
     execution.md                <- graph building, lane dispatch, verification
     execution-with-team.md      <- Agent Teams pattern (Claude Code only)
 ```
 
-The agent loads the relevant reference on demand: `planning.md` when asked to
-plan, `execution.md` when asked to execute, `execution-with-team.md` when Agent
-Teams are available.
+The agent loads the relevant reference on demand: `harness-primitives.md` for
+runtime-neutral agent behavior, `planning.md` when asked to plan, `execution.md`
+when asked to execute, and `execution-with-team.md` only for explicit Claude
+Code Agent Teams execution.
 
 ## Install the skill
 
@@ -42,6 +48,7 @@ Create a project-local editor link when your agent environment supports it:
 ```bash
 trekoon skills install --link --editor opencode
 trekoon skills install --link --editor claude
+trekoon skills install --link --editor codex
 trekoon skills install --link --editor pi
 trekoon skills install --link --editor opencode --to ./.custom-editor/skills
 trekoon skills update
@@ -52,6 +59,7 @@ Path behavior:
 - Canonical install: `.agents/skills/trekoon/SKILL.md`
 - OpenCode link: `.opencode/skills/trekoon`
 - Claude link: `.claude/skills/trekoon`
+- Codex link: `.codex/skills/trekoon`
 - Pi link: `.pi/skills/trekoon`
 - `--to <path>` changes only the editor link root
 - `--allow-outside-repo` is for intentional external links
@@ -96,6 +104,13 @@ Typical flow:
 ## Default execution loop
 
 The core loop: **session, work, task done, repeat**.
+
+For non-trivial work, the parent agent should prefer orchestration over doing
+every detail itself. It should build the Trekoon execution graph, group ready
+tasks into lanes, spawn subagents for independent lanes when the harness
+supports it, keep a local todo/task display for the user, and synthesize the
+results. Tiny, tightly coupled, or immediately blocking work can stay in the
+parent agent.
 
 Start with a single orientation call, optionally scoped to an epic:
 
@@ -191,6 +206,14 @@ Or more explicitly:
 /trekoon -- run session, take the next ready task, do the work, append progress
 notes, mark it done, and repeat until there are no ready tasks or you hit a
 blocker.
+```
+
+### Execute with subagents where useful
+
+```text
+/trekoon <epic-id> execute -- prefer subagents for non-trivial independent
+lanes, keep Trekoon as the source of truth, and use local task tools to show
+live progress.
 ```
 
 ### Plan and execute end to end
