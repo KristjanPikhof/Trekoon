@@ -297,8 +297,8 @@ describe("Monotonic event ordering", () => {
     const storage = openTrekoonDatabase(workspace);
     const service = new MutationService(storage.db, workspace);
 
-    service.createEpic({ title: "First Epic", description: "" });
-    service.createEpic({ title: "Second Epic", description: "" });
+    service.createEpic({ title: "First Epic", description: "first" });
+    service.createEpic({ title: "Second Epic", description: "second" });
 
     const events = readEvents(storage.db);
     expect(events.length).toBeGreaterThanOrEqual(2);
