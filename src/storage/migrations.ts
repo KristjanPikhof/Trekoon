@@ -310,11 +310,7 @@ const MIGRATIONS: readonly Migration[] = [
       db.exec("CREATE UNIQUE INDEX IF NOT EXISTS idx_dependencies_edge ON dependencies (source_id, depends_on_id);");
     },
     down(_db: Database): void {
-      throw new Error(
-        "Migration 0005 (dependency_edge_integrity) is irreversible. " +
-        "It removes orphaned rows and deduplicates dependency edges. " +
-        "Rollback below version 5 is not supported.",
-      );
+      throw migrationDownUnsupported("0005_dependency_edge_integrity", 5);
     },
   },
   {
