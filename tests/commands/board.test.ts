@@ -151,7 +151,7 @@ describe("board command", (): void => {
       startBoardServer: () => ({
         origin: "http://127.0.0.1:4321",
         url: "http://127.0.0.1:4321/?token=secret-token",
-        fallbackUrl: "http://127.0.0.1:4321/?token=secret-token",
+        fallbackUrl: "http://127.0.0.1:4321",
         hostname: "127.0.0.1",
         port: 4321,
         token: "secret-token",
