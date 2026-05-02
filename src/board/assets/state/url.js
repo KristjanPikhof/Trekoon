@@ -47,6 +47,9 @@ export function stateToHash(state) {
   if (state.selectedTaskId) {
     params.set("task", state.selectedTaskId);
   }
+  if (state.selectedSubtaskId) {
+    params.set("subtask", state.selectedSubtaskId);
+  }
   if (state.screen === "epics" && state.selectedEpicId) {
     params.set("screen", "epics");
   }
