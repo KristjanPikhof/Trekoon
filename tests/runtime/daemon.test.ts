@@ -1,11 +1,12 @@
 import { execFileSync } from "node:child_process";
-import { mkdirSync, mkdtempSync, rmSync, statSync, writeFileSync } from "node:fs";
+import { chmodSync, mkdirSync, mkdtempSync, rmSync, statSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
 import { afterEach, describe, expect, test } from "bun:test";
 
 import {
+  __assertOwnerOnlyModeForTests,
   executeDaemonRequest,
   isDaemonSocketPresent,
   PostWriteError,
@@ -46,6 +47,17 @@ afterEach((): void => {
 });
 
 describe("daemon dispatch", (): void => {
+  test("owner-only mode guard rejects permissive socket directories", (): void => {
+    const workspace = createWorkspace();
+    const socketDir = join(workspace, ".trekoon");
+    mkdirSync(socketDir, { recursive: true });
+    chmodSync(socketDir, 0o755);
+
+    expect((): void => {
+      __assertOwnerOnlyModeForTests(socketDir, "daemon socket directory");
+    }).toThrow("must be owner-only");
+  });
+
   test("executeDaemonRequest renders the same payload as in-process executeShell", async (): Promise<void> => {
     const workspace = createWorkspace();
     initGitRepository(workspace);
@@ -109,6 +121,9 @@ describe("daemon dispatch", (): void => {
       expect(direct.stdout).toContain("readiness:");
 
       expect(isDaemonSocketPresent(socketPath)).toBeTrue();
+      const dirStats = statSync(join(workspace, ".trekoon"));
+      // eslint-disable-next-line no-bitwise
+      expect(dirStats.mode & 0o777).toBe(0o700);
       const stats = statSync(socketPath);
       // Owner-only mode (mode bits masked).
       // eslint-disable-next-line no-bitwise
@@ -118,6 +133,27 @@ describe("daemon dispatch", (): void => {
     }
 
     expect(isDaemonSocketPresent(socketPath)).toBeFalse();
+  });
+
+  test("rejects request cwd values outside the daemon worktree and storage scope", async (): Promise<void> => {
+    const workspace = createWorkspace();
+    const outsideWorkspace = createWorkspace();
+    initGitRepository(workspace);
+
+    mkdirSync(join(workspace, ".trekoon"), { recursive: true });
+    const socketPath = join(workspace, ".trekoon", "daemon.sock");
+    const handle = await startDaemonServer({ socketPath, cwd: workspace, silent: true });
+
+    try {
+      const response = await sendDaemonRequest(socketPath, {
+        argv: ["--toon", "session"],
+        cwd: outsideWorkspace,
+      });
+      expect(response.exitCode).toBe(1);
+      expect(response.stderr).toContain("outside the daemon worktree/storage scope");
+    } finally {
+      await handle.close();
+    }
   });
 
   test("rejects malformed payloads without crashing the server", async (): Promise<void> => {
@@ -339,6 +375,67 @@ describe("daemon dispatch", (): void => {
     expect(caught).toBeInstanceOf(PostWriteError);
     expect(caught).not.toBeInstanceOf(PreWriteTransportError);
     expect((caught as Error).message).toContain("daemon may have committed");
+  });
+
+  test("write-then-error race surfaces as PostWriteError before the write callback fires", async (): Promise<void> => {
+    const { createServer, Socket } = await import("node:net");
+
+    const workspace = createWorkspace();
+    mkdirSync(join(workspace, ".trekoon"), { recursive: true });
+    const socketPath = join(workspace, ".trekoon", "daemon.sock");
+
+    const sink = createServer((socket): void => {
+      socket.setEncoding("utf8");
+      socket.on("data", (): void => {
+        // Hold the server side open; the client-side injected error below is
+        // the deterministic race being tested.
+      });
+    });
+    await new Promise<void>((resolve, reject): void => {
+      sink.once("error", reject);
+      sink.listen(socketPath, (): void => {
+        sink.removeListener("error", reject);
+        resolve();
+      });
+    });
+
+    type SocketWrite = (
+      chunk: Uint8Array | string,
+      encodingOrCallback?: BufferEncoding | ((error?: Error | null) => void),
+      callback?: (error?: Error | null) => void,
+    ) => boolean;
+    const socketPrototype = Socket.prototype as unknown as { write: SocketWrite };
+    const originalWrite: SocketWrite = socketPrototype.write;
+    socketPrototype.write = function writeThenError(
+      this: import("node:net").Socket,
+      chunk: Uint8Array | string,
+      encodingOrCallback?: BufferEncoding | ((error?: Error | null) => void),
+      callback?: (error?: Error | null) => void,
+    ): boolean {
+      const result: boolean = originalWrite.call(this, chunk, encodingOrCallback, callback);
+      if (typeof chunk === "string" && chunk.includes("\"argv\":[\"--toon\",\"session\"]")) {
+        this.emit("error", new Error("simulated reset after request write"));
+      }
+      return result;
+    };
+
+    let caught: unknown = null;
+    try {
+      await sendDaemonRequest(socketPath, {
+        argv: ["--toon", "session"],
+        cwd: workspace,
+      });
+    } catch (error: unknown) {
+      caught = error;
+    } finally {
+      socketPrototype.write = originalWrite;
+      await new Promise<void>((resolve): void => {
+        sink.close((): void => resolve());
+      });
+    }
+
+    expect(caught).toBeInstanceOf(PostWriteError);
+    expect(caught).not.toBeInstanceOf(PreWriteTransportError);
   });
 
   test("error stack containing Bearer secret is redacted on daemon stderr", async (): Promise<void> => {
