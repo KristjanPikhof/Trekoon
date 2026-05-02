@@ -19,9 +19,9 @@ function createWorkspace(): string {
   return dir;
 }
 
-function createDomain(cwd: string): TrackerDomain {
-  const db = openTrekoonDatabase(cwd);
-  return new TrackerDomain(db.db);
+function createDomain(cwd: string): { domain: TrackerDomain; db: Database } {
+  const storage = openTrekoonDatabase(cwd);
+  return { domain: new TrackerDomain(storage.db), db: storage.db };
 }
 
 afterEach((): void => {
