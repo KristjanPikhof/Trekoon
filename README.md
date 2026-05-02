@@ -191,7 +191,9 @@ trekoon board update    # refresh assets only
 ```
 
 Binds to `127.0.0.1` only with a per-session token. Gives you an epics
-overview, kanban workspace per epic, task detail modals, and search.
+overview, kanban workspace per epic, task detail modals, and search. The board
+client subscribes to `/api/snapshot/stream` (SSE), so mutations from another
+shell, worktree, or browser tab show up live without a manual refresh.
 
 ## Commands
 
