@@ -1259,86 +1259,78 @@ export async function runTask(context: CliContext): Promise<CliResult> {
           });
         }
 
-        // Check for open subtasks (lenient: warn but allow completion)
-        const openSubtasks = domain.getOpenSubtasks(taskId);
-        const openSubtaskCount = openSubtasks.length;
-        const openSubtaskIds = openSubtasks.map((s) => s.id);
+        // Single-transaction atomic completion: the entire flow (status flip,
+        // event emission, unblocked-diff snapshot) runs inside ONE
+        // `BEGIN IMMEDIATE`/`COMMIT` pair. Bypasses the public transition
+        // checker — this is the documented allowed exception (see
+        // MutationService.markTaskDoneAtomically and docs/machine-contracts.md).
+        // A crash mid-flight rolls the row back to its original status; the
+        // task is never observable in a phantom `in_progress` state.
+        const snapshot = mutations.markTaskDoneAtomically({
+          taskId,
+          computeSnapshot: ({ domain: txDomain, completed, preBlockedReverseDepIds }) => {
+            const openSubtasks = txDomain.getOpenSubtasks(taskId);
+            const readiness = buildTaskReadiness(txDomain, completed.epicId);
+            const nextCandidate = readiness.candidates[0] ?? null;
 
-        // Snapshot blocked reverse deps before marking done (lightweight: no full readiness rebuild).
-        // Only direct task-level reverse deps are tracked here; subtask reverse deps are excluded
-        // because subtasks are children within a task, not independent workflow items.
-        const reverseDeps = domain.listReverseDependencies(taskId);
-        const directRevDepTaskIds = reverseDeps
-          .filter((rd) => rd.isDirect && rd.kind === "task")
-          .map((rd) => rd.id);
-        const preDepStatuses = domain.batchResolveDependencyStatuses(directRevDepTaskIds);
-        const preBlockedIds = new Set(
-          directRevDepTaskIds.filter((id) => {
-            const resolved = preDepStatuses.get(id);
-            return resolved !== undefined && resolved.blockers.length > 0;
-          }),
-        );
+            const preBlockedIds = new Set<string>(preBlockedReverseDepIds);
+            const unblockedTasks = readiness.candidates
+              .filter((item) => preBlockedIds.has(item.task.id))
+              .map((item) => ({
+                id: item.task.id,
+                kind: "task" as const,
+                title: item.task.title,
+                status: item.task.status,
+                wasBlockedBy: [taskId],
+              }));
 
-        // Auto-transition through in_progress when current status is todo or blocked.
-        // Note: this emits two sync events (→in_progress, →done) because each
-        // updateTask call appends its own event.  This is intentional — the status
-        // machine requires the intermediate step, and event consumers should treat
-        // a rapid in_progress→done pair from `task done` as a single logical completion.
-        if (existingTask.status === "todo" || existingTask.status === "blocked") {
-          mutations.updateTask(taskId, { status: "in_progress" });
-        }
+            const nextTree = nextCandidate !== null ? txDomain.buildTaskTreeDetailed(nextCandidate.task.id) : null;
+            const nextDeps = nextCandidate?.blockerSummary.blockedBy ?? [];
 
-        const completed = mutations.updateTask(taskId, { status: "done" });
-        const readiness = buildTaskReadiness(domain, completed.epicId);
-        const nextCandidate = readiness.candidates[0] ?? null;
+            return {
+              completed,
+              openSubtaskCount: openSubtasks.length,
+              openSubtaskIds: openSubtasks.map((s) => s.id),
+              unblocked: unblockedTasks,
+              next: nextTree,
+              nextCandidate,
+              nextDeps,
+              readiness: {
+                readyCount: readiness.summary.readyCount,
+                blockedCount: readiness.summary.blockedCount,
+              },
+            };
+          },
+        });
 
-        // Diff: tasks that were blocked before but are now ready
-        const unblockedTasks = readiness.candidates
-          .filter((item) => preBlockedIds.has(item.task.id))
-          .map((item) => ({
-            id: item.task.id,
-            kind: "task" as const,
-            title: item.task.title,
-            status: item.task.status,
-            wasBlockedBy: [taskId],
-          }));
-
-        const nextTree = nextCandidate !== null ? domain.buildTaskTreeDetailed(nextCandidate.task.id) : null;
-        const nextDeps = nextCandidate?.blockerSummary.blockedBy ?? [];
-
-        const readinessStats = {
-          readyCount: readiness.summary.readyCount,
-          blockedCount: readiness.summary.blockedCount,
-        };
-
-        const subtaskWarning = openSubtaskCount > 0
-          ? `Warning: ${openSubtaskCount} subtask(s) still open.`
+        const subtaskWarning = snapshot.openSubtaskCount > 0
+          ? `Warning: ${snapshot.openSubtaskCount} subtask(s) still open.`
           : null;
 
-        let human = `Task ${completed.title} marked done.`;
+        let human = `Task ${snapshot.completed.title} marked done.`;
         if (subtaskWarning !== null) {
           human += `\n${subtaskWarning}`;
         }
-        if (unblockedTasks.length > 0) {
-          human += `\nUnblocked: ${unblockedTasks.map((t) => t.title).join(", ")}`;
+        if (snapshot.unblocked.length > 0) {
+          human += `\nUnblocked: ${snapshot.unblocked.map((t) => t.title).join(", ")}`;
         }
-        if (nextTree !== null && nextCandidate !== null) {
-          human += `\nNext: ${formatTask(nextCandidate.task)}`;
+        if (snapshot.next !== null && snapshot.nextCandidate !== null) {
+          human += `\nNext: ${formatTask(snapshot.nextCandidate.task)}`;
         }
-        human += `\nReadiness: ready=${readinessStats.readyCount}, blocked=${readinessStats.blockedCount}.`;
+        human += `\nReadiness: ready=${snapshot.readiness.readyCount}, blocked=${snapshot.readiness.blockedCount}.`;
 
         return okResult({
           command: "task.done",
           human,
           data: {
-            completed,
-            openSubtaskCount,
-            openSubtaskIds,
+            completed: snapshot.completed,
+            openSubtaskCount: snapshot.openSubtaskCount,
+            openSubtaskIds: snapshot.openSubtaskIds,
             warning: subtaskWarning,
-            unblocked: unblockedTasks,
-            next: nextTree,
-            nextDeps,
-            readiness: readinessStats,
+            unblocked: snapshot.unblocked,
+            next: snapshot.next,
+            nextDeps: snapshot.nextDeps,
+            readiness: snapshot.readiness,
           },
         });
       }
