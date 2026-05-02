@@ -830,15 +830,24 @@ describe("sync command", (): void => {
     const resolve = await runSync({ args: ["resolve", primaryConflictId, "--use", "theirs"], cwd: primary, mode: "toon" });
     expect(resolve.ok).toBe(true);
 
-    const secondaryReplay = await runSync({ args: ["pull", "--from", "main"], cwd: secondary, mode: "toon" });
+    // Conflicts are scoped per worktree+branch, so primary's resolution event is
+    // emitted on feature/primary-resolution. Secondary pulls from that branch to
+    // receive the resolve_conflict event, then findConflictForResolutionEvent
+    // matches secondary's own pending row by stable source_event_id.
+    const secondaryReplay = await runSync({ args: ["pull", "--from", "feature/primary-resolution"], cwd: secondary, mode: "toon" });
     expect(secondaryReplay.ok).toBe(true);
 
     const secondaryStorage = openTrekoonDatabase(secondary);
     try {
       const epic = secondaryStorage.db.query("SELECT title FROM epics WHERE id = ?;").get(epicId) as { title: string } | null;
       const conflict = secondaryStorage.db
-        .query("SELECT resolution FROM sync_conflicts WHERE event_id = 'source-update-event' AND field_name = 'title' LIMIT 1;")
-        .get() as { resolution: string } | null;
+        .query(
+          `SELECT resolution FROM sync_conflicts
+           WHERE event_id = 'source-update-event' AND field_name = 'title'
+             AND worktree_path = ? AND current_branch = ?
+           LIMIT 1;`,
+        )
+        .get(secondary, "feature/secondary-resolution") as { resolution: string } | null;
 
       expect(epic?.title).toBe("Remote title");
       expect(conflict?.resolution).toBe("theirs");
