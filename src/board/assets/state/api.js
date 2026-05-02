@@ -13,6 +13,87 @@ function cloneSnapshot(snapshot) {
   return JSON.parse(JSON.stringify(snapshot));
 }
 
+const SNAPSHOT_COLLECTIONS = ["epics", "tasks", "subtasks", "dependencies"];
+
+const COLLECTION_TO_DELETED_KEY = {
+  epics: "deletedEpicIds",
+  tasks: "deletedTaskIds",
+  subtasks: "deletedSubtaskIds",
+  dependencies: "deletedDependencyIds",
+};
+
+function indexById(records) {
+  const map = new Map();
+  if (!Array.isArray(records)) {
+    return map;
+  }
+
+  for (const record of records) {
+    if (record && typeof record === "object" && typeof record.id === "string" && record.id.length > 0) {
+      map.set(record.id, record);
+    }
+  }
+
+  return map;
+}
+
+/**
+ * Compute the inverse delta needed to revert an optimistic mutation.
+ *
+ * The inverse is built by diffing the snapshot _before_ the optimistic patch
+ * against the snapshot _after_ the patch. We only describe entities the
+ * optimistic patch actually touched so that concurrent deltas pushed by the
+ * server (for unrelated entities) are preserved when we apply the inverse.
+ *
+ * @param {object} previousSnapshot - Snapshot prior to optimistic apply.
+ * @param {object} optimisticSnapshot - Snapshot after optimistic apply.
+ * @returns {{
+ *   epics?: object[], tasks?: object[], subtasks?: object[], dependencies?: object[],
+ *   deletedEpicIds?: string[], deletedTaskIds?: string[], deletedSubtaskIds?: string[], deletedDependencyIds?: string[],
+ * }}
+ */
+export function computeInverseDelta(previousSnapshot, optimisticSnapshot) {
+  const inverse = {};
+  for (const collection of SNAPSHOT_COLLECTIONS) {
+    const before = indexById(previousSnapshot?.[collection]);
+    const after = indexById(optimisticSnapshot?.[collection]);
+
+    const restored = [];
+    const deletedIds = [];
+
+    // Entities that the optimistic patch deleted -> restore them.
+    for (const [id, beforeRecord] of before) {
+      if (!after.has(id)) {
+        restored.push(beforeRecord);
+      }
+    }
+
+    // Entities present in both but mutated -> restore the previous version.
+    for (const [id, afterRecord] of after) {
+      const beforeRecord = before.get(id);
+      if (beforeRecord && beforeRecord !== afterRecord && JSON.stringify(beforeRecord) !== JSON.stringify(afterRecord)) {
+        restored.push(beforeRecord);
+      }
+    }
+
+    // Entities the optimistic patch added -> mark for deletion.
+    for (const id of after.keys()) {
+      if (!before.has(id)) {
+        deletedIds.push(id);
+      }
+    }
+
+    if (restored.length > 0) {
+      inverse[collection] = restored;
+    }
+    if (deletedIds.length > 0) {
+      inverse[COLLECTION_TO_DELETED_KEY[collection]] = deletedIds;
+    }
+  }
+
+  return inverse;
+}
+
 async function readJsonPayload(response) {
   const text = await response.text();
   if (text.length === 0) {
