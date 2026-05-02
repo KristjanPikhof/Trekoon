@@ -69,7 +69,7 @@ function buildSuggestions(
   recoveryRequired: boolean,
   syncSummary: SyncStatusSummary,
   readiness: TaskReadinessResult,
-  epics: readonly EpicRecord[],
+  epicCount: number,
   activeEpic: EpicRecord | null,
 ): readonly Suggestion[] {
   const suggestions: Suggestion[] = [];
