@@ -44,14 +44,7 @@ function resolveActiveEpic(domain: TrackerDomain, epicId: string | undefined): E
     return domain.getEpic(epicId);
   }
 
-  const epics = domain.listEpics();
-  const inProgress = epics.find((epic) => epic.status === "in_progress");
-  if (inProgress) {
-    return inProgress;
-  }
-
-  const todo = epics.find((epic) => epic.status === "todo");
-  return todo ?? epics[0] ?? null;
+  return domain.findActiveEpic();
 }
 
 function findInProgressTasks(readiness: TaskReadinessResult): { count: number; first: { id: string; title: string } | null } {
