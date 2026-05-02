@@ -380,6 +380,10 @@ export function createBoardApiHandler(context: BoardRouteContext): (request: Req
         });
       }
 
+      if (request.method === "GET" && url.pathname === "/api/snapshot/stream") {
+        return openSnapshotStream(request, domain, eventBus);
+      }
+
         const epicCascadeMatch = request.method === "PATCH" ? url.pathname.match(/^\/api\/epics\/([^/]+)\/cascade$/u) : null;
         if (epicCascadeMatch) {
           const body = await parseJsonBody(request);
@@ -450,7 +454,7 @@ export function createBoardApiHandler(context: BoardRouteContext): (request: Req
               subtaskIds: [subtask.id],
             }),
           };
-          return buildMutationResponse(domain, responseData, 201);
+          return respondWithMutation(domain, responseData, 201);
         }
 
         const result = mutations.createSubtaskAtomicallyWithIdempotency({
@@ -479,7 +483,7 @@ export function createBoardApiHandler(context: BoardRouteContext): (request: Req
         const replaySubtaskId = readRecordId(result.responseData.subtask);
         const replayTaskId = replaySubtaskId ? domain.getSubtask(replaySubtaskId)?.taskId ?? null : null;
         const replayEpicId = replayTaskId ? domain.getTask(replayTaskId)?.epicId ?? null : null;
-        return buildMutationResponse(domain, result.state === "replay"
+        return respondWithMutation(domain, result.state === "replay"
           ? withFreshReplaySnapshotDelta(domain, result.responseData, {
             epicIds: replayEpicId ? [replayEpicId] : [],
             taskIds: replayTaskId ? [replayTaskId] : [],
@@ -507,7 +511,7 @@ export function createBoardApiHandler(context: BoardRouteContext): (request: Req
                 deletedDependencyIds,
               }),
             };
-            return buildMutationResponse(domain, responseData, 200);
+            return respondWithMutation(domain, responseData, 200);
           }
 
           const result = mutations.deleteSubtaskAtomicallyWithIdempotency({
@@ -530,7 +534,7 @@ export function createBoardApiHandler(context: BoardRouteContext): (request: Req
             }),
           });
           const replaySnapshotDelta = readSnapshotDelta(result.responseData);
-          return buildMutationResponse(domain, result.state === "replay"
+          return respondWithMutation(domain, result.state === "replay"
             ? withFreshReplaySnapshotDelta(domain, result.responseData, {
               epicIds: readRecordIds(replaySnapshotDelta?.epics),
               taskIds: readRecordIds(replaySnapshotDelta?.tasks),
@@ -556,7 +560,7 @@ export function createBoardApiHandler(context: BoardRouteContext): (request: Req
               dependencyIds: [dependency.id],
             }),
           };
-          return buildMutationResponse(domain, responseData, 201);
+          return respondWithMutation(domain, responseData, 201);
         }
 
         const result = mutations.addDependencyAtomicallyWithIdempotency({
@@ -600,7 +604,7 @@ export function createBoardApiHandler(context: BoardRouteContext): (request: Req
             dependencyIds: replayDependencyId ? [replayDependencyId] : [],
           }
           : { dependencyIds: [] };
-        return buildMutationResponse(domain, result.state === "replay"
+        return respondWithMutation(domain, result.state === "replay"
           ? withFreshReplaySnapshotDelta(domain, result.responseData, replaySelection)
           : result.responseData, result.status);
       }
@@ -635,7 +639,7 @@ export function createBoardApiHandler(context: BoardRouteContext): (request: Req
               deletedDependencyIds: existingDependencyIds,
             }),
           };
-          return buildMutationResponse(domain, responseData, 200);
+          return respondWithMutation(domain, responseData, 200);
         }
 
         const result = mutations.removeDependencyAtomicallyWithIdempotency({
@@ -659,7 +663,7 @@ export function createBoardApiHandler(context: BoardRouteContext): (request: Req
           }),
         });
         const replaySnapshotDelta = readSnapshotDelta(result.responseData);
-        return buildMutationResponse(domain, result.state === "replay"
+        return respondWithMutation(domain, result.state === "replay"
           ? withFreshReplaySnapshotDelta(domain, result.responseData, {
             taskIds: compactIds([domain.getTask(sourceId)?.id ?? "", domain.getTask(dependsOnId)?.id ?? ""]),
             subtaskIds: compactIds([domain.getSubtask(sourceId)?.id ?? "", domain.getSubtask(dependsOnId)?.id ?? ""]),
