@@ -256,11 +256,16 @@ describe("sync_conflicts worktree+branch scoping", () => {
       currentBranch: FEATURE_B,
     });
 
-    // Seed a task row so updates have something to mutate (allowMissing covers this anyway).
+    // Seed a task row (with parent epic) so updates have something to mutate.
+    const epicId = randomUUID();
+    db.query(
+      `INSERT INTO epics (id, title, description, status, created_at, updated_at, version)
+       VALUES (?, 'epic', '', 'todo', ?, ?, 1);`,
+    ).run(epicId, ts, ts);
     db.query(
       `INSERT OR IGNORE INTO tasks (id, epic_id, title, description, status, created_at, updated_at, version)
        VALUES (?, ?, 'orig', '', 'todo', ?, ?, 1);`,
-    ).run(taskId, randomUUID(), ts, ts);
+    ).run(taskId, epicId, ts, ts);
 
     // Emit a resolve_conflict event on FEATURE_A (the resolver branch),
     // pointing at conflictA via source_event_id. This is the on-wire shape
