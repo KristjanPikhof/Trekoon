@@ -602,7 +602,7 @@ describe("SQLite concurrent write stress tests", () => {
     });
 
     test("5 concurrent appendToSubtaskDescription calls preserve all appended notes", () => {
-      const { dbFile, workspace } = setupTrekoonWorkspace("trekoon-append-subtask-");
+      const workspace = setupTrekoonWorkspace("trekoon-append-subtask-");
 
       const seedDb = openTrekoonDatabase(workspace);
       const seedMutations = new MutationService(seedDb.db, workspace);
