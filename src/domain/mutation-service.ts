@@ -588,6 +588,19 @@ export class MutationService {
     subtask?: SubtaskRecord;
   } {
     return this.#writeTransaction(() => {
+      // Mirror of claimTask: gate the todo/blocked → in_progress transition
+      // through assertNoUnresolvedDependenciesForStatusTransition so subtask
+      // claims cannot bypass dependency resolution.
+      const existing = this.#domain.getSubtask(input.subtaskId);
+      if (existing && (existing.status === "todo" || existing.status === "blocked")) {
+        this.#domain.assertNoUnresolvedDependenciesForStatusTransition(
+          input.subtaskId,
+          "subtask",
+          existing.status,
+          "in_progress",
+        );
+      }
+
       const now = Date.now();
       const result = this.#db
         .query(
