@@ -270,9 +270,9 @@ describe("Monotonic event ordering", () => {
       title: "Mono epic",
       description: "Testing monotonic order",
       taskSpecs: [
-        { title: "Task A", description: "" },
-        { title: "Task B", description: "" },
-        { title: "Task C", description: "" },
+        { tempKey: "t1", title: "Task A", description: "desc A" },
+        { tempKey: "t2", title: "Task B", description: "desc B" },
+        { tempKey: "t3", title: "Task C", description: "desc C" },
       ],
       subtaskSpecs: [],
       dependencySpecs: [],
