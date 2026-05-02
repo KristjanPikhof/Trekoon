@@ -3,6 +3,13 @@ import { type Database } from "bun:sqlite";
 import { writeTransaction } from "../storage/database";
 import { appendEventWithGitContext, prepareEventWriteContext, withTransactionEventContext } from "../sync/event-writes";
 import { ENTITY_OPERATIONS } from "./mutation-operations";
+import {
+  buildMatchSnippet,
+  buildReplacementSnippet,
+  countMatches,
+  replaceMatches,
+  summarizeMatches,
+} from "./search";
 import { TrackerDomain, validateStatusTransition } from "./tracker-domain";
 import {
   type CompactEpicCreateResult,
