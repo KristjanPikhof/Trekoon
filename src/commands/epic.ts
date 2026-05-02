@@ -1386,11 +1386,10 @@ export async function runEpic(context: CliContext): Promise<CliResult> {
           });
         }
 
-        const nextDescription =
-          append === undefined
-            ? description
-            : appendLine(domain.getEpicOrThrow(epicId).description, append);
-        const epic = mutations.updateEpic(epicId, { title, description: nextDescription, status });
+        const epic =
+          append !== undefined
+            ? mutations.appendToEpicDescription({ epicId, append, status })
+            : mutations.updateEpic(epicId, { title, description, status });
 
         return okResult({
           command: "epic.update",
