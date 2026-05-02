@@ -175,8 +175,7 @@ function publishSnapshotDeltaIfPresent(
   }
 }
 
-function buildMutationResponse(_domain: TrackerDomain, data: Record<string, unknown>, status = 200, eventBus?: BoardEventBus): Response {
-  publishSnapshotDeltaIfPresent(eventBus, data);
+function buildMutationResponse(_domain: TrackerDomain, data: Record<string, unknown>, status = 200): Response {
   return jsonResponse(status, {
     ok: true,
     data,
