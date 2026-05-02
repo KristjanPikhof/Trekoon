@@ -169,7 +169,7 @@ describe("buildEpicExportBundle", () => {
 
   test("throws for non-existent epic", () => {
     const cwd = createWorkspace();
-    const { domain, db } = createDomain(cwd);
+    const { domain } = createDomain(cwd);
 
     expect(() => buildEpicExportBundle(domain, "non-existent-id")).toThrow();
   });
