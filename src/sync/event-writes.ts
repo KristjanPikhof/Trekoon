@@ -50,23 +50,36 @@ export function nextEventTimestamp(db: Database): number {
  * Execute `fn` inside a transaction event context, computing the event
  * timestamp AFTER the write lock is held (i.e. after BEGIN IMMEDIATE).
  *
+ * The caller MUST resolve the git context BEFORE entering the write
+ * transaction and pass it in via `git`. This keeps the (potentially slow)
+ * `git branch` / `git rev-parse` subprocesses outside the SQLite write lock,
+ * so concurrent writers on a cold git-context cache do not serialize on
+ * subprocess invocations behind BEGIN IMMEDIATE.
+ *
+ * Only `nextEventTimestamp(db)` runs inside the lock — reading
+ * `MAX(created_at)` while the write lock is held is what guarantees no
+ * concurrent writer can commit a higher timestamp before our INSERT.
+ *
  * If a context is already active for this database connection (nested call),
- * `fn` is invoked directly so the outer context's monotonic counter is reused.
+ * `fn` is invoked directly so the outer context's monotonic counter is
+ * reused; the supplied `git` argument is ignored in that case.
  *
  * @param db   - The database connection that is already inside BEGIN IMMEDIATE.
- * @param cwd  - Working directory used to resolve git context.
+ * @param git  - Pre-resolved git context (resolved BEFORE the write lock).
  * @param fn   - The transaction body to run.
  */
-export function withTransactionEventContext<T>(db: Database, cwd: string, fn: () => T): T {
+export function withTransactionEventContext<T>(db: Database, git: ResolvedGitContext, fn: () => T): T {
   const existingContext: EventWriteContext | undefined = transactionEventContexts.get(db);
   if (existingContext) {
     return fn();
   }
 
-  // Compute the timestamp NOW — the write lock is already held.
+  // Compute the timestamp NOW — the write lock is already held. The git
+  // context was resolved by the caller before BEGIN IMMEDIATE, so no
+  // subprocess invocations happen here.
   const nextTimestamp: number = nextEventTimestamp(db);
-  const git: ResolvedGitContext = resolveGitContext(cwd, nextTimestamp);
-  const context: EventWriteContext = { git, nextTimestamp };
+  const resolvedGit: ResolvedGitContext = { ...git, persistedAt: nextTimestamp };
+  const context: EventWriteContext = { git: resolvedGit, nextTimestamp };
 
   transactionEventContexts.set(db, context);
 
