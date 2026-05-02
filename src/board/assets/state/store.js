@@ -382,6 +382,7 @@ export function createStore(initialSnapshot, options = {}) {
     selectedTaskId: typeof storedState.selectedTaskId === "string" ? storedState.selectedTaskId : null,
     selectedSubtaskId: null,
     taskModalOpen: false,
+    subtaskModalOpen: false,
     theme: readThemePreference(),
     focusedEpicIndex: 0,
     copyFeedback: null,
