@@ -103,12 +103,12 @@ describe("buildEpicExportBundle", () => {
     const bundle = buildEpicExportBundle(domain, epicA.id);
 
     expect(bundle.dependencies).toHaveLength(1);
-    expect(bundle.dependencies[0].internal).toBe(false);
+    expect(bundle.dependencies[0]!.internal).toBe(false);
     expect(bundle.externalNodes).toHaveLength(1);
-    expect(bundle.externalNodes[0].id).toBe(taskB.id);
-    expect(bundle.externalNodes[0].kind).toBe("task");
-    expect(bundle.externalNodes[0].title).toBe("Task in B");
-    expect(bundle.externalNodes[0].epicId).toBe(epicB.id);
+    expect(bundle.externalNodes[0]!.id).toBe(taskB.id);
+    expect(bundle.externalNodes[0]!.kind).toBe("task");
+    expect(bundle.externalNodes[0]!.title).toBe("Task in B");
+    expect(bundle.externalNodes[0]!.epicId).toBe(epicB.id);
     expect(bundle.warnings).toHaveLength(0);
   });
 
