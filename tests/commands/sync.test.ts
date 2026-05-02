@@ -12,7 +12,7 @@ import {
   __resetIdempotencyPruneThrottleForTests,
 } from "../../src/domain/mutation-service";
 import { appendEventWithGitContext } from "../../src/sync/event-writes";
-import { resolveGitContext } from "../../src/sync/git-context";
+import { clearGitContextCache, resolveGitContext } from "../../src/sync/git-context";
 import { syncResolve } from "../../src/sync/service";
 import { openTrekoonDatabase } from "../../src/storage/database";
 import { resolveStoragePaths } from "../../src/storage/path";
