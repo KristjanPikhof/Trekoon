@@ -22,8 +22,8 @@ the quickest way to get started, read [Quickstart](quickstart.md) first.
 - `trekoon sync resolve <conflict-id> --use ours|theirs [--dry-run]`
 - `trekoon sync resolve --all --use ours|theirs [--entity <id>] [--field <name>] [--dry-run]`
 - `trekoon sync conflicts <list|show> [--mode pending|all]`
-- `trekoon skills install [--link --editor opencode|claude|pi] [--to <path>] [--allow-outside-repo]`
-- `trekoon skills install -g|--global [--editor opencode|claude|pi]`
+- `trekoon skills install [--link --editor opencode|claude|codex|pi] [--to <path>] [--allow-outside-repo]`
+- `trekoon skills install -g|--global [--editor opencode|claude|codex|pi]`
 - `trekoon skills update`
 - `trekoon wipe --yes`
 - `trekoon serve` (experimental)
