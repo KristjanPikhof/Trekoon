@@ -135,6 +135,10 @@ function assertOwnerOnlyMode(path: string, label: string): void {
   }
 }
 
+export function __assertOwnerOnlyModeForTests(path: string, label: string): void {
+  assertOwnerOnlyMode(path, label);
+}
+
 function isPathWithin(candidatePath: string, rootPath: string): boolean {
   const candidate: string = resolve(candidatePath);
   const root: string = resolve(rootPath);
