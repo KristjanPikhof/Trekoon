@@ -35,7 +35,7 @@ function parseDocumentedCodes(contents: string): Set<string> {
  */
 function scanSourceCodes(): Set<string> {
   const codes = new Set<string>();
-  const codePattern = /\bcode:\s*["']([a-z][a-z_]+)["']/g;
+  const codePattern = /\bcode:\s*["']([a-z][a-z_]*)["']/g;
 
   function walk(dir: string): void {
     for (const entry of readdirSync(dir)) {
