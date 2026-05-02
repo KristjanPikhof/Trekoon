@@ -429,7 +429,13 @@ export function createBoardActions(options) {
      * @param {{ targetStatus: string, kind: 'valid'|'invalid' }|null} feedback
      */
     setDragFeedback(feedback) {
-      if (store.dragFeedback === feedback) return;
+      // Reference equality on freshly-allocated `{ targetStatus, kind }` always
+      // fails, so dragover would rerender on every move. Compare by primitive
+      // key so repeats over the same column become a no-op.
+      const prev = store.dragFeedback;
+      const prevKey = prev ? `${prev.targetStatus}|${prev.kind}` : null;
+      const nextKey = feedback ? `${feedback.targetStatus}|${feedback.kind}` : null;
+      if (prevKey === nextKey) return;
       store.dragFeedback = feedback;
       rerender();
     },
