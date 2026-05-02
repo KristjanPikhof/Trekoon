@@ -4,6 +4,7 @@ import { dirname, join } from "node:path";
 
 import { afterEach, describe, expect, test } from "bun:test";
 
+import { createBoardApiHandler } from "../../src/board/routes";
 import { startBoardServer } from "../../src/board/server";
 import { resolveStoragePaths } from "../../src/storage/path";
 import { openTrekoonDatabase, type TrekoonDatabase } from "../../src/storage/database";
@@ -342,6 +343,55 @@ describe("WAL watcher diff and resilience", (): void => {
       watcher.close();
       eventBus.close();
       watcherDb.close();
+    }
+  });
+
+  test("route PATCH publish suppresses the immediate WAL duplicate reconcile", async (): Promise<void> => {
+    const workspace: string = createWorkspace();
+    const storage: TrekoonDatabase = openTrekoonDatabase(workspace);
+    const mutations = new MutationService(storage.db, workspace);
+    const epic = mutations.createEpic({ title: "Route seed", description: "Seed" });
+    const task = mutations.createTask({ epicId: epic.id, title: "Before", description: "Task" });
+
+    const eventBus = createBoardEventBus();
+    const deltas: unknown[] = [];
+    eventBus.subscribe((event) => {
+      if (event.type === "snapshotDelta") {
+        deltas.push(event.snapshotDelta);
+      }
+    });
+    const watcher = startWalWatcher({
+      db: storage.db,
+      databaseFile: storage.paths.databaseFile,
+      eventBus,
+      debounceMs: 10,
+    });
+    const handler = createBoardApiHandler({
+      db: storage.db,
+      cwd: workspace,
+      token: "route-token",
+      eventBus,
+    });
+
+    try {
+      const response = await handler(new Request(`http://board.test/api/tasks/${task.id}?token=route-token`, {
+        method: "PATCH",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ title: "After" }),
+      }));
+      expect(response.status).toBe(200);
+      expect(deltas.length).toBe(1);
+
+      watcher.reconcile();
+      await new Promise((resolve) => setTimeout(resolve, 25));
+
+      expect(deltas.length).toBe(1);
+      const routeDelta = deltas[0] as { tasks?: Array<{ id?: string; title?: string }> };
+      expect(routeDelta.tasks).toContainEqual(expect.objectContaining({ id: task.id, title: "After" }));
+    } finally {
+      watcher.close();
+      eventBus.close();
+      storage.close();
     }
   });
 });
