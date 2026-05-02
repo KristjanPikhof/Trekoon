@@ -67,7 +67,11 @@ export async function runBoard(context: CliContext): Promise<CliResult> {
   const parsed = parseArgs(context.args);
   const subcommand: string | undefined = parsed.positional[0];
 
-  if (parsed.options.size > 0 || parsed.flags.size > 0) {
+  const revealToken: boolean = parsed.flags.has("reveal-token");
+  const allowedFlags = new Set(subcommand === "open" ? ["reveal-token"] : []);
+  const disallowedFlags = [...parsed.flags].filter((flag) => !allowedFlags.has(flag));
+
+  if (parsed.options.size > 0 || disallowedFlags.length > 0) {
     return failResult({
       command: subcommand ? `board.${subcommand}` : "board",
       human: "Board commands do not accept options yet.",
