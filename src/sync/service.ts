@@ -770,12 +770,12 @@ function applyIncomingResolutionEvent(db: Database, event: StoredEvent): boolean
   return updated.changes > 0;
 }
 
-function hasLocalEntityEdits(db: Database, entityKind: string, entityId: string, sourceBranch: string): boolean {
+function hasLocalEntityEdits(db: Database, entityKind: string, entityId: string, currentBranch: string): boolean {
   const row = db
     .query(
-      `SELECT 1 FROM events WHERE entity_kind = ? AND entity_id = ? AND (git_branch IS NULL OR git_branch != ?) LIMIT 1;`,
+      `SELECT 1 FROM events WHERE entity_kind = ? AND entity_id = ? AND git_branch = ? LIMIT 1;`,
     )
-    .get(entityKind, entityId, sourceBranch);
+    .get(entityKind, entityId, currentBranch);
   return row !== null;
 }
 
