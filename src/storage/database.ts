@@ -3,7 +3,7 @@ import { existsSync, mkdirSync } from "node:fs";
 import { Database } from "bun:sqlite";
 
 import { DomainError } from "../domain/types";
-import { migrateDatabase } from "./migrations";
+import { LATEST_MIGRATION_VERSION, migrateDatabase, readCurrentMigrationVersionReadOnly } from "./migrations";
 import { resolveLegacyWorktreeDatabaseFile, resolveStoragePaths, type StoragePaths } from "./path";
 import {
   inspectWorktreeDatabaseState,
