@@ -153,6 +153,24 @@ interface ConflictRow {
   readonly resolution: string;
   readonly created_at: number;
   readonly updated_at: number;
+  readonly worktree_path: string;
+  readonly current_branch: string;
+}
+
+/**
+ * Worktree+branch scope under which a conflict is recorded. Required so that
+ * cleanup, listing, and resolution paths can isolate conflicts that two
+ * sibling worktrees independently observed on the same entity. Without this
+ * scoping a `removeConflictsForEntityIds` from worktree A's pull would erase
+ * worktree B's pending conflicts on the same entity.
+ */
+interface ConflictScope {
+  readonly worktreePath: string;
+  readonly currentBranch: string;
+}
+
+function scopeFromGitContext(git: { worktreePath: string; branchName: string | null }): ConflictScope {
+  return { worktreePath: git.worktreePath, currentBranch: git.branchName ?? "" };
 }
 
 interface ResolutionEventPayload {
