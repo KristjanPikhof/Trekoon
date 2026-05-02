@@ -994,60 +994,17 @@ export class TrackerDomain {
   }
 
   planStatusCascade(rootKind: StatusCascadeRootKind, rootId: string, targetStatus: string): StatusCascadePlan {
-    return planStatusCascadeImpl(this.#cascadePlannerReader(), rootKind, rootId, targetStatus);
-  }
-
-  #cascadePlannerReader(): CascadePlannerReader {
-    return {
-      buildEpicTreeDetailed: (id: string) => this.buildEpicTreeDetailed(id),
-      buildTaskTreeDetailed: (id: string) => this.buildTaskTreeDetailed(id),
-      listDependenciesBySourceIds: (ids: readonly string[]) => this.listDependenciesBySourceIds(ids),
-      loadDependencyTargetStatuses: (ids: readonly string[]) => this.#loadCascadeDependencyTargetStatuses(ids),
-    };
-  }
-
-  #loadCascadeDependencyTargetStatuses(sourceIds: readonly string[]): readonly CascadeDependencyTargetStatusRow[] {
-    if (sourceIds.length === 0) {
-      return [];
-    }
-
-    type DepStatusRow = {
-      source_id: string;
-      source_kind: DependencyNodeKind;
-      depends_on_id: string;
-      depends_on_kind: DependencyNodeKind;
-      dep_status: string | null;
-    };
-
-    const collected: CascadeDependencyTargetStatusRow[] = [];
-
-    for (let offset = 0; offset < sourceIds.length; offset += SQLITE_MAX_VARIABLES) {
-      const chunkIds = sourceIds.slice(offset, offset + SQLITE_MAX_VARIABLES);
-      const inPlaceholders: string = chunkIds.map(() => "?").join(", ");
-      const rows = this.#db
-        .query(
-          `SELECT d.source_id, d.source_kind, d.depends_on_id, d.depends_on_kind,
-                  COALESCE(t.status, s.status) AS dep_status
-           FROM dependencies d
-           LEFT JOIN tasks t ON d.depends_on_kind = 'task' AND d.depends_on_id = t.id
-           LEFT JOIN subtasks s ON d.depends_on_kind = 'subtask' AND d.depends_on_id = s.id
-           WHERE d.source_id IN (${inPlaceholders})
-           ORDER BY d.created_at ASC, d.id ASC;`,
-        )
-        .all(...chunkIds) as DepStatusRow[];
-
-      for (const row of rows) {
-        collected.push({
-          sourceId: row.source_id,
-          sourceKind: row.source_kind,
-          dependsOnId: row.depends_on_id,
-          dependsOnKind: row.depends_on_kind,
-          dependsOnStatus: row.dep_status,
-        });
-      }
-    }
-
-    return collected;
+    return planStatusCascadeImpl(
+      {
+        buildEpicTreeDetailed: (id: string) => this.buildEpicTreeDetailed(id),
+        buildTaskTreeDetailed: (id: string) => this.buildTaskTreeDetailed(id),
+        listDependenciesBySourceIds: (ids: readonly string[]) => this.listDependenciesBySourceIds(ids),
+        loadDependencyTargetStatuses: (ids: readonly string[]) => loadCascadeDependencyTargetStatuses(this.#db, ids),
+      },
+      rootKind,
+      rootId,
+      targetStatus,
+    );
   }
 
   collectEpicSearchScope(epicId: string): readonly SearchNode[] {
