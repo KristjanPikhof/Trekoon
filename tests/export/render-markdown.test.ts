@@ -145,7 +145,7 @@ describe("renderMarkdown", () => {
     const epicB = domain.createEpic({ title: "Epic B", description: "Second" });
     const taskA = domain.createTask({ epicId: epicA.id, title: "Task A", description: "In A" });
     const taskB = domain.createTask({ epicId: epicB.id, title: "Task B", description: "In B" });
-    domain.addDependency(taskA.id, taskB.id);
+    writeTransaction(db, () => domain.addDependency(taskA.id, taskB.id));
     const bundle = buildEpicExportBundle(domain, epicA.id);
     const md = renderMarkdown(bundle);
 
@@ -232,7 +232,7 @@ describe("renderMarkdown", () => {
     const epicB = domain.createEpic({ title: "Epic B", description: "Second" });
     const taskA = domain.createTask({ epicId: epicA.id, title: "Task A", description: "In A" });
     const taskB = domain.createTask({ epicId: epicB.id, title: "Has | pipe", description: "In B" });
-    domain.addDependency(taskA.id, taskB.id);
+    writeTransaction(db, () => domain.addDependency(taskA.id, taskB.id));
     const bundle = buildEpicExportBundle(domain, epicA.id);
     const md = renderMarkdown(bundle);
 
