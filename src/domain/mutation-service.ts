@@ -261,8 +261,25 @@ export class MutationService {
 
   deleteEpic(id: string): void {
     this.#writeTransaction((): void => {
+      const tasks = this.#domain.listTasks(id);
+      const taskIds = tasks.map((task) => task.id);
+      const subtasksByTaskId = taskIds.length > 0
+        ? this.#domain.listSubtasksByTaskIds(taskIds)
+        : new Map<string, readonly SubtaskRecord[]>();
+
       this.#domain.deleteEpic(id);
-      this.#emitEpicDeleted(id);
+
+      const epicDeleteEventId = this.#emitEpicDeleted(id);
+
+      for (const task of tasks) {
+        const taskDeleteEventId = this.#emitTaskDeleted(task.id);
+        const subtasks = subtasksByTaskId.get(task.id) ?? [];
+        for (const subtask of subtasks) {
+          this.#emitSubtaskDeleted(subtask.id, { taskId: task.id, sourceEventId: taskDeleteEventId });
+        }
+      }
+
+      void epicDeleteEventId;
     });
   }
 
