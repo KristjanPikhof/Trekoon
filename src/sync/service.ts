@@ -1544,6 +1544,11 @@ export function syncPull(cwd: string, sourceBranch: string): PullSummary {
     let lastEventAt: number | null = cursor?.last_event_at ?? null;
     let scannedEvents = 0;
 
+    // Per-pull memoization for "ours" field-value lookups. Reused across
+    // every incoming event so repeated probes of the same (entity, field)
+    // are O(1) after first hit.
+    const oursCache = createOursValueCache();
+
     writeTransaction(storage.db, (): void => {
       while (true) {
         const incomingEvents = queryBranchEventsSinceBatch(
