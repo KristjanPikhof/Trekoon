@@ -41,7 +41,22 @@ afterEach((): void => {
       rmSync(dir, { recursive: true, force: true });
     }
   }
+  mock.restore();
 });
+
+function mockGitContextAs(workspace: string, branchName: string): void {
+  mock.module("../../src/sync/git-context", () => ({
+    resolveGitContext: () => ({
+      worktreePath: workspace,
+      branchName,
+      headSha: null,
+      persistedAt: Date.now(),
+    }),
+    persistGitContext: () => undefined,
+    clearGitContextCache: () => undefined,
+    gitContextCacheSize: () => 0,
+  }));
+}
 
 type Db = ReturnType<typeof openTrekoonDatabase>["db"];
 
