@@ -90,8 +90,8 @@ What the agent does during execution:
    calls `task done`
 6. `task done` returns which downstream tasks just became unblocked, so the
    orchestrator knows what to dispatch next
-7. After all tasks complete: code review, tests, manual verification, then marks
-   the epic `done`
+7. After all tasks complete: review agent or review skill for non-trivial
+   changes, tests, manual verification, then marks the epic `done`
 
 The orchestrator uses `task done` responses to drive the whole loop. No polling,
 no guessing. When a task finishes, Trekoon tells you exactly what's ready next.
