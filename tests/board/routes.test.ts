@@ -1380,4 +1380,45 @@ describe("board routes", (): void => {
     }
   });
 
+  test("redacts secrets from DomainError message and details before serialising on the wire", async (): Promise<void> => {
+    const cwd = createWorkspace();
+    const storage = openTrekoonDatabase(cwd);
+
+    try {
+      // Force a `not_found` DomainError whose message and details echo the
+      // user-supplied entity id. We pick an id that begins with `Bearer `
+      // followed by a high-entropy-looking secret to assert that the redact
+      // pass strips it from both the top-level message and the nested
+      // details (P1 finding 10).
+      const leakedSecret = "abc-super-secret";
+      const maliciousId = `Bearer ${leakedSecret}`;
+      const handler = createBoardApiHandler({ db: storage.db, cwd, token: "secret-token" });
+      const response = await handler(
+        new Request(`http://board.test/api/tasks/${encodeURIComponent(maliciousId)}?token=secret-token`, {
+          method: "PATCH",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({ status: "in_progress" }),
+        }),
+      );
+
+      const body = await response.json() as {
+        ok: boolean;
+        error: { code: string; message: string; details?: Record<string, unknown> };
+      };
+      const rawText = JSON.stringify(body);
+
+      expect(response.status).toBe(404);
+      expect(body.ok).toBeFalse();
+      expect(body.error.code).toBe("not_found");
+      // Bearer prefix is rewritten to "Bearer REDACTED" by redactSensitive,
+      // so the original secret must be absent everywhere — message *and*
+      // details *and* the serialised JSON.
+      expect(body.error.message).not.toContain(leakedSecret);
+      expect(rawText).not.toContain(leakedSecret);
+      expect(body.error.message).toContain("REDACTED");
+    } finally {
+      storage.close();
+    }
+  });
+
 });
