@@ -169,6 +169,8 @@ All notable changes to Trekoon are documented in this file.
 - **Sync resolve `lookupOursFieldValue` parameterizes `fieldName`** as
   a SQLite bind value (defense in depth) while still gating by
   `SAFE_FIELD_NAME_PATTERN`.
+- **`escapeHtml` covers the apostrophe (`'`).** All five HTML-significant
+  characters (`&`, `<`, `>`, `"`, `'`) are now escaped.
 
 ## 0.4.1
 
