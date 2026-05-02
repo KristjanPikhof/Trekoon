@@ -160,6 +160,26 @@ describe("board server auth", (): void => {
     }
   });
 
+  test("token redirect normalizes double-slash paths to a single-slash Location", async (): Promise<void> => {
+    const workspace: string = createWorkspace();
+    prepareBoardAssets(workspace);
+
+    const boardServer = startBoardServer({ cwd: workspace, token: "normalize-token" });
+
+    try {
+      const redirect = await fetch(`${boardServer.origin}//nested/path?token=normalize-token`, {
+        redirect: "manual",
+      });
+
+      expect(redirect.status).toBe(302);
+      expect(redirect.headers.get("location")).toBe("/nested/path");
+      expect(redirect.headers.get("location") ?? "").not.toStartWith("//");
+      expect(redirect.headers.get("referrer-policy")).toBe("no-referrer");
+    } finally {
+      boardServer.stop();
+    }
+  });
+
   test("rejects invalid cookie credentials", async (): Promise<void> => {
     const workspace: string = createWorkspace();
     prepareBoardAssets(workspace);
