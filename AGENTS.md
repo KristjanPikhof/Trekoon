@@ -1,7 +1,3 @@
-# CLAUDE.md
-
-Guide for agents working in this repo.
-
 ## Bootstrap (start of every session)
 
 1. `trekoon --toon session` — diagnostics, sync state, next ready task. If `recoveryRequired`, stop and `trekoon --toon init`.
