@@ -719,10 +719,11 @@ describe("storage lifecycle", (): void => {
       const summary = rollbackDatabase(storage.db, 6);
       const indexes: string[] = indexNames(storage.db);
 
-      expect(summary.fromVersion).toBe(10);
+      expect(summary.fromVersion).toBe(11);
       expect(summary.toVersion).toBe(6);
-      expect(summary.rolledBack).toBe(4);
+      expect(summary.rolledBack).toBe(5);
       expect(summary.rolledBackMigrations).toEqual([
+        "0011_sync_conflicts_worktree_branch_scope",
         "0010_board_idempotency_retention_index",
         "0009_board_idempotency_storage",
         "0008_sync_scaling_indexes",
