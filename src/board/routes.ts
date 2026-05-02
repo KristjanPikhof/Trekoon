@@ -161,7 +161,22 @@ function describeBoardError(mutations: MutationService, error: unknown, requestL
   };
 }
 
-function buildMutationResponse(_domain: TrackerDomain, data: Record<string, unknown>, status = 200): Response {
+function publishSnapshotDeltaIfPresent(
+  eventBus: BoardEventBus | undefined,
+  data: Record<string, unknown>,
+): void {
+  if (!eventBus) {
+    return;
+  }
+
+  const delta = readSnapshotDelta(data);
+  if (delta) {
+    eventBus.publishSnapshotDelta(delta);
+  }
+}
+
+function buildMutationResponse(_domain: TrackerDomain, data: Record<string, unknown>, status = 200, eventBus?: BoardEventBus): Response {
+  publishSnapshotDeltaIfPresent(eventBus, data);
   return jsonResponse(status, {
     ok: true,
     data,
