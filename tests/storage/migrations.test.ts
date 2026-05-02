@@ -1,5 +1,4 @@
 import {
-  chmodSync,
   copyFileSync,
   existsSync,
   mkdtempSync,
