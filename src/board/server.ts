@@ -90,7 +90,7 @@ function isUnavailablePortError(error: unknown): boolean {
 }
 
 function buildBoardSessionCookie(token: string): string {
-  return `trekoon_board_session=${encodeURIComponent(token)}; Path=/; SameSite=Strict; HttpOnly`;
+  return `trekoon_board_session=${encodeURIComponent(token)}; Path=/; Max-Age=86400; SameSite=Strict; HttpOnly`;
 }
 
 function readBoardSessionCookie(request: Request): string | null {
@@ -120,6 +120,13 @@ function isAuthenticatedBoardRequest(request: Request, url: URL, token: string):
 
   const cookieToken = readBoardSessionCookie(request);
   return cookieToken !== null && cookieToken === token;
+}
+
+function buildTokenStrippedLocation(url: URL): string {
+  const redirectUrl = new URL(url);
+  redirectUrl.searchParams.delete("token");
+  const pathname = `/${redirectUrl.pathname.replace(/^\/+/u, "")}`;
+  return `${pathname}${redirectUrl.search}${redirectUrl.hash}`;
 }
 
 function serializeInlineJson(value: unknown): string {
@@ -195,15 +202,15 @@ export function startBoardServer(options: StartBoardServerOptions = {}): BoardSe
           // and Referer headers free of the secret on the very first
           // navigation, severing the leakage surface that an open URL bar
           // would otherwise expose. The cookie carries auth from here on.
-          const redirectUrl = new URL(url);
-          redirectUrl.searchParams.delete("token");
-          // Preserve the relative location so the redirect works regardless
-          // of how the client reached us (loopback IP vs. localhost name).
-          const location = `${redirectUrl.pathname}${redirectUrl.search}${redirectUrl.hash}`;
+          // Preserve a single-slash relative location so the redirect works
+          // regardless of how the client reached us, without creating a
+          // scheme-relative `//host` Location for odd incoming paths.
+          const location = buildTokenStrippedLocation(url);
           return new Response(null, {
             status: 302,
             headers: {
               ...responseHeaders,
+              "referrer-policy": "no-referrer",
               location: location.length > 0 ? location : "/",
             },
           });
