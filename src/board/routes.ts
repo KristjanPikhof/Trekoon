@@ -841,6 +841,18 @@ export function createBoardApiHandler(context: BoardRouteContext): (request: Req
         },
       });
     } catch (error: unknown) {
+      // PreconditionFailedError is a typed signal from the *WithIfMatch
+      // CAS variants. It carries the freshly-fetched currentUpdatedAt so
+      // the 409 payload is always consistent with the post-rollback state.
+      if (error instanceof PreconditionFailedError) {
+        return preconditionFailedResponse({
+          entityKind: error.entityKind,
+          entityId: error.entityId,
+          currentUpdatedAt: error.currentUpdatedAt,
+          providedUpdatedAt: error.providedUpdatedAt,
+        });
+      }
+
       const routeError = describeBoardError(mutations, error, requestLabel);
       return jsonResponse(routeError.status, {
         ok: false,
