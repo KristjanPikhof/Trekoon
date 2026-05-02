@@ -1209,11 +1209,10 @@ export async function runTask(context: CliContext): Promise<CliResult> {
           });
         }
 
-        const nextDescription =
-          append === undefined
-            ? description
-            : appendLine(domain.getTaskOrThrow(taskId).description, append);
-        const task = mutations.updateTask(taskId, { title, description: nextDescription, status, owner });
+        const task =
+          append !== undefined
+            ? mutations.appendToTaskDescription({ taskId, append, status, owner })
+            : mutations.updateTask(taskId, { title, description, status, owner });
 
         return okResult({
           command: "task.update",
