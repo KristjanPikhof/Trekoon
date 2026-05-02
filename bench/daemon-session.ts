@@ -125,38 +125,40 @@ function reportSummary(summary: BenchSummary): void {
   );
 }
 
-function startDaemonProcess(workspace: string): Promise<{
+async function startDaemonProcess(workspace: string): Promise<{
   process: ChildProcessWithoutNullStreams;
   socketPath: string;
 }> {
-  return new Promise((resolveStart, rejectStart): void => {
-    const child = spawn("bun", [ENTRY, "serve"], {
-      cwd: workspace,
-      stdio: ["ignore", "pipe", "pipe"],
-    });
-
-    const cleanup = (): void => {
-      child.stdout.removeAllListeners("data");
-      child.stderr.removeAllListeners("data");
-    };
-
-    child.stdout.setEncoding("utf8");
-    child.stderr.setEncoding("utf8");
-    child.stdout.on("data", (data: string): void => {
-      const match = data.match(/listening on (.+\.sock)/);
-      if (match) {
-        cleanup();
-        resolveStart({ process: child, socketPath: match[1]!.trim() });
-      }
-    });
-    child.stderr.on("data", (data: string): void => {
-      process.stderr.write(`[daemon stderr] ${data}`);
-    });
-    child.on("exit", (code: number | null): void => {
-      cleanup();
-      rejectStart(new Error(`daemon exited before listening (code=${code})`));
-    });
+  // Resolve the canonical socket path the daemon will bind to. The bench
+  // polls for the socket file rather than parsing the daemon's banner — the
+  // banner is suppressed in non-human output mode.
+  const socketPath: string = resolveDaemonSocketPath(workspace);
+  const child = spawn("bun", [ENTRY, "serve"], {
+    cwd: workspace,
+    stdio: ["ignore", "pipe", "pipe"],
   });
+
+  child.stdout.setEncoding("utf8");
+  child.stderr.setEncoding("utf8");
+  child.stderr.on("data", (data: string): void => {
+    process.stderr.write(`[daemon stderr] ${data}`);
+  });
+
+  const deadline: number = Date.now() + 10_000;
+  while (!isDaemonSocketPresent(socketPath)) {
+    if (Date.now() > deadline) {
+      child.kill("SIGKILL");
+      throw new Error(`daemon did not bind ${socketPath} within 10s`);
+    }
+    if (child.exitCode !== null) {
+      throw new Error(`daemon exited before binding socket (code=${child.exitCode})`);
+    }
+    await new Promise<void>((settle): void => {
+      setTimeout(settle, 50);
+    });
+  }
+
+  return { process: child, socketPath };
 }
 
 async function main(): Promise<void> {
