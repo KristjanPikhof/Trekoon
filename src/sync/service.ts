@@ -916,7 +916,12 @@ function hasLocalDependencyRemovalForIdentity(
   return row !== null;
 }
 
-function hasLocalDependencyDeleteConflict(db: Database, event: StoredEvent, currentBranch: string): boolean {
+function hasLocalDependencyDeleteConflict(db: Database, event: StoredEvent, currentBranch: string | null): boolean {
+  // Detached HEAD has no named branch — no local-branch events can conflict.
+  if (currentBranch === null) {
+    return false;
+  }
+
   const identity = dependencyEventIdentity(event);
   if (identity === null) {
     return false;
@@ -934,7 +939,12 @@ function hasLocalDependencyDeleteConflict(db: Database, event: StoredEvent, curr
   return hasLocalDependencyEditsForIdentity(db, currentBranch, identity);
 }
 
-function hasLocalDeleteCascadeEdits(db: Database, event: StoredEvent, currentBranch: string): boolean {
+function hasLocalDeleteCascadeEdits(db: Database, event: StoredEvent, currentBranch: string | null): boolean {
+  // Detached HEAD has no named branch — no local-branch events can conflict.
+  if (currentBranch === null) {
+    return false;
+  }
+
   if (hasLocalEntityEdits(db, event.entity_kind, event.entity_id, currentBranch)) {
     return true;
   }
