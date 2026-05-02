@@ -219,6 +219,7 @@ function publishSnapshotDeltaIfPresent(
   const delta = readSnapshotDelta(data);
   if (delta) {
     eventBus.publishSnapshotDelta(delta);
+    eventBus.markInProcessWrite();
   }
 }
 
