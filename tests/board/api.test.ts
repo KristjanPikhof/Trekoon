@@ -28,7 +28,7 @@ type Notice = {
   message: string;
   title?: string;
   retryLabel?: string;
-  retryMutationId?: number;
+  retryMutationId?: string;
 } | null;
 
 const originalFetch = globalThis.fetch;
