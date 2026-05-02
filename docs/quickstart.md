@@ -148,6 +148,54 @@ a file extension means "write this file"; no extension means "put the default-
 named file in this directory". Use `--overwrite` to resave after the plan state
 changes.
 
+## Claim work atomically
+
+When multiple agents or lanes work in parallel, use `claim` to avoid races:
+
+```bash
+trekoon task claim <task-id> --owner <owner>
+trekoon subtask claim <subtask-id> --owner <owner>
+```
+
+Both commands use a SQL compare-and-swap: the claim succeeds only when the item
+is `todo` or `blocked` and the owner is `NULL` or already set to `<owner>`.
+The response includes `claimed` (true/false), `currentOwner`, `currentStatus`,
+and the full entity record on success. Two concurrent claims return exactly one
+`claimed=true`.
+
+## Database backup and migration
+
+Before any manual migration recovery, snapshot the database:
+
+```bash
+trekoon migrate backup
+trekoon migrate backup --retain 5   # keep last 5 backups (default 10)
+```
+
+This writes a timestamped copy of `.trekoon/trekoon.db` next to the live file.
+To check the current schema version or roll back:
+
+```bash
+trekoon migrate status
+trekoon migrate rollback              # one version back
+trekoon migrate rollback --to-version 1
+```
+
+## Daemon mode (experimental)
+
+`trekoon serve` starts a foreground daemon on a Unix-domain socket inside
+`.trekoon`. Subsequent invocations skip Bun startup, module load, and database
+open, which makes repeated calls noticeably faster:
+
+```bash
+trekoon serve                         # start the daemon (foreground)
+trekoon --daemon session              # route a call through the daemon
+TREKOON_DAEMON=1 trekoon session      # same, via environment variable
+```
+
+If the socket is missing or unreachable the client falls back silently to the
+normal one-shot path. The socket is 0o600 and `.trekoon` is forced to 0o700.
+
 ## Check progress
 
 ```bash
