@@ -68,19 +68,23 @@ export function isCursorStale(db: Database, cursorToken: string, sourceBranch: s
     }
   }
 
-  // Compute the earliest retained created_at across both the live events
-  // table and event_archive (pruned events). If the cursor predates that
-  // minimum, history before the cursor has been lost and re-bootstrap is
-  // required.
+  // Compute the earliest retained created_at on the cursor's source branch
+  // across both the live events table and event_archive (pruned events). If
+  // the cursor predates that minimum, history before the cursor on this
+  // branch has been lost and re-bootstrap is required.
+  //
+  // Scoping by git_branch is essential: a global MIN would falsely report
+  // staleness on branch B simply because branch A has older retained events
+  // than the cursor on B.
   const minRow = db
     .query(
       `SELECT MIN(min_ts) AS min_ts FROM (
-         SELECT MIN(created_at) AS min_ts FROM events
+         SELECT MIN(created_at) AS min_ts FROM events WHERE git_branch = ?
          UNION ALL
-         SELECT MIN(created_at) AS min_ts FROM event_archive
+         SELECT MIN(created_at) AS min_ts FROM event_archive WHERE git_branch = ?
        );`,
     )
-    .get() as { min_ts: number | null } | null;
+    .get(sourceBranch, sourceBranch) as { min_ts: number | null } | null;
 
   const minTs: number | null = minRow?.min_ts ?? null;
 
