@@ -468,6 +468,12 @@ export async function bootLegacyBoard(options = {}) {
 
     const api = createApi(model, { sessionToken: runtimeSession.token, rerender });
 
+    // Subscribe to /api/snapshot/stream so external CLI writes (picked up by
+    // the WAL watcher) and concurrent-tab mutations are reflected in this
+    // board within ~1s without manual refresh. applySnapshotDelta is idempotent
+    // so re-receiving deltas already applied via mutation responses is safe.
+    subscribeSnapshotStream(model, { sessionToken: runtimeSession.token, rerender });
+
     // Actions for delegation
     const actions = createBoardActions({
       model,
