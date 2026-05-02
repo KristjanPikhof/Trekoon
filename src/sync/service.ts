@@ -618,18 +618,21 @@ function entityFieldConflict(
 }
 
 /**
- * Slow-path conflict detection for dependency events. Preserves the legacy
- * batched history walk because dependency identity (source/depends_on tuple)
- * must match the incoming event — a static-field probe is not sufficient
- * when distinct dependencies share an entity_id.
+ * Slow-path conflict detection. Preserves the legacy batched history walk
+ * for two cases:
+ *   1. Dependency events — identity (source/depends_on tuple) must match
+ *      the incoming event because distinct dependencies can share an
+ *      entity_id. A static-field probe is not sufficient.
+ *   2. Field names that cannot safely be inlined into a JSON1 path — falls
+ *      back to JS-side payload parsing instead of a json_type SQL probe.
  */
-function entityFieldConflictDependencyWalk(
+function entityFieldConflictHistoryWalk(
   localDb: Database,
   currentBranch: string,
   event: StoredEvent,
   fieldName: string,
   theirsValue: string | null,
-  incomingDependencyIdentity: DependencyEventIdentity,
+  incomingDependencyIdentity: DependencyEventIdentity | null,
 ): { oursValue: string | null; theirsValue: string | null } | null {
   let beforeCreatedAt = Number.MAX_SAFE_INTEGER;
   let beforeId = "\uffff";
