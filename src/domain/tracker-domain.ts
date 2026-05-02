@@ -1213,6 +1213,7 @@ export class TrackerDomain {
   }
 
   removeDependency(sourceId: string, dependsOnId: string): number {
+    this.#assertInTransaction("removeDependency");
     const normalizedSourceId: string = assertNonEmpty("sourceId", sourceId);
     const normalizedDependsOnId: string = assertNonEmpty("dependsOnId", dependsOnId);
     const result = this.#db
