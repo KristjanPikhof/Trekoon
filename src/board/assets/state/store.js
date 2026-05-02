@@ -591,5 +591,20 @@ export function createStore(initialSnapshot, options = {}) {
     getSelectedTask() {
       return boardStateMemo.get(state).selectedTask;
     },
+
+    /**
+     * Invalidate the memoized board state. Call after a direct mutation of
+     * `model.store` that didn't go through `setState`/`syncState`/`notify`,
+     * before triggering a rerender, so `getBoardState()` recomputes.
+     */
+    invalidateBoardStateMemo() {
+      boardStateMemo.invalidate();
+    },
+
+    /**
+     * Notify subscribers (and invalidate the memo). Use after a direct
+     * mutation of `model.store` that needs to be reflected in derived state.
+     */
+    notify,
   };
 }
