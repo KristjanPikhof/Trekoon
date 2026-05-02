@@ -281,6 +281,9 @@ export function openTrekoonDatabase(
         // No-op: the daemon owns the lifetime, freed via closeCachedDatabases().
       },
     };
+    // Bound the cache before insertion so a daemon serving many distinct
+    // cwds doesn't accumulate open FDs without limit.
+    evictLruIfNeeded();
     cachedDatabases.set(paths.databaseFile, cachedHandle);
     return cachedHandle;
   }
