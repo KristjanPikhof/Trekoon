@@ -101,6 +101,66 @@ describe("redactSensitive", (): void => {
       "code=ECONNREFUSED host=localhost",
     );
   });
+
+  // --- expanded key coverage ---
+  test("redacts api_key=value", (): void => {
+    expect(redactSensitive("api_key=abc123")).toBe("api_key=REDACTED");
+  });
+
+  test("redacts apikey=value", (): void => {
+    expect(redactSensitive("apikey=abc123")).toBe("apikey=REDACTED");
+  });
+
+  test("redacts api-key=value", (): void => {
+    expect(redactSensitive("api-key=abc123")).toBe("api-key=REDACTED");
+  });
+
+  test("redacts client_secret=value", (): void => {
+    expect(redactSensitive("client_secret=mysecret")).toBe("client_secret=REDACTED");
+  });
+
+  test("redacts private_key=value", (): void => {
+    expect(redactSensitive("private_key=pem-contents")).toBe("private_key=REDACTED");
+  });
+
+  test("redacts cookie=value", (): void => {
+    expect(redactSensitive("cookie=session=abc")).toBe("cookie=REDACTED");
+  });
+
+  test("redacts session_id=value", (): void => {
+    expect(redactSensitive("session_id=sess_xyz")).toBe("session_id=REDACTED");
+  });
+
+  // --- single-quoted values ---
+  test("redacts single-quoted token='value'", (): void => {
+    expect(redactSensitive("token='abc123'")).toBe("token='REDACTED'");
+  });
+
+  test("redacts single-quoted JSON 'password':'hunter2'", (): void => {
+    expect(redactSensitive("'password':'hunter2'")).toBe("'password':'REDACTED'");
+  });
+
+  // --- angle-bracket / tag-style values ---
+  test("redacts tag-style <token>value</token>", (): void => {
+    expect(redactSensitive("<token>abc123</token>")).toBe("<token>REDACTED</token>");
+  });
+
+  test("redacts tag-style <password>hunter2</password>", (): void => {
+    expect(redactSensitive("<password>hunter2</password>")).toBe(
+      "<password>REDACTED</password>",
+    );
+  });
+
+  // --- standalone Bearer / Basic tokens ---
+  test("redacts standalone Bearer token", (): void => {
+    expect(redactSensitive("got Bearer eyJhbGciOiJIUzI1NiJ9 from header")).toBe(
+      "got Bearer REDACTED from header",
+    );
+  });
+
+  test("redacts standalone Basic token", (): void => {
+    expect(redactSensitive("auth: Basic dXNlcjpwYXNz here")).toBe("auth: Basic REDACTED here");
+  });
 });
 
 describe("safeErrorMessage redaction", (): void => {
