@@ -2238,9 +2238,10 @@ export function syncResolveAll(
   try {
     persistGitContext(storage.db, git);
 
+    const scope: ConflictScope = scopeFromGitContext(git);
     const resolvedIds: string[] = writeTransaction(storage.db, (): string[] => {
       const expectedConflictIds = options.expectedConflictIds;
-      const orderedConflictIds = expectedConflictIds ?? queryPendingConflictIds(storage.db, filters);
+      const orderedConflictIds = expectedConflictIds ?? queryPendingConflictIds(storage.db, filters, scope);
 
       if (orderedConflictIds.length === 0) {
         throw new DomainError({
