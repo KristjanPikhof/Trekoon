@@ -428,13 +428,7 @@ export class MutationService {
         validateStatusTransition(existing.status, input.status, "subtask", id);
       }
       const subtask = this.#domain.updateSubtask(id, input);
-      this.#appendEntityEvent("subtask", subtask.id, ENTITY_OPERATIONS.subtask.updated, {
-        task_id: subtask.taskId,
-        title: subtask.title,
-        description: subtask.description,
-        status: subtask.status,
-        owner: subtask.owner,
-      });
+      this.#emitSubtaskUpdated(subtask);
       return subtask;
     });
   }
@@ -443,7 +437,7 @@ export class MutationService {
     return this.#writeTransaction((): { deletedDependencyIds: string[] } => {
       const touchingDependencies = this.#domain.listDependenciesTouchingNode(id);
       this.#domain.deleteSubtask(id);
-      const subtaskDeleteEventId = this.#appendEntityEvent("subtask", id, ENTITY_OPERATIONS.subtask.deleted, {});
+      const subtaskDeleteEventId = this.#emitSubtaskDeleted(id);
       for (const dependency of touchingDependencies) {
         this.#appendEntityEvent(
           "dependency",
