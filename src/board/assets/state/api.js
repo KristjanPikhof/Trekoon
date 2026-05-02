@@ -109,13 +109,15 @@ export function computeInverseDelta(previousSnapshot, optimisticSnapshot) {
     }
 
     // Entities present in both but mutated -> restore the previous version.
-    // cloneSnapshot always produces fresh references for the optimistic snapshot,
-    // so reference-inequality is sufficient: any record the optimistic patch
-    // touched will be a different object from the pre-patch one. This avoids an
-    // O(snapshot) JSON.stringify on every rollback path.
+    // cloneSnapshot/normalizeSnapshot always produce fresh references for
+    // every record in the optimistic snapshot, so plain reference inequality
+    // would flag every entity. Use a shallow field-by-field equality check
+    // instead — equivalent to a structural compare for these flat records but
+    // O(field) per record rather than O(snapshot) JSON.stringify on each
+    // rollback (P2 perf finding).
     for (const [id, afterRecord] of after) {
       const beforeRecord = before.get(id);
-      if (beforeRecord && beforeRecord !== afterRecord) {
+      if (beforeRecord && beforeRecord !== afterRecord && !recordsShallowEqual(beforeRecord, afterRecord)) {
         restored.push(beforeRecord);
       }
     }
