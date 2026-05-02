@@ -33,6 +33,13 @@ All notable changes to Trekoon are documented in this file.
 - Canonical status-machine reference at
   `.agents/skills/trekoon/reference/status-machine.md` and a sync
   reference at `reference/sync.md`.
+- `trekoon migrate backup` subcommand snapshots `.trekoon/trekoon.db` to
+  a timestamped sibling file (e.g. `trekoon.db.backup-<ISO8601>`) using
+  SQLite `VACUUM INTO`. Read-only on the source, returns
+  `backupPath`/`bytes`/`migrationVersion` for machine consumers.
+- `migration_down_unsupported` error code on irreversible v4-v6
+  rollbacks. The error message points at `trekoon migrate backup` so
+  operators take a snapshot before any manual recovery.
 
 ### Changed
 
