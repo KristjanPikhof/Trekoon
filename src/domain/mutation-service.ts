@@ -71,32 +71,32 @@ function normalizeOwnerInput(owner: string | null | undefined): string | null | 
 
 /**
  * Thrown by the *WithIfMatch CAS variants when the supplied `If-Match`
- * `updatedAt` does not match the row currently in the database.
+ * version token does not match the row currently in the database.
  *
  * The error is **not** a `DomainError` so the generic `toBoardRouteError`
  * fall-through doesn't accidentally surface it as a 400 — route handlers
  * catch it explicitly and emit the canonical 409 `precondition_failed`
- * payload (with `currentUpdatedAt` fetched inside the same transaction
+ * payload (with `currentVersion` fetched inside the same transaction
  * that observed the mismatch).
  */
 export class PreconditionFailedError extends Error {
   readonly entityKind: "epic" | "task" | "subtask";
   readonly entityId: string;
-  readonly currentUpdatedAt: number;
-  readonly providedUpdatedAt: number;
+  readonly currentVersion: number;
+  readonly providedVersion: number;
 
   constructor(input: {
     entityKind: "epic" | "task" | "subtask";
     entityId: string;
-    currentUpdatedAt: number;
-    providedUpdatedAt: number;
+    currentVersion: number;
+    providedVersion: number;
   }) {
-    super("If-Match version does not match current updatedAt");
+    super("If-Match version does not match current version");
     this.name = "PreconditionFailedError";
     this.entityKind = input.entityKind;
     this.entityId = input.entityId;
-    this.currentUpdatedAt = input.currentUpdatedAt;
-    this.providedUpdatedAt = input.providedUpdatedAt;
+    this.currentVersion = input.currentVersion;
+    this.providedVersion = input.providedVersion;
   }
 }
 
@@ -296,10 +296,10 @@ export class MutationService {
    * Atomic If-Match CAS variant of {@link updateEpic}.
    *
    * The `If-Match` precondition is enforced INSIDE the write transaction
-   * via a SQL compare-and-swap (`UPDATE ... WHERE id = ? AND updated_at = ?`).
+   * via a SQL compare-and-swap (`UPDATE ... WHERE id = ? AND version = ?`).
    * If zero rows are affected we determine whether the row is missing
    * (→ `DomainError(not_found)`) or merely stale (→ {@link PreconditionFailedError}
-   * with the freshly-fetched `currentUpdatedAt`).
+   * with the freshly-fetched `currentVersion`).
    *
    * This eliminates the read-check-then-write race the previous route-level
    * check had: a concurrent writer could land between `parseIfMatchHeader`'s
@@ -312,7 +312,7 @@ export class MutationService {
    */
   updateEpicWithIfMatch(
     id: string,
-    ifMatchUpdatedAt: number,
+    ifMatchVersion: number,
     input: { title?: string | undefined; description?: string | undefined; status?: string | undefined },
   ): EpicRecord {
     return this.#writeTransaction((): EpicRecord => {
@@ -343,22 +343,22 @@ export class MutationService {
           `UPDATE epics
               SET title = ?, description = ?, status = ?, updated_at = ?, version = version + 1
             WHERE id = ?
-              AND updated_at = ?
+              AND version = ?
            RETURNING id`,
         )
-        .get(nextTitle, nextDescription, nextStatus, now, id, ifMatchUpdatedAt) as { id: string } | null;
+        .get(nextTitle, nextDescription, nextStatus, now, id, ifMatchVersion) as { id: string } | null;
 
       if (result === null) {
         // Zero rows changed. We already proved the row exists via
         // getEpicOrThrow, so the only remaining failure mode is a stale
-        // precondition. Re-fetch updatedAt inside the same tx so the
+        // precondition. Re-fetch version inside the same tx so the
         // caller's 409 carries the freshest value.
         const current = this.#domain.getEpicOrThrow(id);
         throw new PreconditionFailedError({
           entityKind: "epic",
           entityId: id,
-          currentUpdatedAt: current.updatedAt,
-          providedUpdatedAt: ifMatchUpdatedAt,
+          currentVersion: current.version,
+          providedVersion: ifMatchVersion,
         });
       }
 
@@ -389,17 +389,17 @@ export class MutationService {
    */
   updateEpicStatusCascadeWithIfMatch(
     id: string,
-    ifMatchUpdatedAt: number,
+    ifMatchVersion: number,
     status: string,
   ): StatusCascadePlan {
     return this.#writeTransaction((): StatusCascadePlan => {
       const existing = this.#domain.getEpicOrThrow(id);
-      if (existing.updatedAt !== ifMatchUpdatedAt) {
+      if (existing.version !== ifMatchVersion) {
         throw new PreconditionFailedError({
           entityKind: "epic",
           entityId: id,
-          currentUpdatedAt: existing.updatedAt,
-          providedUpdatedAt: ifMatchUpdatedAt,
+          currentVersion: existing.version,
+          providedVersion: ifMatchVersion,
         });
       }
       const plan = this.#domain.planStatusCascade("epic", id, status);
@@ -513,7 +513,7 @@ export class MutationService {
    */
   updateTaskWithIfMatch(
     id: string,
-    ifMatchUpdatedAt: number,
+    ifMatchVersion: number,
     input: { title?: string | undefined; description?: string | undefined; status?: string | undefined; owner?: string | null | undefined },
   ): TaskRecord {
     return this.#writeTransaction((): TaskRecord => {
@@ -546,18 +546,18 @@ export class MutationService {
           `UPDATE tasks
               SET title = ?, description = ?, status = ?, owner = ?, updated_at = ?, version = version + 1
             WHERE id = ?
-              AND updated_at = ?
+              AND version = ?
            RETURNING id`,
         )
-        .get(nextTitle, nextDescription, nextStatus, nextOwner, now, id, ifMatchUpdatedAt) as { id: string } | null;
+        .get(nextTitle, nextDescription, nextStatus, nextOwner, now, id, ifMatchVersion) as { id: string } | null;
 
       if (result === null) {
         const current = this.#domain.getTaskOrThrow(id);
         throw new PreconditionFailedError({
           entityKind: "task",
           entityId: id,
-          currentUpdatedAt: current.updatedAt,
-          providedUpdatedAt: ifMatchUpdatedAt,
+          currentVersion: current.version,
+          providedVersion: ifMatchVersion,
         });
       }
 
@@ -1032,7 +1032,7 @@ export class MutationService {
    */
   updateSubtaskWithIfMatch(
     id: string,
-    ifMatchUpdatedAt: number,
+    ifMatchVersion: number,
     input: { title?: string | undefined; description?: string | undefined; status?: string | undefined; owner?: string | null | undefined },
   ): SubtaskRecord {
     return this.#writeTransaction((): SubtaskRecord => {
@@ -1063,18 +1063,18 @@ export class MutationService {
           `UPDATE subtasks
               SET title = ?, description = ?, status = ?, owner = ?, updated_at = ?, version = version + 1
             WHERE id = ?
-              AND updated_at = ?
+              AND version = ?
            RETURNING id`,
         )
-        .get(nextTitle, nextDescription, nextStatus, nextOwner, now, id, ifMatchUpdatedAt) as { id: string } | null;
+        .get(nextTitle, nextDescription, nextStatus, nextOwner, now, id, ifMatchVersion) as { id: string } | null;
 
       if (result === null) {
         const current = this.#domain.getSubtaskOrThrow(id);
         throw new PreconditionFailedError({
           entityKind: "subtask",
           entityId: id,
-          currentUpdatedAt: current.updatedAt,
-          providedUpdatedAt: ifMatchUpdatedAt,
+          currentVersion: current.version,
+          providedVersion: ifMatchVersion,
         });
       }
 
