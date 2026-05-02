@@ -13,8 +13,7 @@
 
 ## Dev CLI and verify
 
-- Run local source: `bun run run -- <subcommand>` (= `bun run ./src/index.ts`). Or use installed `trekoon`.
-- Build: `bun run build`. Lint: `bun run lint` (= `bunx tsc --noEmit`).
+- Run local source: `bun run run -- <subcommand>` (= `bun run ./src/index.ts`).
 - Verify before claiming done:
   - Touched board: `bun test tests/board && bunx tsc --noEmit`
   - Touched commands: `bun test tests/commands && bunx tsc --noEmit`
