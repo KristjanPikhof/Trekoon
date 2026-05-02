@@ -839,7 +839,7 @@ function findConflictForResolutionEvent(
     const bySourceEvent = db
       .query(
         `
-        SELECT id, event_id, entity_kind, entity_id, field_name, ours_value, theirs_value, resolution, created_at, updated_at
+        SELECT id, event_id, entity_kind, entity_id, field_name, ours_value, theirs_value, resolution, created_at, updated_at, worktree_path, current_branch
         FROM sync_conflicts
         WHERE event_id = ?
           AND entity_kind = ?
@@ -863,7 +863,7 @@ function findConflictForResolutionEvent(
   return db
     .query(
       `
-      SELECT id, event_id, entity_kind, entity_id, field_name, ours_value, theirs_value, resolution, created_at, updated_at
+      SELECT id, event_id, entity_kind, entity_id, field_name, ours_value, theirs_value, resolution, created_at, updated_at, worktree_path, current_branch
       FROM sync_conflicts
       WHERE id = ?
         AND entity_kind = ?
@@ -2003,19 +2003,30 @@ function appendResolutionEvent(
 
 export function listSyncConflicts(cwd: string, mode: SyncConflictMode): SyncConflictListItem[] {
   const storage = openTrekoonDatabase(cwd);
+  const git = resolveGitContext(cwd);
+  const scope: ConflictScope = scopeFromGitContext(git);
 
   try {
-    const whereClause = mode === "pending" ? "WHERE resolution = 'pending'" : "";
+    // Conflicts are scoped to the worktree+branch that recorded them. Each
+    // worktree only sees its own pending/resolved conflicts so peer
+    // worktrees on the same shared DB don't bleed into one another.
+    const conditions: string[] = ["worktree_path = ?", "current_branch = ?"];
+    const params: string[] = [scope.worktreePath, scope.currentBranch];
+
+    if (mode === "pending") {
+      conditions.push("resolution = 'pending'");
+    }
+
     return storage.db
       .query(
         `
-        SELECT id, event_id, entity_kind, entity_id, field_name, ours_value, theirs_value, resolution, created_at, updated_at
+        SELECT id, event_id, entity_kind, entity_id, field_name, ours_value, theirs_value, resolution, created_at, updated_at, worktree_path, current_branch
         FROM sync_conflicts
-        ${whereClause}
+        WHERE ${conditions.join(" AND ")}
         ORDER BY created_at ASC;
         `,
       )
-      .all() as SyncConflictListItem[];
+      .all(...params) as SyncConflictListItem[];
   } finally {
     storage.close();
   }
@@ -2028,7 +2039,7 @@ export function getSyncConflict(cwd: string, conflictId: string): SyncConflictDe
     const conflict = storage.db
       .query(
         `
-        SELECT id, event_id, entity_kind, entity_id, field_name, ours_value, theirs_value, resolution, created_at, updated_at
+        SELECT id, event_id, entity_kind, entity_id, field_name, ours_value, theirs_value, resolution, created_at, updated_at, worktree_path, current_branch
         FROM sync_conflicts
         WHERE id = ?
         LIMIT 1;
@@ -2082,7 +2093,7 @@ function lookupPendingConflict(db: Database, conflictId: string): ConflictRow {
   const conflict = db
     .query(
       `
-      SELECT id, event_id, entity_kind, entity_id, field_name, ours_value, theirs_value, resolution, created_at, updated_at
+      SELECT id, event_id, entity_kind, entity_id, field_name, ours_value, theirs_value, resolution, created_at, updated_at, worktree_path, current_branch
       FROM sync_conflicts
       WHERE id = ?
       LIMIT 1;
@@ -2194,7 +2205,7 @@ function queryPendingConflictsByIds(db: Database, conflictIds: readonly string[]
   const rows = db
     .query(
       `
-      SELECT id, event_id, entity_kind, entity_id, field_name, ours_value, theirs_value, resolution, created_at, updated_at
+      SELECT id, event_id, entity_kind, entity_id, field_name, ours_value, theirs_value, resolution, created_at, updated_at, worktree_path, current_branch
       FROM sync_conflicts
       WHERE resolution = 'pending' AND id IN (${placeholders});
       `,
