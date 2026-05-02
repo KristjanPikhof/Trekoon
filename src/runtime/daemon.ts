@@ -172,21 +172,31 @@ export async function startDaemonServer(options: StartDaemonOptions = {}): Promi
     });
   });
 
-  await new Promise<void>((resolve, reject): void => {
-    const onError = (error: Error): void => {
-      server.removeListener("listening", onListening);
-      reject(error);
-    };
-    const onListening = (): void => {
-      server.removeListener("error", onError);
-      resolve();
-    };
-    server.once("error", onError);
-    server.once("listening", onListening);
-    server.listen(socketPath);
-  });
+  // Tighten the umask BEFORE server.listen() so the socket inode is created
+  // with mode 0o600 from inception. This closes the TOCTOU window between the
+  // bind() syscall and the post-listen chmodSync. The chmodSync below remains
+  // as a defence-in-depth fallback for filesystems where umask is ignored at
+  // socket creation (some network FS / overlay FS edge cases).
+  const previousUmask: number = process.umask(0o077);
+  try {
+    await new Promise<void>((resolve, reject): void => {
+      const onError = (error: Error): void => {
+        server.removeListener("listening", onListening);
+        reject(error);
+      };
+      const onListening = (): void => {
+        server.removeListener("error", onError);
+        resolve();
+      };
+      server.once("error", onError);
+      server.once("listening", onListening);
+      server.listen(socketPath);
+    });
+  } finally {
+    process.umask(previousUmask);
+  }
 
-  // Restrict the socket to the owner only.
+  // Defence-in-depth: re-assert owner-only mode after listen succeeds.
   try {
     chmodSync(socketPath, 0o600);
   } catch {
