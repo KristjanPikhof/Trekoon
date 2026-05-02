@@ -745,6 +745,7 @@ function createConflict(
   fieldName: string,
   oursValue: string | null,
   theirsValue: string | null,
+  scope: ConflictScope,
   resolution: string = "pending",
 ): void {
   const now: number = Date.now();
@@ -754,11 +755,19 @@ function createConflict(
       SELECT id, resolution, ours_value, theirs_value
       FROM sync_conflicts
       WHERE event_id = ? AND entity_kind = ? AND entity_id = ? AND field_name = ?
+        AND worktree_path = ? AND current_branch = ?
       ORDER BY CASE WHEN resolution = 'pending' THEN 0 ELSE 1 END, created_at ASC, id ASC
       LIMIT 1;
       `,
     )
-    .get(event.id, event.entity_kind, event.entity_id, fieldName) as
+    .get(
+      event.id,
+      event.entity_kind,
+      event.entity_id,
+      fieldName,
+      scope.worktreePath,
+      scope.currentBranch,
+    ) as
     | { id: string; resolution: string; ours_value: string | null; theirs_value: string | null }
     | null;
 
@@ -800,10 +809,25 @@ function createConflict(
       resolution,
       created_at,
       updated_at,
-      version
-    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1);
+      version,
+      worktree_path,
+      current_branch
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1, ?, ?);
     `,
-  ).run(randomUUID(), event.id, event.entity_kind, event.entity_id, fieldName, oursValue, theirsValue, resolution, now, now);
+  ).run(
+    randomUUID(),
+    event.id,
+    event.entity_kind,
+    event.entity_id,
+    fieldName,
+    oursValue,
+    theirsValue,
+    resolution,
+    now,
+    now,
+    scope.worktreePath,
+    scope.currentBranch,
+  );
 }
 
 function findConflictForResolutionEvent(
