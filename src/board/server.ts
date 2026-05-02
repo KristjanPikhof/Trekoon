@@ -172,10 +172,11 @@ export function startBoardServer(options: StartBoardServerOptions = {}): BoardSe
           return apiHandler(request);
         }
 
+        const isAuthenticated = isAuthenticatedBoardRequest(request, url, token);
         const responseHeaders: Record<string, string> = {
           "cache-control": "no-store",
         };
-        if ((url.searchParams.get("token") ?? "") === token) {
+        if (isAuthenticated && (url.searchParams.get("token") ?? "") === token) {
           responseHeaders["set-cookie"] = buildBoardSessionCookie(token);
         }
 
@@ -186,9 +187,13 @@ export function startBoardServer(options: StartBoardServerOptions = {}): BoardSe
             return new Response("Board assets are not installed", { status: 500 });
           }
 
-          const html = injectBoardBootstrap(readFileSync(fallbackPath, "utf8"), buildBoardBootstrapPayload(database, token));
+          const rawHtml = readFileSync(fallbackPath, "utf8");
+          const html = isAuthenticated
+            ? injectBoardBootstrap(rawHtml, buildBoardBootstrapPayload(database, token))
+            : rawHtml;
 
           return new Response(html, {
+            status: isAuthenticated ? 200 : 401,
             headers: {
               ...responseHeaders,
               "content-type": "text/html; charset=utf-8",
@@ -197,8 +202,12 @@ export function startBoardServer(options: StartBoardServerOptions = {}): BoardSe
         }
 
         if (assetPath.endsWith("/index.html")) {
-          const html = injectBoardBootstrap(readFileSync(assetPath, "utf8"), buildBoardBootstrapPayload(database, token));
+          const rawHtml = readFileSync(assetPath, "utf8");
+          const html = isAuthenticated
+            ? injectBoardBootstrap(rawHtml, buildBoardBootstrapPayload(database, token))
+            : rawHtml;
           return new Response(html, {
+            status: isAuthenticated ? 200 : 401,
             headers: {
               ...responseHeaders,
               "content-type": "text/html; charset=utf-8",
