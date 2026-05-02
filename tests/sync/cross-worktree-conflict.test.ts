@@ -207,4 +207,115 @@ describe("sync_conflicts worktree+branch scoping", () => {
 
     storage.close();
   });
+
+  test("resolving via incoming resolve_conflict event in worktree A leaves worktree B's row untouched (shared source_event_id)", () => {
+    const workspace = mkdtempSync(join(tmpdir(), "trekoon-cross-wt-resolve-"));
+    tempDirs.push(workspace);
+    mkdirSync(join(workspace, ".trekoon"), { recursive: true });
+
+    const FEATURE_A = "feature/a";
+    const FEATURE_B = "feature/b";
+    const MAIN = "main";
+
+    const storage = openTrekoonDatabase(workspace);
+    const db = storage.db;
+
+    const taskId = randomUUID();
+    const sharedSourceEventId = randomUUID();
+
+    // Seed an "incoming" source event on MAIN that both worktrees observed
+    // and recorded a "title" conflict against. Both rows share the
+    // source_event_id (= the shared MAIN event id).
+    const ts = Date.now();
+    db.query(
+      `INSERT INTO events (id, entity_kind, entity_id, operation, payload, git_branch, git_head, created_at, updated_at, version)
+       VALUES (?, 'task', ?, 'task.updated', ?, ?, NULL, ?, ?, 1);`,
+    ).run(sharedSourceEventId, taskId, JSON.stringify({ fields: { title: "main-title" } }), MAIN, ts, ts);
+
+    // Worktree A: feature/a — pending "title" conflict against the shared source event.
+    const conflictA = insertConflictRow(db, {
+      eventId: sharedSourceEventId,
+      entityKind: "task",
+      entityId: taskId,
+      fieldName: "title",
+      oursValue: '"a-ours"',
+      theirsValue: '"main-title"',
+      worktreePath: workspace,
+      currentBranch: FEATURE_A,
+    });
+
+    // Worktree B: feature/b — pending "title" conflict against the SAME source event.
+    const conflictB = insertConflictRow(db, {
+      eventId: sharedSourceEventId,
+      entityKind: "task",
+      entityId: taskId,
+      fieldName: "title",
+      oursValue: '"b-ours"',
+      theirsValue: '"main-title"',
+      worktreePath: workspace,
+      currentBranch: FEATURE_B,
+    });
+
+    // Seed a task row so updates have something to mutate (allowMissing covers this anyway).
+    db.query(
+      `INSERT OR IGNORE INTO tasks (id, epic_id, title, description, status, created_at, updated_at, version)
+       VALUES (?, ?, 'orig', '', 'todo', ?, ?, 1);`,
+    ).run(taskId, randomUUID(), ts, ts);
+
+    // Emit a resolve_conflict event on FEATURE_A (the resolver branch),
+    // pointing at conflictA via source_event_id. This is the on-wire shape
+    // produced by appendResolutionEvent on the originating worktree.
+    const resolveEventId = randomUUID();
+    const resolveTs = ts + 100;
+    db.query(
+      `INSERT INTO events (id, entity_kind, entity_id, operation, payload, git_branch, git_head, created_at, updated_at, version)
+       VALUES (?, 'task', ?, 'resolve_conflict', ?, ?, NULL, ?, ?, 1);`,
+    ).run(
+      resolveEventId,
+      taskId,
+      JSON.stringify({
+        conflict_id: conflictA,
+        source_event_id: sharedSourceEventId,
+        field: "title",
+        resolution: "theirs",
+        value: "main-title",
+        worktree_path: workspace,
+        current_branch: FEATURE_A,
+      }),
+      FEATURE_A,
+      resolveTs,
+      resolveTs,
+    );
+
+    storage.close();
+
+    // Pull from FEATURE_A while sitting on FEATURE_B: the receiver's scope
+    // is (workspace, FEATURE_B). The resolve event must NOT touch
+    // worktree A's row (different scope) AND must NOT touch worktree B's
+    // row either (different source/branch payload + scope mismatch on
+    // payload's worktree_path). Result: B's row stays pending.
+    mockGitContextAs(workspace, FEATURE_B);
+    syncPull(workspace, FEATURE_A);
+
+    const reopened = openTrekoonDatabase(workspace);
+    const rows = reopened.db
+      .query(
+        `SELECT id, current_branch, resolution
+         FROM sync_conflicts
+         WHERE entity_id = ?
+         ORDER BY current_branch ASC;`,
+      )
+      .all(taskId) as Array<{ id: string; current_branch: string; resolution: string }>;
+
+    expect(rows.length).toBe(2);
+    const rowB = rows.find((r) => r.id === conflictB);
+    expect(rowB).toBeDefined();
+    expect(rowB?.resolution).toBe("pending");
+    // A's row is unchanged from B's pull (B's scope cannot resolve A's row).
+    const rowA = rows.find((r) => r.id === conflictA);
+    expect(rowA).toBeDefined();
+    expect(rowA?.resolution).toBe("pending");
+
+    reopened.close();
+  });
 });
