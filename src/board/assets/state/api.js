@@ -22,6 +22,46 @@ const COLLECTION_TO_DELETED_KEY = {
   dependencies: "deletedDependencyIds",
 };
 
+function arraysShallowEqual(left, right) {
+  if (left === right) return true;
+  if (!Array.isArray(left) || !Array.isArray(right)) return false;
+  if (left.length !== right.length) return false;
+  for (let i = 0; i < left.length; i += 1) {
+    if (left[i] !== right[i]) return false;
+  }
+  return true;
+}
+
+/**
+ * Shallow equality on plain board records.
+ *
+ * Board records are flat objects whose values are primitives or arrays of
+ * primitives (e.g. dependency-id arrays). A field-by-field shallow comparison
+ * is therefore equivalent to a structural deep-equal but avoids the
+ * O(snapshot) JSON.stringify cost the previous implementation paid on every
+ * rollback. Cross-realm values and odd nested objects fall back to
+ * reference equality, which is a safe over-restore (worst case: an unchanged
+ * record is included in the inverse delta).
+ */
+function recordsShallowEqual(left, right) {
+  if (left === right) return true;
+  if (!left || !right || typeof left !== "object" || typeof right !== "object") return false;
+  const leftKeys = Object.keys(left);
+  const rightKeys = Object.keys(right);
+  if (leftKeys.length !== rightKeys.length) return false;
+  for (const key of leftKeys) {
+    const leftValue = left[key];
+    const rightValue = right[key];
+    if (leftValue === rightValue) continue;
+    if (Array.isArray(leftValue) || Array.isArray(rightValue)) {
+      if (!arraysShallowEqual(leftValue, rightValue)) return false;
+      continue;
+    }
+    return false;
+  }
+  return true;
+}
+
 function indexById(records) {
   const map = new Map();
   if (!Array.isArray(records)) {
