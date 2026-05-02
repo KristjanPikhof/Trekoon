@@ -255,6 +255,10 @@ export function shouldUseTaskModal(boardState, store) {
   return Boolean(boardState?.taskModalOpen && boardState?.selectedTask);
 }
 
+export function shouldUseSubtaskModal(boardState) {
+  return Boolean(boardState?.subtaskModalOpen && boardState?.selectedSubtask);
+}
+
 export function lookupNode(snapshot, id) {
   return snapshot.tasks.find((task) => task.id === id)
     ?? snapshot.subtasks.find((subtask) => subtask.id === id)
