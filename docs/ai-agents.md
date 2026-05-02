@@ -89,6 +89,10 @@ Typical flow:
 4. Execute the plan (reads `reference/execution.md` internally)
 5. Update progress, blockers, and completion state as you go
 
+> **Experimental — not for routine agent use:** `trekoon serve` and the
+> `--daemon` flag are experimental. Use the default one-shot CLI path for
+> any production or automated agent workflow until daemon mode stabilizes.
+
 ## Default execution loop
 
 The core loop: **session, work, task done, repeat**.
