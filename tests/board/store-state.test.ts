@@ -421,6 +421,40 @@ describe("board state store reconciliation", () => {
     expect(fifth).toBe(afterChange);
   });
 
+  test("getBoardState reflects an epic-status-filter toggle without waiting for the hour bucket", () => {
+    globalThis.localStorage = createMockStorage() as Storage;
+
+    const store = createStore({
+      epics: [
+        { id: "epic-todo", title: "Pending epic", status: "todo", createdAt: 100, updatedAt: 100 },
+        { id: "epic-blocked", title: "Blocked epic", status: "blocked", createdAt: 200, updatedAt: 200 },
+      ],
+      tasks: [],
+      subtasks: [],
+      dependencies: [],
+    });
+
+    // Default filter shows todo + blocked + in_progress.
+    const initial = store.getBoardState();
+    expect(initial.visibleEpics.map((epic: { id: string }) => epic.id).sort()).toEqual([
+      "epic-blocked",
+      "epic-todo",
+    ]);
+
+    // Direct mutation of store.epicStatusFilter (simulating a filter toggle)
+    // followed by a memo invalidation must take effect immediately, even
+    // though Date.now()'s hour bucket has not advanced.
+    store.store.epicStatusFilter = {
+      ...store.store.epicStatusFilter,
+      blocked: false,
+    };
+    store.invalidateBoardStateMemo();
+
+    const filtered = store.getBoardState();
+    expect(filtered).not.toBe(initial);
+    expect(filtered.visibleEpics.map((epic: { id: string }) => epic.id)).toEqual(["epic-todo"]);
+  });
+
   test("ignores malformed delta records without creating persistent synthetic ids", () => {
     globalThis.localStorage = createMockStorage() as Storage;
 
