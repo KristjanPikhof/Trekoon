@@ -7,6 +7,17 @@ import { BoardInstallError, type EnsureBoardInstalledOptions } from "../board/ty
 import { failResult, okResult } from "../io/output";
 import { type CliContext, type CliResult } from "../runtime/command-types";
 
+// Per-subcommand allow-lists. Mirrors the pattern used in epic/task/subtask
+// command modules: each subcommand declares the set of flags (and options)
+// it accepts; everything else is rejected up-front.
+const OPEN_FLAGS = ["reveal-token"] as const;
+const UPDATE_FLAGS: readonly string[] = [];
+
+const FLAGS_BY_SUBCOMMAND: Readonly<Record<string, readonly string[]>> = {
+  open: OPEN_FLAGS,
+  update: UPDATE_FLAGS,
+};
+
 type EnsureBoardInstalledFn = (options: EnsureBoardInstalledOptions) => ReturnType<typeof ensureBoardInstalled>;
 type StartBoardServerFn = (options: { cwd: string }) => BoardServerInfo;
 type OpenBoardInBrowserFn = (url: string) => Promise<OpenBrowserResult> | OpenBrowserResult;
