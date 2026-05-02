@@ -208,7 +208,82 @@ describe("storage backup: createMigrationBackup", (): void => {
     }
 
     expect(caught).toBeInstanceOf(DomainError);
-    expect((caught as DomainError).code).toBe("backup_already_exists");
+    const domainError = caught as DomainError;
+    expect(domainError.code).toBe("backup_already_exists");
+    // Collision message must reflect millisecond filename resolution, not
+    // the legacy "wait one second" wording.
+    expect(domainError.message).toMatch(/millisecond/iu);
+    expect(domainError.message).not.toMatch(/wait at least one second/iu);
+  });
+
+  test("retain keeps only the last N backups and prunes older siblings", (): void => {
+    const workspace: string = createWorkspace();
+    const storage = openTrekoonDatabase(workspace);
+    storage.close();
+
+    const baseMs: number = new Date("2026-05-02T13:45:30.000Z").getTime();
+    // Take 7 timestamped backups, retaining 5. Two oldest must be pruned.
+    for (let i = 0; i < 7; i += 1) {
+      createMigrationBackup({
+        cwd: workspace,
+        now: new Date(baseMs + i * 1000),
+        retain: 5,
+      });
+    }
+
+    const remaining = listBackups(workspace).sort();
+    expect(remaining.length).toBe(5);
+    // The 5 newest (indexes 2..6) must be the retained set.
+    const expectedSuffixes = [2, 3, 4, 5, 6].map((i): string => {
+      return new Date(baseMs + i * 1000).toISOString().replace(/[:.]/gu, "-");
+    });
+    for (const suffix of expectedSuffixes) {
+      expect(remaining.some((entry) => entry.includes(suffix))).toBe(true);
+    }
+  });
+
+  test("retain default is 10", (): void => {
+    const workspace: string = createWorkspace();
+    const storage = openTrekoonDatabase(workspace);
+    storage.close();
+
+    const baseMs: number = new Date("2026-05-02T13:45:30.000Z").getTime();
+    for (let i = 0; i < 12; i += 1) {
+      createMigrationBackup({
+        cwd: workspace,
+        now: new Date(baseMs + i * 1000),
+      });
+    }
+
+    expect(listBackups(workspace).length).toBe(10);
+  });
+
+  test("retain reports retainedCount and prunedPaths", (): void => {
+    const workspace: string = createWorkspace();
+    const storage = openTrekoonDatabase(workspace);
+    storage.close();
+
+    const baseMs: number = new Date("2026-05-02T13:45:30.000Z").getTime();
+    // Pre-populate three backups outside the retention window.
+    for (let i = 0; i < 3; i += 1) {
+      createMigrationBackup({
+        cwd: workspace,
+        now: new Date(baseMs + i * 1000),
+        retain: 100,
+      });
+    }
+
+    const result = createMigrationBackup({
+      cwd: workspace,
+      now: new Date(baseMs + 3 * 1000),
+      retain: 2,
+    });
+
+    expect(result.retainedCount).toBe(2);
+    expect(result.prunedPaths.length).toBe(2);
+    for (const pruned of result.prunedPaths) {
+      expect(existsSync(pruned)).toBe(false);
+    }
   });
 
   test("rejects backup when the database file is missing", (): void => {
