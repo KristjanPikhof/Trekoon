@@ -746,7 +746,7 @@ describe("sync command", (): void => {
     }
   });
 
-  test("resolution replay converges across worktrees using stable source event identity", async (): Promise<void> => {
+  test("resolution replay is scoped: a resolve in one worktree does not mutate another worktree's pending conflict", async (): Promise<void> => {
     const workspace = createWorkspace();
     initializeRepository(workspace);
 
