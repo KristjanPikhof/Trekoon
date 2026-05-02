@@ -7,6 +7,7 @@ import { afterEach, describe, expect, test } from "bun:test";
 
 import { type EventPruneSummary, pruneEvents, pruneResolvedConflicts } from "../../src/storage/events-retention";
 import { appendEventWithGitContext, nextEventTimestamp, withTransactionEventContext } from "../../src/sync/event-writes";
+import { resolveGitContext } from "../../src/sync/git-context";
 import { openTrekoonDatabase } from "../../src/storage/database";
 
 const DAY_IN_MILLISECONDS = 24 * 60 * 60 * 1000;
