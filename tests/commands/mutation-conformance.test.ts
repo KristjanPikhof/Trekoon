@@ -22,6 +22,14 @@ function createWorkspace(): string {
   return workspace;
 }
 
+function boardRequest(input: string, init?: RequestInit): Request {
+  const url = new URL(input);
+  url.searchParams.delete("token");
+  const headers = new Headers(init?.headers);
+  headers.set("authorization", "Bearer board-token");
+  return new Request(url.toString(), { ...init, headers });
+}
+
 function eventOperationsForEntity(cwd: string, entityKind: string, entityId: string): string[] {
   return eventRowsForEntity(cwd, entityKind, entityId).map((row) => row.operation);
 }
@@ -945,7 +953,7 @@ describe("mutation conformance", (): void => {
     const storage = openTrekoonDatabase(cwd);
     try {
       const handler = createBoardApiHandler({ db: storage.db, cwd, token: "board-token" });
-      const response = await handler(new Request(`http://board.test/api/tasks/${taskId}?token=board-token`, {
+      const response = await handler(boardRequest(`http://board.test/api/tasks/${taskId}?token=board-token`, {
         method: "PATCH",
         headers: {
           "content-type": "application/json",
@@ -1003,7 +1011,7 @@ describe("mutation conformance", (): void => {
     try {
       const handler = createBoardApiHandler({ db: storage.db, cwd, token: "board-token" });
 
-      const updatedSubtask = await handler(new Request(`http://board.test/api/subtasks/${subtaskId}?token=board-token`, {
+      const updatedSubtask = await handler(boardRequest(`http://board.test/api/subtasks/${subtaskId}?token=board-token`, {
         method: "PATCH",
         headers: {
           "content-type": "application/json",
@@ -1012,7 +1020,7 @@ describe("mutation conformance", (): void => {
       }));
       expect(updatedSubtask.status).toBe(200);
 
-      const addedDependency = await handler(new Request("http://board.test/api/dependencies?token=board-token", {
+      const addedDependency = await handler(boardRequest("http://board.test/api/dependencies?token=board-token", {
         method: "POST",
         headers: {
           "content-type": "application/json",
@@ -1021,7 +1029,7 @@ describe("mutation conformance", (): void => {
       }));
       expect(addedDependency.status).toBe(201);
 
-      const removedDependency = await handler(new Request(`http://board.test/api/dependencies?token=board-token&sourceId=${encodeURIComponent(taskId)}&dependsOnId=${encodeURIComponent(blockerTaskId)}`, {
+      const removedDependency = await handler(boardRequest(`http://board.test/api/dependencies?token=board-token&sourceId=${encodeURIComponent(taskId)}&dependsOnId=${encodeURIComponent(blockerTaskId)}`, {
         method: "DELETE",
       }));
       expect(removedDependency.status).toBe(200);
@@ -1086,7 +1094,7 @@ describe("mutation conformance", (): void => {
     const storage = openTrekoonDatabase(cwd);
     try {
       const handler = createBoardApiHandler({ db: storage.db, cwd, token: "board-token" });
-      const response = await handler(new Request(`http://board.test/api/epics/${epicId}/cascade?token=board-token`, {
+      const response = await handler(boardRequest(`http://board.test/api/epics/${epicId}/cascade?token=board-token`, {
         method: "PATCH",
         headers: {
           "content-type": "application/json",
@@ -1176,7 +1184,7 @@ describe("mutation conformance", (): void => {
     const storage = openTrekoonDatabase(cwd);
     try {
       const handler = createBoardApiHandler({ db: storage.db, cwd, token: "board-token" });
-      const response = await handler(new Request(`http://board.test/api/epics/${epicId}/cascade?token=board-token`, {
+      const response = await handler(boardRequest(`http://board.test/api/epics/${epicId}/cascade?token=board-token`, {
         method: "PATCH",
         headers: {
           "content-type": "application/json",
