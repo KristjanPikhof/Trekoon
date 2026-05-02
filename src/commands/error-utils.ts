@@ -30,22 +30,33 @@ function readErrorMessage(error: unknown): string | null {
 }
 
 // Keys whose values must never appear in surfaced error output.
-// Handles formats: key=val, key: val, key="val", 'key':'val', "key":"val", <key>val</key>,
-// Authorization: Bearer val, and standalone Bearer/Basic tokens.
+// Handles formats: key=val, key: val, key="val", 'key':'val', "key":"val",
+// Authorization: Bearer val, Authorization: Basic val.
 const SENSITIVE_KEY_PATTERN =
   /(["']?)(token|secret|password|bearer|authorization|api[_-]?key|client[_-]?secret|private[_-]?key|cookie|session[_-]?id)(["']?\s*[:=]\s*(?:Bearer\s+|Basic\s+)?["']?)([^\s"',;&\]}{)<>]+)/giu;
 
-// Standalone "Bearer xyz" / "Basic xyz" not preceded by an Authorization-style key.
-// Negative lookbehind avoids double-matching cases already handled by SENSITIVE_KEY_PATTERN.
-const STANDALONE_AUTH_SCHEME_PATTERN =
-  /(?<![:=]\s*)\b(Bearer|Basic)\s+([A-Za-z0-9._\-+/=]+)/giu;
+// Tag-style sensitive values: <key>value</key>.
+const SENSITIVE_TAG_PATTERN =
+  /(<\s*(token|secret|password|bearer|authorization|api[_-]?key|client[_-]?secret|private[_-]?key|cookie|session[_-]?id)\s*>)([^<]+)/giu;
+
+// Standalone "Bearer xyz" / "Basic xyz" anywhere in the message.
+// SENSITIVE_KEY_PATTERN runs first and consumes Authorization: Bearer/Basic forms; this
+// catches bare occurrences that remain (e.g. "got Bearer eyJ..." or "auth: Basic dXNl...").
+const STANDALONE_AUTH_SCHEME_PATTERN = /\b(Bearer|Basic)\s+([A-Za-z0-9._\-+/=]+)/giu;
 
 export function redactSensitive(input: string): string {
   const keyRedacted = input.replace(
     SENSITIVE_KEY_PATTERN,
     (_match, open, key, sep) => `${open}${key}${sep}REDACTED`,
   );
-  return keyRedacted.replace(STANDALONE_AUTH_SCHEME_PATTERN, (_match, scheme) => `${scheme} REDACTED`);
+  const tagRedacted = keyRedacted.replace(
+    SENSITIVE_TAG_PATTERN,
+    (_match, openTag) => `${openTag}REDACTED`,
+  );
+  return tagRedacted.replace(
+    STANDALONE_AUTH_SCHEME_PATTERN,
+    (_match, scheme) => `${scheme} REDACTED`,
+  );
 }
 
 function sanitizeErrorMessage(message: string): string {
