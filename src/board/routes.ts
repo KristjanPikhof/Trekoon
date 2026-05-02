@@ -348,6 +348,27 @@ export function createBoardApiHandler(context: BoardRouteContext): (request: Req
 
     const domain = new TrackerDomain(context.db);
     const mutations = new MutationService(context.db, context.cwd);
+    const eventBus = context.eventBus;
+
+    const respondWithMutation = (
+      domainArg: TrackerDomain,
+      data: Record<string, unknown>,
+      status = 200,
+    ): Response => {
+      publishSnapshotDeltaIfPresent(eventBus, data);
+      return buildMutationResponse(domainArg, data, status);
+    };
+
+    const respondWithMutationDelta = (
+      domainArg: TrackerDomain,
+      data: Record<string, unknown>,
+      selection: SnapshotDeltaSelection,
+      status = 200,
+    ): Response => {
+      const enrichedData = { ...data, snapshotDelta: buildSnapshotDelta(domainArg, selection) };
+      publishSnapshotDeltaIfPresent(eventBus, enrichedData);
+      return buildMutationResponse(domainArg, enrichedData, status);
+    };
 
     try {
       if (request.method === "GET" && url.pathname === "/api/snapshot") {
