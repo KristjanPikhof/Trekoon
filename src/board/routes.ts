@@ -84,7 +84,7 @@ function readCookieToken(request: Request): string | null {
   return null;
 }
 
-function extractToken(request: Request, url: URL): string | null {
+function extractHeaderOrCookieToken(request: Request): string | null {
   const authorization: string | null = request.headers.get("authorization");
   if (authorization?.startsWith("Bearer ")) {
     return authorization.slice("Bearer ".length).trim();
@@ -93,11 +93,6 @@ function extractToken(request: Request, url: URL): string | null {
   const headerToken: string | null = request.headers.get("x-trekoon-token");
   if (headerToken && headerToken.trim().length > 0) {
     return headerToken.trim();
-  }
-
-  const queryToken: string | null = url.searchParams.get("token");
-  if (queryToken && queryToken.trim().length > 0) {
-    return queryToken.trim();
   }
 
   return readCookieToken(request);
@@ -635,7 +630,18 @@ export function createBoardApiHandler(context: BoardRouteContext): (request: Req
   return async (request: Request): Promise<Response> => {
     const url = new URL(request.url);
     const requestLabel = `${request.method} ${url.pathname}`;
-    const requestToken = extractToken(request, url);
+    if (url.searchParams.has("token")) {
+      return jsonResponse(401, {
+        ok: false,
+        error: {
+          code: "unauthorized",
+          message: "Board API requests must authenticate with the session cookie or authorization header",
+        },
+      });
+    }
+    const requestToken = url.pathname === "/api/snapshot/stream"
+      ? readCookieToken(request)
+      : extractHeaderOrCookieToken(request);
     // Plain `!==` instead of a constant-time compare is a deliberate choice
     // (System Hardening 0.4.2, finding 32). The board server only binds to
     // 127.0.0.1, the session token is a 256-bit cryptographically-random
