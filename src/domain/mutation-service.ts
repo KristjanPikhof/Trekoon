@@ -76,10 +76,16 @@ export class MutationService {
   }
 
   #writeTransaction<T>(fn: () => T): T {
-    // withTransactionEventContext computes the event timestamp lazily AFTER
-    // BEGIN IMMEDIATE is issued by writeTransaction, so concurrent writers
-    // cannot collide on (created_at, id).
-    return writeTransaction(this.#db, (): T => withTransactionEventContext(this.#db, this.#cwd, fn));
+    // Resolve git context BEFORE acquiring the SQLite write lock. Cold-cache
+    // resolution spawns `git branch` / `git rev-parse` subprocesses; doing
+    // that inside BEGIN IMMEDIATE would serialize concurrent writers behind
+    // git invocations rather than just the lock-promotion itself.
+    //
+    // withTransactionEventContext still computes the event timestamp lazily
+    // AFTER BEGIN IMMEDIATE is issued by writeTransaction so concurrent
+    // writers cannot collide on (created_at, id).
+    const git = resolveGitContext(this.#cwd);
+    return writeTransaction(this.#db, (): T => withTransactionEventContext(this.#db, git, fn));
   }
 
   #dependencyEventEntityId(input: {
