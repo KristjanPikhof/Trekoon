@@ -244,19 +244,24 @@ function selectSearchScope(state) {
 
 /**
  * Create a memoizer for deriveBoardState that returns the same reference until
- * invalidate() is called. Designed to be invalidated by the store's notify().
+ * invalidate() is called or the hour bucket changes (so time-sensitive
+ * selectors like selectVisibleEpics can re-evaluate the 24h grace cutoff).
+ * Designed to be invalidated by the store's notify().
  * @param {(state: object) => BoardState} compute
  */
 function createBoardStateMemo(compute) {
   let cachedState = null;
+  let cachedBucket = null;
   let cachedResult = null;
   let dirty = true;
 
   function get(state) {
-    if (!dirty && cachedState === state) {
+    const bucket = Math.floor(Date.now() / GRACE_BUCKET_MS);
+    if (!dirty && cachedState === state && cachedBucket === bucket) {
       return cachedResult;
     }
     cachedState = state;
+    cachedBucket = bucket;
     cachedResult = compute(state);
     dirty = false;
     return cachedResult;
