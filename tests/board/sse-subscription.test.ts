@@ -242,6 +242,52 @@ describe("subscribeSnapshotStream", () => {
     handle.dispose();
   });
 
+  test("onerror surfaces a 'live updates disconnected' notice and rerenders", () => {
+    const { Ctor, instances } = createMockEventSourceCtor();
+    const model = createMockModel();
+    let rerenderCount = 0;
+
+    const handle = subscribeSnapshotStream(model, {
+      sessionToken: "tok",
+      rerender: () => {
+        rerenderCount += 1;
+      },
+      EventSourceCtor: Ctor,
+    });
+
+    expect(model.store.notice).toBeNull();
+
+    instances[0]?.onerror?.();
+
+    expect(model.store.notice).not.toBeNull();
+    expect(model.store.notice).toMatchObject({
+      type: "warning",
+      code: "live_updates_disconnected",
+    });
+    expect(rerenderCount).toBe(1);
+
+    // Repeat onerror calls during continuing reconnects must not spam reflows.
+    instances[0]?.onerror?.();
+    expect(rerenderCount).toBe(1);
+
+    handle.dispose();
+  });
+
+  test("onerror after dispose is a no-op", () => {
+    const { Ctor, instances } = createMockEventSourceCtor();
+    const model = createMockModel();
+
+    const handle = subscribeSnapshotStream(model, {
+      sessionToken: "tok",
+      rerender: () => {},
+      EventSourceCtor: Ctor,
+    });
+
+    handle.dispose();
+    instances[0]?.onerror?.();
+    expect(model.store.notice).toBeNull();
+  });
+
   test("returns a no-op disposer when EventSource is unavailable", () => {
     const model = createMockModel();
     const handle = subscribeSnapshotStream(model, {
