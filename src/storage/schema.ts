@@ -138,6 +138,8 @@ export const BASE_SCHEMA_STATEMENTS: readonly string[] = [
   `CREATE INDEX IF NOT EXISTS idx_sync_cursors_owner ON sync_cursors(owner_scope, owner_worktree_path, source_branch);`,
   `CREATE INDEX IF NOT EXISTS idx_conflicts_resolution ON sync_conflicts(resolution);`,
   `CREATE INDEX IF NOT EXISTS idx_conflicts_resolution_entity_field_id ON sync_conflicts(resolution, entity_id, field_name, id);`,
+  `CREATE INDEX IF NOT EXISTS idx_sync_conflicts_scope_entity ON sync_conflicts(worktree_path, current_branch, entity_kind, entity_id);`,
+  `CREATE INDEX IF NOT EXISTS idx_sync_conflicts_scope_resolution ON sync_conflicts(worktree_path, current_branch, resolution);`,
   `CREATE INDEX IF NOT EXISTS idx_board_idempotency_created_at ON board_idempotency_keys(created_at);`,
   `CREATE INDEX IF NOT EXISTS idx_board_idempotency_state_created_at ON board_idempotency_keys(state, created_at);`,
 ];
