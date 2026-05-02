@@ -1335,6 +1335,68 @@ export async function runTask(context: CliContext): Promise<CliResult> {
           },
         });
       }
+      case "claim": {
+        const claimUnknownOption = findUnknownOption(parsed, CLAIM_OPTIONS);
+        if (claimUnknownOption !== undefined) {
+          return unknownOption("task.claim", claimUnknownOption, CLAIM_OPTIONS);
+        }
+
+        const missingClaimOption = readMissingOptionValue(parsed.missingOptionValues, "owner");
+        if (missingClaimOption !== undefined) {
+          return failMissingOptionValue("task.claim", missingClaimOption);
+        }
+
+        const taskId: string = parsed.positional[1] ?? "";
+        if (taskId.length === 0) {
+          return failResult({
+            command: "task.claim",
+            human: "Provide a task id. Usage: trekoon task claim <id> --owner <owner>",
+            data: { code: "invalid_input" },
+            error: {
+              code: "invalid_input",
+              message: "Missing task id",
+            },
+          });
+        }
+
+        const owner: string | undefined = readOption(parsed.options, "owner");
+        if (owner === undefined || owner.trim().length === 0) {
+          return failResult({
+            command: "task.claim",
+            human: "--owner is required. Usage: trekoon task claim <id> --owner <owner>",
+            data: { code: "invalid_input", option: "owner" },
+            error: {
+              code: "invalid_input",
+              message: "Missing required option --owner",
+            },
+          });
+        }
+
+        const claimResult = mutations.claimTask({ taskId, owner });
+
+        if (claimResult.claimed) {
+          return okResult({
+            command: "task.claim",
+            human: `Claimed task ${taskId} for ${owner}`,
+            data: {
+              claimed: true,
+              currentOwner: claimResult.currentOwner,
+              currentStatus: claimResult.currentStatus,
+              task: claimResult.task,
+            },
+          });
+        }
+
+        return okResult({
+          command: "task.claim",
+          human: `Task ${taskId} not claimed: status=${claimResult.currentStatus}, owner=${claimResult.currentOwner ?? "none"}`,
+          data: {
+            claimed: false,
+            currentOwner: claimResult.currentOwner,
+            currentStatus: claimResult.currentStatus,
+          },
+        });
+      }
       case "delete": {
         const taskId: string = parsed.positional[1] ?? "";
         mutations.deleteTask(taskId);
@@ -1348,7 +1410,7 @@ export async function runTask(context: CliContext): Promise<CliResult> {
       default:
         return failResult({
           command: "task",
-          human: "Usage: trekoon task <create|create-many|list|show|ready|next|done|search|replace|update|delete>",
+          human: "Usage: trekoon task <create|create-many|list|show|ready|next|done|search|replace|update|delete|claim>",
           data: {
             args: context.args,
           },
