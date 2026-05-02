@@ -24,17 +24,39 @@ function runGit(args: readonly string[], cwd: string): string | null {
   return output.length > 0 ? output : null;
 }
 
+/** Process-lifetime cache: cwd → resolved branch + headSha (without persistedAt). */
+interface GitContextCore {
+  readonly worktreePath: string;
+  readonly branchName: string | null;
+  readonly headSha: string | null;
+}
+
+const gitContextCache: Map<string, GitContextCore> = new Map();
+
+/**
+ * Clear the process-level git context cache.
+ * Intended for test isolation only — production code should never call this.
+ */
+export function clearGitContextCache(): void {
+  gitContextCache.clear();
+}
+
 export function resolveGitContext(cwd: string, persistedAt: number = Date.now()): ResolvedGitContext {
   const storagePaths = resolveStoragePaths(cwd);
+  const worktreePath: string = storagePaths.worktreeRoot;
+
+  const cached: GitContextCore | undefined = gitContextCache.get(worktreePath);
+  if (cached !== undefined) {
+    return { ...cached, persistedAt };
+  }
+
   const branchName: string | null = runGit(["branch", "--show-current"], cwd);
   const headSha: string | null = runGit(["rev-parse", "HEAD"], cwd);
 
-  return {
-    worktreePath: storagePaths.worktreeRoot,
-    branchName,
-    headSha,
-    persistedAt,
-  };
+  const core: GitContextCore = { worktreePath, branchName, headSha };
+  gitContextCache.set(worktreePath, core);
+
+  return { ...core, persistedAt };
 }
 
 function persistGitContextInner(db: Database, git: GitContextSnapshot, persistedAt: number): void {
