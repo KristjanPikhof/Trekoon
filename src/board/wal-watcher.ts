@@ -96,12 +96,7 @@ export function startWalWatcher(options: WalWatcherOptions): WalWatcher {
   const watchDir = dirname(options.databaseFile);
   const dbBaseName = basename(options.databaseFile);
 
-  let lastSnapshot = buildBoardSnapshot(new TrackerDomain(options.db)) as Record<string, unknown> & {
-    epics: Record<string, unknown>[];
-    tasks: Record<string, unknown>[];
-    subtasks: Record<string, unknown>[];
-    dependencies: Record<string, unknown>[];
-  };
+  let lastSnapshot = buildBoardSnapshot(new TrackerDomain(options.db));
 
   let debounceTimer: ReturnType<typeof setTimeout> | null = null;
   let closed = false;
