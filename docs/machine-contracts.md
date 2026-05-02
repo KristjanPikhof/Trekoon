@@ -371,6 +371,32 @@ Note: `claimed: false` is a successful response (`ok: true`). The command
 reports the current state, not an error condition. Check `data.claimed` to
 distinguish the two cases.
 
+Dependency gating on claim (cr-expert hardening): when the task or subtask is
+in `blocked` or `todo` and has unresolved dependencies, the claim atomically
+fails with `code: dependency_blocked` rather than flipping the row into
+`in_progress`. This mirrors `task done` semantics so neither
+forward-progress transition (`todo|blocked → in_progress` via claim,
+`* → done` via `task done`) can bypass dependency resolution.
+
+```text
+ok: false
+command: task.claim | subtask.claim
+error:
+  code: dependency_blocked
+  message: "task cannot transition to in_progress while dependencies are unresolved"
+data:
+  unresolvedDependencyCount: <number>
+  unresolvedDependencyIds: [<id>, ...]
+  unresolvedDependencies: [{ id, kind, status }, ...]
+```
+
+The only intentional direct-status-write exception in the codebase remains
+`MutationService.markTaskDoneAtomically`, which bypasses
+`validateStatusTransition` for the `* → done` flip but still goes through
+`assertNoUnresolvedDependenciesForStatusTransition` before issuing the UPDATE.
+No other call site is permitted to write `status` directly without going
+through the public transition checker.
+
 ## Owner field in updates
 
 Task and subtask update payloads include `owner`:
