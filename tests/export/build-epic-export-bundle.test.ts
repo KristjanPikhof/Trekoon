@@ -95,13 +95,17 @@ describe("buildEpicExportBundle", () => {
 
   test("classifies external dependencies and resolves stubs", () => {
     const cwd = createWorkspace();
-    const { domain, db } = createDomain(cwd);
+    const { domain, db, seed } = createDomain(cwd);
+    void db;
 
-    const epicA = domain.createEpic({ title: "Epic A", description: "First epic" });
-    const epicB = domain.createEpic({ title: "Epic B", description: "Second epic" });
-    const taskA = domain.createTask({ epicId: epicA.id, title: "Task in A", description: "Belongs to A" });
-    const taskB = domain.createTask({ epicId: epicB.id, title: "Task in B", description: "Belongs to B" });
-    writeTransaction(db, () => domain.addDependency(taskA.id, taskB.id));
+    const { epicA, epicB, taskB } = seed((d) => {
+      const createdEpicA = d.createEpic({ title: "Epic A", description: "First epic" });
+      const createdEpicB = d.createEpic({ title: "Epic B", description: "Second epic" });
+      const createdTaskA = d.createTask({ epicId: createdEpicA.id, title: "Task in A", description: "Belongs to A" });
+      const createdTaskB = d.createTask({ epicId: createdEpicB.id, title: "Task in B", description: "Belongs to B" });
+      d.addDependency(createdTaskA.id, createdTaskB.id);
+      return { epicA: createdEpicA, epicB: createdEpicB, taskA: createdTaskA, taskB: createdTaskB };
+    });
 
     const bundle = buildEpicExportBundle(domain, epicA.id);
 
