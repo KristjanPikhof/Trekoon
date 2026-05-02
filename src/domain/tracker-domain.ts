@@ -812,6 +812,7 @@ export class TrackerDomain {
   }
 
   deleteSubtask(id: string): void {
+    this.#assertInTransaction("deleteSubtask");
     this.getSubtaskOrThrow(id);
     this.#db.query("DELETE FROM dependencies WHERE source_id = ? OR depends_on_id = ?;").run(id, id);
     this.#db.query("DELETE FROM subtasks WHERE id = ?;").run(id);
