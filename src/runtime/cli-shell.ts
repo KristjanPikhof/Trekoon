@@ -98,6 +98,11 @@ export function parseInvocation(argv: readonly string[], options: ParseInvocatio
       continue;
     }
 
+    if (token === "--daemon") {
+      wantsDaemon = true;
+      continue;
+    }
+
     if (token === "--compat") {
       const maybeValue: string | undefined = argv[index + 1];
       if (!maybeValue || maybeValue.startsWith("--")) {
