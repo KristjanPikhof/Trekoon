@@ -145,6 +145,7 @@ function resolveGitDir(worktreePath: string): GitDirInfo {
   }
 
   const info: GitDirInfo = { gitDir, commonDir };
+  evictLruIfNeeded(gitDirCache, GIT_CONTEXT_CACHE_CAPACITY);
   gitDirCache.set(worktreePath, info);
   return info;
 }
