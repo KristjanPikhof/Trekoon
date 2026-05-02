@@ -47,7 +47,6 @@ import {
 } from "./batch-validation";
 
 const DEFAULT_STATUS = "todo";
-const DEPENDENCY_GATED_STATUSES = new Set<string>(["in_progress", "done"]);
 const SQLITE_MAX_VARIABLES = 999;
 
 interface EpicRow {
