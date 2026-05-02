@@ -254,6 +254,15 @@ export function topologicallyOrderDoneCascadeChanges(
     .filter((change) => (indegree.get(change.id) ?? 0) === 0)
     .sort((left, right) => (indexById.get(left.id) ?? 0) - (indexById.get(right.id) ?? 0));
 
+  // Kahn-style topo sort. We re-sort `ready` after every push so the
+  // iteration is deterministic on the original change index, but that
+  // turns the loop into O(n^2 log n) in the worst case (System Hardening
+  // 0.4.2, finding 34). Cascades currently fan out to at most a few dozen
+  // entities so this is a non-issue in practice; keep the simple
+  // array-based queue for readability.
+  // TODO(perf): swap `ready` for a min-heap keyed on `indexById` if a
+  // future benchmark shows cascades on large epics (>1k changes) hot in
+  // a profile.
   while (ready.length > 0) {
     const next = ready.shift();
     if (next === undefined) {
