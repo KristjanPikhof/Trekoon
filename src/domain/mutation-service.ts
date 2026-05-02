@@ -262,19 +262,14 @@ export class MutationService {
   deleteEpic(id: string): void {
     this.#writeTransaction((): void => {
       this.#domain.deleteEpic(id);
-      this.#appendEntityEvent("epic", id, ENTITY_OPERATIONS.epic.deleted, {});
+      this.#emitEpicDeleted(id);
     });
   }
 
   createTask(input: { epicId: string; title: string; description: string; status?: string | undefined }): TaskRecord {
     return this.#writeTransaction((): TaskRecord => {
       const task = this.#domain.createTask(input);
-      this.#appendEntityEvent("task", task.id, ENTITY_OPERATIONS.task.created, {
-        epic_id: task.epicId,
-        title: task.title,
-        description: task.description,
-        status: task.status,
-      });
+      this.#emitTaskCreated(task);
       return task;
     });
   }
@@ -283,12 +278,7 @@ export class MutationService {
     return this.#writeTransaction((): CompactTaskBatchCreateResult => {
       const created = this.#domain.createTaskBatch(input);
       for (const task of created.tasks) {
-        this.#appendEntityEvent("task", task.id, ENTITY_OPERATIONS.task.created, {
-          epic_id: task.epicId,
-          title: task.title,
-          description: task.description,
-          status: task.status,
-        });
+        this.#emitTaskCreated(task);
       }
       return created;
     });
