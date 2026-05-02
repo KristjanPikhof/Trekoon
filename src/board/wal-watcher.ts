@@ -20,7 +20,7 @@ import { type Database } from "bun:sqlite";
 
 import { TrackerDomain } from "../domain/tracker-domain";
 import { type BoardEventBus } from "./event-bus";
-import { buildBoardSnapshot } from "./snapshot";
+import { buildBoardSnapshot, type BoardSnapshot } from "./snapshot";
 
 interface CollectionDiff {
   readonly upserted: unknown[];
