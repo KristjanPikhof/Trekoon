@@ -196,6 +196,16 @@ Choose the lightest mode that will still move the work forward.
 | Multiple ready tasks across separable subsystems or owners | Orchestrated execution | Read `reference/execution.md`, then `task ready --epic <epic-id> --limit 50` |
 | User explicitly asked for team execution and Agent Teams are available | Team execution | Read `reference/execution-with-team.md` |
 
+Single-agent loop (abbreviated): **session → claim → work → task done → repeat**.
+
+- Step 1: `trekoon --toon session --epic <epic-id>` — orient, get next ready task.
+- Step 2: `trekoon --toon task claim <task-id> --owner <name>` — claim atomically.
+  Use `task update --status blocked` (not `task claim`) for non-claim status moves.
+- Step 3: Do the work, append progress notes with `task update --append`.
+- Step 4: `trekoon --toon task done <task-id>` — finish; read `unblocked` for next.
+
+See `reference/execution.md` for the full loop with subtask discipline and recovery.
+
 ## Delegation policy
 
 Prefer one sub-agent per execution lane, not one sub-agent per tiny task.
