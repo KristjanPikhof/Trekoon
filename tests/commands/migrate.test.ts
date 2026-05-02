@@ -68,8 +68,10 @@ describe("migrate command", (): void => {
 
     expect(rollback.ok).toBeFalse();
     expect(rollback.error).toBeDefined();
+    expect(rollback.error?.code).toBe("migration_down_unsupported");
     const errorMessage = String((rollback as { error?: { message?: string } }).error?.message ?? "");
     expect(errorMessage).toContain("irreversible");
+    expect(errorMessage).toContain("trekoon migrate backup");
   });
 
   test("status reports current version on fully migrated database", async (): Promise<void> => {
