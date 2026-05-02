@@ -2,6 +2,7 @@ import { randomBytes } from "node:crypto";
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { dirname, extname, resolve } from "node:path";
 
+import { createBoardEventBus, type BoardEventBus } from "./event-bus";
 import { createBoardApiHandler } from "./routes";
 import { buildBoardSnapshot } from "./snapshot";
 
