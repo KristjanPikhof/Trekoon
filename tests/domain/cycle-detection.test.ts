@@ -22,8 +22,8 @@ describe("parent-child dependency rejection", (): void => {
     let subtaskA1Id!: string;
 
     writeTransaction(db, (): void => {
-      const epic = domain.createEpic({ title: "Epic", description: "" });
-      const taskA = domain.createTask({ epicId: epic.id, title: "Task A", description: "" });
+      const epic = domain.createEpic({ title: "Epic", description: "desc" });
+      const taskA = domain.createTask({ epicId: epic.id, title: "Task A", description: "desc" });
       const subtaskA1 = domain.createSubtask({ taskId: taskA.id, title: "Subtask A1" });
       taskAId = taskA.id;
       subtaskA1Id = subtaskA1.id;
@@ -60,8 +60,8 @@ describe("parent-child dependency rejection", (): void => {
     let subtaskA1Id!: string;
 
     writeTransaction(db, (): void => {
-      const epic = domain.createEpic({ title: "Epic", description: "" });
-      const taskA = domain.createTask({ epicId: epic.id, title: "Task A", description: "" });
+      const epic = domain.createEpic({ title: "Epic", description: "desc" });
+      const taskA = domain.createTask({ epicId: epic.id, title: "Task A", description: "desc" });
       const subtaskA1 = domain.createSubtask({ taskId: taskA.id, title: "Subtask A1" });
       taskAId = taskA.id;
       subtaskA1Id = subtaskA1.id;
@@ -98,8 +98,8 @@ describe("parent-child dependency rejection", (): void => {
     let taskBId!: string;
 
     writeTransaction(db, (): void => {
-      const epic = domain.createEpic({ title: "Epic", description: "" });
-      const taskA = domain.createTask({ epicId: epic.id, title: "Task A", description: "" });
+      const epic = domain.createEpic({ title: "Epic", description: "desc" });
+      const taskA = domain.createTask({ epicId: epic.id, title: "Task A", description: "desc" });
       const taskB = domain.createTask({ epicId: epic.id, title: "Task B", description: "" });
       taskAId = taskA.id;
       taskBId = taskB.id;
@@ -125,8 +125,8 @@ describe("parent-child dependency rejection", (): void => {
     let subtaskB1Id!: string;
 
     writeTransaction(db, (): void => {
-      const epic = domain.createEpic({ title: "Epic", description: "" });
-      const taskA = domain.createTask({ epicId: epic.id, title: "Task A", description: "" });
+      const epic = domain.createEpic({ title: "Epic", description: "desc" });
+      const taskA = domain.createTask({ epicId: epic.id, title: "Task A", description: "desc" });
       const taskB = domain.createTask({ epicId: epic.id, title: "Task B", description: "" });
       const subtaskA1 = domain.createSubtask({ taskId: taskA.id, title: "Subtask A1" });
       const subtaskB1 = domain.createSubtask({ taskId: taskB.id, title: "Subtask B1" });
@@ -155,8 +155,8 @@ describe("parent-child dependency rejection", (): void => {
     let subtaskA1Id!: string;
 
     writeTransaction(db, (): void => {
-      const epic = domain.createEpic({ title: "Epic", description: "" });
-      const taskA = domain.createTask({ epicId: epic.id, title: "Task A", description: "" });
+      const epic = domain.createEpic({ title: "Epic", description: "desc" });
+      const taskA = domain.createTask({ epicId: epic.id, title: "Task A", description: "desc" });
       const taskB = domain.createTask({ epicId: epic.id, title: "Task B", description: "" });
       const subtaskA1 = domain.createSubtask({ taskId: taskA.id, title: "Subtask A1" });
       taskAId = taskA.id;
@@ -210,8 +210,8 @@ describe("parent-child dependency rejection", (): void => {
     let subtaskB1Id!: string;
 
     writeTransaction(db, (): void => {
-      const epic = domain.createEpic({ title: "Epic", description: "" });
-      const taskA = domain.createTask({ epicId: epic.id, title: "Task A", description: "" });
+      const epic = domain.createEpic({ title: "Epic", description: "desc" });
+      const taskA = domain.createTask({ epicId: epic.id, title: "Task A", description: "desc" });
       const taskB = domain.createTask({ epicId: epic.id, title: "Task B", description: "" });
       const subtaskB1 = domain.createSubtask({ taskId: taskB.id, title: "Subtask B1" });
       taskAId = taskA.id;
