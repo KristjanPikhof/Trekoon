@@ -182,6 +182,28 @@ All notable changes to Trekoon are documented in this file.
   `SAFE_FIELD_NAME_PATTERN`.
 - **`escapeHtml` covers the apostrophe (`'`).** All five HTML-significant
   characters (`&`, `<`, `>`, `"`, `'`) are now escaped.
+- **SSE backpressure on `/api/snapshot/stream`.** The endpoint now caps
+  per-client queued bytes (1 MB hard limit) and disconnects slow clients
+  with a `stream_error` frame `{code: "backpressure", reason}` instead of
+  letting the queue grow unbounded. Healthy clients are unaffected.
+- **`If-Match` PATCH preconditions accept weak ETags.** Quoted, bare, and
+  weak (`W/"..."`) forms are all parsed, in line with RFC 7232, so
+  conditional updates from caches that emit weak validators now match.
+- **Board route error envelopes are redacted.** Friendly route error
+  responses go through `redactSensitive` so secret-bearing query strings,
+  headers, or filesystem paths can no longer leak through 4xx/5xx
+  bodies.
+- **Board auth redirects strip the token from the URL.** Loopback
+  redirects after auth no longer carry the bearer token in a query
+  string where it could be captured by referrer headers or browser
+  history.
+- **Idempotency-key pruning is throttled.** The pre-write prune for the
+  idempotency-keys table is now rate-limited so long-running daemons do
+  not run an unbounded `DELETE` on every mutation.
+- **Stale schema marker unlinks log on failure.** Cleanup of an
+  out-of-date `schema_version` marker file now logs the unlink error
+  instead of swallowing it silently, so operators see filesystem
+  permission issues.
 
 ## 0.4.1
 
