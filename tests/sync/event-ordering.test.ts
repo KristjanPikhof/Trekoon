@@ -391,7 +391,7 @@ describe("Snapshot consistency", () => {
 
     // Writer 2 commits after: must observe writer 1's committed timestamp
     writeTransaction(conn2, (): void => {
-      withTransactionEventContext(conn2, workspace, (): void => {
+      withTransactionEventContext(conn2, fakeGitContext(workspace), (): void => {
         const ts = (conn2
           .query("SELECT COALESCE(MAX(created_at), 0) + 1 AS ts FROM events;")
           .get() as { ts: number }).ts;
