@@ -159,23 +159,33 @@ describe("subscribeSnapshotStream", () => {
     handle.dispose();
   });
 
-  test("ignores malformed JSON without crashing", () => {
+  test("ignores malformed JSON without crashing and logs a warning", () => {
     const { Ctor, instances } = createMockEventSourceCtor();
     const model = createMockModel();
     let rerenderCount = 0;
+    const originalWarn = console.warn;
+    const warnings: string[] = [];
+    console.warn = (...args: unknown[]) => {
+      warnings.push(args.map(String).join(" "));
+    };
 
-    const handle = subscribeSnapshotStream(model, {
-      sessionToken: "tok",
-      rerender: () => {
-        rerenderCount += 1;
-      },
-      EventSourceCtor: Ctor,
-    });
+    try {
+      const handle = subscribeSnapshotStream(model, {
+        sessionToken: "tok",
+        rerender: () => {
+          rerenderCount += 1;
+        },
+        EventSourceCtor: Ctor,
+      });
 
-    instances[0]?.emit("snapshotDelta", "{not json");
-    expect(model.applied).toHaveLength(0);
-    expect(rerenderCount).toBe(0);
-    handle.dispose();
+      instances[0]?.emit("snapshotDelta", "{not json");
+      expect(model.applied).toHaveLength(0);
+      expect(rerenderCount).toBe(0);
+      expect(warnings.some((w) => w.includes("malformed snapshotDelta JSON"))).toBe(true);
+      handle.dispose();
+    } finally {
+      console.warn = originalWarn;
+    }
   });
 
   test("ignores events without snapshotDelta payload", () => {
