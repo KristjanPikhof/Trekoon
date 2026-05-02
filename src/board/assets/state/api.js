@@ -267,6 +267,9 @@ export function createMutationQueue(model, rerender) {
 
     processing = false;
     model.store.isMutating = false;
+    if (typeof model.invalidateBoardStateMemo === "function") {
+      model.invalidateBoardStateMemo();
+    }
     rerender();
     resolveFlushes();
   }
