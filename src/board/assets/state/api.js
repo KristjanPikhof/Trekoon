@@ -567,7 +567,7 @@ export function createApi(model, options) {
  *
  * @param {object} model - Store with `applySnapshotDelta` method
  * @param {object} options
- * @param {string} options.sessionToken - Auth token (forwarded as ?token=)
+ * @param {string} options.sessionToken - Auth token for API parity; EventSource uses the same-origin HttpOnly cookie.
  * @param {function} options.rerender - Trigger UI rerender after applying deltas
  * @param {typeof EventSource} [options.EventSourceCtor] - Constructor override for tests
  * @param {string} [options.path] - Override stream path; default /api/snapshot/stream
@@ -575,7 +575,6 @@ export function createApi(model, options) {
  */
 export function subscribeSnapshotStream(model, options) {
   const {
-    sessionToken,
     rerender,
     EventSourceCtor = typeof EventSource !== "undefined" ? EventSource : null,
     path = "/api/snapshot/stream",
@@ -585,14 +584,20 @@ export function subscribeSnapshotStream(model, options) {
     return { dispose: () => {}, eventSource: null };
   }
 
-  // EventSource cannot set custom headers, so the auth token rides as a query
-  // parameter. Server `extractToken` already accepts ?token=.
-  const url = sessionToken && sessionToken.length > 0
-    ? `${path}?token=${encodeURIComponent(sessionToken)}`
-    : path;
-
   let disposed = false;
-  const eventSource = new EventSourceCtor(url);
+  let consecutiveErrors = 0;
+  const eventSource = new EventSourceCtor(path);
+
+  const clearLiveUpdateNotice = () => {
+    if (model.store?.notice?.code === "live_updates_disconnected") {
+      model.store.notice = null;
+    }
+  };
+
+  const markLiveUpdateSuccess = () => {
+    consecutiveErrors = 0;
+    clearLiveUpdateNotice();
+  };
 
   const handleSnapshotDelta = (event) => {
     if (disposed) return;
@@ -611,6 +616,7 @@ export function subscribeSnapshotStream(model, options) {
     const delta = payload?.snapshotDelta;
     if (!delta || typeof delta !== "object") return;
     model.applySnapshotDelta(delta);
+    markLiveUpdateSuccess();
     if (typeof rerender === "function") rerender();
   };
 
@@ -630,26 +636,41 @@ export function subscribeSnapshotStream(model, options) {
     if (!snapshot || typeof snapshot !== "object") return;
     if (typeof model.replaceSnapshot === "function") {
       model.replaceSnapshot(snapshot);
+      markLiveUpdateSuccess();
       if (typeof rerender === "function") rerender();
     }
   };
 
+  function dispose() {
+    if (disposed) return;
+    disposed = true;
+    try {
+      eventSource.close();
+    } catch {
+      // best-effort
+    }
+  }
+
   const handleError = () => {
     if (disposed) return;
-    // Surface the disconnect to the user so they don't silently miss live
-    // updates. EventSource will keep auto-reconnecting; once a snapshot/
-    // snapshotDelta event lands again, the regular notice clearing flow
-    // (e.g. on the next mutation) replaces this notice.
+    consecutiveErrors += 1;
     if (model.store && typeof model.store === "object") {
       const existing = model.store.notice;
-      if (!existing || existing.code !== "live_updates_disconnected") {
+      const disabled = consecutiveErrors >= 5;
+      const nextCode = disabled ? "live_updates_disabled" : "live_updates_disconnected";
+      if (!existing || existing.code !== nextCode) {
         model.store.notice = {
           type: "warning",
-          code: "live_updates_disconnected",
-          title: "Live updates disconnected",
-          message: "Reconnecting to the server. Changes from other sessions may be delayed.",
+          code: nextCode,
+          title: disabled ? "Live updates disabled" : "Live updates disconnected",
+          message: disabled
+            ? "Refresh the board to resume live updates from other sessions."
+            : "Reconnecting to the server. Changes from other sessions may be delayed.",
         };
         if (typeof rerender === "function") rerender();
+      }
+      if (disabled) {
+        dispose();
       }
     }
   };
@@ -663,14 +684,6 @@ export function subscribeSnapshotStream(model, options) {
 
   return {
     eventSource,
-    dispose() {
-      if (disposed) return;
-      disposed = true;
-      try {
-        eventSource.close();
-      } catch {
-        // best-effort
-      }
-    },
+    dispose,
   };
 }
