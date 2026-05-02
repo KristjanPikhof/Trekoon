@@ -406,13 +406,9 @@ export async function tryDaemonDispatch(argv: readonly string[]): Promise<Daemon
   }
 
   try {
-    const env: Record<string, string> = {};
-    for (const [key, value] of Object.entries(process.env)) {
-      if (typeof value === "string") {
-        env[key] = value;
-      }
-    }
-    return await sendDaemonRequest(socketPath, { argv: [...argv], cwd, env });
+    // The daemon owns its own environment (set at `trekoon serve` startup);
+    // client env is deliberately NOT forwarded over the socket.
+    return await sendDaemonRequest(socketPath, { argv: [...argv], cwd });
   } catch {
     return null;
   }
