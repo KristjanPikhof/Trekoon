@@ -200,28 +200,14 @@ export class MutationService {
         dependencySpecs: input.dependencySpecs,
       });
 
-      this.#appendEntityEvent("epic", epic.id, ENTITY_OPERATIONS.epic.created, {
-        title: epic.title,
-        description: epic.description,
-        status: epic.status,
-      });
+      this.#emitEpicCreated(epic);
 
       for (const task of created.tasks) {
-        this.#appendEntityEvent("task", task.id, ENTITY_OPERATIONS.task.created, {
-          epic_id: task.epicId,
-          title: task.title,
-          description: task.description,
-          status: task.status,
-        });
+        this.#emitTaskCreated(task);
       }
 
       for (const subtask of created.subtasks) {
-        this.#appendEntityEvent("subtask", subtask.id, ENTITY_OPERATIONS.subtask.created, {
-          task_id: subtask.taskId,
-          title: subtask.title,
-          description: subtask.description,
-          status: subtask.status,
-        });
+        this.#emitSubtaskCreated(subtask);
       }
 
       for (const dependency of created.dependencies) {
