@@ -579,10 +579,13 @@ function entityFieldConflict(
   // Dependency events use identity-tuple matching (entity_id can be reused
   // across distinct dependencies). Fall back to the legacy filtered scan;
   // dependency events are bounded by per-entity history depth and not the
-  // hot path that the optimization targets.
+  // hot path that the optimization targets. Same fallback applies for
+  // payload field names that can't safely be inlined into a JSON1 path
+  // (defense in depth — the canonical SYNC_ALLOWED_FIELDS are all simple
+  // identifiers, but incoming payloads are not strictly schema-checked).
   const incomingDependencyIdentity = dependencyEventIdentity(event);
-  if (incomingDependencyIdentity !== null) {
-    return entityFieldConflictDependencyWalk(
+  if (incomingDependencyIdentity !== null || !isSafeJsonPathField(fieldName)) {
+    return entityFieldConflictHistoryWalk(
       localDb,
       currentBranch,
       event,
