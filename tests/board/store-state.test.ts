@@ -396,6 +396,31 @@ describe("board state store reconciliation", () => {
     expect(listener).toHaveBeenCalled();
   });
 
+  test("getBoardState returns same reference until state changes", () => {
+    globalThis.localStorage = createMockStorage() as Storage;
+
+    const store = createStore({
+      epics: [{ id: "epic-1", title: "Epic 1" }],
+      tasks: [{ id: "task-1", epicId: "epic-1", title: "Task 1", status: "todo" }],
+      subtasks: [],
+      dependencies: [],
+    });
+
+    const first = store.getBoardState();
+    const second = store.getBoardState();
+    const third = store.getBoardState();
+
+    expect(second).toBe(first);
+    expect(third).toBe(first);
+
+    store.syncState({ search: "epic" });
+    const afterChange = store.getBoardState();
+    expect(afterChange).not.toBe(first);
+
+    const fifth = store.getBoardState();
+    expect(fifth).toBe(afterChange);
+  });
+
   test("ignores malformed delta records without creating persistent synthetic ids", () => {
     globalThis.localStorage = createMockStorage() as Storage;
 
