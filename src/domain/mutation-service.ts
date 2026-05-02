@@ -1121,8 +1121,12 @@ export class MutationService {
     });
   }
 
-  #emitTaskDeleted(taskId: string): string {
-    return this.#appendEntityEvent("task", taskId, ENTITY_OPERATIONS.task.deleted, {});
+  #emitTaskDeleted(
+    taskId: string,
+    cascade?: { sourceEventId: string } | undefined,
+  ): string {
+    const fields: Record<string, unknown> = cascade ? { source_event_id: cascade.sourceEventId } : {};
+    return this.#appendEntityEvent("task", taskId, ENTITY_OPERATIONS.task.deleted, fields);
   }
 
   #emitSubtaskCreated(subtask: SubtaskRecord): string {
