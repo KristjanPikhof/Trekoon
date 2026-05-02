@@ -131,6 +131,7 @@ export function parseInvocation(argv: readonly string[], options: ParseInvocatio
     args: positionals.slice(1),
     wantsHelp,
     wantsVersion,
+    wantsDaemon,
   };
 }
 
