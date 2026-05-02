@@ -188,7 +188,7 @@ describe("board command", (): void => {
       },
       server: {
         origin: "http://127.0.0.1:4321",
-        fallbackUrl: "http://127.0.0.1:4321/?token=secret-token",
+        fallbackUrl: "http://127.0.0.1:4321",
         hostname: "127.0.0.1",
         port: 4321,
       },
