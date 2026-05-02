@@ -136,7 +136,7 @@ describe("board server", (): void => {
       writeFileSync(stateFile, `${JSON.stringify({ preferredPort: occupiedPort }, null, 2)}\n`, "utf8");
 
       const boardServer = startBoardServer({ cwd: workspace, token: "fallback-token" });
-      const response = await fetch(boardServer.url);
+      const response = await fetchFollowingTokenRedirect(boardServer.url, "fallback-token");
 
       expect(response.status).toBe(200);
       expect(boardServer.port).not.toBe(occupiedPort);
