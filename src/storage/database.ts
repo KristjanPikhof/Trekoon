@@ -11,6 +11,45 @@ import {
   type WorktreeRecoveryDiagnostics,
 } from "./worktree-recovery";
 
+/**
+ * Re-inspect worktree state on a daemon-mode cache hit so out-of-band changes
+ * to the worktree (e.g. an operator restoring a legacy `.trekoon/trekoon.db`
+ * after the daemon started, or a new tracked-vs-ignored conflict) surface to
+ * the caller through `diagnostics.recoveryRequired` instead of being masked
+ * by the cached handle's stale snapshot. Returns NO_LEGACY_RECOVERY when the
+ * fast-path no-legacy-DB shortcut applies and falls back to the
+ * DomainError-aware capture used by `resolveStorageResolutionDiagnostics`
+ * when inspection itself raises (e.g. tracked_ignored_mismatch).
+ */
+function reinspectRecoveryForCacheHit(paths: StoragePaths): WorktreeRecoveryDiagnostics {
+  const legacyDbFile: string = resolveLegacyWorktreeDatabaseFile(paths.worktreeRoot);
+  if (legacyDbFile !== paths.databaseFile && !existsSync(legacyDbFile)) {
+    return NO_LEGACY_RECOVERY;
+  }
+
+  try {
+    return inspectWorktreeDatabaseState(paths);
+  } catch (error) {
+    if (!(error instanceof DomainError)) {
+      throw error;
+    }
+    const details: Record<string, unknown> = error.details ?? {};
+    return {
+      status: (details.status as WorktreeRecoveryDiagnostics["status"] | undefined) ?? "no_legacy_state",
+      legacyDatabaseFiles: Array.isArray(details.legacyDatabaseFiles)
+        ? (details.legacyDatabaseFiles as string[])
+        : [],
+      backupFiles: Array.isArray(details.backupFiles) ? (details.backupFiles as string[]) : [],
+      trackedStorageFiles: Array.isArray(details.trackedStorageFiles)
+        ? (details.trackedStorageFiles as string[])
+        : [],
+      autoMigrated: details.autoMigrated === true,
+      importedFrom: typeof details.importedFrom === "string" ? details.importedFrom : null,
+      operatorAction: typeof details.operatorAction === "string" ? details.operatorAction : error.message,
+    };
+  }
+}
+
 export interface StorageResolutionDiagnostics {
   readonly invocationCwd: string;
   readonly storageMode: StoragePaths["storageMode"];
