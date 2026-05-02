@@ -326,19 +326,17 @@ describe("task claim — CLI subcommand", (): void => {
 describe("subtask claim — CLI subcommand", (): void => {
   test("subtask claim <id> --owner: happy path", async (): Promise<void> => {
     const cwd = createWorkspace();
-    const db = new Database(join(cwd, ".trekoon", "trekoon.db"), { create: true });
-    db.exec("PRAGMA journal_mode=WAL;");
-    migrateDatabase(db);
-    const svc = new MutationService(db, cwd);
-    const epic = svc.createEpic({ title: "E", description: "d" });
-    const task = svc.createTask({ epicId: epic.id, title: "T", description: "d" });
-    const subtask = svc.createSubtask({ taskId: task.id, title: "S", description: "d", status: "todo" });
-    db.close();
+    const epicRes = await runEpic({ cwd, mode: "toon", args: ["create", "--title", "E", "--description", "d"] });
+    const epicId = (epicRes.data as { epic: { id: string } }).epic.id;
+    const taskRes = await runTask({ cwd, mode: "toon", args: ["create", "--epic", epicId, "--title", "T", "--description", "d"] });
+    const taskId = (taskRes.data as { task: { id: string } }).task.id;
+    const subtaskRes = await runSubtask({ cwd, mode: "toon", args: ["create", "--task", taskId, "--title", "S", "--description", "d"] });
+    const subtaskId = (subtaskRes.data as { subtask: { id: string } }).subtask.id;
 
     const result = await runSubtask({
       cwd,
       mode: "toon",
-      args: ["claim", subtask.id, "--owner", "sub-agent"],
+      args: ["claim", subtaskId, "--owner", "sub-agent"],
     });
 
     expect(result.ok).toBe(true);
@@ -347,6 +345,6 @@ describe("subtask claim — CLI subcommand", (): void => {
     expect(data.claimed).toBe(true);
     expect(data.currentOwner).toBe("sub-agent");
     expect(data.currentStatus).toBe("in_progress");
-    expect(data.subtask.id).toBe(subtask.id);
+    expect(data.subtask.id).toBe(subtaskId);
   });
 });
