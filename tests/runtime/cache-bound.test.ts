@@ -218,6 +218,33 @@ describe("daemon-mode cachedDatabases LRU bound", (): void => {
     }
     newHandle.close();
   });
+
+  test("closeCachedDatabases skips borrowed handles and leaves them usable", (): void => {
+    process.env.TREKOON_DAEMON_INPROCESS = "1";
+
+    const workspace = createWorkspace();
+    const borrowedHandle = openTrekoonDatabase(workspace);
+    const originalWarn = console.warn;
+    let warning = "";
+    console.warn = (message?: unknown): void => {
+      warning += String(message);
+    };
+
+    try {
+      closeCachedDatabases();
+
+      expect(warning).toContain("still borrowed");
+      expect(cachedDatabasesSize()).toBe(1);
+      const probe = borrowedHandle.db.query("SELECT COUNT(*) AS n FROM sqlite_master;").get() as { n: number };
+      expect(probe.n).toBeGreaterThan(0);
+    } finally {
+      console.warn = originalWarn;
+      borrowedHandle.close();
+      closeCachedDatabases();
+    }
+
+    expect(cachedDatabasesSize()).toBe(0);
+  });
 });
 
 describe("daemon-mode autoMigrate-honoring on cached handles", (): void => {
@@ -244,6 +271,8 @@ describe("daemon-mode autoMigrate-honoring on cached handles", (): void => {
     const secondHandle = openTrekoonDatabase(workspace);
     expect(secondHandle.db).toBe(firstHandle.db); // same cached connection
     expect(readCurrentMigrationVersionReadOnly(secondHandle.db)).toBe(LATEST_MIGRATION_VERSION);
+    firstHandle.close();
+    secondHandle.close();
   });
 });
 
