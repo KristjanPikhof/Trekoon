@@ -212,6 +212,63 @@ describe("board PATCH If-Match preconditions", (): void => {
     expect(response.status).toBe(200);
   });
 
+  test("PATCH /api/epics/:id with W/-prefixed weak ETag matches", async (): Promise<void> => {
+    const updatedAt = readUpdatedAt("epic", seeded.epicId);
+    const response = await fetch(authedUrl(`/api/epics/${encodeURIComponent(seeded.epicId)}`), {
+      method: "PATCH",
+      headers: {
+        "content-type": "application/json",
+        "if-match": `W/"${updatedAt}"`,
+      },
+      body: JSON.stringify({ title: "Weak ETag Rename" }),
+    });
+    expect(response.status).toBe(200);
+  });
+
+  test("PATCH /api/epics/:id with bare W/<digits> weak ETag matches", async (): Promise<void> => {
+    const updatedAt = readUpdatedAt("epic", seeded.epicId);
+    const response = await fetch(authedUrl(`/api/epics/${encodeURIComponent(seeded.epicId)}`), {
+      method: "PATCH",
+      headers: {
+        "content-type": "application/json",
+        "if-match": `W/${updatedAt}`,
+      },
+      body: JSON.stringify({ title: "Weak ETag Bare" }),
+    });
+    expect(response.status).toBe(200);
+  });
+
+  test("PATCH /api/epics/:id with W/-prefixed stale ETag returns 409", async (): Promise<void> => {
+    const updatedAt = readUpdatedAt("epic", seeded.epicId);
+    const response = await fetch(authedUrl(`/api/epics/${encodeURIComponent(seeded.epicId)}`), {
+      method: "PATCH",
+      headers: {
+        "content-type": "application/json",
+        "if-match": `W/"${updatedAt - 1}"`,
+      },
+      body: JSON.stringify({ title: "Should Not Apply" }),
+    });
+    expect(response.status).toBe(409);
+    const body = await response.json();
+    expect(body.error.code).toBe("precondition_failed");
+  });
+
+  test("PATCH /api/epics/:id with `*` wildcard If-Match returns 400 (not supported)", async (): Promise<void> => {
+    const response = await fetch(authedUrl(`/api/epics/${encodeURIComponent(seeded.epicId)}`), {
+      method: "PATCH",
+      headers: {
+        "content-type": "application/json",
+        "if-match": "*",
+      },
+      body: JSON.stringify({ title: "Star Header" }),
+    });
+    expect(response.status).toBe(400);
+    const body = await response.json();
+    expect(body.ok).toBe(false);
+    expect(body.error.code).toBe("invalid_input");
+    expect(String(body.error.message)).toContain("wildcard");
+  });
+
   // Trekoon task 02a08a41-93a9-4c30-95be-0f9bf2478632 / system-hardening-0.4.2
   // P0 finding 2: previously the route layer issued the If-Match check
   // BEFORE entering the write transaction, so two concurrent PATCHes that
