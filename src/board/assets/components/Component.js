@@ -80,11 +80,18 @@ function getNamespacedFormIdentity(form) {
   return "anonymous-form";
 }
 
-function getManagedControls(root) {
+function getManagedControls(root, cache) {
+  if (cache) {
+    const cached = cache.get(root);
+    if (cached) return cached;
+    const controls = Array.from(root.querySelectorAll("input, textarea, select"));
+    cache.set(root, controls);
+    return controls;
+  }
   return Array.from(root.querySelectorAll("input, textarea, select"));
 }
 
-function getControlIdentity(el, form) {
+function getControlIdentity(el, form, cache) {
   const controlKey = el.getAttribute("data-control-id");
   if (controlKey) {
     return `control:${controlKey}`;
@@ -98,12 +105,12 @@ function getControlIdentity(el, form) {
   if (name) {
     const tagName = el.tagName.toLowerCase();
     const type = tagName === "input" ? (el.getAttribute("type") ?? "text") : tagName;
-    const peers = getManagedControls(form).filter((candidate) => candidate.getAttribute("name") === name);
+    const peers = getManagedControls(form, cache).filter((candidate) => candidate.getAttribute("name") === name);
     const index = peers.indexOf(el);
     return `name:${name}:${type}:${index}`;
   }
 
-  const index = getManagedControls(form).indexOf(el);
+  const index = getManagedControls(form, cache).indexOf(el);
   return `index:${index}:${el.tagName.toLowerCase()}`;
 }
 
