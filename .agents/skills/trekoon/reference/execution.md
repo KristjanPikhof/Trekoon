@@ -141,13 +141,19 @@ When a sub-agent calls `task done`, the response includes:
 1. Agent attempts to fix failures (has context).
 2. If can't fix, report failure with error output.
 3. Dispatch fix agent with context.
-4. Same error twice -> stop and ask user.
 
-If a status update fails with `status_transition_invalid`, check current status
-and transition through the valid intermediate step.
+**`status_transition_invalid`** — exact recovery sequence:
+1. Run `trekoon --toon --compact task show <id>` to read the current status.
+2. Append a blocker note: `trekoon --toon task update <id> --append "Blocked: status_transition_invalid from <attempted transition>; current status is <actual>"`.
+3. Identify the valid intermediate transition (see `reference/status-machine.md`).
+4. Apply the correct intermediate step, then retry the intended transition.
+5. Only move on to the next task after the target task reaches the intended status or is explicitly marked `blocked`.
 
-If a status update fails with `dependency_blocked`, refresh with
-`task ready`/`task next` and continue with a ready candidate.
+**`dependency_blocked`** — exact recovery sequence:
+1. Run `trekoon --toon --compact task show <id>` to identify which dependency is unmet.
+2. Append a blocker note: `trekoon --toon task update <id> --append "Blocked: dependency_blocked; depends on <dep-id>"`.
+3. Run `trekoon --toon task ready --epic <epic-id>` to get a ready candidate.
+4. Only then continue with the ready candidate — do not retry the blocked task.
 
 ## Verify before closing
 
