@@ -883,6 +883,7 @@ function removeConflictsForEntityIds(
   db: Database,
   entityKind: string,
   entityIds: readonly string[],
+  scope: ConflictScope,
   excludeConflictId?: string,
 ): void {
   if (entityIds.length === 0) {
@@ -891,12 +892,21 @@ function removeConflictsForEntityIds(
   const placeholders = entityIds.map(() => "?").join(", ");
   if (excludeConflictId !== undefined) {
     db.query(
-      `DELETE FROM sync_conflicts WHERE entity_kind = ? AND entity_id IN (${placeholders}) AND id != ?;`,
-    ).run(entityKind, ...entityIds, excludeConflictId);
+      `DELETE FROM sync_conflicts
+       WHERE entity_kind = ?
+         AND entity_id IN (${placeholders})
+         AND worktree_path = ?
+         AND current_branch = ?
+         AND id != ?;`,
+    ).run(entityKind, ...entityIds, scope.worktreePath, scope.currentBranch, excludeConflictId);
   } else {
     db.query(
-      `DELETE FROM sync_conflicts WHERE entity_kind = ? AND entity_id IN (${placeholders});`,
-    ).run(entityKind, ...entityIds);
+      `DELETE FROM sync_conflicts
+       WHERE entity_kind = ?
+         AND entity_id IN (${placeholders})
+         AND worktree_path = ?
+         AND current_branch = ?;`,
+    ).run(entityKind, ...entityIds, scope.worktreePath, scope.currentBranch);
   }
 }
 
