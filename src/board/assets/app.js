@@ -366,6 +366,7 @@ export async function bootLegacyBoard(options = {}) {
       const selectedTask = boardState.selectedTask;
       const selectedSubtask = boardState.selectedSubtask;
       const taskModalOpen = Boolean(boardState.taskModalOpen && selectedTask);
+      const subtaskModalOpen = Boolean(boardState.subtaskModalOpen && selectedSubtask);
       const currentNav = taskModalOpen ? "detail" : screen === "tasks" ? "board" : "epics";
 
       // Layout toggles
