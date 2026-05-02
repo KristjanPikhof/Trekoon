@@ -212,14 +212,10 @@ function formatSseEvent(eventName: string, data: unknown, id?: number): string {
 
 // SSE backpressure thresholds (P1 finding 5).
 // A client that connects but never reads can otherwise grow the per-stream
-// queue without bound — every snapshotDelta the bus publishes is encoded
-// and pushed, retaining the bytes in `controller`'s internal queue. We
-// guard against OOM by tracking unflushed bytes and the time since the
-// consumer last pulled, and tearing the connection down once either limit
-// is exceeded.
-const SSE_MAX_QUEUED_BYTES = 1_000_000; // 1 MB hard cap → drop connection.
-const SSE_COALESCE_BYTES = 256_000;     // 256 KB soft cap → coalesce deltas.
-const SSE_STALL_MS = 30_000;            // 30 s without consumption → drop.
+// queue without bound. The stream controller already exposes queue pressure
+// through `desiredSize`; once it goes negative we stop enqueueing sparse
+// deltas and retain one pending full-snapshot frame for the next drain.
+const SSE_STALL_MS = 30_000; // 30 s without consumption under pressure → drop.
 const SSE_BACKPRESSURE_CHECK_MS = 1_000;
 
 function openSnapshotStream(
@@ -243,17 +239,9 @@ function openSnapshotStream(
   let heartbeatTimer: ReturnType<typeof setInterval> | null = null;
   let backpressureTimer: ReturnType<typeof setInterval> | null = null;
 
-  // Bytes enqueued but not yet consumed via `pull`. Each enqueue adds the
-  // chunk's byte length; each `pull` decrements by the next pending chunk's
-  // size (FIFO; we don't peek into the controller's internal queue).
-  let queuedBytes = 0;
-  const pendingChunkSizes: number[] = [];
   let lastConsumeAt = Date.now();
   let closed = false;
-  // When over the soft threshold we coalesce snapshotDeltas: only the latest
-  // is retained, dropping superseded deltas. The cached delta is flushed
-  // once the queue drains below the soft limit on the next `pull`.
-  let pendingDelta: { id: number; snapshotDelta: Record<string, unknown> } | null = null;
+  let pendingFrame: string | null = null;
 
   const cleanupTimers = (): void => {
     if (unsubscribe) {
@@ -277,22 +265,29 @@ function openSnapshotStream(
           return;
         }
         try {
-          const bytes = encoder.encode(chunk);
-          controller.enqueue(bytes);
-          queuedBytes += bytes.byteLength;
-          pendingChunkSizes.push(bytes.byteLength);
+          controller.enqueue(encoder.encode(chunk));
         } catch {
           // Controller closed; cleanup happens via cancel.
         }
       };
 
-      const flushPendingDelta = (): void => {
-        if (!pendingDelta || closed) {
+      const isBackpressured = (): boolean => (controller.desiredSize ?? 1) < 0;
+
+      const queueFullSnapshot = (id: number): void => {
+        // Sparse per-mutation deltas are not cumulative, so merging them can
+        // silently drop changes. Under backpressure, retain a fresh full
+        // snapshot frame instead; EventSource clients can converge from it
+        // without relying on every skipped delta.
+        pendingFrame = formatSseEvent("snapshot", { snapshot: buildBoardSnapshot(domain) }, id);
+      };
+
+      const flushPendingFrame = (): void => {
+        if (!pendingFrame || closed || isBackpressured()) {
           return;
         }
-        const delta = pendingDelta;
-        pendingDelta = null;
-        enqueueRaw(formatSseEvent("snapshotDelta", { snapshotDelta: delta.snapshotDelta }, delta.id));
+        const frame = pendingFrame;
+        pendingFrame = null;
+        enqueueRaw(frame);
       };
 
       const closeWithError = (reason: string): void => {
@@ -318,21 +313,14 @@ function openSnapshotStream(
         if (closed) {
           return;
         }
-        if (queuedBytes >= SSE_MAX_QUEUED_BYTES) {
-          closeWithError("queued bytes exceeded 1MB hard limit");
+        if (isBackpressured()) {
+          queueFullSnapshot(id);
           return;
         }
-        if (queuedBytes >= SSE_COALESCE_BYTES) {
-          // Slow consumer: coalesce. The board snapshot is cumulative; the
-          // newest delta carries the freshest causally-ordered state for
-          // every entity it touches, so dropping superseded deltas is safe.
-          pendingDelta = { id, snapshotDelta };
+        flushPendingFrame();
+        if (isBackpressured()) {
+          queueFullSnapshot(id);
           return;
-        }
-        // Fast path: flush any coalesced delta first to preserve ordering,
-        // then enqueue the new one.
-        if (pendingDelta) {
-          flushPendingDelta();
         }
         enqueueRaw(formatSseEvent("snapshotDelta", { snapshotDelta }, id));
       };
@@ -348,21 +336,20 @@ function openSnapshotStream(
 
       // Heartbeats keep proxies and stale-connection detectors happy.
       heartbeatTimer = setInterval(() => {
+        if ((controller.desiredSize ?? 1) < 0) {
+          return;
+        }
         enqueueRaw(": heartbeat\n\n");
       }, 15000);
 
       // Backpressure watchdog: if the consumer has not pulled within
-      // SSE_STALL_MS while pending data is sitting in the queue, treat the
-      // client as dead and drop the connection so we don't pin memory.
+      // SSE_STALL_MS while the stream is under pressure, close with an
+      // error frame so EventSource reconnects and receives a fresh snapshot.
       backpressureTimer = setInterval(() => {
         if (closed) {
           return;
         }
-        if (queuedBytes >= SSE_MAX_QUEUED_BYTES) {
-          closeWithError("queued bytes exceeded 1MB hard limit");
-          return;
-        }
-        const stalled = queuedBytes > 0 && Date.now() - lastConsumeAt > SSE_STALL_MS;
+        const stalled = (controller.desiredSize ?? 1) < 0 && Date.now() - lastConsumeAt > SSE_STALL_MS;
         if (stalled) {
           closeWithError(`no consumer pull within ${SSE_STALL_MS}ms`);
         }
@@ -387,17 +374,17 @@ function openSnapshotStream(
       }
       request.signal.addEventListener("abort", onAbort);
     },
-    pull(): void {
-      // A pull means the consumer drained the next chunk from the queue.
-      const consumed = pendingChunkSizes.shift();
-      if (typeof consumed === "number") {
-        queuedBytes = Math.max(0, queuedBytes - consumed);
-      }
+    pull(controller): void {
       lastConsumeAt = Date.now();
-      // Outer-scope flush: re-walk via enqueueRaw on the active controller is
-      // unnecessary because the controller is only valid inside start();
-      // instead the next snapshotDelta arrival will see queuedBytes below the
-      // soft limit and flush pendingDelta automatically.
+      if (pendingFrame && !closed && (controller.desiredSize ?? 1) >= 0) {
+        const frame = pendingFrame;
+        pendingFrame = null;
+        try {
+          controller.enqueue(encoder.encode(frame));
+        } catch {
+          // Controller closed.
+        }
+      }
     },
     cancel(): void {
       closed = true;
