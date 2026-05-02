@@ -161,8 +161,9 @@ export function startWalWatcher(options: WalWatcherOptions): WalWatcher {
   // CPU on large boards. The handle stays valid for the lifetime of the
   // server, so re-binding is unnecessary.
   const domain = new TrackerDomain(options.db);
+  const buildSnapshot = options.buildSnapshot ?? buildBoardSnapshot;
 
-  let lastSnapshot = buildBoardSnapshot(domain);
+  let lastSnapshot = buildSnapshot(domain);
 
   let debounceTimer: ReturnType<typeof setTimeout> | null = null;
   let closed = false;
