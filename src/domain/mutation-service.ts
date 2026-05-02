@@ -399,12 +399,7 @@ export class MutationService {
   }): AtomicIdempotentMutationResult {
     return this.#completeAtomicIdempotentMutation(input.claim, (): AtomicIdempotencyCompletedResult => {
       const subtask = this.#domain.createSubtask(input);
-      this.#appendEntityEvent("subtask", subtask.id, ENTITY_OPERATIONS.subtask.created, {
-        task_id: subtask.taskId,
-        title: subtask.title,
-        description: subtask.description,
-        status: subtask.status,
-      });
+      this.#emitSubtaskCreated(subtask);
       return {
         state: "completed",
         status: 201,
@@ -417,12 +412,7 @@ export class MutationService {
     return this.#writeTransaction((): CompactSubtaskBatchCreateResult => {
       const created = this.#domain.createSubtaskBatch(input);
       for (const subtask of created.subtasks) {
-        this.#appendEntityEvent("subtask", subtask.id, ENTITY_OPERATIONS.subtask.created, {
-          task_id: subtask.taskId,
-          title: subtask.title,
-          description: subtask.description,
-          status: subtask.status,
-        });
+        this.#emitSubtaskCreated(subtask);
       }
       return created;
     });
