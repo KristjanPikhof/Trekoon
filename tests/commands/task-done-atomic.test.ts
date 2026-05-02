@@ -97,6 +97,14 @@ describe("task done atomic", (): void => {
     const blocked = service.updateTask(downstream.id, { status: "blocked" });
     expect(blocked.status).toBe("blocked");
 
+    // Resolve the dep so the atomic done call passes the dependency-gating
+    // guard and reaches computeSnapshot — the rollback assertion below
+    // depends on exercising the post-UPDATE-pre-COMMIT path.
+    service.markTaskDoneAtomically({
+      taskId: upstream.id,
+      computeSnapshot: () => undefined,
+    });
+
     expect((): void => {
       service.markTaskDoneAtomically({
         taskId: downstream.id,
