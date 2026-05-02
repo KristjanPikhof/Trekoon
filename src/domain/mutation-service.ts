@@ -437,6 +437,101 @@ export class MutationService {
     });
   }
 
+  /**
+   * Atomically claim a task for an owner using a SQL compare-and-swap.
+   *
+   * The UPDATE predicate ensures:
+   *   - Only `todo` or `blocked` tasks can be claimed (not `done` or
+   *     already-in_progress tasks owned by someone else).
+   *   - An owner can re-claim their own in-progress task (idempotent).
+   *   - Exactly one caller gets `claimed: true` when two concurrent calls race.
+   *
+   * Returns `{ claimed, currentOwner, currentStatus }`.
+   * When `claimed` is true the returned `task` is the post-update record.
+   */
+  claimTask(input: { taskId: string; owner: string }): {
+    claimed: boolean;
+    currentOwner: string | null;
+    currentStatus: string;
+    task?: TaskRecord;
+  } {
+    return this.#writeTransaction(() => {
+      const now = Date.now();
+      const result = this.#db
+        .query(
+          `UPDATE tasks
+              SET status = 'in_progress', owner = ?, updated_at = ?, version = version + 1
+            WHERE id = ?
+              AND status IN ('todo', 'blocked')
+              AND (owner IS NULL OR owner = ?)
+           RETURNING id`,
+        )
+        .get(input.owner, now, input.taskId, input.owner) as { id: string } | null;
+
+      if (result !== null) {
+        const task = this.#domain.getTaskOrThrow(input.taskId);
+        this.#emitTaskUpdated(task);
+        return {
+          claimed: true,
+          currentOwner: input.owner,
+          currentStatus: "in_progress",
+          task,
+        };
+      }
+
+      // CAS failed — fetch current state for the caller
+      const current = this.#domain.getTaskOrThrow(input.taskId);
+      return {
+        claimed: false,
+        currentOwner: current.owner,
+        currentStatus: current.status,
+      };
+    });
+  }
+
+  /**
+   * Atomically claim a subtask for an owner using a SQL compare-and-swap.
+   * Same semantics as `claimTask`.
+   */
+  claimSubtask(input: { subtaskId: string; owner: string }): {
+    claimed: boolean;
+    currentOwner: string | null;
+    currentStatus: string;
+    subtask?: SubtaskRecord;
+  } {
+    return this.#writeTransaction(() => {
+      const now = Date.now();
+      const result = this.#db
+        .query(
+          `UPDATE subtasks
+              SET status = 'in_progress', owner = ?, updated_at = ?, version = version + 1
+            WHERE id = ?
+              AND status IN ('todo', 'blocked')
+              AND (owner IS NULL OR owner = ?)
+           RETURNING id`,
+        )
+        .get(input.owner, now, input.subtaskId, input.owner) as { id: string } | null;
+
+      if (result !== null) {
+        const subtask = this.#domain.getSubtaskOrThrow(input.subtaskId);
+        this.#emitSubtaskUpdated(subtask);
+        return {
+          claimed: true,
+          currentOwner: input.owner,
+          currentStatus: "in_progress",
+          subtask,
+        };
+      }
+
+      const current = this.#domain.getSubtaskOrThrow(input.subtaskId);
+      return {
+        claimed: false,
+        currentOwner: current.owner,
+        currentStatus: current.status,
+      };
+    });
+  }
+
   updateTaskStatusCascade(id: string, status: string): StatusCascadePlan {
     return this.#writeTransaction((): StatusCascadePlan => {
       const plan = this.#domain.planStatusCascade("task", id, status);
