@@ -475,7 +475,7 @@ export class MutationService {
       const task = this.#domain.getTaskOrThrow(existingSubtask.taskId);
       const touchingDependencies = this.#domain.listDependenciesTouchingNode(input.id);
       this.#domain.deleteSubtask(input.id);
-      const subtaskDeleteEventId = this.#appendEntityEvent("subtask", input.id, ENTITY_OPERATIONS.subtask.deleted, {});
+      const subtaskDeleteEventId = this.#emitSubtaskDeleted(input.id);
       for (const dependency of touchingDependencies) {
         this.#appendEntityEvent(
           "dependency",
