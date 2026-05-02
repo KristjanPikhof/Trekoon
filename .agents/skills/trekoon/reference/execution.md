@@ -90,8 +90,8 @@ subtasks:
 - Task <id>: <title>
 
 Before starting each task:
-- set status to in_progress and assign owner:
-  trekoon --toon task update <id> --status in_progress --owner <lane-name>
+- claim and assign owner:
+  trekoon --toon task claim <id> --owner <lane-name>
 - append a short start note:
   trekoon --toon task update <id> --append "Starting implementation"
 
