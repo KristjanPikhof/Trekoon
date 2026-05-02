@@ -911,7 +911,7 @@ function hasLocalDependencyRemovalForIdentity(
   return row !== null;
 }
 
-function hasLocalDependencyDeleteConflict(db: Database, event: StoredEvent, sourceBranch: string): boolean {
+function hasLocalDependencyDeleteConflict(db: Database, event: StoredEvent, currentBranch: string): boolean {
   const identity = dependencyEventIdentity(event);
   if (identity === null) {
     return false;
@@ -921,21 +921,21 @@ function hasLocalDependencyDeleteConflict(db: Database, event: StoredEvent, sour
     return false;
   }
 
-  const latestOperation = latestLocalDependencyOperationForIdentity(db, sourceBranch, identity);
+  const latestOperation = latestLocalDependencyOperationForIdentity(db, currentBranch, identity);
   if (latestOperation === ENTITY_OPERATIONS.dependency.removed) {
     return false;
   }
 
-  return hasLocalDependencyEditsForIdentity(db, sourceBranch, identity);
+  return hasLocalDependencyEditsForIdentity(db, currentBranch, identity);
 }
 
-function hasLocalDeleteCascadeEdits(db: Database, event: StoredEvent, sourceBranch: string): boolean {
-  if (hasLocalEntityEdits(db, event.entity_kind, event.entity_id, sourceBranch)) {
+function hasLocalDeleteCascadeEdits(db: Database, event: StoredEvent, currentBranch: string): boolean {
+  if (hasLocalEntityEdits(db, event.entity_kind, event.entity_id, currentBranch)) {
     return true;
   }
 
   if (event.entity_kind === "subtask") {
-    return hasLocalDependencyEditsTouchingNodes(db, [event.entity_id], sourceBranch);
+    return hasLocalDependencyEditsTouchingNodes(db, [event.entity_id], currentBranch);
   }
 
   if (event.entity_kind !== "task") {
@@ -948,12 +948,12 @@ function hasLocalDeleteCascadeEdits(db: Database, event: StoredEvent, sourceBran
   const subtaskIds = subtaskRows.map((row) => row.id);
 
   for (const subtaskId of subtaskIds) {
-    if (hasLocalEntityEdits(db, "subtask", subtaskId, sourceBranch)) {
+    if (hasLocalEntityEdits(db, "subtask", subtaskId, currentBranch)) {
       return true;
     }
   }
 
-  return hasLocalDependencyEditsTouchingNodes(db, [event.entity_id, ...subtaskIds], sourceBranch);
+  return hasLocalDependencyEditsTouchingNodes(db, [event.entity_id, ...subtaskIds], currentBranch);
 }
 
 function rowExists(db: Database, tableName: string, id: string): boolean {
