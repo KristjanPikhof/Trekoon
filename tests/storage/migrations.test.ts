@@ -89,29 +89,47 @@ describe("storage migrations: down() v4-v6", (): void => {
     }
   });
 
-  test("each v4-v6 down() guard throws DomainError when invoked directly", (): void => {
+  test("v5 down() guard fires when only v5 sits above the target", (): void => {
     const workspace: string = createWorkspace();
     const storage = openTrekoonDatabase(workspace);
 
     try {
-      // Reach into the migration registry by invoking down() through rollback
-      // staged at the right point. We assert each guard's error in isolation
-      // via direct rollback to the version below the target.
-      const cases: ReadonlyArray<{ to: number; expectedName: string }> = [
-        { to: 5, expectedName: "0006_add_owner_column" },
-      ];
+      // Manually drop schema_migrations rows for versions 6+ so the next
+      // rollback walk hits 0005's guard first instead of 0006's.
+      storage.db.exec("DELETE FROM schema_migrations WHERE version >= 6;");
 
-      for (const { to, expectedName } of cases) {
-        let caught: unknown;
-        try {
-          rollbackDatabase(storage.db, to);
-        } catch (error: unknown) {
-          caught = error;
-        }
-        expect(caught).toBeInstanceOf(DomainError);
-        const domainError = caught as DomainError;
-        expect(domainError.details?.migrationName).toBe(expectedName);
+      let caught: unknown;
+      try {
+        rollbackDatabase(storage.db, 4);
+      } catch (error: unknown) {
+        caught = error;
       }
+
+      expect(caught).toBeInstanceOf(DomainError);
+      expect((caught as DomainError).details?.migrationName).toBe("0005_dependency_edge_integrity");
+      expect((caught as DomainError).message).toContain("trekoon migrate backup");
+    } finally {
+      storage.close();
+    }
+  });
+
+  test("v4 down() guard fires when only v4 sits above the target", (): void => {
+    const workspace: string = createWorkspace();
+    const storage = openTrekoonDatabase(workspace);
+
+    try {
+      storage.db.exec("DELETE FROM schema_migrations WHERE version >= 5;");
+
+      let caught: unknown;
+      try {
+        rollbackDatabase(storage.db, 3);
+      } catch (error: unknown) {
+        caught = error;
+      }
+
+      expect(caught).toBeInstanceOf(DomainError);
+      expect((caught as DomainError).details?.migrationName).toBe("0004_worktree_scoped_sync_metadata");
+      expect((caught as DomainError).message).toContain("trekoon migrate backup");
     } finally {
       storage.close();
     }
