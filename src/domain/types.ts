@@ -265,6 +265,7 @@ export const ERROR_CODES = {
   CANCELLED: "cancelled",
   CONFIRMATION_REQUIRED: "confirmation_required",
   CONFLICT_SET_CHANGED: "conflict_set_changed",
+  DAEMON_START_FAILED: "daemon_start_failed",
   DATABASE_BUSY: "database_busy",
   DEPENDENCY_BLOCKED: "dependency_blocked",
   DISALLOWED_FIELD: "disallowed_field",
