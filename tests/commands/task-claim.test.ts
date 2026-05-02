@@ -199,7 +199,7 @@ describe("task claim — concurrency (5-way race)", (): void => {
     const results = owners.map((owner) => service.claimTask({ taskId: task.id, owner }));
     const winner = results.find((r) => r.claimed)!;
 
-    expect(owners).toContain(winner.currentOwner);
+    expect(owners).toContain(winner.currentOwner ?? "");
   });
 });
 
