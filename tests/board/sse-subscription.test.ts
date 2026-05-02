@@ -72,6 +72,7 @@ function createMockEventSourceCtor(): {
 interface MockModel {
   applied: Array<Record<string, unknown>>;
   replaced: Array<Record<string, unknown>>;
+  store: { notice: Record<string, unknown> | null };
   applySnapshotDelta(delta: Record<string, unknown>): void;
   replaceSnapshot(snapshot: Record<string, unknown>): void;
 }
@@ -80,6 +81,7 @@ function createMockModel(): MockModel {
   const model: MockModel = {
     applied: [],
     replaced: [],
+    store: { notice: null },
     applySnapshotDelta(delta) {
       this.applied.push(delta);
     },
