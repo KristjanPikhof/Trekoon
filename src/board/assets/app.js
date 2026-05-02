@@ -133,15 +133,16 @@ export async function bootLegacyBoard(options = {}) {
     const runtimeSession = resolveRuntimeSession();
     if (runtimeSession.shouldScrubAddressBar) scrubTokenFromAddressBar();
 
-    // Fetch snapshot
-    const bootstrap = readJsonScript("trekoon-board-bootstrap") ?? {};
-    let snapshotPayload = bootstrap?.snapshot ?? readJsonScript("trekoon-board-snapshot") ?? {};
-    if ((!snapshotPayload || typeof snapshotPayload !== "object") && runtimeSession.token.length > 0) {
-      const response = await fetch("/api/snapshot");
-      const payload = await response.json();
-      if (!payload?.ok) throw new Error(payload?.error?.message || "Board request failed");
-      snapshotPayload = payload?.data?.snapshot ?? {};
+    // Always fetch snapshot client-side. The bootstrap script in index.html
+    // only carries the auth token; the snapshot is fetched via /api/snapshot
+    // so index.html stays small and never carries board data in its HTML body.
+    const response = await fetch("/api/snapshot");
+    if (!response.ok) {
+      throw new Error(`Board snapshot request failed with status ${response.status}`);
     }
+    const payload = await response.json();
+    if (!payload?.ok) throw new Error(payload?.error?.message || "Board request failed");
+    const snapshotPayload = payload?.data?.snapshot ?? {};
 
     const snapshot = normalizeSnapshot(snapshotPayload);
 
