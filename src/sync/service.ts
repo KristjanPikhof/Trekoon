@@ -179,6 +179,17 @@ interface ResolutionEventPayload {
   readonly field: string;
   readonly resolution: string;
   readonly value?: string | null;
+  /**
+   * Worktree+branch scope of the conflict row that was resolved on the
+   * emitter side. Receivers use these (combined with their OWN active
+   * scope) to ensure a single shared `source_event_id` does not cause one
+   * worktree's resolution to clobber a sibling worktree's pending row.
+   *
+   * Optional for back-compat with events emitted before scope-aware
+   * resolution was introduced.
+   */
+  readonly worktree_path?: string;
+  readonly current_branch?: string;
 }
 
 interface ResolutionWriteContext {
