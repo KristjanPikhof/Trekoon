@@ -223,10 +223,15 @@ export class MutationService {
 
       this.#domain.deleteEpic(id);
 
-      this.#emitEpicDeleted(id);
+      const epicDeleteEventId = this.#emitEpicDeleted(id);
 
       for (const task of tasks) {
-        const taskDeleteEventId = this.#emitTaskDeleted(task.id);
+        // Stamp cascaded task.deleted events with the parent epic-delete event
+        // id so peer worktrees can suppress the per-task __delete__ conflict
+        // when an epic-level conflict is already pending. Without this, a peer
+        // with edits on the epic's tasks gets N+1 conflicts (epic + one per
+        // task) instead of the single epic-level conflict.
+        const taskDeleteEventId = this.#emitTaskDeleted(task.id, { sourceEventId: epicDeleteEventId });
         const subtasks = subtasksByTaskId.get(task.id) ?? [];
         for (const subtask of subtasks) {
           this.#emitSubtaskDeleted(subtask.id, { taskId: task.id, sourceEventId: taskDeleteEventId });
