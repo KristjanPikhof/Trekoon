@@ -883,6 +883,11 @@ export function migrateDatabase(db: Database): void {
   // transactional migration path for non-current/legacy schemas.
   if (isSchemaCurrentFastPath(db, latestVersion)) {
     migrateBoardIdempotencyState(db);
+    // Stamp the DB header so subsequent fast-path checks have a fingerprint
+    // to verify against, even if this is the first run after the v1 marker
+    // format upgrade or a restored-from-backup DB whose schema_migrations
+    // happens to match latest.
+    setUserVersion(db, latestVersion);
     writeMigrationVersionMarker(db, latestVersion);
     return;
   }
@@ -906,6 +911,10 @@ export function migrateDatabase(db: Database): void {
       migration.up(db);
       recordMigration(db, migration);
     }
+
+    // Stamp the DB header inside the same exclusive transaction so the
+    // user_version cannot diverge from schema_migrations on commit.
+    setUserVersion(db, latestVersion);
   });
 
   // Persist the new version so the next cold start can skip the probe.
