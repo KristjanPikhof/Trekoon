@@ -794,6 +794,7 @@ export class TrackerDomain {
     id: string,
     input: { title?: string | undefined; description?: string | undefined; status?: string | undefined; owner?: string | null | undefined },
   ): SubtaskRecord {
+    this.#assertInTransaction("updateSubtask");
     const existing: SubtaskRecord = this.getSubtaskOrThrow(id);
     const nextTitle: string = input.title !== undefined ? assertNonEmpty("title", input.title) : existing.title;
     const nextDescription: string =
