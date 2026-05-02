@@ -13,7 +13,7 @@ import {
 } from "../../src/domain/mutation-service";
 import { appendEventWithGitContext } from "../../src/sync/event-writes";
 import { clearGitContextCache, resolveGitContext } from "../../src/sync/git-context";
-import { syncResolve } from "../../src/sync/service";
+import { getSyncConflict, syncResolve, syncResolveAll, syncResolvePreview } from "../../src/sync/service";
 import { openTrekoonDatabase } from "../../src/storage/database";
 import { resolveStoragePaths } from "../../src/storage/path";
 
