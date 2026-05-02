@@ -259,19 +259,11 @@ export async function bootLegacyBoard(options = {}) {
       overlay.focus({ preventScroll: true });
     }
 
-    let overlayKeydownAttached = false;
-    function attachOverlayFocusTrap() {
-      if (overlayKeydownAttached) return;
-      document.addEventListener("keydown", trapOverlayFocus, true);
-      document.addEventListener("focusin", containOverlayFocus, true);
-      overlayKeydownAttached = true;
-    }
-    function detachOverlayFocusTrap() {
-      if (!overlayKeydownAttached) return;
-      document.removeEventListener("keydown", trapOverlayFocus, true);
-      document.removeEventListener("focusin", containOverlayFocus, true);
-      overlayKeydownAttached = false;
-    }
+    const overlayFocusTrap = createOverlayFocusTrap({
+      doc: document,
+      onTabKey: (event) => trapOverlayFocus(event),
+      onFocusIn: (event) => containOverlayFocus(event),
+    });
 
     function syncOverlayEnvironment() {
       const hadOverlay = activeOverlay instanceof HTMLElement;
