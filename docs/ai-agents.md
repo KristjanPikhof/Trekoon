@@ -113,12 +113,22 @@ If the session shows you're behind, pull tracker events before claiming work:
 trekoon --toon sync pull --from main
 ```
 
-Claim work, assign ownership, then finish or report a block:
+Claim work atomically using SQL compare-and-swap (recommended for parallel
+agents), then finish or report a block:
 
 ```bash
-trekoon --toon task update <task-id> --status in_progress --owner "agent-1"
+trekoon --toon task claim <task-id> --owner "agent-1"
 trekoon --toon task done <task-id>
 trekoon --toon task update <task-id> --append "Blocked by <reason>" --status blocked
+```
+
+`task claim` is the safe primitive for parallel agents. Two concurrent calls on
+the same task return exactly one `claimed: true`. Check `data.claimed` before
+proceeding — if false, another agent won the race.
+
+```bash
+# Fallback: non-atomic claim (single-agent or sequential workflows only)
+trekoon --toon task update <task-id> --status in_progress --owner "agent-1"
 ```
 
 Use `task done` when the task is actually finished. It marks the task complete,
