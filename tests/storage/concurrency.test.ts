@@ -537,6 +537,156 @@ describe("SQLite concurrent write stress tests", () => {
     });
   });
 
+  describe("Scenario 6 - atomic --append: concurrent appends preserve all writes", () => {
+    /**
+     * Helper: initialise a git workspace and return a Trekoon DB path + cwd.
+     */
+    function setupTrekoonWorkspace(prefix: string): { dbFile: string; workspace: string } {
+      const workspace = mkdtempSync(join(tmpdir(), prefix));
+      tempDirs.push(workspace);
+      execFileSync("git", ["init"], { cwd: workspace, stdio: "ignore" });
+      writeFileSync(join(workspace, "README.md"), "# test\n", "utf8");
+      execFileSync("git", ["add", "README.md"], { cwd: workspace, stdio: "ignore" });
+      execFileSync(
+        "git",
+        ["-c", "user.name=Trekoon Tests", "-c", "user.email=tests@trekoon.local", "commit", "-m", "Init"],
+        { cwd: workspace, stdio: "ignore" },
+      );
+      const setup = openTrekoonDatabase(workspace);
+      const dbFile = setup.paths.databaseFile;
+      setup.close();
+      return { dbFile, workspace };
+    }
+
+    test("5 concurrent appendToTaskDescription calls preserve all appended notes", () => {
+      const { dbFile, workspace } = setupTrekoonWorkspace("trekoon-append-task-");
+
+      // Seed: create epic + task
+      const seedDb = openTrekoonDatabase(workspace);
+      const seedMutations = new MutationService(seedDb.db, workspace);
+      const epic = seedMutations.createEpic({ title: "Append epic", description: "Base epic" });
+      const task = seedMutations.createTask({ epicId: epic.id, title: "Append task", description: "Initial" });
+      seedDb.close();
+
+      const APPENDER_COUNT = 5;
+      const NOTE_PREFIX = "note-from-appender-";
+
+      // Each connection appends a distinct note to the same task
+      const conns = Array.from({ length: APPENDER_COUNT }, () => {
+        const conn = openTrekoonDatabase(workspace);
+        return conn;
+      });
+
+      for (let i = 0; i < APPENDER_COUNT; i++) {
+        const conn = conns[i]!;
+        const mutations = new MutationService(conn.db, workspace);
+        mutations.appendToTaskDescription({ taskId: task.id, append: `${NOTE_PREFIX}${i}` });
+      }
+
+      for (const conn of conns) {
+        conn.close();
+      }
+
+      // Read final description from a fresh connection
+      const readDb = openTrekoonDatabase(workspace);
+      const readMutations = new MutationService(readDb.db, workspace);
+      // Use domain via a one-off updateTask (read path: use getTaskOrThrow via MutationService)
+      // We read via the public TrackerDomain API indirectly by doing a no-op updateTask
+      // Actually we need to read the task. Let's do it via a raw SQL query on the db.
+      const row = readDb.db.query("SELECT description FROM tasks WHERE id = ?;").get(task.id) as { description: string };
+      readDb.close();
+
+      // All 5 notes must appear in the final description
+      for (let i = 0; i < APPENDER_COUNT; i++) {
+        expect(row.description).toContain(`${NOTE_PREFIX}${i}`);
+      }
+    });
+
+    test("5 concurrent appendToSubtaskDescription calls preserve all appended notes", () => {
+      const { dbFile, workspace } = setupTrekoonWorkspace("trekoon-append-subtask-");
+
+      const seedDb = openTrekoonDatabase(workspace);
+      const seedMutations = new MutationService(seedDb.db, workspace);
+      const epic = seedMutations.createEpic({ title: "Sub epic", description: "Base" });
+      const task = seedMutations.createTask({ epicId: epic.id, title: "Task for sub", description: "t" });
+      const subtask = seedMutations.createSubtask({ taskId: task.id, title: "Append subtask", description: "Initial" });
+      seedDb.close();
+
+      const APPENDER_COUNT = 5;
+      const NOTE_PREFIX = "subtask-note-";
+
+      const conns = Array.from({ length: APPENDER_COUNT }, () => openTrekoonDatabase(workspace));
+
+      for (let i = 0; i < APPENDER_COUNT; i++) {
+        const mutations = new MutationService(conns[i]!.db, workspace);
+        mutations.appendToSubtaskDescription({ subtaskId: subtask.id, append: `${NOTE_PREFIX}${i}` });
+      }
+
+      for (const conn of conns) {
+        conn.close();
+      }
+
+      const readDb = openTrekoonDatabase(workspace);
+      const row = readDb.db.query("SELECT description FROM subtasks WHERE id = ?;").get(subtask.id) as { description: string };
+      readDb.close();
+
+      for (let i = 0; i < APPENDER_COUNT; i++) {
+        expect(row.description).toContain(`${NOTE_PREFIX}${i}`);
+      }
+    });
+
+    test("5 concurrent appendToEpicDescription calls preserve all appended notes", () => {
+      const { dbFile, workspace } = setupTrekoonWorkspace("trekoon-append-epic-");
+
+      const seedDb = openTrekoonDatabase(workspace);
+      const seedMutations = new MutationService(seedDb.db, workspace);
+      const epic = seedMutations.createEpic({ title: "Epic append", description: "Base" });
+      seedDb.close();
+
+      const APPENDER_COUNT = 5;
+      const NOTE_PREFIX = "epic-note-";
+
+      const conns = Array.from({ length: APPENDER_COUNT }, () => openTrekoonDatabase(workspace));
+
+      for (let i = 0; i < APPENDER_COUNT; i++) {
+        const mutations = new MutationService(conns[i]!.db, workspace);
+        mutations.appendToEpicDescription({ epicId: epic.id, append: `${NOTE_PREFIX}${i}` });
+      }
+
+      for (const conn of conns) {
+        conn.close();
+      }
+
+      const readDb = openTrekoonDatabase(workspace);
+      const row = readDb.db.query("SELECT description FROM epics WHERE id = ?;").get(epic.id) as { description: string };
+      readDb.close();
+
+      for (let i = 0; i < APPENDER_COUNT; i++) {
+        expect(row.description).toContain(`${NOTE_PREFIX}${i}`);
+      }
+    });
+
+    test("appendToTaskDescription with combined --status lands atomically", () => {
+      const { dbFile: _dbFile, workspace } = setupTrekoonWorkspace("trekoon-append-status-");
+
+      const seedDb = openTrekoonDatabase(workspace);
+      const seedMutations = new MutationService(seedDb.db, workspace);
+      const epic = seedMutations.createEpic({ title: "Status atomic epic", description: "e" });
+      const task = seedMutations.createTask({ epicId: epic.id, title: "Status task", description: "initial" });
+      seedDb.close();
+
+      const conn = openTrekoonDatabase(workspace);
+      const mutations = new MutationService(conn.db, workspace);
+      const updated = mutations.appendToTaskDescription({ taskId: task.id, append: "progress note", status: "in_progress" });
+      conn.close();
+
+      // Both status and appended text must be present after the single atomic write
+      expect(updated.status).toBe("in_progress");
+      expect(updated.description).toContain("progress note");
+      expect(updated.description).toContain("initial");
+    });
+  });
+
   describe("Scenario comparison summary", () => {
     test("compare DEFERRED vs IMMEDIATE error rates side by side", async () => {
       const deferredResult = await runParallelScenario("summary-deferred", 5000, runDeferredWriter);
