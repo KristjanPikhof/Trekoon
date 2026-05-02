@@ -166,6 +166,7 @@ export async function runQuickstart(_: CliContext): Promise<CliResult> {
         "trekoon --toon suggest",
         "trekoon --toon epic progress <epic-id>",
         "trekoon --toon task done <task-id>",
+        "trekoon --toon task claim <task-id> --owner <owner>",
         "trekoon --toon task show <task-id> --all",
         "trekoon --toon epic show <epic-id> --all",
         "trekoon --toon sync status",
