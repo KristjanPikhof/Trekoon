@@ -56,6 +56,7 @@ interface EpicRow {
   status: string;
   created_at: number;
   updated_at: number;
+  version: number;
 }
 
 interface TaskRow extends EpicRow {
@@ -208,6 +209,7 @@ function mapEpic(row: EpicRow): EpicRecord {
     status: row.status,
     createdAt: row.created_at,
     updatedAt: row.updated_at,
+    version: row.version,
   };
 }
 
@@ -221,6 +223,7 @@ function mapTask(row: TaskRow): TaskRecord {
     owner: row.owner ?? null,
     createdAt: row.created_at,
     updatedAt: row.updated_at,
+    version: row.version,
   };
 }
 
@@ -234,6 +237,7 @@ function mapSubtask(row: SubtaskRow): SubtaskRecord {
     owner: row.owner ?? null,
     createdAt: row.created_at,
     updatedAt: row.updated_at,
+    version: row.version,
   };
 }
 
@@ -299,7 +303,7 @@ export class TrackerDomain {
 
   listEpics(): readonly EpicRecord[] {
     const rows = this.#db
-      .query("SELECT id, title, description, status, created_at, updated_at FROM epics ORDER BY created_at ASC, id ASC;")
+      .query("SELECT id, title, description, status, created_at, updated_at, version FROM epics ORDER BY created_at ASC, id ASC;")
       .all() as EpicRow[];
     return rows.map(mapEpic);
   }
@@ -326,7 +330,7 @@ export class TrackerDomain {
   findActiveEpic(): EpicRecord | null {
     const inProgress = this.#db
       .query(
-        "SELECT id, title, description, status, created_at, updated_at FROM epics WHERE status = 'in_progress' LIMIT 1;",
+        "SELECT id, title, description, status, created_at, updated_at, version FROM epics WHERE status = 'in_progress' LIMIT 1;",
       )
       .get() as EpicRow | null;
     if (inProgress) {
@@ -335,7 +339,7 @@ export class TrackerDomain {
 
     const todo = this.#db
       .query(
-        "SELECT id, title, description, status, created_at, updated_at FROM epics WHERE status = 'todo' ORDER BY updated_at DESC LIMIT 1;",
+        "SELECT id, title, description, status, created_at, updated_at, version FROM epics WHERE status = 'todo' ORDER BY updated_at DESC LIMIT 1;",
       )
       .get() as EpicRow | null;
     if (todo) {
@@ -345,7 +349,7 @@ export class TrackerDomain {
     // Fallback: oldest epic regardless of status (mirrors epics[0] from listEpics).
     const oldest = this.#db
       .query(
-        "SELECT id, title, description, status, created_at, updated_at FROM epics ORDER BY created_at ASC, id ASC LIMIT 1;",
+        "SELECT id, title, description, status, created_at, updated_at, version FROM epics ORDER BY created_at ASC, id ASC LIMIT 1;",
       )
       .get() as EpicRow | null;
     return oldest ? mapEpic(oldest) : null;
@@ -353,7 +357,7 @@ export class TrackerDomain {
 
   getEpic(id: string): EpicRecord | null {
     const row = this.#db
-      .query("SELECT id, title, description, status, created_at, updated_at FROM epics WHERE id = ?;")
+      .query("SELECT id, title, description, status, created_at, updated_at, version FROM epics WHERE id = ?;")
       .get(id) as EpicRow | null;
     return row ? mapEpic(row) : null;
   }
@@ -469,7 +473,7 @@ export class TrackerDomain {
       const inPlaceholders: string = chunkIds.map(() => "?").join(", ");
       const chunkRows = this.#db
         .query(
-          `SELECT id, epic_id, title, description, status, owner, created_at, updated_at FROM tasks WHERE id IN (${inPlaceholders});`,
+          `SELECT id, epic_id, title, description, status, owner, created_at, updated_at, version FROM tasks WHERE id IN (${inPlaceholders});`,
         )
         .all(...chunkIds) as TaskRow[];
       fetchedRows.push(...chunkRows);
@@ -501,21 +505,21 @@ export class TrackerDomain {
       this.getEpicOrThrow(epicId);
       const rows = this.#db
         .query(
-          "SELECT id, epic_id, title, description, status, owner, created_at, updated_at FROM tasks WHERE epic_id = ? ORDER BY created_at ASC, id ASC;",
+          "SELECT id, epic_id, title, description, status, owner, created_at, updated_at, version FROM tasks WHERE epic_id = ? ORDER BY created_at ASC, id ASC;",
         )
         .all(epicId) as TaskRow[];
       return rows.map(mapTask);
     }
 
     const rows = this.#db
-      .query("SELECT id, epic_id, title, description, status, owner, created_at, updated_at FROM tasks ORDER BY created_at ASC, id ASC;")
+      .query("SELECT id, epic_id, title, description, status, owner, created_at, updated_at, version FROM tasks ORDER BY created_at ASC, id ASC;")
       .all() as TaskRow[];
     return rows.map(mapTask);
   }
 
   getTask(id: string): TaskRecord | null {
     const row = this.#db
-      .query("SELECT id, epic_id, title, description, status, owner, created_at, updated_at FROM tasks WHERE id = ?;")
+      .query("SELECT id, epic_id, title, description, status, owner, created_at, updated_at, version FROM tasks WHERE id = ?;")
       .get(id) as TaskRow | null;
     return row ? mapTask(row) : null;
   }
@@ -661,7 +665,7 @@ export class TrackerDomain {
       const inPlaceholders: string = chunkIds.map(() => "?").join(", ");
       const chunkRows = this.#db
         .query(
-          `SELECT id, task_id, title, description, status, owner, created_at, updated_at FROM subtasks WHERE id IN (${inPlaceholders});`,
+          `SELECT id, task_id, title, description, status, owner, created_at, updated_at, version FROM subtasks WHERE id IN (${inPlaceholders});`,
         )
         .all(...chunkIds) as SubtaskRow[];
       fetchedRows.push(...chunkRows);
@@ -737,7 +741,7 @@ export class TrackerDomain {
       this.getTaskOrThrow(taskId);
       const rows = this.#db
         .query(
-          "SELECT id, task_id, title, description, status, owner, created_at, updated_at FROM subtasks WHERE task_id = ? ORDER BY created_at ASC, id ASC;",
+          "SELECT id, task_id, title, description, status, owner, created_at, updated_at, version FROM subtasks WHERE task_id = ? ORDER BY created_at ASC, id ASC;",
         )
         .all(taskId) as SubtaskRow[];
       return rows.map(mapSubtask);
@@ -745,7 +749,7 @@ export class TrackerDomain {
 
     const rows = this.#db
       .query(
-        "SELECT id, task_id, title, description, status, owner, created_at, updated_at FROM subtasks ORDER BY created_at ASC, id ASC;",
+        "SELECT id, task_id, title, description, status, owner, created_at, updated_at, version FROM subtasks ORDER BY created_at ASC, id ASC;",
       )
       .all() as SubtaskRow[];
     return rows.map(mapSubtask);
@@ -755,7 +759,7 @@ export class TrackerDomain {
     this.getTaskOrThrow(taskId);
     const rows = this.#db
       .query(
-        "SELECT id, task_id, title, description, status, owner, created_at, updated_at FROM subtasks WHERE task_id = ? AND status != 'done' ORDER BY created_at ASC, id ASC;",
+        "SELECT id, task_id, title, description, status, owner, created_at, updated_at, version FROM subtasks WHERE task_id = ? AND status != 'done' ORDER BY created_at ASC, id ASC;",
       )
       .all(taskId) as SubtaskRow[];
     return rows.map(mapSubtask);
@@ -763,7 +767,7 @@ export class TrackerDomain {
 
   getSubtask(id: string): SubtaskRecord | null {
     const row = this.#db
-      .query("SELECT id, task_id, title, description, status, owner, created_at, updated_at FROM subtasks WHERE id = ?;")
+      .query("SELECT id, task_id, title, description, status, owner, created_at, updated_at, version FROM subtasks WHERE id = ?;")
       .get(id) as SubtaskRow | null;
     return row ? mapSubtask(row) : null;
   }
@@ -862,7 +866,7 @@ export class TrackerDomain {
     const taskIds = new Set(tasks.map((task) => task.id));
     const subtasks = this.#db
       .query(
-        "SELECT id, task_id, title, description, status, owner, created_at, updated_at FROM subtasks WHERE task_id IN (SELECT id FROM tasks WHERE epic_id = ?) ORDER BY created_at ASC, id ASC;",
+        "SELECT id, task_id, title, description, status, owner, created_at, updated_at, version FROM subtasks WHERE task_id IN (SELECT id FROM tasks WHERE epic_id = ?) ORDER BY created_at ASC, id ASC;",
       )
       .all(epicId) as SubtaskRow[];
 
@@ -1266,7 +1270,7 @@ export class TrackerDomain {
       const inPlaceholders: string = chunkIds.map(() => "?").join(", ");
       const rows = this.#db
         .query(
-          `SELECT id, task_id, title, description, status, owner, created_at, updated_at
+          `SELECT id, task_id, title, description, status, owner, created_at, updated_at, version
            FROM subtasks
            WHERE task_id IN (${inPlaceholders})
            ORDER BY created_at ASC, id ASC;`,
