@@ -74,6 +74,14 @@ export interface StoragePathDiagnostics {
 
 const storagePathCache: Map<string, StoragePaths> = new Map();
 
+/**
+ * Clear the process-level storage path cache.
+ * Intended for test isolation only — production code should never call this.
+ */
+export function clearStoragePathCache(): void {
+  storagePathCache.clear();
+}
+
 function resolveGitPath(workingDirectory: string, argument: "--git-common-dir" | "--show-toplevel"): string | null {
   const result = spawnSync("git", ["rev-parse", argument], {
     cwd: workingDirectory,
