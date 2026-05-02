@@ -29,8 +29,16 @@ function readErrorMessage(error: unknown): string | null {
   return null;
 }
 
+// Keys whose values must never appear in surfaced error output.
+const SENSITIVE_KEY_PATTERN =
+  /\b(token|secret|password|bearer|authorization)\b(\s*[:=]\s*"?|:\s*Bearer\s+)([^\s",;&\]}{)]+)/giu;
+
+export function redactSensitive(input: string): string {
+  return input.replace(SENSITIVE_KEY_PATTERN, (_match, key, sep) => `${key}${sep}REDACTED`);
+}
+
 function sanitizeErrorMessage(message: string): string {
-  const normalized = message.replace(/\s+/gu, " ").trim();
+  const normalized = redactSensitive(message.replace(/\s+/gu, " ").trim());
   if (normalized.length <= 240) {
     return normalized;
   }
