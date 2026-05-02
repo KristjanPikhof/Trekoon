@@ -140,12 +140,31 @@ export function writeTransaction<T>(db: Database, fn: (db: Database) => T): T {
   }
 }
 
+/** Sentinel recovery result for the common case: no legacy worktree DB present. */
+const NO_LEGACY_RECOVERY: WorktreeRecoveryDiagnostics = {
+  status: "no_legacy_state",
+  legacyDatabaseFiles: [],
+  backupFiles: [],
+  trackedStorageFiles: [],
+  autoMigrated: false,
+  importedFrom: null,
+  operatorAction: "No legacy worktree-local database detected.",
+};
+
 export function openTrekoonDatabase(
   workingDirectory: string = process.cwd(),
   options: OpenTrekoonDatabaseOptions = {},
 ): TrekoonDatabase {
   const paths: StoragePaths = resolveStoragePaths(workingDirectory);
-  const recovery: WorktreeRecoveryDiagnostics = recoverWorktreeDatabaseState(paths);
+
+  // Fast path: if no legacy .trekoon/trekoon.db exists in the current worktree,
+  // skip the git-heavy recoverWorktreeDatabaseState entirely.
+  const legacyDbFile: string = resolveLegacyWorktreeDatabaseFile(paths.worktreeRoot);
+  const recovery: WorktreeRecoveryDiagnostics =
+    legacyDbFile !== paths.databaseFile && !existsSync(legacyDbFile)
+      ? NO_LEGACY_RECOVERY
+      : recoverWorktreeDatabaseState(paths);
+
   const diagnostics: StorageResolutionDiagnostics = buildStorageResolutionDiagnostics(paths, recovery);
 
   mkdirSync(paths.storageDir, { recursive: true });
