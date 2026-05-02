@@ -558,7 +558,7 @@ describe("SQLite concurrent write stress tests", () => {
     }
 
     test("5 concurrent appendToTaskDescription calls preserve all appended notes", () => {
-      const { dbFile, workspace } = setupTrekoonWorkspace("trekoon-append-task-");
+      const workspace = setupTrekoonWorkspace("trekoon-append-task-");
 
       // Seed: create epic + task
       const seedDb = openTrekoonDatabase(workspace);
