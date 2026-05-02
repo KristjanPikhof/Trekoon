@@ -1495,9 +1495,14 @@ function shouldWithholdDeleteCascadeEvent(db: Database, event: StoredEvent, fiel
   return hasPendingDeleteConflict(db, sourceEventId);
 }
 
-function applyEntityFields(db: Database, event: StoredEvent, fields: Record<string, unknown>): boolean {
+function applyEntityFields(
+  db: Database,
+  event: StoredEvent,
+  fields: Record<string, unknown>,
+  scope: ConflictScope,
+): boolean {
   if (event.operation.endsWith(".deleted") || event.operation === "dependency.removed") {
-    return applyDelete(db, event, fields);
+    return applyDelete(db, event, fields, scope);
   }
 
   if (event.operation.endsWith(".created") || event.operation === "dependency.added") {
