@@ -88,8 +88,6 @@
 - `updateTask(id, {status?,title?,description?,owner?})` — positional ID + object.
 - `addDependency(sourceId, dependsOnId)` — positional strings.
 
-Prioritize startup speed and low-latency UX in CLI changes.
-
 ## Documentation surfaces for new commands
 
 When adding a CLI subcommand, update **all** of:
