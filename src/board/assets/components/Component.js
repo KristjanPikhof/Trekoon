@@ -150,7 +150,11 @@ function restoreSelection(el, selectionStart, selectionEnd) {
  */
 export function preserveFormState(container, writeFn, options = {}) {
   const resetFormIds = new Set(options.resetFormIds ?? []);
-  const inputs = getManagedControls(container);
+
+  // Per-form cache for getManagedControls: avoids the O(n^2) re-query that
+  // occurs when many controls share the same form root.
+  const captureCache = new Map();
+  const inputs = getManagedControls(container, captureCache);
 
   const activeElement = document.activeElement;
   let focusedIdentity = null;
@@ -158,7 +162,7 @@ export function preserveFormState(container, writeFn, options = {}) {
   const savedStates = inputs.map((el) => {
     const form = getFormRoot(el);
     const formId = getNamespacedFormIdentity(form);
-    const controlId = form ? getControlIdentity(el, form) : null;
+    const controlId = form ? getControlIdentity(el, form, captureCache) : null;
     const identity = controlId ? { formId, controlId } : null;
 
     if (activeElement === el) {
@@ -184,13 +188,16 @@ export function preserveFormState(container, writeFn, options = {}) {
     ]),
   );
 
+  // Fresh cache for the restore pass (DOM was replaced by writeFn).
+  const restoreCache = new Map();
+
   for (const state of savedStates) {
     const { formId, controlId } = state.identity;
     if (resetFormIds.has(formId)) {
       continue;
     }
     const form = formsByIdentity.get(formId) ?? container;
-    const restored = getManagedControls(form).find((control) => getControlIdentity(control, form) === controlId);
+    const restored = getManagedControls(form, restoreCache).find((control) => getControlIdentity(control, form, restoreCache) === controlId);
     if (restored && restored.value !== state.value) {
       restored.value = state.value;
     }
@@ -206,7 +213,7 @@ export function preserveFormState(container, writeFn, options = {}) {
       return;
     }
     const form = formsByIdentity.get(formId) ?? container;
-    const restored = getManagedControls(form).find((control) => getControlIdentity(control, form) === controlId);
+    const restored = getManagedControls(form, restoreCache).find((control) => getControlIdentity(control, form, restoreCache) === controlId);
     if (restored) {
       restored.focus({ preventScroll: true });
       const focusedState = savedStates.find((state) => state.identity?.formId === formId && state.identity?.controlId === controlId);
