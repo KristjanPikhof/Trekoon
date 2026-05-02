@@ -1761,37 +1761,61 @@ export function syncPull(cwd: string, sourceBranch: string): PullSummary {
     // the same entity own their own row set and cannot erase each other.
     const conflictScope: ConflictScope = scopeFromGitContext(git);
 
-    writeTransaction(storage.db, (): void => {
-      while (true) {
-        const incomingEvents = queryBranchEventsSinceBatch(
-          storage.db,
-          sourceBranch,
-          lastToken ?? cursorToken,
-          SYNC_PULL_BATCH_SIZE,
-        ) as StoredEvent[];
+    // Chunked write transactions: each batch of SYNC_PULL_BATCH_SIZE
+    // events is processed inside its own writeTransaction. The cursor and
+    // lastEventAt are persisted at the end of each batch, so a crash mid-
+    // pull leaves a consistent cursor pointing at the last fully-committed
+    // batch and the next pull resumes from there. The write lock is no
+    // longer held across multiple batches.
+    while (true) {
+      const incomingEvents = queryBranchEventsSinceBatch(
+        storage.db,
+        sourceBranch,
+        lastToken ?? cursorToken,
+        SYNC_PULL_BATCH_SIZE,
+      ) as StoredEvent[];
 
-        if (incomingEvents.length === 0) {
-          break;
-        }
+      if (incomingEvents.length === 0) {
+        break;
+      }
 
-        scannedEvents += incomingEvents.length;
+      interface BatchResult {
+        readonly appliedDelta: number;
+        readonly createdConflictsDelta: number;
+        readonly malformedPayloadDelta: number;
+        readonly applyRejectedDelta: number;
+        readonly quarantinedDelta: number;
+        readonly conflictEventsDelta: number;
+        readonly token: string | null;
+        readonly eventAt: number | null;
+      }
+
+      const batchResult: BatchResult = writeTransaction(storage.db, (): BatchResult => {
+        let appliedDelta = 0;
+        let createdConflictsDelta = 0;
+        let malformedPayloadDelta = 0;
+        let applyRejectedDelta = 0;
+        let quarantinedDelta = 0;
+        let conflictEventsDelta = 0;
+        let token: string | null = lastToken;
+        let eventAt: number | null = lastEventAt;
 
         for (const incoming of incomingEvents) {
           if (incoming.operation === "resolve_conflict") {
             if (applyIncomingResolutionEvent(storage.db, incoming, conflictScope)) {
-              appliedEvents += 1;
+              appliedDelta += 1;
             }
             storeEvent(storage.db, incoming);
-            lastToken = cursorTokenFromEvent(incoming);
-            lastEventAt = incoming.created_at;
+            token = cursorTokenFromEvent(incoming);
+            eventAt = incoming.created_at;
             continue;
           }
 
           const payloadValidation = parsePayload(incoming.payload);
 
           if (!payloadValidation.ok) {
-            malformedPayloadEvents += 1;
-            quarantinedEvents += 1;
+            malformedPayloadDelta += 1;
+            quarantinedDelta += 1;
             createConflict(
               storage.db,
               incoming,
@@ -1801,10 +1825,10 @@ export function syncPull(cwd: string, sourceBranch: string): PullSummary {
               conflictScope,
               "invalid",
             );
-            createdConflicts += 1;
+            createdConflictsDelta += 1;
             storeEvent(storage.db, incoming);
-            lastToken = cursorTokenFromEvent(incoming);
-            lastEventAt = incoming.created_at;
+            token = cursorTokenFromEvent(incoming);
+            eventAt = incoming.created_at;
             continue;
           }
 
@@ -1812,8 +1836,8 @@ export function syncPull(cwd: string, sourceBranch: string): PullSummary {
 
           if (shouldWithholdDeleteCascadeEvent(storage.db, incoming, payload.fields, conflictScope)) {
             storeEvent(storage.db, incoming);
-            lastToken = cursorTokenFromEvent(incoming);
-            lastEventAt = incoming.created_at;
+            token = cursorTokenFromEvent(incoming);
+            eventAt = incoming.created_at;
             continue;
           }
 
@@ -1822,11 +1846,11 @@ export function syncPull(cwd: string, sourceBranch: string): PullSummary {
             (incoming.operation === "dependency.removed" && hasLocalDependencyDeleteConflict(storage.db, incoming, git.branchName));
           if (isDeleteWithLocalEdits) {
             createConflict(storage.db, incoming, "__delete__", null, "Entity deleted on source branch", conflictScope);
-            createdConflicts += 1;
-            conflictEvents += 1;
+            createdConflictsDelta += 1;
+            conflictEventsDelta += 1;
             storeEvent(storage.db, incoming);
-            lastToken = cursorTokenFromEvent(incoming);
-            lastEventAt = incoming.created_at;
+            token = cursorTokenFromEvent(incoming);
+            eventAt = incoming.created_at;
             continue;
           }
 
@@ -1851,7 +1875,7 @@ export function syncPull(cwd: string, sourceBranch: string): PullSummary {
 
             if (conflict) {
               withheldConflictCount += 1;
-              conflictEvents += 1;
+              conflictEventsDelta += 1;
               createConflict(
                 storage.db,
                 incoming,
@@ -1860,7 +1884,7 @@ export function syncPull(cwd: string, sourceBranch: string): PullSummary {
                 conflict.theirsValue,
                 conflictScope,
               );
-              createdConflicts += 1;
+              createdConflictsDelta += 1;
               continue;
             }
 
@@ -1868,12 +1892,12 @@ export function syncPull(cwd: string, sourceBranch: string): PullSummary {
           }
 
           if (applyEntityFields(storage.db, incoming, fieldsToApply, conflictScope)) {
-            appliedEvents += 1;
+            appliedDelta += 1;
           } else if (applyReplayedCreateWithConflicts(storage.db, incoming, fieldsToApply, withheldConflictCount)) {
-            appliedEvents += 1;
+            appliedDelta += 1;
           } else {
-            applyRejectedEvents += 1;
-            quarantinedEvents += 1;
+            applyRejectedDelta += 1;
+            quarantinedDelta += 1;
             createConflict(
               storage.db,
               incoming,
@@ -1883,19 +1907,44 @@ export function syncPull(cwd: string, sourceBranch: string): PullSummary {
               conflictScope,
               "invalid",
             );
-            createdConflicts += 1;
+            createdConflictsDelta += 1;
           }
 
           storeEvent(storage.db, incoming);
-          lastToken = cursorTokenFromEvent(incoming);
-          lastEventAt = incoming.created_at;
+          token = cursorTokenFromEvent(incoming);
+          eventAt = incoming.created_at;
         }
-      }
 
-      if (lastToken) {
-        saveCursor(storage.db, git.worktreePath, sourceBranch, lastToken, lastEventAt);
+        if (token) {
+          saveCursor(storage.db, git.worktreePath, sourceBranch, token, eventAt);
+        }
+
+        return {
+          appliedDelta,
+          createdConflictsDelta,
+          malformedPayloadDelta,
+          applyRejectedDelta,
+          quarantinedDelta,
+          conflictEventsDelta,
+          token,
+          eventAt,
+        };
+      });
+
+      scannedEvents += incomingEvents.length;
+      appliedEvents += batchResult.appliedDelta;
+      createdConflicts += batchResult.createdConflictsDelta;
+      malformedPayloadEvents += batchResult.malformedPayloadDelta;
+      applyRejectedEvents += batchResult.applyRejectedDelta;
+      quarantinedEvents += batchResult.quarantinedDelta;
+      conflictEvents += batchResult.conflictEventsDelta;
+      lastToken = batchResult.token;
+      lastEventAt = batchResult.eventAt;
+
+      if (incomingEvents.length < SYNC_PULL_BATCH_SIZE) {
+        break;
       }
-    });
+    }
 
     const errorHints: string[] = buildSyncErrorHints({
       malformedPayloadEvents,
