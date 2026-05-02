@@ -33,6 +33,7 @@ import {
 } from "./types";
 import { buildMatchSnippet, collectSearchMatches, countMatches, summarizeMatches } from "./search";
 import { loadCascadeDependencyTargetStatuses, planStatusCascade as planStatusCascadeImpl } from "./cascade-planner";
+import { DEPENDENCY_GATED_STATUSES } from "./dependency-rules";
 import {
   type BatchValidationReader,
   type DependencyBatchResolution,
