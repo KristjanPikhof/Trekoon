@@ -233,6 +233,33 @@ function selectSearchScope(state) {
  */
 
 /**
+ * Create a memoizer for deriveBoardState that returns the same reference until
+ * invalidate() is called. Designed to be invalidated by the store's notify().
+ * @param {(state: object) => BoardState} compute
+ */
+function createBoardStateMemo(compute) {
+  let cachedState = null;
+  let cachedResult = null;
+  let dirty = true;
+
+  function get(state) {
+    if (!dirty && cachedState === state) {
+      return cachedResult;
+    }
+    cachedState = state;
+    cachedResult = compute(state);
+    dirty = false;
+    return cachedResult;
+  }
+
+  function invalidate() {
+    dirty = true;
+  }
+
+  return { get, invalidate };
+}
+
+/**
  * Compute full derived board state from the internal state, using memoized selectors.
  * @param {object} state
  * @returns {BoardState}
