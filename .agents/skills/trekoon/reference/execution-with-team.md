@@ -9,11 +9,13 @@ tmux pane.
 marked `done`, all remaining work is blocked with recorded reasons, or user
 input is required to continue.
 
-**Prerequisite:** Agent Teams requires the Claude Code environment variable
-`CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS` set to `"true"`. This feature is Claude
-Code only — it is not available in OpenCode or other harnesses.
+**Prerequisite:** Agent Teams is a Claude Code-specific implementation of
+Trekoon lane delegation. Use it only when the user explicitly asks for team
+execution and the environment supports it. Agent Teams requires the Claude Code
+environment variable `CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS` set to `"true"`.
+This feature is not available in OpenCode, Codex, Pi, or other harnesses.
 
-- [Claude Agent Teams documentation](https://code.claude.com/docs/en/agent-teams.md)
+- [Claude Agent Teams documentation](https://code.claude.com/docs/en/agent-teams)
 
 **Clarify ambiguity upfront.** If the plan has unclear requirements or meaningful
 tradeoffs, ask the user before starting.
