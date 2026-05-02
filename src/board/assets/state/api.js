@@ -200,14 +200,22 @@ export function createMutationQueue(model, rerender) {
 
     while (queue.length > 0) {
       const mutation = queue.shift();
-      const previousSnapshot = cloneSnapshot(model.store.snapshot);
       if (model.store.notice?.retryMutationId !== mutation.id) {
         model.store.notice = null;
       }
 
+      // Capture per-mutation inverse delta if the optimistic patch ran.
+      // Using an inverse delta (rather than wholesale replaceSnapshot) means
+      // concurrent server-pushed deltas applied to unrelated entities while
+      // the request was in flight survive a rollback.
+      let inverseDelta = null;
+
       try {
         if (typeof mutation.optimistic === "function") {
-          model.store.snapshot = mutation.optimistic(cloneSnapshot(model.store.snapshot));
+          const previousSnapshot = cloneSnapshot(model.store.snapshot);
+          const optimisticSnapshot = mutation.optimistic(cloneSnapshot(model.store.snapshot));
+          inverseDelta = computeInverseDelta(previousSnapshot, optimisticSnapshot);
+          model.store.snapshot = optimisticSnapshot;
           rerender();
         }
 
@@ -227,8 +235,11 @@ export function createMutationQueue(model, rerender) {
           ? { type: "success", message: mutation.successMessage }
           : null;
       } catch (error) {
-        // Revert to pre-optimistic snapshot
-        model.replaceSnapshot(previousSnapshot);
+        // Revert only the entities this mutation touched. Any unrelated
+        // entities updated by concurrent server deltas remain intact.
+        if (inverseDelta) {
+          model.applySnapshotDelta(inverseDelta);
+        }
 
         const message = error instanceof Error ? error.message : String(error);
         model.store.notice = {
