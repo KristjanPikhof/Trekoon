@@ -34,6 +34,18 @@ import {
 } from "./types";
 import { buildMatchSnippet, collectSearchMatches, countMatches, summarizeMatches } from "./search";
 import { loadCascadeDependencyTargetStatuses, planStatusCascade as planStatusCascadeImpl } from "./cascade-planner";
+import {
+  type BatchValidationReader,
+  type DependencyBatchResolution,
+  type DependencyBatchValidationIssue,
+  type ResolvedCompactEntity,
+  type ResolvedDependencyBatchSpec,
+  buildDependencyAdjacency as buildDependencyAdjacencyFn,
+  collectDependencyBatchIssues as collectDependencyBatchIssuesFn,
+  resolveDependencyBatchSpec as resolveDependencyBatchSpecFn,
+  resolveEpicExpandDependencySpecs as resolveEpicExpandDependencySpecsFn,
+  resolveEpicExpandSubtaskSpecs as resolveEpicExpandSubtaskSpecsFn,
+} from "./batch-validation";
 
 const DEFAULT_STATUS = "todo";
 const DEPENDENCY_GATED_STATUSES = new Set<string>(["in_progress", "done"]);
