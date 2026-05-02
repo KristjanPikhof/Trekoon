@@ -1385,19 +1385,23 @@ describe("board routes", (): void => {
     const storage = openTrekoonDatabase(cwd);
 
     try {
-      // Force a `not_found` DomainError whose message and details echo the
-      // user-supplied entity id. We pick an id that begins with `Bearer `
-      // followed by a high-entropy-looking secret to assert that the redact
-      // pass strips it from both the top-level message and the nested
-      // details (P1 finding 10).
-      const leakedSecret = "abc-super-secret";
-      const maliciousId = `Bearer ${leakedSecret}`;
+      // Force a `status_transition_invalid` DomainError where the offending
+      // status echoes the body text. Posting `Bearer abc` as the status
+      // value lets us assert the redact pass strips the secret from the
+      // serialised wire response (P1 finding 10) — the message, the details
+      // (which include `toStatus`), and the JSON body as a whole.
+      const mutations = new MutationService(storage.db, cwd);
+      const epic = mutations.createEpic({ title: "Roadmap", description: "Plan release" });
+      const task = mutations.createTask({ epicId: epic.id, title: "Implement", description: "Ship board" });
+
+      const leakedSecret = "abc";
+      const maliciousStatus = `Bearer ${leakedSecret}`;
       const handler = createBoardApiHandler({ db: storage.db, cwd, token: "secret-token" });
       const response = await handler(
-        new Request(`http://board.test/api/tasks/${encodeURIComponent(maliciousId)}?token=secret-token`, {
+        new Request(`http://board.test/api/tasks/${task.id}?token=secret-token`, {
           method: "PATCH",
           headers: { "content-type": "application/json" },
-          body: JSON.stringify({ status: "in_progress" }),
+          body: JSON.stringify({ status: maliciousStatus }),
         }),
       );
 
@@ -1407,15 +1411,19 @@ describe("board routes", (): void => {
       };
       const rawText = JSON.stringify(body);
 
-      expect(response.status).toBe(404);
+      expect(response.status).toBe(400);
       expect(body.ok).toBeFalse();
-      expect(body.error.code).toBe("not_found");
-      // Bearer prefix is rewritten to "Bearer REDACTED" by redactSensitive,
+      expect(body.error.code).toBe("status_transition_invalid");
+      // `Bearer abc` is rewritten to `Bearer REDACTED` by redactSensitive,
       // so the original secret must be absent everywhere — message *and*
-      // details *and* the serialised JSON.
-      expect(body.error.message).not.toContain(leakedSecret);
-      expect(rawText).not.toContain(leakedSecret);
-      expect(body.error.message).toContain("REDACTED");
+      // details *and* the serialised JSON. The literal "Bearer" substring
+      // is allowed (only the value is sensitive).
+      expect(body.error.message).not.toContain(`Bearer ${leakedSecret}`);
+      expect(rawText).not.toContain(`Bearer ${leakedSecret}`);
+      expect(rawText).toContain("REDACTED");
+      // Specifically prove the nested `details.toStatus` leaf was scrubbed.
+      expect(body.error.details?.toStatus).not.toBe(maliciousStatus);
+      expect(String(body.error.details?.toStatus ?? "")).not.toContain(`Bearer ${leakedSecret}`);
     } finally {
       storage.close();
     }
