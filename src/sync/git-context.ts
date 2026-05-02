@@ -41,6 +41,14 @@ export function clearGitContextCache(): void {
   gitContextCache.clear();
 }
 
+/**
+ * Return the number of entries currently held in the process-level cache.
+ * Intended for test assertions only.
+ */
+export function gitContextCacheSize(): number {
+  return gitContextCache.size;
+}
+
 export function resolveGitContext(cwd: string, persistedAt: number = Date.now()): ResolvedGitContext {
   const storagePaths = resolveStoragePaths(cwd);
   const worktreePath: string = storagePaths.worktreeRoot;
