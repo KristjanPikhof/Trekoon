@@ -21,8 +21,8 @@ Treat these entrypoints as hard mode contracts:
 - `trekoon <epic-id>` → **orient** on the current state and report the next
   concrete action.
 - `trekoon <epic-id> execute` → **own the epic until it is done, hard-blocked,
-  or requires user input**. Use subagents by default for non-trivial
-  independent lanes when the harness exposes them.
+  or requires user input**. Use subagents by default for meaningful work that
+  can run independently when the harness exposes them.
 - `trekoon <epic-id> team execute` → same execution contract, but use Agent
   Teams only when the environment supports it and the user explicitly wants it.
 
@@ -144,7 +144,7 @@ These stop conditions are the core contract for the skill.
   lane and delegate by default when the harness exposes subagents.
 - If a higher-priority harness policy blocks subagent use without explicit user
   wording, ask immediately and explain that Trekoon execution is designed to
-  preserve the parent context for orchestration.
+  preserve your context for orchestration.
 - Ask the user only when the work is genuinely blocked by ambiguity, approval,
   or missing external access.
 
@@ -202,7 +202,7 @@ Choose the lightest mode that will still move the work forward.
 
 | Situation | Mode | First move |
 |---|---|---|
-| One ready task, narrow scope, tiny change, or tightly coupled work | Single-agent execution | `session --epic <epic-id>` |
+| One ready task, narrow scope, tiny change, or tightly coupled work | Do it in the parent agent | `session --epic <epic-id>` |
 | Multiple ready tasks across separable subsystems or owners | Orchestrated execution with subagents by default | Read `reference/harness-primitives.md` and `reference/execution.md`, then `task ready --epic <epic-id> --limit 50`; delegate safe independent lanes when the harness exposes subagents |
 | User explicitly asked for team execution and Agent Teams are available | Team execution | Read `reference/execution-with-team.md` |
 
@@ -212,20 +212,20 @@ update/recovery policy, and the canonical command sequences.
 
 ## Delegation policy
 
-Use subagents by default for non-trivial independent Trekoon execution lanes
-when the harness supports them. This preserves the parent context window for
-orchestration, dependency decisions, user communication, and final synthesis.
-The parent agent's job is to keep finishing the epic, not to personally perform
-every implementation step.
+When executing an epic, use subagents by default for any meaningful work that
+can run independently. Keep small or tightly coupled tasks in the parent agent.
+Use your context for orchestration, dependency decisions, user communication,
+and final synthesis. Your job is to keep finishing the epic, not to personally
+perform every implementation step.
 
-- A bare `execute` request means own the epic to completion using Trekoon's
+- A bare `execute` request means own the epic to completion. Use Trekoon's
   orchestration strategy, including subagents for safe independent lanes when
   the harness supports them.
 - If a higher-priority harness rule requires explicit permission before
   spawning subagents, ask immediately instead of quietly falling back to
   single-agent execution.
-- The parent may complete tiny tasks directly. Prefer delegation once work is
-  non-trivial, separable, or likely to consume context needed for later
+- You may complete tiny tasks directly. Prefer delegation once work is
+  meaningful, separable, or likely to consume context needed for later
   dependency decisions.
 - Use the harness's native subagent/task mechanism. If exact tool names are not
   known, phrase the action as "spawn a subagent for this bounded Trekoon lane".
