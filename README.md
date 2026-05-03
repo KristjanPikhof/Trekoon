@@ -147,14 +147,15 @@ Execute only:
 /trekoon <epic-id> execute
 ```
 
-For non-trivial execution, the skill uses subagents by default for independent
-Trekoon lanes when the harness exposes them. The parent agent preserves context
-for orchestration, dependency decisions, user communication, and final
-synthesis while Trekoon remains the durable source of truth.
+When you execute an epic, use subagents by default for any meaningful work that
+can run independently. Keep small or tightly coupled tasks in the parent agent.
+Use the main context for orchestration, dependency decisions, user
+communication, and final synthesis while Trekoon remains the durable source of
+truth.
 
-Tiny or tightly coupled work can stay in the parent agent. If a harness has a
-higher-priority rule requiring explicit permission before subagents, the agent
-should surface that immediately instead of silently doing broad work itself.
+If a harness has a higher-priority rule requiring explicit permission before
+subagents, surface that immediately instead of silently doing broad work
+yourself.
 
 Plan and execute end to end:
 
