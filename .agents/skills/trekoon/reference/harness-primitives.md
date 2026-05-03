@@ -16,34 +16,31 @@ notes, verification evidence, and review outcomes.
 | Orient | Read Trekoon session/progress/suggest to find ready work and blockers. | Shell/read tools |
 | Display progress | Use local todo/task tools to show the current plan and live progress to the user. | Todo/task UI tools |
 | Ask | Use the harness question tool if available; otherwise ask one concise plain-text question. | `question`, `AskUserQuestion`, or fallback text |
-| Delegate | Use subagents by default for non-trivial independent Trekoon execution lanes when the harness exposes them. | Native subagent/task mechanism |
+| Delegate | When executing an epic, use subagents by default for meaningful work that can run independently. | Native subagent/task mechanism |
 | Explore | Use read-only/explorer subagents for noisy codebase lookup, logs, or research. | Explorer/read-only agent |
 | Execute | Use write-capable worker/general subagents for bounded implementation lanes. | Worker/general/build agent |
 | Test | Run the required automated or manual checks for the touched scope. | Shell, browser, simulator, test tools |
 | Review | Use a capable review agent or review skill for non-trivial code changes. | Code-review subagent/skill |
 | Record | Append progress, blockers, test results, review results, and completion evidence to Trekoon. | Trekoon CLI |
 
-## Delegation Preference
+## Delegation Default
 
-Subagent delegation is the default Trekoon execution strategy for non-trivial,
-independent lanes when the harness supports it. This preserves the parent
-context window for orchestration, dependency decisions, user communication, and
-final synthesis.
+When executing an epic, use subagents by default for any meaningful work that
+can run independently. Keep small or tightly coupled tasks in the parent agent.
 
-Keep work in the parent agent when it is tiny, tightly coupled, or the next
-local step is immediately blocked on the result. The parent agent may complete
-small tasks directly, but it should not consume the main context window on broad
-implementation lanes that can be safely delegated.
+Use the parent session to coordinate the epic, make dependency decisions, keep
+the user oriented, and synthesize results. Do not spend the main context window
+on broad implementation lanes that can be safely delegated.
 
-Treat requests such as "execute this epic", "work through this Trekoon plan",
+When the user asks you to "execute this epic", "work through this Trekoon plan",
 "use agents", "spawn subagents", "delegate independent lanes", "execute with
-subagents", "parallelize this", or "team execute" as requests for Trekoon to
+subagents", "parallelize this", or "team execute", treat that as a request to
 orchestrate the work to completion. If the graph has safe independent lanes and
 the harness supports subagents, delegate those lanes by default.
 
 If a higher-priority harness policy blocks subagent use without explicit user
-wording, surface that limitation immediately instead of silently continuing as
-a single agent:
+wording, tell the user immediately instead of silently continuing as a single
+agent:
 
 ```text
 I found <n> independent Trekoon lanes. This harness requires explicit
@@ -53,13 +50,12 @@ coordinating from the parent session?
 
 ## Runtime Notes
 
-- **Codex:** Trekoon execution should use subagents by default for safe
-  independent lanes, but Codex may have a higher-priority rule requiring the
-  user to explicitly mention subagents, delegation, or parallel agent work.
-  When that rule applies, ask immediately before broad execution rather than
-  silently doing all work in the parent. When permission exists and native tools
-  are exposed, the parent may use `spawn_agent`, `send_input`, `wait_agent`,
-  `resume_agent`, and `close_agent`.
+- **Codex:** use subagents by default for safe independent lanes when Codex
+  exposes them. If a higher-priority Codex rule requires the user to explicitly
+  mention subagents, delegation, or parallel agent work, ask immediately before
+  broad execution. Do not silently do all work in the parent. When permission
+  exists and native tools are exposed, use `spawn_agent`, `send_input`,
+  `wait_agent`, `resume_agent`, and `close_agent`.
 - **Claude Code:** use subagents for bounded side work. Use Agent Teams only
   when the user explicitly asks for team execution and the environment supports
   it.
