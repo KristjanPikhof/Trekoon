@@ -12,9 +12,9 @@ All notable changes to Trekoon are documented in this file.
   displays, subagent-preferred lane execution, structured questions, review
   agents, and Trekoon evidence recording across Codex, Claude Code, OpenCode,
   Pi, and similar harnesses.
-- Clarify that stricter harnesses such as Codex need explicit delegation
-  permission, so agents should ask once before broad execution when independent
-  lanes exist but the user did not request subagents.
+- Clarify that subagents are the default Trekoon execution strategy for
+  non-trivial independent lanes when the harness exposes them, preserving the
+  parent context for orchestration and finishing the epic.
 
 ### Changed
 
