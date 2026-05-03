@@ -18,6 +18,8 @@ agent to:
   Trekoon as the durable source of truth
 - prefer subagents for non-trivial independent execution lanes when the harness
   supports it
+- ask once for delegation permission in stricter harnesses, such as Codex, when
+  independent lanes exist but the user did not explicitly request subagents
 
 The skill ships with reference guides so the agent can handle the full
 plan-to-completion workflow from one install:
@@ -121,6 +123,12 @@ supports it, keep a local todo/task display for the user, and synthesize the
 results. Tiny, tightly coupled, or immediately blocking work can stay in the
 parent agent.
 
+Some harnesses require explicit user permission before spawning subagents.
+Codex is one of them: `/trekoon <id> execute` starts the execution contract, but
+`/trekoon <id> execute with subagents` or "delegate independent lanes" is the
+clear signal that subagents are allowed. If that signal is missing and the
+agent finds safe independent lanes, it should ask once before broad execution.
+
 Start with a single orientation call, optionally scoped to an epic:
 
 ```bash
@@ -223,6 +231,12 @@ blocker.
 /trekoon <epic-id> execute -- prefer subagents for non-trivial independent
 lanes, keep Trekoon as the source of truth, and use local task tools to show
 live progress.
+```
+
+Short form for stricter harnesses:
+
+```text
+/trekoon <epic-id> execute with subagents
 ```
 
 ### Plan and execute end to end
