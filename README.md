@@ -152,6 +152,11 @@ lanes when the harness supports it. The parent agent keeps the user oriented
 with local todo/task tools, coordinates dependencies, and records durable state
 in Trekoon.
 
+Some harnesses require explicit permission before spawning subagents. In those
+environments, use wording like `execute with subagents` or `delegate independent
+lanes`; otherwise the agent should ask once when it discovers safe parallel
+lanes.
+
 Plan and execute end to end:
 
 ```
