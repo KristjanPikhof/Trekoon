@@ -1,46 +1,36 @@
-# Universal Harness Primitives
+# Harness Primitives
 
 Use these intent-level primitives across Codex, Claude Code, OpenCode, Pi, and
-similar agent harnesses. Prefer the intent first; let the current harness map it
-to its native tools.
+similar harnesses. Trekoon is durable state; harness-local todo/task tools are
+only live session display.
 
-Trekoon is the durable source of truth. Harness-local todo/task tools are useful
-as a live progress display for the user and as current-session coordination
-state, but Trekoon owns statuses, owners, blockers, dependencies, completion
-notes, verification evidence, and review outcomes.
-
-## Primitive Map
-
-| Primitive | Universal instruction | Harness decides |
-|---|---|---|
-| Orient | Read Trekoon session/progress/suggest to find ready work and blockers. | Shell/read tools |
-| Display progress | Use local todo/task tools to show the current plan and live progress to the user. | Todo/task UI tools |
-| Ask | Use the harness question tool if available; otherwise ask one concise plain-text question. | `question`, `AskUserQuestion`, or fallback text |
-| Delegate | When executing an epic, use subagents by default for meaningful work that can run independently. | Native subagent/task mechanism |
-| Explore | Use read-only/explorer subagents for noisy codebase lookup, logs, or research. | Explorer/read-only agent |
-| Execute | Use write-capable worker/general subagents for bounded implementation lanes. | Worker/general/build agent |
-| Test | Run the required automated or manual checks for the touched scope. | Shell, browser, simulator, test tools |
-| Review | Use a capable review agent or review skill for non-trivial code changes. | Code-review subagent/skill |
-| Record | Append progress, blockers, test results, review results, and completion evidence to Trekoon. | Trekoon CLI |
+| Need | Instruction |
+|---|---|
+| Orient | Read Trekoon session/progress/suggest for ready work and blockers. |
+| Display progress | Use local todo/task tools for the current execution shape and lane status. |
+| Ask | Use the harness question tool when available; otherwise ask one concise plain-text question. |
+| Delegate | When executing an epic, use subagents by default for meaningful work that can run independently. |
+| Explore | Use read-only/explorer subagents for noisy codebase lookup, logs, or research. |
+| Execute | Use write-capable worker/general subagents for bounded implementation lanes. |
+| Test | Run the required automated or manual checks for touched scope. |
+| Review | Use a review agent/skill for non-trivial code changes when available. |
+| Record | Append progress, blockers, tests, review, and completion evidence to Trekoon. |
 
 ## Delegation Default
 
 When executing an epic, use subagents by default for any meaningful work that
 can run independently. Keep small or tightly coupled tasks in the parent agent.
-
 Use the parent session to coordinate the epic, make dependency decisions, keep
-the user oriented, and synthesize results. Do not spend the main context window
-on broad implementation lanes that can be safely delegated.
+the user oriented, and synthesize results.
 
-When the user asks you to "execute this epic", "work through this Trekoon plan",
-"use agents", "spawn subagents", "delegate independent lanes", "execute with
-subagents", "parallelize this", or "team execute", treat that as a request to
-orchestrate the work to completion. If the graph has safe independent lanes and
-the harness supports subagents, delegate those lanes by default.
+Treat "execute this epic", "work through this Trekoon plan", "use agents",
+"spawn subagents", "delegate independent lanes", "execute with subagents",
+"parallelize this", and "team execute" as requests to orchestrate work to
+completion. If safe independent lanes exist and the harness supports subagents,
+delegate those lanes by default.
 
-If a higher-priority harness policy blocks subagent use without explicit user
-wording, tell the user immediately instead of silently continuing as a single
-agent:
+If a higher-priority harness policy blocks subagents without explicit user
+wording, tell the user immediately:
 
 ```text
 I found <n> independent Trekoon lanes. This harness requires explicit
@@ -50,45 +40,38 @@ coordinating from the parent session?
 
 ## Runtime Notes
 
-- **Codex:** use subagents by default for safe independent lanes when Codex
-  exposes them. If a higher-priority Codex rule requires the user to explicitly
-  mention subagents, delegation, or parallel agent work, ask immediately before
-  broad execution. Do not silently do all work in the parent. When permission
-  exists and native tools are exposed, use `spawn_agent`, `send_input`,
+- Codex: use subagents by default when exposed. If Codex policy requires
+  explicit user wording, ask immediately before broad execution. Do not silently
+  do broad work in the parent. When available, use `spawn_agent`, `send_input`,
   `wait_agent`, `resume_agent`, and `close_agent`.
-- **Claude Code:** use subagents for bounded side work. Use Agent Teams only
+- Claude Code: use normal subagents for bounded side work. Use Agent Teams only
   when the user explicitly asks for team execution and the environment supports
   it.
-- **OpenCode:** use `@explore` for read-only discovery and `@general` or the
-  native Task tool for write-capable lane work. Use `question` when available.
-- **Pi and other harnesses:** use the same universal wording and the native
-  task/subagent/question tools when available.
+- OpenCode: use `@explore` for read-only discovery and `@general` or native
+  Task for write-capable lane work. Use `question` when available.
+- Pi/other harnesses: use the same intent and native task/subagent/question
+  tools when available.
 
 ## Local Task Tools
 
-Use local todo/task tools to keep the user oriented:
+Use local todo/task tools to show only current-session coordination:
 
-1. Show the selected execution shape and lane list.
-2. Mark each lane as pending, in progress, blocked, review, or done.
-3. Keep the list short enough to be readable.
-4. Mirror only the current session's coordination state.
+1. Execution shape and lane list.
+2. Lane status: pending, in progress, blocked, review, done.
+3. Short enough to stay readable.
 
-Do not treat local todo/task tools as durable tracking. If local state and
-Trekoon disagree, Trekoon wins.
+If local state and Trekoon disagree, Trekoon wins.
 
-## Review Guidance
+## Review
 
-For non-trivial implementation work, run a separate review pass before closing
-the task or epic. Prefer a specialized code-review agent or relevant review
-skill when available. The reviewer should inspect the actual diff and focus on
-correctness, behavioral regressions, missing tests, security, reliability,
-performance, and integration risks.
+For non-trivial implementation, run a separate review pass before closing the
+task or epic. Prefer a specialized review agent/skill. Review the actual diff
+for correctness, regressions, missing tests, security, reliability, performance,
+and integration risk.
 
-For tiny documentation or mechanical changes, a separate review agent is
-optional. Still run the relevant check and record what was verified.
-
-Append review outcomes to Trekoon before marking work done:
+Tiny docs/mechanical changes may skip separate review. Still run relevant
+checks and record the review gap or decision:
 
 ```bash
-trekoon --toon task update <task-id> --append "Review: <summary of result or accepted risk>"
+trekoon --toon task update <task-id> --append "Review: <summary or accepted gap>"
 ```
