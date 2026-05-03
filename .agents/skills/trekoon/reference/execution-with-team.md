@@ -1,106 +1,76 @@
-# Execution with Agent Teams Reference
+# Execution With Agent Teams Reference
 
-**You are a team lead orchestrator.** Execute work from Trekoon using Agent
-Teams — real parallel Claude Code instances coordinated via TeamCreate,
-TaskCreate, SendMessage, and shared task lists. Each teammate runs in its own
-tmux pane.
+You are a team lead orchestrator. Use this file only for Claude Code Agent
+Teams when the user explicitly asks for team execution and
+`CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS=true`. This is a runtime-specific path,
+not the default subagent path for Codex, OpenCode, Pi, or other harnesses.
 
-**Execute mode contract:** team execution is complete only when the epic is
-marked `done`, all remaining work is blocked with recorded reasons, or user
-input is required to continue.
+Team execution is complete only when the epic is marked `done`, all remaining
+work is blocked with recorded reasons, or real user input is required.
 
-**Prerequisite:** Agent Teams is a Claude Code-specific implementation of
-Trekoon lane delegation. Use it only when the user explicitly asks for team
-execution and the environment supports it. Agent Teams requires the Claude Code
-environment variable `CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS` set to `"true"`.
-This feature is not available in OpenCode, Codex, Pi, or other harnesses.
+Clarify meaningful ambiguity before starting.
 
-- [Claude Agent Teams documentation](https://code.claude.com/docs/en/agent-teams)
+## Start
 
-**Clarify ambiguity upfront.** If the plan has unclear requirements or meaningful
-tradeoffs, ask the user before starting.
-
-## Build the execution graph
-
-Same as the standard execution reference — use `task ready`, `dep reverse`, and
-lane grouping to construct a runnable graph. See `reference/execution.md` for
-the full scheduler loop and lane grouping rules.
-
-## Mark epic in-progress
-
-Before dispatching any work, transition the epic so it reflects actual state:
+Build the graph with the standard execution reference: `task ready`,
+`dep reverse`, lane grouping, and first-wave validation. Then mark the epic in
+progress:
 
 ```bash
 trekoon --toon epic update <epic-id> --status in_progress
 ```
 
-This must happen once, immediately after building the execution graph. If
-execution is interrupted, the epic is at least `in_progress` rather than `todo`.
+## Create Team And Tasks
 
-## Create the team
+1. Create the team:
 
-Use **TeamCreate** to set up the team, then **TaskCreate** to populate the
-shared task list, then **Agent** with `team_name` to spawn teammates.
-
-### Step 1: Create the team
-
-```
+```text
 TeamCreate:
   team_name: "<epic-slug>"
   description: "Executing epic <epic-id>: <title>"
 ```
 
-### Step 2: Create tasks in the shared task list
+2. Create one shared team task per lane:
 
-For each task group from the execution graph, create a task:
-
-```
+```text
 TaskCreate:
-  subject: "<lane description>: <task-ids/titles>"
+  subject: "<lane>: <task-ids/titles>"
   description: |
-    Execute these Trekoon tasks IN ORDER unless task description says
+    Execute these Trekoon tasks IN ORDER unless task descriptions allow
     parallel subtasks:
     - Task <id>: <title>
-    - Task <id>: <title>
 
-    Before starting each task:
-    - claim and assign owner:
-      trekoon --toon task claim <id> --owner <lane-name>
-    - append a short start note:
-      trekoon --toon task update <id> --append "Starting implementation"
+    Before each task:
+    - trekoon --toon task claim <id> --owner <lane-name>
+    - trekoon --toon task update <id> --append "Starting implementation"
 
-    While executing:
-    - complete required subtasks, update subtask statuses
-    - append meaningful progress notes (do not rewrite task description)
-    - respect the status machine: todo -> in_progress -> done (never skip)
-    - use --compact to reduce output noise:
-      trekoon --toon --compact task show <id>
+    While working:
+    - Complete required subtasks.
+    - Append progress notes; do not rewrite task descriptions.
+    - Use task done for completion.
+    - Use --compact for noisy Trekoon reads.
 
     On completion:
-    - append final verification evidence
-    - mark done: trekoon --toon task done <id>
-      (task done auto-transitions from todo/blocked through in_progress)
-    - read the response: it includes unblocked downstream tasks and open
-      subtask warnings — report these back via SendMessage
+    - Append verification evidence.
+    - trekoon --toon task done <id>
+    - Report unblocked tasks, open subtask warnings, and next candidate via
+      SendMessage.
+    - Report review result or review gap for non-trivial code changes.
 
     If blocked:
-    - append blocker reason, dependency id, and exact failing command/output
-    - set status: trekoon --toon task update <id> --status blocked
-    - notify team lead via SendMessage with blocker details
+    - Append blocker reason, dependency id, and exact failing command/output.
+    - trekoon --toon task update <id> --append "Blocked by <reason>" --status blocked
+    - Notify team lead via SendMessage.
 
-    Only create branches, commits, or PRs if the user explicitly requested
-    them and the current harness policy allows it.
-    Report: files changed, verification results, blockers
+    Do not create branches, commits, pushes, or PRs unless the user explicitly
+    asked and harness policy allows it.
 ```
 
-Use `blockedBy` via TaskUpdate to set dependencies between tasks that require
-sequential execution.
+Use `blockedBy` via TaskUpdate for team tasks that must run sequentially.
 
-### Step 3: Spawn teammates
+3. Spawn one teammate per parallel lane:
 
-For each parallel lane, spawn a teammate using the Agent tool:
-
-```
+```text
 Agent:
   name: "developer-1"
   team_name: "<epic-slug>"
@@ -108,118 +78,84 @@ Agent:
   description: "<lane>: <task titles>"
   prompt: |
     You are a developer on team "<epic-slug>".
-    Check TaskList for your assigned tasks and work through them.
-    Use TaskUpdate to claim tasks (set owner to your name) and mark
-    them completed.
-
-    Before starting each Trekoon task, claim it in Trekoon:
+    Work through your TaskList assignment.
+    Claim each Trekoon task before editing:
       trekoon --toon task claim <trekoon-task-id> --owner <your-name>
 
-    Status machine rules:
-    - todo -> in_progress -> done (valid)
-    - todo -> done (INVALID — use task done which auto-transitions)
-    - in_progress -> blocked (valid, with reason)
-    - blocked -> in_progress (valid, to resume)
+    Use task done for completion. Read and report unblocked tasks, warnings,
+    and next candidate via SendMessage.
 
-    When you complete a Trekoon task with `task done`, read the response:
-    - unblocked: tasks that became ready — report via SendMessage
-    - warning: open subtasks — report via SendMessage
-    - next: next ready candidate
-
-    Communicate with teammates via SendMessage if you need coordination.
-    After completing a task, check TaskList for the next available task.
+    Communicate blockers and coordination needs via SendMessage.
 ```
 
-**Teammate count:** 3-5 teammates for most epics. Don't over-parallelize.
+Use 3-5 teammates for most epics. Do not over-parallelize. Use
+`general-purpose` for implementation and `Explore`/`Plan` only for read-only
+research or planning.
 
-**Agent types:**
-- Use `general-purpose` for implementation work (has edit/write/bash access)
-- Use `Explore` or `Plan` only for read-only research or planning tasks
-
-## Coordinate as team lead
+## Coordinate
 
 Your job as team lead:
 
-1. **Monitor progress** — teammates send messages when they complete tasks or
-   hit blockers.
-2. **Use task done responses** — when a teammate reports `unblocked` tasks from
-   a `task done` response, create new team tasks via TaskCreate for the
-   unblocked work and assign to idle teammates.
-3. **Unblock work** — when a teammate reports a blocker, help resolve it or
-   reassign.
-4. **Assign ownership** — use TaskUpdate with `owner` to assign tasks to idle
-   teammates. Also set Trekoon owner:
+1. Monitor SendMessage updates.
+2. When a teammate reports `unblocked` tasks from `task done`, create new team
+   tasks and assign idle teammates.
+3. Help resolve or reassign blockers.
+4. Keep Trekoon owners current:
    ```bash
    trekoon --toon task update <task-id> --owner <teammate-name>
    ```
-5. **Send messages** — use SendMessage to direct teammates, never plain text
-   output.
-6. **Check progress** — periodically run `epic progress` to gauge completion:
+5. Use SendMessage to direct teammates.
+6. Check progress:
    ```bash
    trekoon --toon epic progress <epic-id>
    ```
-7. **Get suggestions when stuck** — when all teammates are blocked:
+7. When all teammates are blocked, run:
    ```bash
    trekoon --toon suggest --epic <epic-id>
    ```
 
-## Auto-recovery
+## Recovery
 
-Teammate attempts to fix failures. If can't fix, teammate reports failure with
-error output via SendMessage; dispatch fix instructions in response.
+Use the standard execution recovery rules. Teammates should try to fix failures
+with their local context. If they cannot, they must report exact command/output
+via SendMessage so you can give fix instructions or reassign.
 
-**`status_transition_invalid`** — exact recovery sequence:
-1. Run `trekoon --toon --compact task show <id>` to read the current status.
-2. Append a blocker note: `trekoon --toon task update <id> --append "Blocked: status_transition_invalid from <attempted transition>; current status is <actual>"`.
-3. Identify the valid intermediate transition (see `reference/status-machine.md`).
-4. Apply the correct intermediate step, then retry the intended transition.
-5. Only move on to the next task after the target task reaches the intended status or is explicitly marked `blocked`.
-6. Report resolution via SendMessage.
+For `status_transition_invalid`, inspect current status with:
 
-**`dependency_blocked`** — exact recovery sequence:
-1. Run `trekoon --toon --compact task show <id>` to identify which dependency is unmet.
-2. Append a blocker note: `trekoon --toon task update <id> --append "Blocked: dependency_blocked; depends on <dep-id>"`.
-3. Run `trekoon --toon task ready --epic <epic-id>` to get a ready candidate.
-4. Only then continue with the ready candidate — do not retry the blocked task.
-5. Notify team lead via SendMessage with blocker details.
+```bash
+trekoon --toon --compact task show <id>
+```
 
-## Verify and close
+For `dependency_blocked`, inspect the dependency, append a blocker note, then
+continue with a ready candidate from:
 
-Same verification steps as the standard execution reference: code review,
-automated tests, manual verification, DX quality, record evidence, final
-progress check. See `reference/execution.md` for details.
+```bash
+trekoon --toon task ready --epic <epic-id>
+```
 
-## Shutdown and cleanup
+## Verify And Close
+
+Use the standard execution verification rules: review, automated tests, manual
+checks, DX quality, and Trekoon evidence notes.
 
 After all work is verified:
 
-1. **Check everything is done:**
-   ```bash
-   trekoon --toon epic progress <epic-id>
-   ```
+```bash
+trekoon --toon epic progress <epic-id>
+trekoon --toon suggest --epic <epic-id>
+trekoon --toon epic update <epic-id> --status done
+```
 
-2. **Confirm nothing remains:**
-   ```bash
-   trekoon --toon suggest --epic <epic-id>
-   ```
-   Should return no actionable suggestions.
+Then send `shutdown_request` to each teammate, delete the team with TeamDelete,
+and return completed tasks, files changed, verification, review, remaining
+blockers, and dependency state.
 
-3. **Mark epic done** (already `in_progress` from the start step):
-   ```bash
-   trekoon --toon epic update <epic-id> --status done
-   ```
-
-4. **Shutdown teammates** — send `shutdown_request` via SendMessage to each.
-5. **Delete the team** — use TeamDelete to clean up team and task directories.
-6. Return final execution summary: completed tasks, remaining blockers,
-    dependency state.
-
-## Team orchestration tools
+## Team Tools
 
 | Purpose | Tool |
-|---------|------|
-| Create the team | `TeamCreate` |
-| Manage shared task list | `TaskCreate` / `TaskList` / `TaskUpdate` / `TaskGet` |
-| Spawn teammates | `Agent` (with `team_name`) |
+|---|---|
+| Create team | `TeamCreate` |
+| Manage shared tasks | `TaskCreate` / `TaskList` / `TaskUpdate` / `TaskGet` |
+| Spawn teammates | `Agent` with `team_name` |
 | Communicate | `SendMessage` |
 | Clean up | `TeamDelete` |
