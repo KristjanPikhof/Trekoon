@@ -18,8 +18,8 @@ agent to:
   Trekoon as the durable source of truth
 - prefer subagents for non-trivial independent execution lanes when the harness
   supports it
-- ask once for delegation permission in stricter harnesses, such as Codex, when
-  independent lanes exist but the user did not explicitly request subagents
+- use subagents by default for non-trivial independent lanes when the harness
+  exposes them, preserving the parent context for orchestration and decisions
 
 The skill ships with reference guides so the agent can handle the full
 plan-to-completion workflow from one install:
@@ -116,18 +116,18 @@ Typical flow:
 
 The core loop: **session, work, task done, repeat**.
 
-For non-trivial work, the parent agent should prefer orchestration over doing
-every detail itself. It should build the Trekoon execution graph, group ready
-tasks into lanes, spawn subagents for independent lanes when the harness
-supports it, keep a local todo/task display for the user, and synthesize the
-results. Tiny, tightly coupled, or immediately blocking work can stay in the
+For non-trivial work, the parent agent should orchestrate instead of doing every
+detail itself. It should build the Trekoon execution graph, group ready tasks
+into lanes, spawn subagents for independent lanes when the harness exposes
+them, keep a local todo/task display for the user, and synthesize the results.
+This preserves the parent context window for dependency decisions and finishing
+the epic. Tiny, tightly coupled, or immediately blocking work can stay in the
 parent agent.
 
-Some harnesses require explicit user permission before spawning subagents.
-Codex is one of them: `/trekoon <id> execute` starts the execution contract, but
-`/trekoon <id> execute with subagents` or "delegate independent lanes" is the
-clear signal that subagents are allowed. If that signal is missing and the
-agent finds safe independent lanes, it should ask once before broad execution.
+Some harnesses have higher-priority rules that require explicit user permission
+before spawning subagents. When that happens, the agent should say so
+immediately after discovering independent lanes and ask for permission before
+broad execution. It should not silently default to single-agent execution.
 
 Start with a single orientation call, optionally scoped to an epic:
 
@@ -233,7 +233,7 @@ lanes, keep Trekoon as the source of truth, and use local task tools to show
 live progress.
 ```
 
-Short form for stricter harnesses:
+Short form for harnesses that require explicit delegation wording:
 
 ```text
 /trekoon <epic-id> execute with subagents
