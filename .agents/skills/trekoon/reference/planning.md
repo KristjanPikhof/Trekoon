@@ -1,420 +1,265 @@
 # Planning Reference
 
-Write implementation plans directly into Trekoon as epics with task/subtask
-DAGs. Plans must be directly executable without re-interpretation.
+Write plans directly into Trekoon as epics with task/subtask DAGs. A plan is
+done only when the epic exists, the graph is validated, and the user can run
+`trekoon <epic-id> execute` without reinterpretation.
 
-**Plan mode contract:** planning is complete only when the epic exists in
-Trekoon, the dependency graph is validated, and the user can immediately run
-`trekoon <epic-id> execute`.
+Ask planning-critical questions before writing. Use the harness question tool
+when available (`question`, `AskUserQuestion`, or native equivalent); otherwise
+ask one concise plain-text question. Use multi-select only for independent
+features that can combine. Use single-select for mutually exclusive choices.
 
-**Clarify ambiguity upfront.** If the plan has unclear requirements or meaningful
-tradeoffs, ask the user before writing. Present options with clear tradeoffs.
-Use multi-select for independent features that can be combined; use single-select
-for mutually exclusive choices.
+## Before You Create Records
 
-Use the harness's interactive user-question tool when you need clarification,
-when available:
+Synthesize existing context instead of rediscovering it:
 
-- OpenCode: `question`
-- Claude Code: `AskUserQuestion`
-- Codex/Pi/other harnesses: use the native question tool if exposed; otherwise
-  ask one concise plain-text question
+1. Goal and user outcome.
+2. Decisions already made and rejected options.
+3. Constraints: architecture, compatibility, safety, timelines, libraries.
+4. Affected areas: subsystems, paths, interfaces, workflows.
+5. Verification evidence needed for completion.
+6. Unknowns that block graph creation.
 
-Do not hide planning-critical questions inside a long narrative response.
+If the brief is sufficient, plan. If not, do targeted research or ask one narrow
+question. Preserve prior user decisions unless they explicitly reopen them.
+Expand existing Trekoon items when they already represent the work.
 
-## Pre-plan synthesis
+## Data Model
 
-Before creating or expanding an epic, synthesize the context you already have.
-Planning should consume previous brainstorming, research, and codebase discovery
-rather than redoing it from scratch.
+- Epic: full outcome, scope, constraints, and verification gates.
+- Task: one complete subsystem/domain work unit that one agent can own.
+- Subtask: concrete implementation/test/verification step under a task.
+- Dependency: hard prerequisite only, not "nice to have" ordering.
 
-Build a short internal planning brief with:
+All new entities start as `todo`. Do not create records as `in_progress`,
+`blocked`, or `done`.
 
-1. **Goal** — what outcome the user wants
-2. **Decisions already made** — chosen direction, rejected options, known tradeoffs
-3. **Known constraints** — architecture, library constraints, timelines, safety, compatibility
-4. **Affected areas** — subsystems, files, interfaces, or workflows likely involved
-5. **Verification expectations** — what evidence will prove the work is complete
-6. **Remaining unknowns** — only the ones that actually block graph creation
+## Write Detailed, Executable Records
 
-If the brief is already sufficient, go straight into planning. If important
-unknowns remain, do targeted research or ask a narrow user question before
-creating the graph.
+### Epic
 
-## Research-aware planning rules
-
-- Reuse research conclusions in the epic and task descriptions.
-- Carry forward concrete patterns, file paths, APIs, and constraints that were
-  discovered earlier.
-- Do not replace prior decisions with generic planning boilerplate.
-- If the user already chose an approach during brainstorming, plan that approach
-  unless they explicitly reopen the decision.
-- If existing Trekoon items already represent part of the work, expand or refine
-  them instead of recreating parallel tracking state.
-
-## Planning data model
-
-- **Epic** = full feature outcome and constraints.
-- **Task** = one complete subsystem/domain work unit that can be owned by one
-  agent.
-- **Subtask** = concrete implementation/test/verification step under a task.
-- **Dependency edge** = strict prerequisite only (do not add "nice to have"
-  dependencies).
-
-All entities start in `todo`. See `reference/status-machine.md` for the
-canonical transition table.
-
-Plan implications:
-- Never set initial status to anything other than `todo` in create commands.
-- Task descriptions should reference valid transitions when documenting
-  completion flow (e.g., "todo -> in_progress -> done", not "todo -> done").
-- `task done` auto-transitions through `in_progress`, but `task update` does
-  not — plan descriptions should note this for agents.
-
-## Information-dense writing standard
-
-### Epic title
-
-Use a functional, outcome-oriented format:
+Title format:
 
 `<Product/Area>: <deliverable> to <user/system outcome> (<key constraint>)`
 
-Example: `Checkout: add idempotent payment capture to prevent duplicate charges
-(Stripe + retries)`
+Description must include:
 
-### Epic description
+- Goal and why now.
+- In scope and out of scope.
+- Success criteria.
+- Risks and constraints.
+- Verification gates.
+- Key prior decisions or research findings that affect implementation.
 
-Include:
+### Task
 
-1. **Goal & why now**
-2. **In scope** (specific capabilities)
-3. **Out of scope** (explicit exclusions)
-4. **Success criteria** (testable outcomes)
-5. **Risks/constraints** (data migration, latency budgets, auth boundaries)
-6. **Verification gates** (tests, manual checks, perf/security checks)
-7. **Key prior decisions or research findings** when they materially affect the
-   implementation path
-
-### Task title
-
-Use a structure that encodes subsystem + action + outcome:
+Title format:
 
 `[<Subsystem>] <verb> <artifact/interface> to <observable outcome>`
 
-Example: `[API/Auth] issue refresh-token rotation endpoint to invalidate
-replayed sessions`
+Description must include:
 
-### Task description
+- Target files: files to create or modify.
+- Read first: files, functions, or patterns to inspect before editing.
+- Do not touch: paths owned by other lanes.
+- Acceptance criteria with observable behavior.
+- Required tests or manual verification commands.
+- Integration constraints and compatibility requirements.
+- Owner/lane when clear.
+- Parallelism note: "can run in parallel with ..." or "blocked by ...".
+- Relevant prior findings so execution agents do not rediscover context.
 
-Must include:
+Example:
 
-- concrete scope and affected paths/symbols
-- acceptance criteria (observable behavior)
-- required tests/verification commands
-- integration constraints (contracts, backward compatibility)
-- explicit "can run in parallel with ..." or "blocked by ..." note
-- relevant findings from prior research or brainstorming that execution agents
-  should not have to rediscover
-
-**File scope** — declare explicitly so the agent doesn't waste tokens exploring:
-
-- **Target files**: files to create or modify
-- **Read-first files**: files the agent should read for context
-- **Do-not-touch**: paths that parallel agents own — prevents merge conflicts
-
-**Context loading hints** — point the agent to existing patterns:
-
-- Reference a concrete file as the pattern to mirror
-- Name the specific function/class/export to extend or integrate with
-- State project conventions rather than assuming the agent will discover them
-
-**Owner assignment** — when the plan has clear subsystem lanes, assign owners in
-task descriptions so the executor knows which agent/person owns each task:
-
-```
-Owner: auth-lane
-Can run in parallel with: billing-lane tasks
-```
-
-Example task description:
-
-```
+```text
 Implement refresh-token rotation endpoint.
 
 Target files: src/auth/refresh.ts (new), src/auth/refresh.test.ts (new)
-Read first: src/auth/login.ts (follow same handler pattern)
+Read first: src/auth/login.ts (follow handler pattern)
 Do not touch: src/billing/* (owned by billing-lane)
 
-Follow the handler pattern in login.ts: schema validation -> service call ->
-response mapping.
-
-Acceptance: POST /auth/refresh returns new token pair, invalidates old token.
+Follow login.ts: schema validation -> service call -> response mapping.
+Acceptance: POST /auth/refresh returns a new token pair and invalidates old token.
 Verify: bun test src/auth/refresh.test.ts
 Owner: auth-lane
-Can run in parallel with: billing-lane. Blocked by: task-types (needs AuthToken).
+Can run in parallel with: billing-lane. Blocked by: task-types.
 ```
 
-### Subtask title/description
+### Subtask
 
-- Titles are imperative and specific, not generic.
-- Description states exact artifact and completion signal.
-- Use subtasks for real units, not filler checklist noise.
-- Inherit file scope from parent task — only override if different files.
+- Use imperative, specific titles.
+- State exact artifact and completion signal.
+- Use subtasks for real execution units, not filler checklist noise.
+- Inherit parent task file scope unless a subtask differs.
 
-## Parallelism & dependencies
+## Design For Delegated Execution
 
-Model execution lanes intentionally:
+Plan so meaningful independent work can run in subagents:
 
-- Tasks with no dependency edge between them are parallel candidates.
-- Tasks in different subsystems should usually run in parallel.
-- Tasks in the same subsystem should be combined or sequenced.
-- Keep task groups to ~3-4 tasks per active subsystem lane.
+- Tasks with no dependency edge are parallel candidates.
+- Different subsystems usually become different lanes.
+- Same subsystem work should usually be grouped or sequenced.
+- Keep each active subsystem lane to about 3-4 tasks.
+- Add owners after creation when lanes are clear:
+  ```bash
+  trekoon --toon task update <task-id> --owner auth-lane
+  trekoon --toon task update <task-id> --owner billing-lane
+  ```
 
-Dependency policy:
+Use dependencies only for hard prerequisites. Prefer task-to-task dependencies.
+Use subtask dependencies only when task-level ordering is too coarse.
 
-1. Add an edge only for hard prerequisites.
-2. Prefer task-to-task dependencies; use subtask dependencies only when required.
-3. Validate acyclic graph assumptions before finalizing.
+## Create Records Efficiently
 
-## Assign owners after creation
+Use `--toon` on every planning command. It saves tokens and gives agents a
+stable structured response.
 
-After creating tasks, assign ownership for multi-agent execution:
+Prefer one transactional planning command over repeated single-item creates. If
+you know the epic, tasks, subtasks, and dependencies, one-shot the whole epic
+with `epic create --task ... --subtask ... --dep ...`. This saves tool calls and
+keeps the graph internally consistent.
 
-```bash
-trekoon --toon task update <task-id> --owner auth-lane
-trekoon --toon task update <task-id> --owner billing-lane
-```
-
-## Validate the plan
-
-After creating the epic, validate before handing off to execution.
-
-### Check progress structure
-
-```bash
-trekoon --toon epic progress <epic-id>
-```
-
-Verify: total count matches expectations, all tasks are in `todo`, ready count
-equals the number of tasks with no dependencies.
-
-### Run suggest to confirm sanity
-
-```bash
-trekoon --toon suggest --epic <epic-id>
-```
-
-`suggest` will surface issues: sync gaps, recovery needs, or unexpected blocker
-states. If it suggests claiming a task, the plan's dependency graph is valid and
-execution-ready.
-
-### Verify dependency graph
-
-```bash
-trekoon --toon task ready --epic <epic-id> --limit 50
-```
-
-Confirm that the expected first-wave tasks appear as ready candidates and
-second-wave tasks appear as blocked with the right dependencies.
-
-## Plan output and handoff
-
-After creating the epic and validating, present a summary to the user. This
-summary is the primary handoff artifact — it must be self-contained and
-actionable.
-
-Do not stop at a prose-only design. The final handoff must reference the actual
-Trekoon epic and the first execution wave.
-
-### ID rules
-
-- **Always use full UUIDs** for epic and task IDs. Never use temp-keys
-  (`task-truthy`, `@task-api`, etc.) in the summary — those are ephemeral
-  creation-time references that do not exist in the database.
-- IDs must be copy-friendly: render them in monospace/code formatting so the
-  user can select and copy a UUID directly.
-
-### Summary structure
-
-1. **Epic ID + title** — displayed prominently at the top, e.g.:
-   ```
-   Epic: <full-uuid>
-   Title: <epic title>
-   ```
-2. Tasks grouped by wave/batch with columns: full UUID, title, owner/lane
-3. Dependencies shown per task (using full UUIDs or task titles, not temp-keys)
-4. Verification gate (commands to run after all tasks complete)
-
-### Example format
-
-```
-Epic: 904b3129-be2d-4b20-8030-537dc327491a
-Title: Checkout: add idempotent payment capture
-
-Wave 1 (parallel)
-| ID                                   | Task                          | Owner        |
-|--------------------------------------|-------------------------------|--------------|
-| c12c9746-dbae-4660-bcbb-ebe660cb7054 | [API] Payment capture endpoint| api-lane     |
-| 4f0848f3-538a-44d3-8415-5bb16cf3f39e | [UI] Checkout button states   | ui-lane      |
-
-Wave 2 (depends on wave 1)
-| ID                                   | Task                          | Depends on                           |
-|--------------------------------------|-------------------------------|--------------------------------------|
-| 8a76afac-155d-45b3-b205-df2e4ef8988b | [API] Retry logic             | c12c9746-dbae-4660-bcbb-ebe660cb7054 |
-
-Verification: bun run build && bun run test
-```
-
-### Execution handoff contract
-
-Every plan must be directly executable without re-interpretation. Include these
-in task descriptions:
-
-1. **Lane/subsystem ownership** (`[Subsystem] ...` in title, `--owner` set).
-2. **Dependency intent** (explicit `blocked by ...` / `can run in parallel
-   with ...`).
-3. **Verification evidence** (exact commands and expected outcome).
-4. **Completion semantics** (`done` means verified and handoff-ready; use
-   `blocked` with reason when not).
-5. **Stable contract** (execution appends progress notes rather than rewriting
-   original plan text unless the plan itself is wrong).
-
-## Quality rules
-
-1. **No markdown plan files** as source of truth.
-2. **No vague titles** ("Refactor stuff", "Fix bugs").
-3. **Descriptions must be implementation-usable** by another agent without
-   guessing.
-4. **Every task must define completion evidence** (tests/manual checks).
-5. **Parallelism must be explicit** (not implied).
-6. **Status transitions must be valid** — never describe a `todo -> done` flow.
-7. **Owners should be assigned** when multiple execution lanes exist.
-
-## Large initiatives
-
-For large scope, create multiple epics with explicit cross-epic boundaries. Use
-dependencies within each epic DAG and keep each epic executable in bounded time.
-
-## Creation policy: prefer bulk planning workflows
-
-When creating multiple related records, do not loop through repeated single-item
-creates unless only one record is needed.
-
-### Which command to use
-
-| Situation | Preferred command |
+| Situation | Command |
 |---|---|
-| New epic and full graph already known | `trekoon --toon epic create ... --task ... --subtask ... --dep ...` |
+| New epic with known graph | Prefer `trekoon --toon epic create ... --task ... --subtask ... --dep ...` |
 | Existing epic needs linked additions | `trekoon --toon epic expand <epic-id> ...` |
-| Multiple sibling tasks under one epic | `trekoon --toon task create-many --epic <epic-id> --task ...` |
-| Multiple sibling subtasks under one task | `trekoon --toon subtask create-many <task-id> --subtask ...` |
-| Multiple dependency edges across existing IDs | `trekoon --toon dep add-many --dep ...` |
+| Many sibling tasks | `trekoon --toon task create-many --epic <epic-id> --task ...` |
+| Many sibling subtasks | `trekoon --toon subtask create-many <task-id> --subtask ...` |
+| Many dependency edges across existing IDs | `trekoon --toon dep add-many --dep ...` |
 | One record only | `epic create`, `task create`, or `subtask create` |
 
-### Compact spec escaping rules
-
-Compact specs (pipe-delimited `--task`, `--subtask`, `--dep` values) use `\` as
-the escape character. Only these sequences are valid:
+Compact specs use pipe-delimited values. `\` is the escape character:
 
 | Sequence | Produces |
 |---|---|
-| `\|` | literal `\|` (not a field separator) |
+| `\|` | literal `|` |
 | `\\` | literal `\` |
 | `\n` | newline |
 | `\r` | carriage return |
 | `\t` | tab |
 
-Any other `\X` combination (e.g., `\!`, `\=`, `\$`) is rejected with
-`Invalid escape sequence`. To avoid accidental escapes:
+Any other `\X` is invalid. Avoid operators like `!=` in descriptions because
+shell or compact-spec escaping can be confusing; rephrase as words.
 
-- Do not use `!=` or similar operators in description text; rephrase instead
-  (e.g., "null does not equal sourceBranch" instead of "null !== sourceBranch").
-- If a literal backslash is needed, double it: `\\`.
-- When using shell line continuations (`\` at end of line), ensure the next
-  line's first character is not one that forms an invalid escape with `\`.
+One-shot rules:
 
-### Critical temp-key rule
+- Declare tasks/subtasks with plain temp keys, e.g. `task-api`, `sub-tests`.
+- Refer to records created in the same command as `@task-api` or `@sub-tests`.
+- Use `@task-key` as the subtask parent ref and in `--dep` specs.
+- `--dep <source>|<depends-on>` points from blocked item to prerequisite.
+- `epic create` returns `result.mappings` and counts. Use those real UUIDs in
+  handoff summaries and follow-up updates. Never show temp keys as real IDs.
+- `dep add-many` does not resolve temp keys from earlier commands. Use real IDs.
 
-- Use plain temp keys when declaring records in compact specs, for example
-  `task-api` or `sub-tests`.
-- Refer to those records later in the same invocation as `@task-api` or
-  `@sub-tests`.
-- `@temp-key` references work in same-invocation graph workflows such as
-  one-shot `epic create` and `epic expand`.
-- `dep add-many` does **not** resolve temp keys from earlier commands. Use real
-  persisted IDs there.
-
-### Compact examples
-
-#### One-shot epic creation
-
-Use this when the epic does not exist yet and you already know the tree.
+One-shot example:
 
 ```bash
 trekoon --toon epic create \
-  --title "Batch command rollout" \
-  --description "Ship linked planning in one transaction" \
-  --task "task-api|Design API|Define compact grammar|todo" \
-  --task "task-cli|Wire CLI|Hook parser and output|todo" \
-  --subtask "@task-api|sub-tests|Write tests|Cover parser cases|todo" \
-  --dep "@task-cli|@task-api"
+  --title "Checkout: add idempotent payment capture" \
+  --description "Goal: prevent duplicate charges.\nVerification: bun test tests/payments" \
+  --task "task-api|[API] add capture endpoint|Target files: src/payments/capture.ts\nRead first: src/payments/service.ts\nDo not touch: src/ui/*\nAcceptance: duplicate request returns prior result.\nVerify: bun test tests/payments/capture.test.ts\nOwner: api-lane\nCan run in parallel with: task-ui.|todo" \
+  --task "task-ui|[UI] show capture states|Target files: src/ui/checkout.tsx\nRead first: src/ui/form.tsx\nDo not touch: src/payments/*\nAcceptance: loading and retry states render.\nVerify: bun test tests/ui/checkout.test.ts\nOwner: ui-lane\nBlocked by: task-api.|todo" \
+  --subtask "@task-api|sub-api-tests|Write capture tests|Cover idempotent retry and conflict responses.|todo" \
+  --subtask "@task-ui|sub-ui-states|Write UI state tests|Cover loading, success, retry, and error states.|todo" \
+  --dep "@task-ui|@task-api"
 ```
 
-#### Expand an existing epic
+## Append Efficiently
 
-Use this when the epic already exists and the new batch needs internal links.
+Use `--append` for progress notes, shared findings, verification requirements,
+or planning refinements. Appending is cheaper and safer than rewriting full
+descriptions.
+
+Entity-specific append:
 
 ```bash
-trekoon --toon epic expand <epic-id> \
-  --task "task-docs|Document workflow|Write operator guide|todo" \
-  --subtask "@task-docs|sub-examples|Add examples|Show canonical flows|todo" \
-  --dep "@sub-examples|@task-docs"
+trekoon --toon epic update <epic-id> --append "Planning note: <text>"
+trekoon --toon task update <task-id> --append "Planning note: <text>"
+trekoon --toon subtask update <subtask-id> --append "Planning note: <text>"
 ```
 
-#### Create sibling tasks or subtasks
+Append to selected tasks or subtasks with IDs from `result.mappings`:
 
 ```bash
-trekoon --toon task create-many --epic <epic-id> \
-  --task "seed-api|Design API|Define grammar|todo" \
-  --task "seed-cli|Wire CLI|Hook output|todo"
-
-trekoon --toon subtask create-many <task-id> \
-  --subtask "seed-tests|Write tests|Cover happy path|todo" \
-  --subtask "seed-docs|Document flow|Add notes|todo"
+trekoon --toon task update --ids id1,id2,id3 --append "Shared verification: bun test tests/payments"
+trekoon --toon subtask update --ids id1,id2 --append "Shared note: follow capture endpoint contract"
 ```
 
-#### Add dependencies after records already exist
+Important:
+
+- `epic update <epic-id> --append ...` appends only to the epic description.
+- There is no scoped "append to all tasks in this epic" command. Use task IDs
+  from one-shot mappings, `epic show --all`, or `task ready`, then
+  `task update --ids ... --append ...`.
+- Do not use `task update --all --append ...` unless you truly mean every task
+  in the database.
+- `epic update <epic-id> --all` is cascade status mode only and rejects
+  `--append`.
+- Bulk append is per-row, not one atomic transaction.
+
+## Validate Before Handoff
+
+After creating or expanding the epic:
 
 ```bash
-trekoon --toon dep add-many \
-  --dep "<task-b>|<task-a>" \
-  --dep "<subtask-c>|<task-b>"
+trekoon --toon epic progress <epic-id>
+trekoon --toon suggest --epic <epic-id>
+trekoon --toon task ready --epic <epic-id> --limit 50
 ```
 
-## Search and replace policy
+Verify:
 
-Use scoped search before manual tree reads when you need to locate repeated
-paths, labels, owners, or migration targets.
+- Counts match expectations.
+- All new tasks are `todo`.
+- Ready count equals first-wave tasks with no dependencies.
+- Blocked tasks show the expected dependencies.
+- `suggest` returns a sensible first execution candidate and no recovery/sync
+  issue that blocks execution.
 
-### Scope choice
+## Handoff Summary
 
-Prefer the narrowest valid root:
+Do not stop at a prose-only design. Return the actual Trekoon epic and first
+execution wave.
 
-1. `subtask search` or `subtask replace`
-2. `task search` or `task replace`
-3. `epic search` or `epic replace`
+Rules:
 
-Scope behavior:
+- Always use full UUIDs for epic/task IDs in summaries.
+- Never use temp keys (`task-api`, `@sub-tests`) outside create commands.
+- Render IDs in code formatting.
+- Group tasks by wave with title, owner/lane, and dependencies.
+- Include final verification gate.
 
-- `subtask` scope scans only that subtask.
-- `task` scope scans the task plus descendant subtasks.
-- `epic` scope scans the epic plus descendant tasks and subtasks.
+Format:
 
-### Safe replace workflow
+```text
+Epic: <full-uuid>
+Title: <epic title>
 
-1. Search first.
-2. Preview replace.
-3. Apply only after preview matches the intended scope.
+Wave 1 (parallel)
+| ID | Task | Owner |
+|---|---|---|
+| <uuid> | [API] Payment capture endpoint | api-lane |
+
+Wave 2
+| ID | Task | Depends on |
+|---|---|---|
+| <uuid> | [API] Retry logic | <wave-1-uuid> |
+
+Verification: bun run build && bun run test
+```
+
+## Search And Replace
+
+Use scoped search before manual tree reads when locating repeated paths, labels,
+owners, or migration targets.
+
+Narrowest valid scope first:
+
+1. `subtask search` / `subtask replace`
+2. `task search` / `task replace`
+3. `epic search` / `epic replace`
+
+Workflow:
 
 ```bash
 trekoon --toon epic search <epic-id> "path/to/somewhere"
@@ -427,6 +272,5 @@ Guardrails:
 - Use literal, explicit search text.
 - Narrow fields when useful: `--fields title`, `--fields description`, or
   `--fields title,description`.
-- Do not jump straight to `--apply`.
-- Prefer scoped search/replace over manually reading a whole tree and editing
-  many records one by one.
+- Preview before `--apply`.
+- Prefer scoped replace over manually editing many records one by one.
