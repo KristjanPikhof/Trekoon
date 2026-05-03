@@ -219,8 +219,8 @@ and final synthesis. Your job is to keep finishing the epic, not to personally
 perform every implementation step.
 
 - A bare `execute` request means own the epic to completion. Use Trekoon's
-  orchestration strategy, including subagents for safe independent lanes when
-  the harness supports them.
+  orchestration strategy, including subagents for meaningful independent lanes
+  when the harness supports them.
 - If a higher-priority harness rule requires explicit permission before
   spawning subagents, ask immediately instead of quietly falling back to
   single-agent execution.
