@@ -124,8 +124,7 @@ function renderTaskIndex(lines: string[], bundle: ExportBundle): void {
   lines.push("| # | Title | Status | Subtasks |");
   lines.push("|---|-------|--------|----------|");
 
-  for (let i = 0; i < bundle.tasks.length; i++) {
-    const task = bundle.tasks[i];
+  for (const [i, task] of bundle.tasks.entries()) {
     const subtaskCount = bundle.subtasks.filter((s) => s.taskId === task.id).length;
     const anchor = taskAnchor(task);
     lines.push(`| ${i + 1} | [${escapeTableCell(escapeInlineText(task.title))}](#${anchor}) | ${task.status} | ${subtaskCount} |`);
