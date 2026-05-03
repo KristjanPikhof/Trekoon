@@ -16,7 +16,7 @@ notes, verification evidence, and review outcomes.
 | Orient | Read Trekoon session/progress/suggest to find ready work and blockers. | Shell/read tools |
 | Display progress | Use local todo/task tools to show the current plan and live progress to the user. | Todo/task UI tools |
 | Ask | Use the harness question tool if available; otherwise ask one concise plain-text question. | `question`, `AskUserQuestion`, or fallback text |
-| Delegate | Spawn a subagent for each non-trivial independent Trekoon execution lane when harness policy permits it; otherwise ask once for delegation permission before starting broad work. | Native subagent/task mechanism |
+| Delegate | Use subagents by default for non-trivial independent Trekoon execution lanes when the harness exposes them. | Native subagent/task mechanism |
 | Explore | Use read-only/explorer subagents for noisy codebase lookup, logs, or research. | Explorer/read-only agent |
 | Execute | Use write-capable worker/general subagents for bounded implementation lanes. | Worker/general/build agent |
 | Test | Run the required automated or manual checks for the touched scope. | Shell, browser, simulator, test tools |
@@ -25,40 +25,41 @@ notes, verification evidence, and review outcomes.
 
 ## Delegation Preference
 
-Prefer offloading non-trivial, independent Trekoon execution lanes to subagents
-when the harness supports it. This preserves the parent context window for
-orchestration, dependency decisions, user communication, and final synthesis.
+Subagent delegation is the default Trekoon execution strategy for non-trivial,
+independent lanes when the harness supports it. This preserves the parent
+context window for orchestration, dependency decisions, user communication, and
+final synthesis.
 
 Keep work in the parent agent when it is tiny, tightly coupled, or the next
-local step is immediately blocked on the result. If the harness requires
-explicit user opt-in for subagents and the user has not provided it, ask one
-concise confirmation as soon as independent lanes are found. Continue
-single-agent only when the work is narrow, tightly coupled, or asking would
-stall an immediately useful next step.
+local step is immediately blocked on the result. The parent agent may complete
+small tasks directly, but it should not consume the main context window on broad
+implementation lanes that can be safely delegated.
 
-Treat requests such as "use agents", "spawn subagents", "delegate independent
-lanes", "execute with subagents", "parallelize this", or "team execute" as
-explicit permission to use native subagents when the graph has safe independent
-lanes and the harness policy allows it.
+Treat requests such as "execute this epic", "work through this Trekoon plan",
+"use agents", "spawn subagents", "delegate independent lanes", "execute with
+subagents", "parallelize this", or "team execute" as requests for Trekoon to
+orchestrate the work to completion. If the graph has safe independent lanes and
+the harness supports subagents, delegate those lanes by default.
 
-Treat bare requests such as "execute this epic" or "work through this Trekoon
-plan" as an execution contract, not universal delegation permission. In
-harnesses that allow inferred delegation, use subagents when useful. In
-harnesses that require explicit delegation permission, ask once early:
+If a higher-priority harness policy blocks subagent use without explicit user
+wording, surface that limitation immediately instead of silently continuing as
+a single agent:
 
 ```text
-I found <n> independent Trekoon lanes. Should I delegate them to subagents and
-keep coordinating from the parent session?
+I found <n> independent Trekoon lanes. This harness requires explicit
+permission before I can spawn subagents. Should I delegate those lanes and keep
+coordinating from the parent session?
 ```
 
 ## Runtime Notes
 
-- **Codex:** subagents require the user to explicitly ask for subagents,
-  delegation, or parallel agent work. A bare "execute" request is not enough.
-  If safe independent lanes exist and permission is missing, ask once before
-  broad execution. When permission exists and native tools are exposed, the
-  parent may use `spawn_agent`, `send_input`, `wait_agent`, `resume_agent`, and
-  `close_agent`.
+- **Codex:** Trekoon execution should use subagents by default for safe
+  independent lanes, but Codex may have a higher-priority rule requiring the
+  user to explicitly mention subagents, delegation, or parallel agent work.
+  When that rule applies, ask immediately before broad execution rather than
+  silently doing all work in the parent. When permission exists and native tools
+  are exposed, the parent may use `spawn_agent`, `send_input`, `wait_agent`,
+  `resume_agent`, and `close_agent`.
 - **Claude Code:** use subagents for bounded side work. Use Agent Teams only
   when the user explicitly asks for team execution and the environment supports
   it.
