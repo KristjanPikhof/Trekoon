@@ -1,9 +1,8 @@
 # Execution Reference
 
 **You are an orchestrator.** Execute work from Trekoon, not markdown plan files.
-Prefer offloading non-trivial independent execution lanes to subagents when the
-harness supports it. The parent agent should preserve its context window for
-orchestration, dependency decisions, user communication, and final synthesis.
+When executing an epic, use subagents by default for any meaningful work that
+can run independently. Keep small or tightly coupled tasks in the parent agent.
 
 **Execute mode contract:** execution is complete only when the epic is marked
 `done`, all remaining work is blocked with recorded reasons, or user input is
@@ -23,10 +22,9 @@ Use the lightest shape that still preserves momentum:
   the universal primitives in `reference/harness-primitives.md`; this file
   defines the Trekoon-specific lane and completion protocol.
 
-The parent agent should preserve context for orchestration and finishing the
-epic. It may do tiny or tightly coupled work directly, but non-trivial
-independent lanes should go to subagents by default when the harness exposes
-them.
+Preserve your context for orchestration and finishing the epic. You may do tiny
+or tightly coupled work directly, but meaningful independent lanes should go to
+subagents by default when the harness exposes them.
 
 If a higher-priority harness policy blocks subagent use without explicit user
 wording, surface that limitation as soon as the lane graph is known. Do not wait
@@ -91,10 +89,10 @@ execution is interrupted, the epic is at least `in_progress` rather than `todo`.
 
 ## Delegate execution lanes
 
-For each non-trivial parallel lane group, spawn a subagent for a bounded
-Trekoon lane when the harness exposes subagents. Use the current harness's
-native mechanism when it is obvious; otherwise use natural-language delegation
-such as "spawn a write-capable subagent for this Trekoon execution lane."
+For each meaningful parallel lane group, spawn a subagent for a bounded Trekoon
+lane when the harness exposes subagents. Use the current harness's native
+mechanism when it is obvious; otherwise use natural-language delegation such as
+"spawn a write-capable subagent for this Trekoon execution lane."
 
 If a higher-priority harness policy requires explicit user permission before
 delegation, ask before broad execution:
