@@ -291,8 +291,8 @@ describe("batch grammar contracts", (): void => {
     expect(taskHelp).toContain("trekoon task create-many --epic <epic-id> --task <spec>");
     expect(taskHelp).not.toContain("grammar only for now");
     expect(subtaskHelp).toContain("trekoon subtask create-many [<task-id>] [--task <task-id>] --subtask <spec>");
-    expect(epicHelp).toContain("trekoon epic create --title \"...\" --description \"...\" [--task <spec>] [--subtask <spec>] [--dep <spec>]");
-    expect(epicHelp).toContain("trekoon epic expand <epic-id>");
+    expect(epicHelp).toContain("trekoon --toon epic create --title \"...\" --description \"...\" [--task <spec>] [--subtask <spec>] [--dep <spec>]");
+    expect(epicHelp).toContain("trekoon --toon epic expand <epic-id>");
     expect(epicHelp).toContain("@<temp-key>");
     expect(depHelp).toContain("add-many --dep <source-ref>|<depends-on-ref>");
     expect(depHelp).toContain("Uses persisted IDs only");
