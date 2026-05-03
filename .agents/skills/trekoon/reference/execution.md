@@ -23,7 +23,7 @@ Use the lightest shape that still preserves momentum:
   defines the Trekoon-specific lane and completion protocol.
 
 Preserve your context for orchestration and finishing the epic. You may do tiny
-or tightly coupled work directly, but meaningful independent lanes should go to
+or tightly coupled work directly, but send meaningful independent lanes to
 subagents by default when the harness exposes them.
 
 If a higher-priority harness policy blocks subagent use without explicit user
