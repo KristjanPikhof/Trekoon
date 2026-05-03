@@ -15,6 +15,11 @@ All notable changes to Trekoon are documented in this file.
 - Clarify direct agent guidance: when executing an epic, use subagents by
   default for meaningful work that can run independently, while keeping small
   or tightly coupled tasks in the parent agent.
+- Compact Trekoon skill references around explicit load rules, detailed
+  planning handoff, direct execution runbooks, and lazy sync/status/team
+  guidance to reduce agent context usage without weakening workflows.
+- Strengthen planning guidance to prefer one-shot epic creation for known graphs
+  and document efficient `--append` patterns for epic, task, and subtask notes.
 
 ### Changed
 
