@@ -23,9 +23,14 @@ Use the lightest shape that still preserves momentum:
   the universal primitives in `reference/harness-primitives.md`; this file
   defines the Trekoon-specific lane and completion protocol.
 
-If the selected shape needs subagents but the current harness requires explicit
-delegation permission, ask for that permission as soon as the lane graph is
-known. Do not wait until after doing several tasks in the parent session.
+The parent agent should preserve context for orchestration and finishing the
+epic. It may do tiny or tightly coupled work directly, but non-trivial
+independent lanes should go to subagents by default when the harness exposes
+them.
+
+If a higher-priority harness policy blocks subagent use without explicit user
+wording, surface that limitation as soon as the lane graph is known. Do not wait
+until after doing several tasks in the parent session.
 
 Do not stop at status reporting when ready work exists.
 
@@ -86,22 +91,23 @@ execution is interrupted, the epic is at least `in_progress` rather than `todo`.
 
 ## Delegate execution lanes
 
-For each non-trivial parallel lane group, ask the harness to spawn a subagent
-for a bounded Trekoon lane when harness policy permits it. Use the current
-harness's native mechanism when it is obvious; otherwise use natural-language
-delegation such as "spawn a write-capable subagent for this Trekoon execution
-lane."
+For each non-trivial parallel lane group, spawn a subagent for a bounded
+Trekoon lane when the harness exposes subagents. Use the current harness's
+native mechanism when it is obvious; otherwise use natural-language delegation
+such as "spawn a write-capable subagent for this Trekoon execution lane."
 
-If the harness requires explicit user permission for delegation and the user
-has only asked to "execute", ask once before dispatching lanes:
+If a higher-priority harness policy requires explicit user permission before
+delegation, ask before broad execution:
 
 ```text
-I found <n> independent Trekoon lanes. Should I delegate them to subagents and
-keep coordinating from the parent session?
+I found <n> independent Trekoon lanes. This harness requires explicit
+permission before I can spawn subagents. Should I delegate those lanes and keep
+coordinating from the parent session?
 ```
 
-If permission is denied or unavailable, continue with the single-agent loop and
-record that delegation was skipped due to harness/user constraints.
+If permission is denied or unavailable, continue toward completion with the
+single-agent loop, keep reads narrow, and record that delegation was skipped due
+to harness/user constraints.
 
 Use local todo/task tools in the parent session as a live progress display for
 the user, but keep Trekoon as the durable record.
