@@ -69,7 +69,7 @@ if you just need to refresh the runtime assets without opening the browser.
 ## Create work
 
 ```bash
-trekoon epic create --title "Agent backlog stabilization" --description "Track stabilization work" --status todo
+trekoon --toon epic create --title "Agent backlog stabilization" --description "Track stabilization work" --status todo
 trekoon task create --title "Implement sync status" --description "Add status reporting" --epic <epic-id> --status todo
 trekoon subtask create --task <task-id> --title "Add cursor model" --status todo
 ```
@@ -88,7 +88,7 @@ trekoon task list --all --view compact
 If you already know the full epic tree, create everything in one call:
 
 ```bash
-trekoon epic create \
+trekoon --toon epic create \
   --title "Batch command rollout" \
   --description "Ship one-shot planning workflows" \
   --task "task-a|First task|First description|todo" \
@@ -118,7 +118,7 @@ For larger updates, use batch commands instead of looping:
 | Multiple tasks under one epic | `trekoon task create-many --epic <epic-id> --task ...` |
 | Multiple subtasks under one task | `trekoon subtask create-many <task-id> --subtask ...` |
 | Multiple dependency edges | `trekoon dep add-many --dep ...` |
-| Expand an existing epic | `trekoon epic expand <epic-id> ...` |
+| Expand an existing epic | `trekoon --toon epic expand <epic-id> ...` |
 
 These validate the whole batch before applying, so a bad input fails the entire
 operation instead of leaving partial state.
