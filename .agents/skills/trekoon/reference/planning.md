@@ -138,8 +138,24 @@ Compact specs use pipe-delimited values. `\` is the escape character:
 | `\r` | carriage return |
 | `\t` | tab |
 
-Any other `\X` is invalid. Avoid operators like `!=` in descriptions because
-shell or compact-spec escaping can be confusing; rephrase as words.
+Any other `\X` is invalid. Do not paste regex-escaped or shell-escaped
+patterns directly into compact specs: sequences like `\?`, `\.`, `\{`, `\}`,
+`\(`, `\)`, `\[`, and `\]` will fail before records are created. When a task
+description needs a search pattern, prefer prose over exact regex syntax. Avoid
+operators like `!=` in descriptions because shell or compact-spec escaping can
+be confusing; rephrase as words.
+
+Good:
+
+```text
+Verify: search docs for currentUpdatedAt, updatedAt-ms, SSE auth token rides, and token query contract text.
+```
+
+Bad:
+
+```text
+Verify: search with regex "currentUpdatedAt|<updatedAt-ms>|/api/snapshot/stream\?token|\?token=\{token\}" in docs and README.md
+```
 
 One-shot rules:
 
