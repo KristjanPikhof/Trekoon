@@ -166,11 +166,11 @@ dependency order until the epic is complete
 
 ## Agent Teams
 
-For larger epics, Trekoon can use the current harness's native subagent
-mechanism to offload non-trivial independent lanes. Claude Code Agent Teams are
-one runtime-specific option: instead of sequential sub-agents, you get real
-parallel Claude Code instances coordinated through `TeamCreate` and
-`SendMessage`, each running in its own tmux pane.
+For larger epics, use the current harness's native subagent mechanism for
+meaningful work that can run independently. Claude Code Agent Teams are one
+runtime-specific option: instead of sequential sub-agents, you get real parallel
+Claude Code instances coordinated through `TeamCreate` and `SendMessage`, each
+running in its own tmux pane.
 
 Requires Claude Code env variable `CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS=true`.
 
