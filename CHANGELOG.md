@@ -12,9 +12,9 @@ All notable changes to Trekoon are documented in this file.
   displays, subagent-preferred lane execution, structured questions, review
   agents, and Trekoon evidence recording across Codex, Claude Code, OpenCode,
   Pi, and similar harnesses.
-- Clarify that subagents are the default Trekoon execution strategy for
-  non-trivial independent lanes when the harness exposes them, preserving the
-  parent context for orchestration and finishing the epic.
+- Clarify direct agent guidance: when executing an epic, use subagents by
+  default for meaningful work that can run independently, while keeping small
+  or tightly coupled tasks in the parent agent.
 
 ### Changed
 
