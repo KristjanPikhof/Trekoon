@@ -16,10 +16,10 @@ agent to:
 - treat `.trekoon` as shared repo-scoped state
 - use harness-local todo/task tools as a live progress display while keeping
   Trekoon as the durable source of truth
-- prefer subagents for non-trivial independent execution lanes when the harness
-  supports it
-- use subagents by default for non-trivial independent lanes when the harness
-  exposes them, preserving the parent context for orchestration and decisions
+- use subagents by default for meaningful work that can run independently when
+  the harness exposes them
+- keep small or tightly coupled tasks in the parent agent so the main context
+  stays available for orchestration and decisions
 
 The skill ships with reference guides so the agent can handle the full
 plan-to-completion workflow from one install:
@@ -116,18 +116,16 @@ Typical flow:
 
 The core loop: **session, work, task done, repeat**.
 
-For non-trivial work, the parent agent should orchestrate instead of doing every
-detail itself. It should build the Trekoon execution graph, group ready tasks
-into lanes, spawn subagents for independent lanes when the harness exposes
-them, keep a local todo/task display for the user, and synthesize the results.
-This preserves the parent context window for dependency decisions and finishing
-the epic. Tiny, tightly coupled, or immediately blocking work can stay in the
-parent agent.
+When you execute an epic, use subagents by default for any meaningful work that
+can run independently. Keep small or tightly coupled tasks in the parent agent.
+Build the Trekoon execution graph, group ready tasks into lanes, keep a local
+todo/task display for the user, and synthesize the results. Use the parent
+context for dependency decisions and finishing the epic.
 
 Some harnesses have higher-priority rules that require explicit user permission
-before spawning subagents. When that happens, the agent should say so
-immediately after discovering independent lanes and ask for permission before
-broad execution. It should not silently default to single-agent execution.
+before spawning subagents. When that happens, say so immediately after
+discovering independent lanes and ask for permission before broad execution. Do
+not silently default to single-agent execution.
 
 Start with a single orientation call, optionally scoped to an epic:
 
@@ -228,9 +226,9 @@ blocker.
 ### Execute with subagents where useful
 
 ```text
-/trekoon <epic-id> execute -- prefer subagents for non-trivial independent
-lanes, keep Trekoon as the source of truth, and use local task tools to show
-live progress.
+/trekoon <epic-id> execute -- use subagents by default for meaningful work that
+can run independently, keep Trekoon as the source of truth, and use local task
+tools to show live progress.
 ```
 
 Short form for harnesses that require explicit delegation wording:
