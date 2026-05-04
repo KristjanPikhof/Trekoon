@@ -171,10 +171,9 @@ export function startBoardServer(options: StartBoardServerOptions = {}): BoardSe
   // Resolve the asset root BEFORE generating a token or opening the database.
   // If the installed assets are missing, `resolveBoardAssetRoot` raises a
   // `BoardAssetError` carrying only path/source metadata — never the auth
-  // token, which has not been generated yet. The CLI's existing
-  // `instanceof BoardInstallError` branch (BoardInstallError is now an alias
-  // of BoardAssetError) translates this into a clean operator error without
-  // leaking secrets through machine output or logs.
+  // token, which has not been generated yet. The CLI's `instanceof
+  // BoardAssetError` branch translates this into a clean operator error
+  // without leaking secrets through machine output or logs.
   const assetRoot: BoardAssetRoot = resolveBoardAssetRoot(
     options.assetRootOverride === undefined
       ? {}
