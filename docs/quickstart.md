@@ -50,9 +50,8 @@ trekoon --toon init
 trekoon --toon sync status
 ```
 
-Run `init` once per repository. It creates the shared storage root and installs
-the board runtime under `.trekoon/board`. If `sync status` reports
-`recoveryRequired` or a tracked/ignored mismatch, fix the setup before
+Run `init` once per repository. It creates the shared storage root. If `sync status`
+reports `recoveryRequired` or a tracked/ignored mismatch, fix the setup before
 continuing.
 
 ## Open the board
