@@ -108,9 +108,9 @@ afterEach(async (): Promise<void> => {
 describe("board server", (): void => {
   test("reuses the last successful repo-local port across runs", async (): Promise<void> => {
     const workspace: string = createWorkspace();
-    const { stateFile } = prepareBoardAssets(workspace);
+    const { stateFile, assetRoot } = prepareBoardAssets(workspace);
 
-    const firstServer = startBoardServer({ cwd: workspace, token: "first-token" });
+    const firstServer = startBoardServer({ cwd: workspace, token: "first-token", assetRootOverride: assetRoot });
     const firstResponse = await fetchFollowingTokenRedirect(firstServer.url, "first-token");
     const firstBody = await firstResponse.text();
 
@@ -122,7 +122,7 @@ describe("board server", (): void => {
 
     firstServer.stop();
 
-    const secondServer = startBoardServer({ cwd: workspace, token: "second-token" });
+    const secondServer = startBoardServer({ cwd: workspace, token: "second-token", assetRootOverride: assetRoot });
     const secondResponse = await fetchFollowingTokenRedirect(secondServer.url, "second-token");
 
     expect(secondServer.port).toBe(firstServer.port);
