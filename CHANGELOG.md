@@ -77,6 +77,8 @@ All notable changes to Trekoon are documented in this file.
 
 - Prevent duplicate WAL publishes, stale live-update notices, stale retry IDs,
   and leaked board tokens in API or SSE URLs.
+- Keep external CLI changes visible when they land during board-originated WAL
+  suppression, while still avoiding duplicate route-published deltas.
 - Tighten daemon safety around socket permissions, cwd scope, busy connections,
   post-write errors, and borrowed database handles.
 - Preserve migration root errors when rollback also fails, with the rollback
