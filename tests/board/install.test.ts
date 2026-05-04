@@ -1,17 +1,21 @@
-import { existsSync, mkdtempSync, mkdirSync, readFileSync, rmSync, unlinkSync, writeFileSync } from "node:fs";
+import { existsSync, mkdtempSync, mkdirSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { dirname, join } from "node:path";
+import { join } from "node:path";
 
-import { afterEach, describe, expect, test } from "bun:test";
+import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 
+import {
+  BOARD_ASSET_ROOT_ENV_VAR,
+  resolveBoardAssetRoot,
+} from "../../src/board/asset-root";
 import { ensureBoardInstalled, updateBoardInstallation } from "../../src/board/install";
-import { BOARD_ASSET_CONTRACT_VERSION } from "../../src/board/types";
-import { resolveStoragePaths, TREKOON_BOARD_ENTRY_FILENAME } from "../../src/storage/path";
+import { BoardAssetError, BoardInstallError } from "../../src/board/types";
 
 const tempDirs: string[] = [];
+const originalEnvOverride = process.env[BOARD_ASSET_ROOT_ENV_VAR];
 
 function createWorkspace(): string {
-  const workspace: string = mkdtempSync(join(tmpdir(), "trekoon-board-"));
+  const workspace: string = mkdtempSync(join(tmpdir(), "trekoon-board-asset-"));
   tempDirs.push(workspace);
   return workspace;
 }
@@ -22,7 +26,16 @@ function createBundledAssets(rootPath: string): void {
   writeFileSync(join(rootPath, "static", "app.js"), "console.log('board');\n", "utf8");
 }
 
+beforeEach((): void => {
+  delete process.env[BOARD_ASSET_ROOT_ENV_VAR];
+});
+
 afterEach((): void => {
+  if (originalEnvOverride === undefined) {
+    delete process.env[BOARD_ASSET_ROOT_ENV_VAR];
+  } else {
+    process.env[BOARD_ASSET_ROOT_ENV_VAR] = originalEnvOverride;
+  }
   while (tempDirs.length > 0) {
     const next: string | undefined = tempDirs.pop();
     if (next) {
@@ -31,199 +44,99 @@ afterEach((): void => {
   }
 });
 
-describe("board install", (): void => {
-  test("installs into shared .trekoon/board and reruns idempotently", (): void => {
-    const workspace: string = createWorkspace();
-    const bundledAssetRoot: string = join(workspace, "bundled-assets");
-    createBundledAssets(bundledAssetRoot);
+describe("resolveBoardAssetRoot", (): void => {
+  test("uses an explicit override and locates index.html", (): void => {
+    const assetRoot: string = createWorkspace();
+    createBundledAssets(assetRoot);
 
-    const first = ensureBoardInstalled({
-      workingDirectory: workspace,
-      bundledAssetRoot,
-      assetVersion: "1.2.3",
-    });
+    const resolved = resolveBoardAssetRoot({ assetRootOverride: assetRoot });
 
-    const paths = resolveStoragePaths(workspace);
-    expect(first.action).toBe("installed");
-    expect(first.paths.runtimeRoot).toBe(paths.boardDir);
-    expect(first.paths.entryFile).toBe(paths.boardEntryFile);
-    expect(first.paths.manifestFile).toBe(paths.boardManifestFile);
-    expect(dirname(paths.databaseFile)).toBe(dirname(paths.boardDir));
-    expect(readFileSync(paths.boardEntryFile, "utf8")).toContain("board");
-
-    const manifest = JSON.parse(readFileSync(paths.boardManifestFile, "utf8")) as {
-      contractVersion: string;
-      assetVersion: string;
-      entryFile: string;
-      files: string[];
-      assetDigest: string;
-    };
-    expect(manifest).toEqual({
-      contractVersion: BOARD_ASSET_CONTRACT_VERSION,
-      assetVersion: "1.2.3",
-      entryFile: TREKOON_BOARD_ENTRY_FILENAME,
-      files: ["index.html", "static/app.js"],
-      assetDigest: expect.any(String),
-    });
-
-    const second = ensureBoardInstalled({
-      workingDirectory: workspace,
-      bundledAssetRoot,
-      assetVersion: "1.2.3",
-    });
-
-    expect(second.action).toBe("unchanged");
-    expect(readFileSync(paths.boardManifestFile, "utf8")).toContain('"assetVersion": "1.2.3"');
+    expect(resolved.assetRoot).toBe(assetRoot);
+    expect(resolved.entryFile).toBe(join(assetRoot, "index.html"));
+    expect(resolved.source).toBe("override");
   });
 
-  test("reinstalls when a runtime asset is missing", (): void => {
-    const workspace: string = createWorkspace();
-    const bundledAssetRoot: string = join(workspace, "bundled-assets");
-    createBundledAssets(bundledAssetRoot);
+  test("falls back to TREKOON_BOARD_ASSET_ROOT when no override is given", (): void => {
+    const assetRoot: string = createWorkspace();
+    createBundledAssets(assetRoot);
+    process.env[BOARD_ASSET_ROOT_ENV_VAR] = assetRoot;
 
-    const initial = ensureBoardInstalled({
-      workingDirectory: workspace,
-      bundledAssetRoot,
-      assetVersion: "1.2.3",
-    });
+    const resolved = resolveBoardAssetRoot();
 
-    unlinkSync(initial.paths.entryFile);
-    expect(existsSync(initial.paths.entryFile)).toBeFalse();
-
-    const reinstalled = ensureBoardInstalled({
-      workingDirectory: workspace,
-      bundledAssetRoot,
-      assetVersion: "1.2.3",
-    });
-
-    expect(reinstalled.action).toBe("reinstalled");
-    expect(readFileSync(reinstalled.paths.entryFile, "utf8")).toContain("board");
+    expect(resolved.assetRoot).toBe(assetRoot);
+    expect(resolved.source).toBe("environment");
   });
 
-  test("updates when manifest version no longer matches bundled assets", (): void => {
-    const workspace: string = createWorkspace();
-    const bundledAssetRoot: string = join(workspace, "bundled-assets");
-    createBundledAssets(bundledAssetRoot);
+  test("ignores empty environment override and uses the package source", (): void => {
+    process.env[BOARD_ASSET_ROOT_ENV_VAR] = "";
 
-    const initial = ensureBoardInstalled({
-      workingDirectory: workspace,
-      bundledAssetRoot,
-      assetVersion: "1.0.0",
-    });
+    const resolved = resolveBoardAssetRoot();
 
-    writeFileSync(
-      initial.paths.manifestFile,
-      `${JSON.stringify(
-        {
-          contractVersion: BOARD_ASSET_CONTRACT_VERSION,
-          assetVersion: "0.9.0",
-          entryFile: TREKOON_BOARD_ENTRY_FILENAME,
-          files: ["index.html", "static/app.js"],
-          assetDigest: initial.manifest.assetDigest,
-        },
-        null,
-        2,
-      )}\n`,
-      "utf8",
+    expect(resolved.source).toBe("package");
+    expect(existsSync(resolved.entryFile)).toBeTrue();
+  });
+
+  test("fails deterministically when the asset root directory is missing", (): void => {
+    const missingRoot: string = join(createWorkspace(), "missing");
+
+    expect(() => resolveBoardAssetRoot({ assetRootOverride: missingRoot })).toThrow(
+      expect.objectContaining({ code: "missing_asset" }),
     );
-
-    const updated = updateBoardInstallation({
-      workingDirectory: workspace,
-      bundledAssetRoot,
-      assetVersion: "1.0.0",
-    });
-
-    expect(updated.action).toBe("updated");
-    expect(readFileSync(updated.paths.manifestFile, "utf8")).toContain('"assetVersion": "1.0.0"');
   });
 
-  test("updates when bundled asset contents change without a version bump", (): void => {
-    const workspace: string = createWorkspace();
-    const bundledAssetRoot: string = join(workspace, "bundled-assets");
-    createBundledAssets(bundledAssetRoot);
+  test("fails deterministically when index.html is missing inside the asset root", (): void => {
+    const assetRoot: string = createWorkspace();
+    writeFileSync(join(assetRoot, "static.js"), "console.log('broken');\n", "utf8");
 
-    const initial = ensureBoardInstalled({
-      workingDirectory: workspace,
-      bundledAssetRoot,
-      assetVersion: "1.2.3",
-    });
-
-    writeFileSync(join(bundledAssetRoot, "static", "app.js"), "console.log('board v2');\n", "utf8");
-
-    const updated = updateBoardInstallation({
-      workingDirectory: workspace,
-      bundledAssetRoot,
-      assetVersion: "1.2.3",
-    });
-
-    expect(updated.action).toBe("updated");
-    expect(updated.manifest.assetDigest).not.toBe(initial.manifest.assetDigest);
-    expect(readFileSync(join(updated.paths.runtimeRoot, "static", "app.js"), "utf8")).toContain("board v2");
+    expect(() => resolveBoardAssetRoot({ assetRootOverride: assetRoot })).toThrow(
+      expect.objectContaining({
+        code: "missing_asset",
+        details: expect.objectContaining({ missingFile: "index.html" }),
+      }),
+    );
   });
 
-  test("replaces stale runtime files when the bundled asset list changes", (): void => {
+  test("BoardInstallError remains an alias of BoardAssetError for back-compat", (): void => {
+    expect(BoardInstallError).toBe(BoardAssetError);
+  });
+});
+
+describe("ensureBoardInstalled (no-copy compat layer)", (): void => {
+  test("resolves assets in place without writing to repo storage", (): void => {
     const workspace: string = createWorkspace();
-    const bundledAssetRoot: string = join(workspace, "bundled-assets");
-    createBundledAssets(bundledAssetRoot);
-    writeFileSync(join(bundledAssetRoot, "static", "detail.js"), "console.log('detail overlay');\n", "utf8");
+    const assetRoot: string = createWorkspace();
+    createBundledAssets(assetRoot);
 
-    const initial = ensureBoardInstalled({
+    const result = ensureBoardInstalled({
       workingDirectory: workspace,
-      bundledAssetRoot,
+      bundledAssetRoot: assetRoot,
       assetVersion: "1.2.3",
     });
 
-    expect(existsSync(join(initial.paths.runtimeRoot, "static", "detail.js"))).toBeTrue();
-
-    unlinkSync(join(bundledAssetRoot, "static", "detail.js"));
-
-    const updated = updateBoardInstallation({
-      workingDirectory: workspace,
-      bundledAssetRoot,
-      assetVersion: "1.2.3",
-    });
-
-    expect(updated.action).toBe("updated");
-    expect(updated.manifest.files).toEqual(["index.html", "static/app.js"]);
-    expect(existsSync(join(updated.paths.runtimeRoot, "static", "detail.js"))).toBeFalse();
+    expect(result.action).toBe("installed");
+    expect(result.paths.sourceRoot).toBe(assetRoot);
+    expect(result.paths.runtimeRoot).toBe(assetRoot);
+    expect(result.paths.entryFile).toBe(join(assetRoot, "index.html"));
+    expect(result.manifest.files).toEqual(["index.html", "static/app.js"]);
+    expect(result.manifest.assetVersion).toBe("1.2.3");
+    expect(existsSync(join(workspace, ".trekoon", "board"))).toBeFalse();
   });
 
-  test("reinstalls when the runtime manifest is corrupt", (): void => {
-    const workspace: string = createWorkspace();
-    const bundledAssetRoot: string = join(workspace, "bundled-assets");
-    createBundledAssets(bundledAssetRoot);
+  test("updateBoardInstallation matches ensureBoardInstalled behavior", (): void => {
+    const assetRoot: string = createWorkspace();
+    createBundledAssets(assetRoot);
 
-    const initial = ensureBoardInstalled({
-      workingDirectory: workspace,
-      bundledAssetRoot,
-      assetVersion: "1.2.3",
-    });
+    const ensured = ensureBoardInstalled({ bundledAssetRoot: assetRoot, assetVersion: "1.0.0" });
+    const updated = updateBoardInstallation({ bundledAssetRoot: assetRoot, assetVersion: "1.0.0" });
 
-    writeFileSync(initial.paths.manifestFile, "{not-json\n", "utf8");
-
-    const recovered = updateBoardInstallation({
-      workingDirectory: workspace,
-      bundledAssetRoot,
-      assetVersion: "1.2.3",
-    });
-
-    expect(recovered.action).toBe("reinstalled");
-    expect(readFileSync(recovered.paths.entryFile, "utf8")).toContain("board");
-    expect(JSON.parse(readFileSync(recovered.paths.manifestFile, "utf8"))).toEqual(recovered.manifest);
+    expect(updated).toEqual(ensured);
   });
 
-  test("fails deterministically when bundled entry asset is missing", (): void => {
-    const workspace: string = createWorkspace();
-    const bundledAssetRoot: string = join(workspace, "bundled-assets");
-    mkdirSync(bundledAssetRoot, { recursive: true });
-    writeFileSync(join(bundledAssetRoot, "static.js"), "console.log('broken');\n", "utf8");
+  test("propagates BoardInstallError when assets are missing", (): void => {
+    const missingRoot: string = join(createWorkspace(), "missing");
 
     expect(() =>
-      ensureBoardInstalled({
-        workingDirectory: workspace,
-        bundledAssetRoot,
-        assetVersion: "1.0.0",
-      }),
-    ).toThrow(expect.objectContaining({ code: "missing_asset" }));
+      ensureBoardInstalled({ bundledAssetRoot: missingRoot, assetVersion: "1.0.0" }),
+    ).toThrow(BoardInstallError);
   });
 });
