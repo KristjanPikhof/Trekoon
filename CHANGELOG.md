@@ -16,6 +16,9 @@ All notable changes to Trekoon are documented in this file.
 - `trekoon init` no longer touches board assets. The `Board assets:` and
   `Board runtime root:` human lines and the `board` field in machine output are
   gone. Storage bootstrap and `.trekoon/.gitignore` behavior is unchanged.
+- Built `dist` artifacts now include `package.json` and the board asset bundle
+  beside `dist/index.js`, so the bundled CLI can resolve its version and board
+  assets when deployed from `bun run build` output.
 
 ### Removed
 
@@ -28,6 +31,11 @@ All notable changes to Trekoon are documented in this file.
   `BoardAssetManifest`, `BoardAssetPaths`, `BoardInstallAction`,
   `EnsureBoardInstalledOptions`, and `BOARD_ASSET_CONTRACT_VERSION` types.
   `BoardAssetError` is now the only board error class.
+
+### Migration note
+
+- Existing ignored `.trekoon/board` directories are left untouched on disk.
+  Current Trekoon versions do not read, refresh, or delete those copied assets.
 
 ## 0.4.3
 

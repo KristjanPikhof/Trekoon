@@ -206,6 +206,8 @@ trekoon board open      # starts a local server, opens browser
 Board code (HTML, JS, CSS, fonts) comes from the running Trekoon install.
 Board data comes from the repo where `trekoon board open` is invoked. Updating
 Trekoon updates the board bundle; no per-repo asset copy is needed.
+Repos with an old ignored `.trekoon/board` directory keep those files on disk,
+but Trekoon no longer reads or refreshes them.
 
 Binds to `127.0.0.1` only with a per-session token. Gives you an epics
 overview, kanban workspace per epic, task detail modals, and search. The board

@@ -63,7 +63,8 @@ trekoon board open
 Starts a loopback-only server on `127.0.0.1`, opens the browser, and prints a
 fallback URL. Board code (HTML, JS, CSS, fonts) comes from the running Trekoon
 install; board data comes from the repo where the command is invoked. The board
-works fully offline. To get an updated board UI, update Trekoon itself.
+works fully offline. To get an updated board UI, update Trekoon itself. Old
+ignored `.trekoon/board` copies are left on disk but are no longer used.
 
 ## Create work
 
