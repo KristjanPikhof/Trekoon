@@ -136,13 +136,14 @@ describe("board server", (): void => {
 
   test("falls back to a random port when the preferred port is unavailable", async (): Promise<void> => {
     const workspace: string = createWorkspace();
-    const { stateFile } = prepareBoardAssets(workspace);
+    const { stateFile, assetRoot } = prepareBoardAssets(workspace);
     const { blocker, port: occupiedPort } = await occupyPort();
 
     try {
+      mkdirSync(dirname(stateFile), { recursive: true });
       writeFileSync(stateFile, `${JSON.stringify({ preferredPort: occupiedPort }, null, 2)}\n`, "utf8");
 
-      const boardServer = startBoardServer({ cwd: workspace, token: "fallback-token" });
+      const boardServer = startBoardServer({ cwd: workspace, token: "fallback-token", assetRootOverride: assetRoot });
       const response = await fetchFollowingTokenRedirect(boardServer.url, "fallback-token");
 
       expect(response.status).toBe(200);
