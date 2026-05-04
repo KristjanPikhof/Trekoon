@@ -59,14 +59,7 @@ function createLegacyDatabaseFile(workspace: string, title: string): string {
   return realpathSync(databaseFile);
 }
 
-function createBoardAssets(rootPath: string): void {
-  mkdirSync(join(rootPath, "assets"), { recursive: true });
-  writeFileSync(join(rootPath, "index.html"), "<html><body>board</body></html>\n", "utf8");
-  writeFileSync(join(rootPath, "assets", "app.js"), "console.log('board');\n", "utf8");
-}
-
 afterEach((): void => {
-  process.env.TREKOON_BOARD_ASSET_ROOT = originalBoardAssetRoot;
   while (tempDirs.length > 0) {
     const next = tempDirs.pop();
     if (next) {
@@ -189,22 +182,20 @@ describe("cli shell dispatch", (): void => {
     expect(wipeData.text).toContain("last-resort recovery tool");
   });
 
-  test("dispatches board update and board help", async (): Promise<void> => {
+  test("returns invalid_subcommand for retired board update and exposes open-only help", async (): Promise<void> => {
     const workspace = createWorkspace();
-    const assetRoot = createWorkspace();
-    createBoardAssets(assetRoot);
-    process.env.TREKOON_BOARD_ASSET_ROOT = assetRoot;
 
     const boardHelp = await executeShell(parseInvocation(["help", "board"], { stdoutIsTTY: false }), workspace);
     const boardUpdate = await executeShell(parseInvocation(["board", "update"], { stdoutIsTTY: false }), workspace);
 
     expect(boardHelp.ok).toBeTrue();
     expect((boardHelp.data as { topic: string; text: string }).topic).toBe("board");
-    expect((boardHelp.data as { text: string }).text).toContain("trekoon board <open|update>");
+    expect((boardHelp.data as { text: string }).text).toContain("trekoon board <open>");
+    expect((boardHelp.data as { text: string }).text).not.toContain("update");
 
-    expect(boardUpdate.ok).toBeTrue();
-    expect(boardUpdate.command).toBe("board.update");
-    expect((boardUpdate.data as { action: string }).action).toBe("installed");
+    expect(boardUpdate.ok).toBeFalse();
+    expect(boardUpdate.command).toBe("board");
+    expect(boardUpdate.error?.code).toBe("invalid_subcommand");
   });
 
   test("dispatches skills install and creates project-local artifact", async (): Promise<void> => {
