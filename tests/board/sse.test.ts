@@ -112,9 +112,9 @@ afterEach((): void => {
 describe("board SSE snapshot stream", (): void => {
   test("requires authentication", async (): Promise<void> => {
     const workspace: string = createWorkspace();
-    prepareBoardAssets(workspace);
+    const { assetRoot } = prepareBoardAssets(workspace);
 
-    const boardServer = startBoardServer({ cwd: workspace, token: "stream-token" });
+    const boardServer = startBoardServer({ cwd: workspace, token: "stream-token", assetRootOverride: assetRoot });
 
     try {
       const response = await fetch(`${boardServer.origin}/api/snapshot/stream`);
@@ -129,9 +129,9 @@ describe("board SSE snapshot stream", (): void => {
 
   test("delivers initial snapshot then snapshotDelta events to multiple clients", async (): Promise<void> => {
     const workspace: string = createWorkspace();
-    prepareBoardAssets(workspace);
+    const { assetRoot } = prepareBoardAssets(workspace);
 
-    const boardServer = startBoardServer({ cwd: workspace, token: "multi-client-token" });
+    const boardServer = startBoardServer({ cwd: workspace, token: "multi-client-token", assetRootOverride: assetRoot });
 
     try {
       // Open two SSE clients with valid token.
