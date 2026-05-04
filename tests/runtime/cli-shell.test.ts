@@ -367,9 +367,6 @@ describe("cli shell dispatch", (): void => {
 
   test("surfaces machine-readable tracked storage mismatch data", async (): Promise<void> => {
     const workspace = createWorkspace();
-    const assetRoot = createWorkspace();
-    createBoardAssets(assetRoot);
-    process.env.TREKOON_BOARD_ASSET_ROOT = assetRoot;
     createCommittedGitRepository(workspace);
     mkdirSync(join(workspace, ".trekoon"), { recursive: true });
     const trackedFile = join(workspace, ".trekoon", "tracked.txt");
@@ -502,9 +499,6 @@ describe("cli shell dispatch", (): void => {
 
   test("init meta reflects automatic legacy migration results", async (): Promise<void> => {
     const workspace = createWorkspace();
-    const assetRoot = createWorkspace();
-    createBoardAssets(assetRoot);
-    process.env.TREKOON_BOARD_ASSET_ROOT = assetRoot;
     createCommittedGitRepository(workspace);
     const linkedWorktree = createWorkspace();
 
