@@ -59,9 +59,9 @@ function fetch(
 
 beforeEach((): void => {
   workspace = createWorkspace();
-  prepareBoardAssets(workspace);
+  const { assetRoot } = prepareBoardAssets(workspace);
   seeded = seed(workspace);
-  boardServer = startBoardServer({ cwd: workspace, token: "etag-token" });
+  boardServer = startBoardServer({ cwd: workspace, token: "etag-token", assetRootOverride: assetRoot });
 });
 
 afterEach((): void => {
