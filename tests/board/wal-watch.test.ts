@@ -391,6 +391,26 @@ describe("WAL watcher diff and resilience", (): void => {
       expect(deltas.length).toBe(1);
       const routeDelta = deltas[0] as { tasks?: Array<{ id?: string; title?: string }> };
       expect(routeDelta.tasks).toContainEqual(expect.objectContaining({ id: task.id, title: "After" }));
+
+      const cliDb: TrekoonDatabase = openTrekoonDatabase(workspace);
+      try {
+        new MutationService(cliDb.db, workspace).createEpic({
+          title: "External after suppressed reconcile",
+          description: "CLI write",
+        });
+      } finally {
+        cliDb.close();
+      }
+
+      watcher.reconcile();
+
+      expect(deltas.length).toBe(2);
+      const externalDelta = deltas[1] as {
+        epics?: Array<{ title?: string }>;
+        tasks?: Array<{ id?: string; title?: string }>;
+      };
+      expect(externalDelta.epics).toContainEqual(expect.objectContaining({ title: "External after suppressed reconcile" }));
+      expect(externalDelta.tasks ?? []).not.toContainEqual(expect.objectContaining({ id: task.id, title: "After" }));
     } finally {
       watcher.close();
       eventBus.close();
