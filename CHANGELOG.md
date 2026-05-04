@@ -100,7 +100,7 @@ All notable changes to Trekoon are documented in this file.
 - Add live board updates through `/api/snapshot/stream`. Board tabs now receive
   updates from other tabs, shells, and worktrees without polling.
 - Add `If-Match` support to board PATCH routes. Stale writes return `409`
-  with `currentUpdatedAt`; clients that omit the header still work.
+  with current version metadata; clients that omit the header still work.
 - Add `trekoon migrate backup [--retain <n>]` for read-only SQLite snapshots
   before migration recovery.
 - Add a canonical machine-visible error-code registry in the machine contract
