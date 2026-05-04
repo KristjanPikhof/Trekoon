@@ -63,8 +63,13 @@ no per-repo asset copy is needed.
 Security model:
 
 - Every `board open` session gets a unique token
-- Requests must include it as `Authorization: Bearer {token}`,
-  `x-trekoon-token` header, or `?token={token}` query parameter
+- Initial board HTML bootstrap accepts `?token={token}` once, sets an
+  HttpOnly `trekoon_board_session` cookie, and redirects to the same URL
+  without the token query parameter
+- Board API requests must authenticate with the session cookie,
+  `Authorization: Bearer {token}`, or `x-trekoon-token` header
+- API routes reject token query parameters
+- `/api/snapshot/stream` is authenticated by the session cookie
 - Invalid tokens return `401`
 - Static responses use `cache-control: no-store`
 
@@ -85,18 +90,20 @@ Board API endpoints (all require token authentication):
 | `POST` | `/api/dependencies` | Add dependency edge (sourceId, dependsOnId) |
 | `DELETE` | `/api/dependencies?sourceId=...&dependsOnId=...` | Remove dependency |
 
-**Note:** the SSE auth token rides as a `?token=` query parameter on
-`/api/snapshot/stream` (EventSource cannot set custom headers), so it may
-appear in reverse-proxy access logs; treat access logs as sensitive if the
-board is exposed beyond localhost.
-
 Board mutations from any source — board UI, CLI in another shell, or another
 worktree — propagate to every connected client through the SSE stream. The CLI
 side is driven by a WAL-watcher that diffs the snapshot when
 `.trekoon/trekoon.db-wal` changes; in-process mutations publish deltas
-directly. PATCH endpoints accept `If-Match: <updatedAt-ms>` for optimistic
-concurrency: a stale value returns `409` with `currentUpdatedAt`. Missing
-`If-Match` is allowed for back-compat.
+directly. PATCH endpoints accept `If-Match: <version>` for optimistic
+concurrency; RFC 7232 strong or `W/`-prefixed weak ETag forms are accepted,
+but the `*` wildcard is not. A stale value returns `409` with
+`currentVersion` and `providedVersion`. Missing `If-Match` is allowed for
+back-compat.
+
+Repos that already have an ignored `.trekoon/board` directory keep those files
+on disk, but current Trekoon versions no longer read, create, refresh, or
+delete them. Remove that directory manually only if you want to clean up the
+old copied board bundle.
 
 Board commands don't accept command-specific options yet. `TREKOON_BOARD_ASSET_ROOT`
 overrides the asset source for tests and local development.
