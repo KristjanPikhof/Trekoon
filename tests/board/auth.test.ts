@@ -141,9 +141,9 @@ describe("board server auth", (): void => {
 
   test("accepts session cookie as valid credentials without query token", async (): Promise<void> => {
     const workspace: string = createWorkspace();
-    prepareBoardAssets(workspace);
+    const { assetRoot } = prepareBoardAssets(workspace);
 
-    const boardServer = startBoardServer({ cwd: workspace, token: "cookie-only-token" });
+    const boardServer = startBoardServer({ cwd: workspace, token: "cookie-only-token", assetRootOverride: assetRoot });
 
     try {
       const response = await fetch(boardServer.fallbackUrl, {
@@ -162,9 +162,9 @@ describe("board server auth", (): void => {
 
   test("token redirect normalizes double-slash paths to a single-slash Location", async (): Promise<void> => {
     const workspace: string = createWorkspace();
-    prepareBoardAssets(workspace);
+    const { assetRoot } = prepareBoardAssets(workspace);
 
-    const boardServer = startBoardServer({ cwd: workspace, token: "normalize-token" });
+    const boardServer = startBoardServer({ cwd: workspace, token: "normalize-token", assetRootOverride: assetRoot });
 
     try {
       const redirect = await fetch(`${boardServer.origin}//nested/path?token=normalize-token`, {
@@ -182,9 +182,9 @@ describe("board server auth", (): void => {
 
   test("rejects invalid cookie credentials", async (): Promise<void> => {
     const workspace: string = createWorkspace();
-    prepareBoardAssets(workspace);
+    const { assetRoot } = prepareBoardAssets(workspace);
 
-    const boardServer = startBoardServer({ cwd: workspace, token: "real-token" });
+    const boardServer = startBoardServer({ cwd: workspace, token: "real-token", assetRootOverride: assetRoot });
 
     try {
       const response = await fetch(boardServer.fallbackUrl, {
