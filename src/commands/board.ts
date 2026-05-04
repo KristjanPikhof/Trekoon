@@ -36,11 +36,6 @@ function usageResult(): CliResult {
   });
 }
 
-function resolveAssetRootOptions(): ResolveBoardAssetRootOptions {
-  const bundledAssetRoot: string | undefined = process.env.TREKOON_BOARD_ASSET_ROOT;
-  return bundledAssetRoot === undefined ? {} : { assetRootOverride: bundledAssetRoot };
-}
-
 function boardAssetFailure(command: string, error: BoardAssetError): CliResult {
   return failResult({
     command,
@@ -114,8 +109,11 @@ export async function runBoard(context: CliContext): Promise<CliResult> {
   try {
     switch (subcommand) {
       case "open": {
-        const assetRoot = resolveAssetRootImpl(resolveAssetRootOptions());
-        const server = startBoardServerImpl({ cwd: context.cwd });
+        const assetRoot = resolveAssetRootImpl({});
+        const server = startBoardServerImpl({
+          cwd: context.cwd,
+          assetRootOverride: assetRoot.assetRoot,
+        });
         const launch = await openBoardInBrowserImpl(server.url);
         const humanLines: string[] = [
           `Board ready at ${server.fallbackUrl}`,
