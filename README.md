@@ -218,6 +218,7 @@ shell, worktree, or browser tab show up live without a manual refresh.
 | --- | --- |
 | Set up a repo | `trekoon init` |
 | Open the local board | `trekoon board open` |
+| Reveal full board token | `trekoon board open --reveal-token` |
 | Plan work | `trekoon --toon epic create ...`, `trekoon --toon epic expand ...` |
 | Create tasks in bulk | `trekoon task create-many ...` |
 | Add dependencies | `trekoon dep add-many ...` |
