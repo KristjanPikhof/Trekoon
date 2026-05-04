@@ -1,11 +1,10 @@
-import { mkdtempSync, mkdirSync, rmSync, writeFileSync } from "node:fs";
+import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { dirname, join } from "node:path";
+import { join } from "node:path";
 
 import { afterEach, describe, expect, test } from "bun:test";
 
 import { startBoardServer } from "../../src/board/server";
-import { resolveStoragePaths } from "../../src/storage/path";
 
 const tempDirs: string[] = [];
 
@@ -15,14 +14,15 @@ function createWorkspace(): string {
   return workspace;
 }
 
-function prepareBoardAssets(workspace: string): void {
-  const paths = resolveStoragePaths(workspace);
-  mkdirSync(dirname(paths.boardEntryFile), { recursive: true });
+function prepareBoardAssets(_workspace: string): { assetRoot: string } {
+  const assetRoot: string = mkdtempSync(join(tmpdir(), "trekoon-board-auth-assets-"));
+  tempDirs.push(assetRoot);
   writeFileSync(
-    paths.boardEntryFile,
+    join(assetRoot, "index.html"),
     "<html><head><title>Trekoon Board</title></head><body><div id=\"app\">board</div></body></html>\n",
     "utf8",
   );
+  return { assetRoot };
 }
 
 afterEach((): void => {
