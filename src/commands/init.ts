@@ -3,8 +3,6 @@ import { resolve } from "node:path";
 
 import { unexpectedFailureResult } from "./error-utils";
 
-import { ensureBoardInstalled } from "../board/install";
-import { BoardInstallError } from "../board/types";
 import { DomainError } from "../domain/types";
 import { failResult, okResult } from "../io/output";
 import { type CliContext, type CliResult } from "../runtime/command-types";
