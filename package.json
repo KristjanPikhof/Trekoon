@@ -40,7 +40,7 @@
   ],
   "scripts": {
     "run": "bun run ./src/index.ts",
-    "build": "bun build ./src/index.ts --outdir ./dist --target bun",
+    "build": "bun build ./src/index.ts --outdir ./dist --target bun && cp ./package.json ./dist/package.json && rm -rf ./dist/assets && cp -R ./src/board/assets ./dist/assets",
     "test": "bun test ./tests",
     "lint": "bunx tsc --noEmit"
   },
