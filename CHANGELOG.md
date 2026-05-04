@@ -2,7 +2,7 @@
 
 All notable changes to Trekoon are documented in this file.
 
-## 0.4.3 - 2026-05-04
+## 0.4.3
 
 ### Added
 
