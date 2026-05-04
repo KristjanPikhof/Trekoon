@@ -1,13 +1,12 @@
-import { mkdtempSync, mkdirSync, rmSync, writeFileSync } from "node:fs";
+import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { dirname, join } from "node:path";
+import { join } from "node:path";
 
 import { afterEach, describe, expect, test } from "bun:test";
 
 import { startBoardServer } from "../../src/board/server";
 import { createBoardApiHandler } from "../../src/board/routes";
 import { createBoardEventBus } from "../../src/board/event-bus";
-import { resolveStoragePaths } from "../../src/storage/path";
 import { openTrekoonDatabase } from "../../src/storage/database";
 import { MutationService } from "../../src/domain/mutation-service";
 
@@ -19,10 +18,11 @@ function createWorkspace(): string {
   return workspace;
 }
 
-function prepareBoardAssets(workspace: string): void {
-  const paths = resolveStoragePaths(workspace);
-  mkdirSync(dirname(paths.boardEntryFile), { recursive: true });
-  writeFileSync(paths.boardEntryFile, "<html><body>board</body></html>\n", "utf8");
+function prepareBoardAssets(_workspace: string): { assetRoot: string } {
+  const assetRoot: string = mkdtempSync(join(tmpdir(), "trekoon-board-sse-assets-"));
+  tempDirs.push(assetRoot);
+  writeFileSync(join(assetRoot, "index.html"), "<html><body>board</body></html>\n", "utf8");
+  return { assetRoot };
 }
 
 interface SseFrame {
