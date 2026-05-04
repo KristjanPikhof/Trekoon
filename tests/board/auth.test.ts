@@ -204,9 +204,9 @@ describe("board server auth", (): void => {
 
   test("rejects token query parameters on API routes", async (): Promise<void> => {
     const workspace: string = createWorkspace();
-    prepareBoardAssets(workspace);
+    const { assetRoot } = prepareBoardAssets(workspace);
 
-    const boardServer = startBoardServer({ cwd: workspace, token: "api-query-token" });
+    const boardServer = startBoardServer({ cwd: workspace, token: "api-query-token", assetRootOverride: assetRoot });
 
     try {
       const response = await fetch(`${boardServer.origin}/api/snapshot?token=api-query-token`);
@@ -222,9 +222,9 @@ describe("board server auth", (): void => {
 
   test("snapshot stream authenticates with cookie but rejects query tokens", async (): Promise<void> => {
     const workspace: string = createWorkspace();
-    prepareBoardAssets(workspace);
+    const { assetRoot } = prepareBoardAssets(workspace);
 
-    const boardServer = startBoardServer({ cwd: workspace, token: "sse-cookie-token" });
+    const boardServer = startBoardServer({ cwd: workspace, token: "sse-cookie-token", assetRootOverride: assetRoot });
 
     try {
       const queryResponse = await fetch(`${boardServer.origin}/api/snapshot/stream?token=sse-cookie-token`, {
