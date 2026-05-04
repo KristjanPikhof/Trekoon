@@ -12,7 +12,6 @@ import { migrateDatabase } from "../../src/storage/migrations";
 import { resolveLegacyWorktreeDatabaseFile, resolveStoragePaths } from "../../src/storage/path";
 
 const tempDirs: string[] = [];
-const originalBoardAssetRoot = process.env.TREKOON_BOARD_ASSET_ROOT;
 
 function createWorkspace(): string {
   const workspace = mkdtempSync(join(tmpdir(), "trekoon-shell-"));
