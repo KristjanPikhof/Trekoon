@@ -455,7 +455,7 @@ describe("board server WAL watcher integration", (): void => {
 
   test("CLI-style epic append appears via SSE with an updated version", async (): Promise<void> => {
     const workspace: string = createWorkspace();
-    prepareBoardAssets(workspace);
+    const { assetRoot } = prepareBoardAssets(workspace);
 
     const seedDb: TrekoonDatabase = openTrekoonDatabase(workspace);
     const epic = new MutationService(seedDb.db, workspace).createEpic({
@@ -464,7 +464,7 @@ describe("board server WAL watcher integration", (): void => {
     });
     seedDb.close();
 
-    const boardServer = startBoardServer({ cwd: workspace, token: "wal-append-token" });
+    const boardServer = startBoardServer({ cwd: workspace, token: "wal-append-token", assetRootOverride: assetRoot });
 
     try {
       const sseResponse = await fetch(`${boardServer.origin}/api/snapshot/stream`, {
