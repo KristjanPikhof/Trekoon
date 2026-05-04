@@ -6,7 +6,7 @@ the quickest way to get started, read [Quickstart](quickstart.md) first.
 ## Command surface
 
 - `trekoon init`
-- `trekoon board <open|update>`
+- `trekoon board <open>`
 - `trekoon help [command]`
 - `trekoon quickstart`
 - `trekoon epic <create|expand|list|show|search|replace|update|delete|progress>`
