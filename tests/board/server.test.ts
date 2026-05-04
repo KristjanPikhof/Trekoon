@@ -1,7 +1,7 @@
 import { createServer, type Server as NetServer } from "node:net";
 import { mkdtempSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { dirname, join } from "node:path";
 
 import { afterEach, describe, expect, test } from "bun:test";
 
@@ -161,9 +161,9 @@ describe("board server", (): void => {
 
   test("serves index fallback with no-store headers for deep board routes", async (): Promise<void> => {
     const workspace: string = createWorkspace();
-    prepareBoardAssets(workspace);
+    const { assetRoot } = prepareBoardAssets(workspace);
 
-    const boardServer = startBoardServer({ cwd: workspace, token: "overlay token" });
+    const boardServer = startBoardServer({ cwd: workspace, token: "overlay token", assetRootOverride: assetRoot });
 
     try {
       const response = await fetchFollowingTokenRedirect(
