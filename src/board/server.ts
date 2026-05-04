@@ -39,6 +39,14 @@ export interface BoardServerInfo {
 export interface StartBoardServerOptions {
   readonly cwd?: string;
   readonly token?: string;
+  /**
+   * Optional override for the directory the board server reads static assets
+   * from. When unset, the server resolves the asset root via
+   * `resolveBoardAssetRoot()`, which honours `TREKOON_BOARD_ASSET_ROOT` and
+   * falls back to the assets shipped alongside the running Trekoon package.
+   * Database, API, SSE, and WAL watcher paths continue to use `cwd`.
+   */
+  readonly assetRootOverride?: string;
 }
 
 function guessContentType(pathname: string): string {
