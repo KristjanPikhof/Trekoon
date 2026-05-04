@@ -209,9 +209,9 @@ describe("board server", (): void => {
 
   test("snapshot is fetched via API rather than inlined in HTML for deep routes", async (): Promise<void> => {
     const workspace: string = createWorkspace();
-    prepareBoardAssets(workspace);
+    const { assetRoot } = prepareBoardAssets(workspace);
 
-    const boardServer = startBoardServer({ cwd: workspace, token: "deep-route-snapshot" });
+    const boardServer = startBoardServer({ cwd: workspace, token: "deep-route-snapshot", assetRootOverride: assetRoot });
 
     try {
       const response = await fetchFollowingTokenRedirect(
@@ -228,11 +228,11 @@ describe("board server", (): void => {
 
   test("serves static assets with cache-busting headers", async (): Promise<void> => {
     const workspace: string = createWorkspace();
-    prepareBoardAssets(workspace);
-    mkdirSync(join(resolveStoragePaths(workspace).boardDir, "static"), { recursive: true });
-    writeFileSync(join(resolveStoragePaths(workspace).boardDir, "static", "app.js"), "console.log('board runtime');\n", "utf8");
+    const { assetRoot } = prepareBoardAssets(workspace);
+    mkdirSync(join(assetRoot, "static"), { recursive: true });
+    writeFileSync(join(assetRoot, "static", "app.js"), "console.log('board runtime');\n", "utf8");
 
-    const boardServer = startBoardServer({ cwd: workspace, token: "asset-token" });
+    const boardServer = startBoardServer({ cwd: workspace, token: "asset-token", assetRootOverride: assetRoot });
 
     try {
       const response = await fetch(`${boardServer.origin}/static/app.js`);
