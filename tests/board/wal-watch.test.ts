@@ -402,14 +402,14 @@ describe("WAL watcher diff and resilience", (): void => {
 describe("board server WAL watcher integration", (): void => {
   test("CLI-style mutation appears via SSE within ~1s", async (): Promise<void> => {
     const workspace: string = createWorkspace();
-    prepareBoardAssets(workspace);
+    const { assetRoot } = prepareBoardAssets(workspace);
 
     // Pre-seed before the server boots so the initial snapshot is non-empty.
     const seedDb: TrekoonDatabase = openTrekoonDatabase(workspace);
     new MutationService(seedDb.db, workspace).createEpic({ title: "Pre-seed", description: "Initial epic" });
     seedDb.close();
 
-    const boardServer = startBoardServer({ cwd: workspace, token: "wal-token" });
+    const boardServer = startBoardServer({ cwd: workspace, token: "wal-token", assetRootOverride: assetRoot });
 
     try {
       const sseResponse = await fetch(`${boardServer.origin}/api/snapshot/stream`, {
