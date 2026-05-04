@@ -76,9 +76,9 @@ describe("board server auth", (): void => {
 
   test("returns 401 when an invalid query token is supplied", async (): Promise<void> => {
     const workspace: string = createWorkspace();
-    prepareBoardAssets(workspace);
+    const { assetRoot } = prepareBoardAssets(workspace);
 
-    const boardServer = startBoardServer({ cwd: workspace, token: "valid-token" });
+    const boardServer = startBoardServer({ cwd: workspace, token: "valid-token", assetRootOverride: assetRoot });
 
     try {
       const response = await fetch(`${boardServer.origin}/?token=wrong-token`);
@@ -94,9 +94,9 @@ describe("board server auth", (): void => {
 
   test("redirects with HttpOnly cookie and strips token from URL when valid query token is provided", async (): Promise<void> => {
     const workspace: string = createWorkspace();
-    prepareBoardAssets(workspace);
+    const { assetRoot } = prepareBoardAssets(workspace);
 
-    const boardServer = startBoardServer({ cwd: workspace, token: "session-token" });
+    const boardServer = startBoardServer({ cwd: workspace, token: "session-token", assetRootOverride: assetRoot });
 
     try {
       // Token-revoke-on-rotation: the first GET with `?token=` must respond
