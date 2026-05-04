@@ -188,16 +188,17 @@ export function startWalWatcher(options: WalWatcherOptions): WalWatcher {
       return;
     }
     const inProcessWriteAt = options.eventBus.lastInProcessWriteAt;
-    if (
+    const shouldSuppressInProcessTick =
       inProcessWriteAt > lastSuppressedInProcessWriteAt &&
-      Date.now() - inProcessWriteAt <= IN_PROCESS_WAL_SUPPRESS_MS
-    ) {
-      lastSuppressedInProcessWriteAt = inProcessWriteAt;
-      return;
-    }
+      Date.now() - inProcessWriteAt <= IN_PROCESS_WAL_SUPPRESS_MS;
 
     try {
       const fresh = buildSnapshot(domain);
+      if (shouldSuppressInProcessTick) {
+        lastSuppressedInProcessWriteAt = inProcessWriteAt;
+        lastSnapshot = fresh;
+        return;
+      }
 
       const epicsDiff = diffById(lastSnapshot.epics, fresh.epics);
       const tasksDiff = diffById(lastSnapshot.tasks, fresh.tasks);
