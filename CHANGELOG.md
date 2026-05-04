@@ -2,6 +2,33 @@
 
 All notable changes to Trekoon are documented in this file.
 
+## 0.4.4
+
+### Changed
+
+- Serve board static assets directly from the running Trekoon package. Global
+  installs serve global package assets to every repo opened with `trekoon
+  board open`; no `.trekoon/board` runtime copy is created or refreshed.
+- Resolve the board asset root once per `trekoon board open` via a new
+  `resolveBoardAssetRoot` helper (CLI override, then `TREKOON_BOARD_ASSET_ROOT`
+  env, then running package) and thread that path into `startBoardServer` so
+  CLI machine output and the server agree on a single asset root and `source`.
+- `trekoon init` no longer touches board assets. The `Board assets:` and
+  `Board runtime root:` human lines and the `board` field in machine output are
+  gone. Storage bootstrap and `.trekoon/.gitignore` behavior is unchanged.
+
+### Removed
+
+- Retire `trekoon board update`. The subcommand now returns
+  `invalid_subcommand` with usage `Usage: trekoon board <open>`. Board assets
+  ship with the Trekoon install and do not need a separate refresh.
+- Drop repo-storage board path fields (`boardDir`, `boardEntryFile`,
+  `boardManifestFile`) and the matching helpers from the `StoragePaths` API.
+- Drop the internal `BoardInstallError`, `BoardInstallResult`,
+  `BoardAssetManifest`, `BoardAssetPaths`, `BoardInstallAction`,
+  `EnsureBoardInstalledOptions`, and `BOARD_ASSET_CONTRACT_VERSION` types.
+  `BoardAssetError` is now the only board error class.
+
 ## 0.4.3
 
 ### Added
