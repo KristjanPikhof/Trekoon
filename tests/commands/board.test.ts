@@ -1,24 +1,14 @@
 import { afterEach, describe, expect, test } from "bun:test";
 
 import { runBoard, setBoardCommandHooksForTests } from "../../src/commands/board";
-import { BoardInstallError, type BoardInstallResult } from "../../src/board/types";
+import { BoardAssetError } from "../../src/board/types";
+import type { BoardAssetRoot } from "../../src/board/asset-root";
 
-function mockInstallResult(action: BoardInstallResult["action"] = "updated"): BoardInstallResult {
+function mockAssetRoot(): BoardAssetRoot {
   return {
-    action,
-    paths: {
-      sourceRoot: "/tmp/assets",
-      runtimeRoot: "/tmp/runtime/.trekoon/board",
-      entryFile: "/tmp/runtime/.trekoon/board/index.html",
-      manifestFile: "/tmp/runtime/.trekoon/board/manifest.json",
-    },
-    manifest: {
-      contractVersion: "1.0.0",
-      assetVersion: "9.9.9",
-      entryFile: "index.html",
-      files: ["index.html", "assets/app.js"],
-      assetDigest: "digest",
-    },
+    assetRoot: "/tmp/assets",
+    entryFile: "/tmp/assets/index.html",
+    source: "package",
   };
 }
 
@@ -43,11 +33,11 @@ describe("board command", (): void => {
     const result = await runBoard({
       cwd: "/tmp/workspace",
       mode: "toon",
-      args: ["update", "extra"],
+      args: ["open", "extra"],
     });
 
     expect(result.ok).toBeFalse();
-    expect(result.command).toBe("board.update");
+    expect(result.command).toBe("board.open");
     expect(result.error?.code).toBe("invalid_input");
   });
 
@@ -70,29 +60,22 @@ describe("board command", (): void => {
     });
   });
 
-  test("refreshes board assets for update", async (): Promise<void> => {
-    setBoardCommandHooksForTests({
-      updateInstalled: () => mockInstallResult("updated"),
-    });
-
+  test("returns invalid_subcommand for retired update subcommand", async (): Promise<void> => {
     const result = await runBoard({
       cwd: "/tmp/workspace",
       mode: "toon",
       args: ["update"],
     });
 
-    expect(result.ok).toBeTrue();
-    expect(result.command).toBe("board.update");
-    expect(result.data).toEqual({
-      action: "updated",
-      paths: mockInstallResult("updated").paths,
-      manifest: mockInstallResult("updated").manifest,
-    });
+    expect(result.ok).toBeFalse();
+    expect(result.command).toBe("board");
+    expect(result.error?.code).toBe("invalid_subcommand");
+    expect(result.human).toBe("Usage: trekoon board <open>");
   });
 
   test("opens board server and reports fallback URL", async (): Promise<void> => {
     setBoardCommandHooksForTests({
-      ensureInstalled: () => mockInstallResult("installed"),
+      resolveAssetRoot: () => mockAssetRoot(),
       startBoardServer: () => ({
         origin: "http://127.0.0.1:4321",
         url: "http://127.0.0.1:4321/?token=secret-token",
@@ -125,10 +108,10 @@ describe("board command", (): void => {
     expect(result.human).toContain("Open manually if needed: http://127.0.0.1:4321");
     expect(result.human).not.toContain("secret-token");
     expect(result.data).toEqual({
-      install: {
-        action: "installed",
-        paths: mockInstallResult("installed").paths,
-        manifest: mockInstallResult("installed").manifest,
+      assetRoot: {
+        path: "/tmp/assets",
+        entryFile: "/tmp/assets/index.html",
+        source: "package",
       },
       server: {
         origin: "http://127.0.0.1:4321",
@@ -147,7 +130,7 @@ describe("board command", (): void => {
 
   test("reports fallback URL when browser launch fails", async (): Promise<void> => {
     setBoardCommandHooksForTests({
-      ensureInstalled: () => mockInstallResult("unchanged"),
+      resolveAssetRoot: () => mockAssetRoot(),
       startBoardServer: () => ({
         origin: "http://127.0.0.1:4321",
         url: "http://127.0.0.1:4321/?token=secret-token",
@@ -181,10 +164,10 @@ describe("board command", (): void => {
     expect(result.human).toContain("Open manually if needed: http://127.0.0.1:4321");
     expect(result.human).not.toContain("secret-token");
     expect(result.data).toEqual({
-      install: {
-        action: "unchanged",
-        paths: mockInstallResult("unchanged").paths,
-        manifest: mockInstallResult("unchanged").manifest,
+      assetRoot: {
+        path: "/tmp/assets",
+        entryFile: "/tmp/assets/index.html",
+        source: "package",
       },
       server: {
         origin: "http://127.0.0.1:4321",
@@ -202,7 +185,7 @@ describe("board command", (): void => {
 
   test("redacts token by default and surfaces it when --reveal-token is set", async (): Promise<void> => {
     setBoardCommandHooksForTests({
-      ensureInstalled: () => mockInstallResult("installed"),
+      resolveAssetRoot: () => mockAssetRoot(),
       startBoardServer: () => ({
         origin: "http://127.0.0.1:4321",
         url: "http://127.0.0.1:4321/?token=hidden-secret",
@@ -246,26 +229,22 @@ describe("board command", (): void => {
   });
 
   test("rejects --reveal-token on subcommands other than open", async (): Promise<void> => {
-    setBoardCommandHooksForTests({
-      updateInstalled: () => mockInstallResult("updated"),
-    });
-
     const result = await runBoard({
       cwd: "/tmp/workspace",
       mode: "toon",
-      args: ["update", "--reveal-token"],
+      args: ["bogus", "--reveal-token"],
     });
 
     expect(result.ok).toBeFalse();
-    expect(result.command).toBe("board.update");
+    expect(result.command).toBe("board.bogus");
     expect(result.error?.code).toBe("invalid_input");
   });
 
-  test("surfaces install failures with stable codes", async (): Promise<void> => {
+  test("surfaces asset resolution failures with stable codes", async (): Promise<void> => {
     setBoardCommandHooksForTests({
-      ensureInstalled: () => {
-        throw new BoardInstallError("missing_asset", "Bundled board asset directory not found", {
-          sourceRoot: "/missing/assets",
+      resolveAssetRoot: () => {
+        throw new BoardAssetError("missing_asset", "Bundled board asset directory not found", {
+          assetRoot: "/missing/assets",
         });
       },
     });
