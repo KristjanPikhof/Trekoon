@@ -32,7 +32,7 @@ const QUICKSTART_TEXT = [
   "  stop and fix the setup before continuing.",
   "",
   "  Manual bootstrap (step by step):",
-  "    trekoon --toon init",
+  "    trekoon --toon init       # creates .trekoon/ shared storage (no board assets copied)",
   "    trekoon --toon sync status",
   "    trekoon --toon task next",
   "",
