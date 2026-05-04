@@ -37,9 +37,9 @@ afterEach((): void => {
 describe("board server auth", (): void => {
   test("returns 401 with no snapshot or token when no credentials are provided", async (): Promise<void> => {
     const workspace: string = createWorkspace();
-    prepareBoardAssets(workspace);
+    const { assetRoot } = prepareBoardAssets(workspace);
 
-    const boardServer = startBoardServer({ cwd: workspace, token: "secret-token-value" });
+    const boardServer = startBoardServer({ cwd: workspace, token: "secret-token-value", assetRootOverride: assetRoot });
 
     try {
       const response = await fetch(boardServer.fallbackUrl);
@@ -57,9 +57,9 @@ describe("board server auth", (): void => {
 
   test("returns 401 with no snapshot or token for deep routes without credentials", async (): Promise<void> => {
     const workspace: string = createWorkspace();
-    prepareBoardAssets(workspace);
+    const { assetRoot } = prepareBoardAssets(workspace);
 
-    const boardServer = startBoardServer({ cwd: workspace, token: "deep-route-token" });
+    const boardServer = startBoardServer({ cwd: workspace, token: "deep-route-token", assetRootOverride: assetRoot });
 
     try {
       const response = await fetch(`${boardServer.origin}/epics/some-epic`);
