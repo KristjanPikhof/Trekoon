@@ -246,4 +246,52 @@ describe("board server", (): void => {
       boardServer.stop();
     }
   });
+
+  test("rejects path traversal attempts and falls back to index.html for unknown paths", async (): Promise<void> => {
+    const workspace: string = createWorkspace();
+    const { assetRoot } = prepareBoardAssets(workspace);
+
+    const boardServer = startBoardServer({ cwd: workspace, token: "traversal-token", assetRootOverride: assetRoot });
+
+    try {
+      const response = await fetchFollowingTokenRedirect(
+        `${boardServer.origin}/../../etc/passwd?token=traversal-token`,
+        "traversal-token",
+      );
+
+      // Path traversal must not escape the asset root: the server falls back
+      // to authenticated index.html instead of leaking outside files.
+      expect(response.status).toBe(200);
+      expect(response.headers.get("content-type")).toContain("text/html");
+      const body = await response.text();
+      expect(body).toContain("board");
+    } finally {
+      boardServer.stop();
+    }
+  });
+
+  test("missing installed assets surface a deterministic BoardAssetError without leaking the token", async (): Promise<void> => {
+    const workspace: string = createWorkspace();
+    const missingAssetRoot: string = join(workspace, "does-not-exist");
+
+    let captured: unknown = null;
+    try {
+      startBoardServer({
+        cwd: workspace,
+        token: "must-not-leak-token",
+        assetRootOverride: missingAssetRoot,
+      });
+    } catch (error) {
+      captured = error;
+    }
+
+    expect(captured).toBeInstanceOf(BoardAssetError);
+    const assetError = captured as BoardAssetError;
+    expect(assetError.code).toBe("missing_asset");
+    expect(assetError.message).not.toContain("must-not-leak-token");
+    expect(JSON.stringify(assetError.details)).not.toContain("must-not-leak-token");
+    // Path/source metadata is permitted in the error payload.
+    expect(assetError.details.assetRoot).toBe(missingAssetRoot);
+    expect(assetError.details.source).toBe("override");
+  });
 });
