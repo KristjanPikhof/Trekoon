@@ -196,13 +196,16 @@ call it from any non-done status.
 
 ## Local board
 
-Trekoon includes a browser-based board for humans who like having visual overview.
-No build step, no framework dependencies, works offline.
+Trekoon includes a browser-based board for humans who like having a visual
+overview. No build step, no framework dependencies, works offline.
 
 ```bash
 trekoon board open      # starts a local server, opens browser
-trekoon board update    # refresh assets only
 ```
+
+Board code (HTML, JS, CSS, fonts) comes from the running Trekoon install.
+Board data comes from the repo where `trekoon board open` is invoked. Updating
+Trekoon updates the board bundle; no per-repo asset copy is needed.
 
 Binds to `127.0.0.1` only with a per-session token. Gives you an epics
 overview, kanban workspace per epic, task detail modals, and search. The board
