@@ -1,11 +1,12 @@
 import { createServer, type Server as NetServer } from "node:net";
 import { mkdtempSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { dirname, join } from "node:path";
+import { join } from "node:path";
 
 import { afterEach, describe, expect, test } from "bun:test";
 
 import { startBoardServer } from "../../src/board/server";
+import { BoardAssetError } from "../../src/board/types";
 import { resolveStoragePaths } from "../../src/storage/path";
 
 const BOARD_SERVER_STATE_FILENAME = "board-server.json";
@@ -18,12 +19,18 @@ function createWorkspace(): string {
   return workspace;
 }
 
-function prepareBoardAssets(workspace: string): { stateFile: string } {
+function createAssetRoot(): string {
+  const assetRoot: string = mkdtempSync(join(tmpdir(), "trekoon-board-assets-"));
+  tempDirs.push(assetRoot);
+  writeFileSync(join(assetRoot, "index.html"), "<html><body>board</body></html>\n", "utf8");
+  return assetRoot;
+}
+
+function prepareBoardAssets(workspace: string): { stateFile: string; assetRoot: string } {
   const paths = resolveStoragePaths(workspace);
-  mkdirSync(dirname(paths.boardEntryFile), { recursive: true });
-  writeFileSync(paths.boardEntryFile, "<html><body>board</body></html>\n", "utf8");
   return {
     stateFile: join(paths.storageDir, BOARD_SERVER_STATE_FILENAME),
+    assetRoot: createAssetRoot(),
   };
 }
 
