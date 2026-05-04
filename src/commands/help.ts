@@ -22,7 +22,7 @@ const ROOT_HELP = [
   "  init         Create or re-bootstrap .trekoon storage",
   "  quickstart   Storage model, agent loop, and common patterns",
   "  wipe         Delete repo-wide .trekoon state (requires --yes)",
-  "  board        Open or update the local board",
+  "  board        Open the local board",
   "  epic         Create, list, update, search, and track epics",
   "  task         Create, list, update, search, and complete tasks",
   "  subtask      Create, list, update, and search subtasks",
@@ -89,12 +89,12 @@ const WIPE_HELP = [
 ].join("\n");
 
 const BOARD_HELP = [
-  "Usage: trekoon board <open|update>",
+  "Usage: trekoon board <open>",
   "",
   "Subcommands:",
-  "  open    Install board assets, start a local server on 127.0.0.1,",
-  "          and open the browser. Returns the board URL and a fallback URL.",
-  "  update  Refresh board runtime assets only. No server, no browser.",
+  "  open    Start a local board server on 127.0.0.1 and open the browser.",
+  "          Returns the board URL and a fallback URL. Board assets are served",
+  "          directly from the running Trekoon package; no per-repo install.",
   "",
   "Token visibility:",
   "  By default the board token is redacted from machine output (shown as ****).",
@@ -108,7 +108,6 @@ const BOARD_HELP = [
   "Examples:",
   "  trekoon board open",
   "  trekoon board open --reveal-token",
-  "  trekoon --json board update",
 ].join("\n");
 
 const EPIC_HELP = [
