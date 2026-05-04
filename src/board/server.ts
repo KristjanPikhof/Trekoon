@@ -168,9 +168,21 @@ function injectBoardBootstrap(html: string, bootstrapJson: string): string {
 
 export function startBoardServer(options: StartBoardServerOptions = {}): BoardServerInfo {
   const cwd: string = options.cwd ?? process.cwd();
+  // Resolve the asset root BEFORE generating a token or opening the database.
+  // If the installed assets are missing, `resolveBoardAssetRoot` raises a
+  // `BoardAssetError` carrying only path/source metadata — never the auth
+  // token, which has not been generated yet. The CLI's existing
+  // `instanceof BoardInstallError` branch (BoardInstallError is now an alias
+  // of BoardAssetError) translates this into a clean operator error without
+  // leaking secrets through machine output or logs.
+  const assetRoot: BoardAssetRoot = resolveBoardAssetRoot(
+    options.assetRootOverride === undefined
+      ? {}
+      : { assetRootOverride: options.assetRootOverride },
+  );
+  const boardRoot: string = assetRoot.assetRoot;
   const database: TrekoonDatabase = openTrekoonDatabase(cwd);
   const paths = resolveStoragePaths(cwd);
-  const boardRoot: string = paths.boardDir;
   const stateFile: string = resolve(paths.storageDir, BOARD_SERVER_STATE_FILENAME);
   const token: string = options.token ?? randomBytes(32).toString("hex");
   const eventBus: BoardEventBus = createBoardEventBus();
