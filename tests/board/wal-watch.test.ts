@@ -392,6 +392,27 @@ describe("WAL watcher diff and resilience", (): void => {
       const routeDelta = deltas[0] as { tasks?: Array<{ id?: string; title?: string }> };
       expect(routeDelta.tasks).toContainEqual(expect.objectContaining({ id: task.id, title: "After" }));
 
+      const preSuppressionCliDb: TrekoonDatabase = openTrekoonDatabase(workspace);
+      try {
+        new MutationService(preSuppressionCliDb.db, workspace).createEpic({
+          title: "External before suppressed reconcile",
+          description: "CLI write before suppression",
+        });
+      } finally {
+        preSuppressionCliDb.close();
+      }
+
+      watcher.reconcile();
+      await new Promise((resolve) => setTimeout(resolve, 25));
+
+      expect(deltas.length).toBe(2);
+      const preSuppressionExternalDelta = deltas[1] as {
+        epics?: Array<{ title?: string }>;
+        tasks?: Array<{ id?: string; title?: string }>;
+      };
+      expect(preSuppressionExternalDelta.epics).toContainEqual(expect.objectContaining({ title: "External before suppressed reconcile" }));
+      expect(preSuppressionExternalDelta.tasks ?? []).not.toContainEqual(expect.objectContaining({ id: task.id, title: "After" }));
+
       const cliDb: TrekoonDatabase = openTrekoonDatabase(workspace);
       try {
         new MutationService(cliDb.db, workspace).createEpic({
@@ -404,8 +425,8 @@ describe("WAL watcher diff and resilience", (): void => {
 
       watcher.reconcile();
 
-      expect(deltas.length).toBe(2);
-      const externalDelta = deltas[1] as {
+      expect(deltas.length).toBe(3);
+      const externalDelta = deltas[2] as {
         epics?: Array<{ title?: string }>;
         tasks?: Array<{ id?: string; title?: string }>;
       };
