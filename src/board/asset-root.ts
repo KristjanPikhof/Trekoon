@@ -36,8 +36,9 @@ function selectAssetRoot(options: ResolveBoardAssetRootOptions): SelectedAssetRo
   }
 
   const env = options.env ?? process.env;
-  const envOverride = env[BOARD_ASSET_ROOT_ENV_VAR];
-  if (typeof envOverride === "string" && envOverride.length > 0) {
+  const envOverrideRaw = env[BOARD_ASSET_ROOT_ENV_VAR];
+  const envOverride = typeof envOverrideRaw === "string" ? envOverrideRaw.trim() : "";
+  if (envOverride.length > 0) {
     return { rootPath: resolve(envOverride), source: "environment" };
   }
 
