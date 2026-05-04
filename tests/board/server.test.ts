@@ -187,9 +187,9 @@ describe("board server", (): void => {
 
   test("embeds bootstrap auth token but never inlines snapshot data in index.html", async (): Promise<void> => {
     const workspace: string = createWorkspace();
-    prepareBoardAssets(workspace);
+    const { assetRoot } = prepareBoardAssets(workspace);
 
-    const boardServer = startBoardServer({ cwd: workspace, token: "manual-open-token" });
+    const boardServer = startBoardServer({ cwd: workspace, token: "manual-open-token", assetRootOverride: assetRoot });
 
     try {
       const response = await fetchFollowingTokenRedirect(boardServer.url, "manual-open-token");
