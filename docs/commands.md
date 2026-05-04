@@ -50,13 +50,15 @@ also accept `-h` and `-v`.
 
 ## Board commands
 
-`trekoon board open` installs board assets (if needed), starts a loopback-only
-server on `127.0.0.1` with a random port, opens the browser, and returns the
-board URL plus a manual fallback URL.
+`trekoon board open` starts a loopback-only server on `127.0.0.1` with a
+random port, opens the browser, and returns the board URL plus a manual
+fallback URL.
 
-`trekoon board update` refreshes board runtime assets without starting the
-server or opening a browser. Use this when you need to update copied assets
-before the next launch.
+Board code (HTML, JS, CSS, fonts) comes from the running Trekoon install —
+a global install serves the global package assets; a project-local install
+serves the project-local package assets. Board data comes from the repo where
+`trekoon board open` is invoked. Updating Trekoon updates the board bundle;
+no per-repo asset copy is needed.
 
 Security model:
 
@@ -67,8 +69,7 @@ Security model:
 - Static responses use `cache-control: no-store`
 
 The board is a self-hosted single-page app (vanilla JS, bundled CSS and fonts,
-no framework or CDN dependencies) served from `.trekoon/board`. Works fully
-offline once initialized.
+no framework or CDN dependencies). Works fully offline.
 
 Board API endpoints (all require token authentication):
 
