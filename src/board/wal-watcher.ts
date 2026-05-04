@@ -66,6 +66,22 @@ function changeKeyEqual(
   return a.version === b.version && a.updatedAt === b.updatedAt;
 }
 
+function recordMatchesPublishedDelta(record: unknown, publishedRecord: unknown): boolean {
+  const recordKey = recordChangeKey(record);
+  const publishedKey = recordChangeKey(publishedRecord);
+  const hasComparableKey =
+    recordKey.version !== null ||
+    recordKey.updatedAt !== null ||
+    publishedKey.version !== null ||
+    publishedKey.updatedAt !== null;
+
+  if (hasComparableKey) {
+    return changeKeyEqual(recordKey, publishedKey);
+  }
+
+  return JSON.stringify(record) === JSON.stringify(publishedRecord);
+}
+
 function diffById(previous: readonly unknown[] | undefined, current: readonly unknown[] | undefined): CollectionDiff {
   const previousIndex = new Map<string, unknown>();
   for (const record of previous ?? []) {
@@ -104,6 +120,55 @@ function diffById(previous: readonly unknown[] | undefined, current: readonly un
   }
 
   return { upserted, deletedIds };
+}
+
+function recordsByIdFromDelta(delta: Record<string, unknown> | null, key: string): Map<string, unknown> {
+  const records = delta?.[key];
+  const index = new Map<string, unknown>();
+  if (!Array.isArray(records)) {
+    return index;
+  }
+
+  for (const record of records) {
+    const id = recordId(record);
+    if (id !== null) {
+      index.set(id, record);
+    }
+  }
+
+  return index;
+}
+
+function deletedIdsFromDelta(delta: Record<string, unknown> | null, key: string): Set<string> {
+  const ids = delta?.[key];
+  if (!Array.isArray(ids)) {
+    return new Set();
+  }
+
+  return new Set(ids.filter((id): id is string => typeof id === "string" && id.length > 0));
+}
+
+function suppressAlreadyPublishedDiff(
+  diff: CollectionDiff,
+  publishedRecords: Map<string, unknown>,
+  publishedDeletedIds: Set<string>,
+): CollectionDiff {
+  return {
+    upserted: diff.upserted.filter((record) => {
+      const id = recordId(record);
+      if (id === null) {
+        return true;
+      }
+
+      const publishedRecord = publishedRecords.get(id);
+      return publishedRecord === undefined || !recordMatchesPublishedDelta(record, publishedRecord);
+    }),
+    deletedIds: diff.deletedIds.filter((id) => !publishedDeletedIds.has(id)),
+  };
+}
+
+function hasDiffChanges(...diffs: readonly CollectionDiff[]): boolean {
+  return diffs.some((diff) => diff.upserted.length > 0 || diff.deletedIds.length > 0);
 }
 
 function readMtime(path: string): number {
@@ -194,22 +259,46 @@ export function startWalWatcher(options: WalWatcherOptions): WalWatcher {
 
     try {
       const fresh = buildSnapshot(domain);
-      if (shouldSuppressInProcessTick) {
-        lastSuppressedInProcessWriteAt = inProcessWriteAt;
-        lastSnapshot = fresh;
-        return;
-      }
-
       const epicsDiff = diffById(lastSnapshot.epics, fresh.epics);
       const tasksDiff = diffById(lastSnapshot.tasks, fresh.tasks);
       const subtasksDiff = diffById(lastSnapshot.subtasks, fresh.subtasks);
       const dependenciesDiff = diffById(lastSnapshot.dependencies, fresh.dependencies);
 
-      const hasChanges =
-        epicsDiff.upserted.length > 0 || epicsDiff.deletedIds.length > 0 ||
-        tasksDiff.upserted.length > 0 || tasksDiff.deletedIds.length > 0 ||
-        subtasksDiff.upserted.length > 0 || subtasksDiff.deletedIds.length > 0 ||
-        dependenciesDiff.upserted.length > 0 || dependenciesDiff.deletedIds.length > 0;
+      const shouldSuppressDiff = shouldSuppressInProcessTick
+        ? {
+            epics: suppressAlreadyPublishedDiff(
+              epicsDiff,
+              recordsByIdFromDelta(options.eventBus.lastInProcessSnapshotDelta, "epics"),
+              deletedIdsFromDelta(options.eventBus.lastInProcessSnapshotDelta, "deletedEpicIds"),
+            ),
+            tasks: suppressAlreadyPublishedDiff(
+              tasksDiff,
+              recordsByIdFromDelta(options.eventBus.lastInProcessSnapshotDelta, "tasks"),
+              deletedIdsFromDelta(options.eventBus.lastInProcessSnapshotDelta, "deletedTaskIds"),
+            ),
+            subtasks: suppressAlreadyPublishedDiff(
+              subtasksDiff,
+              recordsByIdFromDelta(options.eventBus.lastInProcessSnapshotDelta, "subtasks"),
+              deletedIdsFromDelta(options.eventBus.lastInProcessSnapshotDelta, "deletedSubtaskIds"),
+            ),
+            dependencies: suppressAlreadyPublishedDiff(
+              dependenciesDiff,
+              recordsByIdFromDelta(options.eventBus.lastInProcessSnapshotDelta, "dependencies"),
+              deletedIdsFromDelta(options.eventBus.lastInProcessSnapshotDelta, "deletedDependencyIds"),
+            ),
+          }
+        : null;
+
+      if (shouldSuppressInProcessTick) {
+        lastSuppressedInProcessWriteAt = inProcessWriteAt;
+      }
+
+      const publishEpicsDiff = shouldSuppressDiff?.epics ?? epicsDiff;
+      const publishTasksDiff = shouldSuppressDiff?.tasks ?? tasksDiff;
+      const publishSubtasksDiff = shouldSuppressDiff?.subtasks ?? subtasksDiff;
+      const publishDependenciesDiff = shouldSuppressDiff?.dependencies ?? dependenciesDiff;
+
+      const hasChanges = hasDiffChanges(publishEpicsDiff, publishTasksDiff, publishSubtasksDiff, publishDependenciesDiff);
 
       lastSnapshot = fresh;
 
@@ -220,14 +309,14 @@ export function startWalWatcher(options: WalWatcherOptions): WalWatcher {
       options.eventBus.publishSnapshotDelta({
         generatedAt: Date.now(),
         source: "wal-watcher",
-        epics: epicsDiff.upserted,
-        tasks: tasksDiff.upserted,
-        subtasks: subtasksDiff.upserted,
-        dependencies: dependenciesDiff.upserted,
-        deletedEpicIds: epicsDiff.deletedIds,
-        deletedTaskIds: tasksDiff.deletedIds,
-        deletedSubtaskIds: subtasksDiff.deletedIds,
-        deletedDependencyIds: dependenciesDiff.deletedIds,
+        epics: publishEpicsDiff.upserted,
+        tasks: publishTasksDiff.upserted,
+        subtasks: publishSubtasksDiff.upserted,
+        dependencies: publishDependenciesDiff.upserted,
+        deletedEpicIds: publishEpicsDiff.deletedIds,
+        deletedTaskIds: publishTasksDiff.deletedIds,
+        deletedSubtaskIds: publishSubtasksDiff.deletedIds,
+        deletedDependencyIds: publishDependenciesDiff.deletedIds,
       });
     } catch (error) {
       // Reconciliation must never crash the server. Errors here usually mean

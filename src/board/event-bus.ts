@@ -18,9 +18,10 @@ export type BoardEventListener = (event: BoardEvent) => void;
 
 export interface BoardEventBus {
   publishSnapshotDelta(snapshotDelta: Record<string, unknown>): BoardDeltaEvent;
-  markInProcessWrite(timestamp?: number): void;
+  markInProcessWrite(timestamp?: number, snapshotDelta?: Record<string, unknown>): void;
   subscribe(listener: BoardEventListener): () => void;
   readonly lastInProcessWriteAt: number;
+  readonly lastInProcessSnapshotDelta: Record<string, unknown> | null;
   readonly subscriberCount: number;
   close(): void;
 }
@@ -30,6 +31,7 @@ export function createBoardEventBus(): BoardEventBus {
   let nextId = 1;
   let closed = false;
   let lastInProcessWriteAt = 0;
+  let lastInProcessSnapshotDelta: Record<string, unknown> | null = null;
 
   return {
     publishSnapshotDelta(snapshotDelta: Record<string, unknown>): BoardDeltaEvent {
@@ -54,8 +56,9 @@ export function createBoardEventBus(): BoardEventBus {
 
       return event;
     },
-    markInProcessWrite(timestamp = Date.now()): void {
+    markInProcessWrite(timestamp = Date.now(), snapshotDelta: Record<string, unknown> | undefined = undefined): void {
       lastInProcessWriteAt = timestamp;
+      lastInProcessSnapshotDelta = snapshotDelta ?? null;
     },
     subscribe(listener: BoardEventListener): () => void {
       if (closed) {
@@ -72,6 +75,9 @@ export function createBoardEventBus(): BoardEventBus {
     },
     get lastInProcessWriteAt(): number {
       return lastInProcessWriteAt;
+    },
+    get lastInProcessSnapshotDelta(): Record<string, unknown> | null {
+      return lastInProcessSnapshotDelta;
     },
     close(): void {
       closed = true;
