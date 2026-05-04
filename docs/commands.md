@@ -98,14 +98,13 @@ directly. PATCH endpoints accept `If-Match: <updatedAt-ms>` for optimistic
 concurrency: a stale value returns `409` with `currentUpdatedAt`. Missing
 `If-Match` is allowed for back-compat.
 
-Board commands don't accept command-specific options yet. For tests and local
-development, `TREKOON_BOARD_ASSET_ROOT` overrides the bundled asset source.
+Board commands don't accept command-specific options yet. `TREKOON_BOARD_ASSET_ROOT`
+overrides the asset source for tests and local development.
 
 ```bash
 trekoon init
 trekoon board open
 trekoon --json board open
-trekoon board update
 ```
 
 ## Human views
