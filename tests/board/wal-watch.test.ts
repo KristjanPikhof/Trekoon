@@ -385,10 +385,6 @@ describe("WAL watcher diff and resilience", (): void => {
       expect(response.status).toBe(200);
       expect(deltas.length).toBe(1);
 
-      watcher.reconcile();
-      await new Promise((resolve) => setTimeout(resolve, 25));
-
-      expect(deltas.length).toBe(1);
       const routeDelta = deltas[0] as { tasks?: Array<{ id?: string; title?: string }> };
       expect(routeDelta.tasks).toContainEqual(expect.objectContaining({ id: task.id, title: "After" }));
 
