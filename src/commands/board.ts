@@ -17,7 +17,7 @@ const FLAGS_BY_SUBCOMMAND: Readonly<Record<string, readonly string[]>> = {
 };
 
 type ResolveAssetRootFn = (options: ResolveBoardAssetRootOptions) => BoardAssetRoot;
-type StartBoardServerFn = (options: { cwd: string }) => BoardServerInfo;
+type StartBoardServerFn = (options: { cwd: string; assetRootOverride?: string }) => BoardServerInfo;
 type OpenBoardInBrowserFn = (url: string) => Promise<OpenBrowserResult> | OpenBrowserResult;
 
 let resolveAssetRootImpl: ResolveAssetRootFn = resolveBoardAssetRoot;
