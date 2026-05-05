@@ -66,10 +66,51 @@ function changeKeyEqual(
   return a.version === b.version && a.updatedAt === b.updatedAt;
 }
 
+function derivedRecordFingerprint(value: unknown): string {
+  if (!value || typeof value !== "object") {
+    return JSON.stringify(value);
+  }
+
+  const record = value as Record<string, unknown>;
+  const kind = typeof record.kind === "string" ? record.kind : "";
+
+  if (kind === "task") {
+    return JSON.stringify({
+      blockedBy: record.blockedBy,
+      blocks: record.blocks,
+      dependencyIds: record.dependencyIds,
+      dependentIds: record.dependentIds,
+      subtasks: record.subtasks,
+      searchText: record.searchText,
+    });
+  }
+
+  if (kind === "subtask") {
+    return JSON.stringify({
+      blockedBy: record.blockedBy,
+      blocks: record.blocks,
+      dependencyIds: record.dependencyIds,
+      dependentIds: record.dependentIds,
+      searchText: record.searchText,
+    });
+  }
+
+  if ("taskIds" in record || "counts" in record) {
+    return JSON.stringify({
+      taskIds: record.taskIds,
+      counts: record.counts,
+      searchText: record.searchText,
+    });
+  }
+
+  return JSON.stringify(record);
+}
+
 function recordMatchesPublishedDelta(record: unknown, publishedRecord: unknown): boolean {
   const recordKey = recordChangeKey(record);
   const publishedKey = recordChangeKey(publishedRecord);
-  return changeKeyEqual(recordKey, publishedKey) && JSON.stringify(record) === JSON.stringify(publishedRecord);
+  return changeKeyEqual(recordKey, publishedKey) &&
+    derivedRecordFingerprint(record) === derivedRecordFingerprint(publishedRecord);
 }
 
 function recordChanged(previousRecord: unknown, currentRecord: unknown): boolean {
@@ -81,7 +122,7 @@ function recordChanged(previousRecord: unknown, currentRecord: unknown): boolean
   // counts/search text and task subtask lists). Child writes do not bump the
   // parent row version, but those derived fields still need to reach connected
   // boards through WAL deltas.
-  return JSON.stringify(previousRecord) !== JSON.stringify(currentRecord);
+  return derivedRecordFingerprint(previousRecord) !== derivedRecordFingerprint(currentRecord);
 }
 
 function diffById(previous: readonly unknown[] | undefined, current: readonly unknown[] | undefined): CollectionDiff {
