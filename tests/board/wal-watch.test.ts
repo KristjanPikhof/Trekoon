@@ -161,7 +161,7 @@ describe("WAL watcher unit", (): void => {
 });
 
 describe("WAL watcher diff and resilience", (): void => {
-  test("shape-change-without-content does not produce a delta", async (): Promise<void> => {
+  test("top-level snapshot metadata changes without record changes do not produce a delta", async (): Promise<void> => {
     const workspace: string = createWorkspace();
     const seedDb: TrekoonDatabase = openTrekoonDatabase(workspace);
     new MutationService(seedDb.db, workspace).createEpic({ title: "Stable", description: "Original" });
@@ -176,10 +176,9 @@ describe("WAL watcher diff and resilience", (): void => {
       }
     });
 
-    // Custom snapshot builder: returns the same logical content (same id,
-    // updatedAt, version) but mutates non-content shape (reorders array,
-    // swaps in a different description string). The (version, updatedAt)
-    // tuple is unchanged, so the watcher must NOT emit a delta.
+    // Custom snapshot builder: returns the same logical records while changing
+    // only top-level metadata. The watcher must NOT emit a delta for generated
+    // timestamps or aggregate counts alone.
     const baseSnapshot = {
       generatedAt: Date.now(),
       epics: [{ id: "epic-1", title: "Stable", description: "Original", status: "todo", createdAt: 1, updatedAt: 100, version: 1, taskIds: [], counts: { todo: 0, blocked: 0, in_progress: 0, done: 0 }, searchText: "" }],
@@ -196,7 +195,10 @@ describe("WAL watcher diff and resilience", (): void => {
     const reshapedSnapshot = {
       ...baseSnapshot,
       generatedAt: Date.now() + 5000, // shape-only metadata change
-      epics: [{ ...baseSnapshot.epics[0]!, description: "shape-shifted but same version+updatedAt", searchText: "different searchText" }],
+      counts: {
+        ...baseSnapshot.counts,
+        dependencies: 99,
+      },
     };
 
     let buildCalls = 0;
@@ -212,13 +214,129 @@ describe("WAL watcher diff and resilience", (): void => {
     });
 
     try {
-      // First reconcile: same logical (version, updatedAt) — must NOT emit.
+      // First reconcile: same logical records — must NOT emit.
       watcher.reconcile();
-      // Second reconcile: still same tuple — still must NOT emit.
+      // Second reconcile: still same records — still must NOT emit.
       watcher.reconcile();
       await new Promise((resolve) => setTimeout(resolve, 50));
       expect(events.length).toBe(0);
       expect(buildCalls).toBeGreaterThanOrEqual(2);
+    } finally {
+      watcher.close();
+      eventBus.close();
+      watcherDb.close();
+    }
+  });
+
+  test("external task create publishes the derived parent epic delta", async (): Promise<void> => {
+    const workspace: string = createWorkspace();
+    const seedDb: TrekoonDatabase = openTrekoonDatabase(workspace);
+    const epic = new MutationService(seedDb.db, workspace).createEpic({
+      title: "Parent epic",
+      description: "Seed",
+    });
+    seedDb.close();
+
+    const watcherDb: TrekoonDatabase = openTrekoonDatabase(workspace);
+    const eventBus = createBoardEventBus();
+    const deltas: unknown[] = [];
+    eventBus.subscribe((event) => {
+      if (event.type === "snapshotDelta") {
+        deltas.push(event.snapshotDelta);
+      }
+    });
+    const watcher = startWalWatcher({
+      db: watcherDb.db,
+      databaseFile: watcherDb.paths.databaseFile,
+      eventBus,
+      debounceMs: 10,
+    });
+
+    try {
+      const cliDb: TrekoonDatabase = openTrekoonDatabase(workspace);
+      try {
+        new MutationService(cliDb.db, workspace).createTask({
+          epicId: epic.id,
+          title: "External Task",
+          description: "Created outside the board server",
+        });
+      } finally {
+        cliDb.close();
+      }
+
+      watcher.reconcile();
+
+      expect(deltas.length).toBe(1);
+      const delta = deltas[0] as {
+        epics?: Array<{ id?: string; taskIds?: string[]; counts?: { todo?: number }; searchText?: string }>;
+        tasks?: Array<{ title?: string }>;
+      };
+      expect(delta.tasks).toContainEqual(expect.objectContaining({ title: "External Task" }));
+      expect(delta.epics).toContainEqual(expect.objectContaining({
+        id: epic.id,
+        counts: expect.objectContaining({ todo: 1 }),
+        searchText: expect.stringContaining("external task"),
+      }));
+      expect(delta.epics?.[0]?.taskIds?.length).toBe(1);
+    } finally {
+      watcher.close();
+      eventBus.close();
+      watcherDb.close();
+    }
+  });
+
+  test("external subtask update publishes derived parent task and epic deltas", async (): Promise<void> => {
+    const workspace: string = createWorkspace();
+    const seedDb: TrekoonDatabase = openTrekoonDatabase(workspace);
+    const mutations = new MutationService(seedDb.db, workspace);
+    const epic = mutations.createEpic({ title: "Subtask parent epic", description: "Seed" });
+    const task = mutations.createTask({ epicId: epic.id, title: "Parent task", description: "Seed task" });
+    const subtask = mutations.createSubtask({ taskId: task.id, title: "Before subtask", description: "Seed subtask" });
+    seedDb.close();
+
+    const watcherDb: TrekoonDatabase = openTrekoonDatabase(workspace);
+    const eventBus = createBoardEventBus();
+    const deltas: unknown[] = [];
+    eventBus.subscribe((event) => {
+      if (event.type === "snapshotDelta") {
+        deltas.push(event.snapshotDelta);
+      }
+    });
+    const watcher = startWalWatcher({
+      db: watcherDb.db,
+      databaseFile: watcherDb.paths.databaseFile,
+      eventBus,
+      debounceMs: 10,
+    });
+
+    try {
+      const cliDb: TrekoonDatabase = openTrekoonDatabase(workspace);
+      try {
+        new MutationService(cliDb.db, workspace).updateSubtask(subtask.id, {
+          title: "External Subtask",
+        });
+      } finally {
+        cliDb.close();
+      }
+
+      watcher.reconcile();
+
+      expect(deltas.length).toBe(1);
+      const delta = deltas[0] as {
+        epics?: Array<{ id?: string; searchText?: string }>;
+        tasks?: Array<{ id?: string; searchText?: string; subtasks?: Array<{ title?: string }> }>;
+        subtasks?: Array<{ id?: string; title?: string }>;
+      };
+      expect(delta.subtasks).toContainEqual(expect.objectContaining({ id: subtask.id, title: "External Subtask" }));
+      expect(delta.tasks).toContainEqual(expect.objectContaining({
+        id: task.id,
+        searchText: expect.stringContaining("external subtask"),
+        subtasks: expect.arrayContaining([expect.objectContaining({ title: "External Subtask" })]),
+      }));
+      expect(delta.epics).toContainEqual(expect.objectContaining({
+        id: epic.id,
+        searchText: expect.stringContaining("external subtask"),
+      }));
     } finally {
       watcher.close();
       eventBus.close();

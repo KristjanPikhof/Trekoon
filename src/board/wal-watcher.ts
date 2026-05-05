@@ -69,17 +69,19 @@ function changeKeyEqual(
 function recordMatchesPublishedDelta(record: unknown, publishedRecord: unknown): boolean {
   const recordKey = recordChangeKey(record);
   const publishedKey = recordChangeKey(publishedRecord);
-  const hasComparableKey =
-    recordKey.version !== null ||
-    recordKey.updatedAt !== null ||
-    publishedKey.version !== null ||
-    publishedKey.updatedAt !== null;
+  return changeKeyEqual(recordKey, publishedKey) && JSON.stringify(record) === JSON.stringify(publishedRecord);
+}
 
-  if (hasComparableKey) {
-    return changeKeyEqual(recordKey, publishedKey);
+function recordChanged(previousRecord: unknown, currentRecord: unknown): boolean {
+  if (!changeKeyEqual(recordChangeKey(previousRecord), recordChangeKey(currentRecord))) {
+    return true;
   }
 
-  return JSON.stringify(record) === JSON.stringify(publishedRecord);
+  // The board snapshot includes derived parent fields (for example epic task
+  // counts/search text and task subtask lists). Child writes do not bump the
+  // parent row version, but those derived fields still need to reach connected
+  // boards through WAL deltas.
+  return JSON.stringify(previousRecord) !== JSON.stringify(currentRecord);
 }
 
 function diffById(previous: readonly unknown[] | undefined, current: readonly unknown[] | undefined): CollectionDiff {
@@ -105,9 +107,7 @@ function diffById(previous: readonly unknown[] | undefined, current: readonly un
       upserted.push(record);
       continue;
     }
-    // Tuple compare on (version, updatedAt) — both move in lockstep on every
-    // domain write. Equal tuple → no content change → skip the upsert.
-    if (!changeKeyEqual(recordChangeKey(previousRecord), recordChangeKey(record))) {
+    if (recordChanged(previousRecord, record)) {
       upserted.push(record);
     }
   }
