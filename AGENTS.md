@@ -61,7 +61,7 @@
 - Rollback uses `computeInverseDelta` against the post-optimistic snapshot, never `replaceSnapshot(previous)` — preserves concurrent server-pushed deltas on unrelated entities.
 - Preserve CLI-equivalent canonical per-entity events and full payloads.
 - Multi-entity cascades stay atomic: no partial writes / snapshots / events on dep-blocked failures.
-- **PATCH preconditions:** `/api/epics/:id`, `/api/tasks/:id`, `/api/subtasks/:id`, `/api/epics/:id/cascade` accept `If-Match: <updatedAt-ms>` (bare or quoted). Mismatch → 409 with `currentUpdatedAt`. Missing header allowed for back-compat.
+- **PATCH preconditions:** `/api/epics/:id`, `/api/tasks/:id`, `/api/subtasks/:id`, `/api/epics/:id/cascade` accept `If-Match: <version>` (bare, quoted, or `W/`-prefixed weak ETag). Mismatch → 409 with `currentVersion` and `providedVersion`. Missing header allowed for back-compat.
 - **SSE channel:** `/api/snapshot/stream` is fed by `src/board/event-bus.ts`. Bus is **per-server-instance** (not module-level singleton) so concurrent test servers stay isolated.
 - **External CLI writes:** `src/board/wal-watcher.ts` watches `.trekoon/trekoon.db-wal` mtime, debounces, diffs the snapshot, publishes deltas to the same bus. Boards reflect CLI mutations within ~1s.
 

@@ -105,8 +105,10 @@ on disk, but current Trekoon versions no longer read, create, refresh, or
 delete them. Remove that directory manually only if you want to clean up the
 old copied board bundle.
 
-Board commands don't accept command-specific options yet. `TREKOON_BOARD_ASSET_ROOT`
-overrides the asset source for tests and local development.
+`trekoon board open` accepts `--reveal-token` to include the raw tokenized URL,
+server token, and browser launch arguments in machine output. Other board
+subcommands and flags are rejected. `TREKOON_BOARD_ASSET_ROOT` overrides the
+asset source for tests and local development.
 
 ```bash
 trekoon init

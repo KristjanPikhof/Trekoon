@@ -156,7 +156,7 @@ export async function bootLegacyBoard(options = {}) {
             </div>
             <span class="${sectionLabelClasses()}">Board ready</span>
             <h1 class="mt-2 text-3xl font-semibold tracking-tight text-[var(--board-text)]">No work has been published yet</h1>
-            <p class="mx-auto mt-3 max-w-2xl text-sm leading-6 text-[var(--board-text-muted)] sm:text-base">Once the board snapshot is installed into <code class="rounded-lg border border-[var(--board-border)] bg-white/[0.04] px-2 py-1 text-[var(--board-text)]">.trekoon/board</code>, epics and tasks will appear here.</p>
+            <p class="mx-auto mt-3 max-w-2xl text-sm leading-6 text-[var(--board-text-muted)] sm:text-base">Create or sync an epic in this repository and it will appear here.</p>
           </div>
         </section>
       `;

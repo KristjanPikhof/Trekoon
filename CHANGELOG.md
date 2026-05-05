@@ -58,20 +58,10 @@ All notable changes to Trekoon are documented in this file.
 
 ### Changed
 
-- Board assets are no longer copied into each repository. Board code (HTML,
-  JS, CSS, fonts) is now served directly from the running Trekoon install.
-  Updating Trekoon updates the board bundle for all repos. `trekoon init` no
-  longer installs a `board` directory under `.trekoon/`.
 - Harden board live updates with version-based `If-Match`, cookie-only SSE
   auth, backpressure-safe snapshots, and reconnect cleanup.
 - Scope sync conflict resolution to the active worktree and branch, including
   large cascade cleanup.
-
-### Removed
-
-- `trekoon board update` — retired. Board assets come from the Trekoon install
-  and do not need to be refreshed independently. Use `trekoon board open` to
-  start the board.
 
 ### Fixed
 
