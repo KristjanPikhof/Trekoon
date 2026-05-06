@@ -32,6 +32,17 @@ All notable changes to Trekoon are documented in this file.
   `EnsureBoardInstalledOptions`, and `BOARD_ASSET_CONTRACT_VERSION` types.
   `BoardAssetError` is now the only board error class.
 
+### Fixed
+
+- WAL watcher now publishes the derived parent epic delta when an external
+  task write changes only derived fields (status rollups, dependency-driven
+  state) without bumping the parent row version, so board clients see the
+  parent epic update without reloading.
+- WAL watcher change detection compares derived record fingerprints for
+  tasks, subtasks, and summary rows instead of raw JSON, so updates to
+  dependency edges and search text reach board clients even when the row's
+  stored fields are unchanged.
+
 ### Migration note
 
 - Existing ignored `.trekoon/board` directories are left untouched on disk.
