@@ -163,6 +163,10 @@ The response includes `claimed` (true/false), `currentOwner`, `currentStatus`,
 and the full entity record on success. Two concurrent claims return exactly one
 `claimed=true`.
 
+In Claude Code, keep parallel Trekoon `Bash` calls read-only unless the command
+is an atomic `claim`. Run status updates and completion commands sequentially so
+a failed transition does not cancel sibling mutations.
+
 ## Database backup and migration
 
 Before any manual migration recovery, snapshot the database:

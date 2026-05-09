@@ -46,7 +46,10 @@ coordinating from the parent session?
   `wait_agent`, `resume_agent`, and `close_agent`.
 - Claude Code: use normal subagents for bounded side work. Use Agent Teams only
   when the user explicitly asks for team execution and the environment supports
-  it.
+  it. Treat parallel `Bash` tool calls as read-only unless every command is a
+  safe atomic claim. Do not batch multiple Trekoon status-changing commands in
+  one parallel tool turn; run them sequentially so one failed transition does
+  not cancel sibling mutations.
 - OpenCode: use `@explore` for read-only discovery and `@general` or native
   Task for write-capable lane work. Use `question` when available.
 - Pi/other harnesses: use the same intent and native task/subagent/question

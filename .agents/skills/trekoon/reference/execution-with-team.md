@@ -47,7 +47,10 @@ TaskCreate:
     While working:
     - Complete required subtasks.
     - Append progress notes; do not rewrite task descriptions.
-    - Use task done for completion.
+    - Use task done for task completion.
+    - For subtasks, claim or move through in_progress before done.
+    - Keep parallel Trekoon Bash calls read-only; serialize status-changing
+      commands unless using atomic claim.
     - Use --compact for noisy Trekoon reads.
 
     On completion:
@@ -82,7 +85,9 @@ Agent:
     Claim each Trekoon task before editing:
       trekoon --toon task claim <trekoon-task-id> --owner <your-name>
 
-    Use task done for completion. Read and report unblocked tasks, warnings,
+    Use task done for task completion. For subtasks, claim or move through
+    in_progress before done. Do not batch multiple Trekoon status-changing Bash
+    calls in one parallel tool turn. Read and report unblocked tasks, warnings,
     and next candidate via SendMessage.
 
     Communicate blockers and coordination needs via SendMessage.
@@ -125,6 +130,10 @@ For `status_transition_invalid`, inspect current status with:
 ```bash
 trekoon --toon --compact task show <id>
 ```
+
+If the error came from a cancelled parallel Bash batch, first re-read the
+affected task or subtask, then retry only the valid next transition. Do not
+replay the whole batch.
 
 For `dependency_blocked`, inspect the dependency, append a blocker note, then
 continue with a ready candidate from:

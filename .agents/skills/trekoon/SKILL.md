@@ -98,6 +98,9 @@ matches the user intent.
   `task next`, `dep list`, `dep reverse`, targeted `show`.
 - Prefer transactional/bulk commands for planning and narrow `--ids` for bulk
   updates.
+- In Claude Code, keep parallel `Bash` batches read-only for Trekoon commands.
+  Run status-changing Trekoon commands sequentially, or use atomic `claim` and
+  `task done` primitives where parallel agents may race.
 - Append progress, verification, and blocker notes with `--append`; do not
   rewrite descriptions unless fixing the plan itself.
 - Preview search/replace before `--apply`.
@@ -112,7 +115,8 @@ matches the user intent.
 Normal status flow is `todo -> in_progress -> done`; `blocked` requires an
 appended reason. Use `task done` for task completion because it auto-transitions
 from `todo` or `blocked` through `in_progress`. Load
-`reference/status-machine.md` for transition errors or uncertainty.
+`reference/status-machine.md` for transition errors or uncertainty. For
+subtasks, claim or move through `in_progress` before marking `done`.
 
 ## Recovery
 

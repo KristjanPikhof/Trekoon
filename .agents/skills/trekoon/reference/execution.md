@@ -86,7 +86,8 @@ Before each task:
 While working:
 - Complete required subtasks and update subtask statuses.
 - Append meaningful progress notes; do not rewrite task descriptions.
-- Respect status flow: todo -> in_progress -> done. Use task done for completion.
+- Respect status flow: todo -> in_progress -> done. Use task done for task
+  completion; for subtasks, claim or move through in_progress before done.
 - Assume other agents may edit unrelated files. Do not revert unrelated changes.
 
 On completion:
@@ -101,6 +102,16 @@ If blocked:
 
 Use --compact in noisy Trekoon reads. Do not create branches, commits, pushes,
 or PRs unless the user explicitly asked and harness policy allows it.
+
+Claude Code parallel tool calls:
+- Parallel Trekoon Bash calls are for read-only commands such as session,
+  progress, ready, suggest, and targeted show.
+- Do not issue multiple Trekoon status-changing Bash commands in one parallel
+  tool batch. Use task/subtask claim for atomic races, then serialize updates
+  and completion commands.
+- If a parallel batch reports sibling cancellation, re-read the affected task or
+  subtask before retrying; recover from current Trekoon state, not the cancelled
+  command text.
 
 Final report: tasks completed, files changed, checks, review result/gap,
 task done response, blockers.

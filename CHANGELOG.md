@@ -4,6 +4,12 @@ All notable changes to Trekoon are documented in this file.
 
 ## 0.4.4
 
+### Added
+
+- Document Claude Code parallel tool-call safety for Trekoon workflows: use
+  parallel Bash for reads and atomic claims, then serialize status-changing
+  updates to avoid sibling cancellation after transition errors.
+
 ### Changed
 
 - Serve board static assets directly from the running Trekoon package. Global

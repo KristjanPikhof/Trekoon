@@ -274,6 +274,14 @@ trekoon --toon epic replace <epic-id> --search "path/to/somewhere" --replace "pa
 trekoon --toon epic replace <epic-id> --search "path/to/somewhere" --replace "path/to/new-path" --apply
 ```
 
+For Claude Code and similar harnesses with parallel tool calls, keep parallel
+Trekoon `Bash` batches read-only. It is safe to fan out `session`, `progress`,
+`ready`, `suggest`, and targeted `show` commands. Do not batch multiple
+status-changing Trekoon commands in one parallel tool turn; if one transition
+fails, sibling calls may be cancelled and the agent must re-read state before
+retrying. Use `task claim` / `subtask claim` for atomic races, then serialize
+status updates and completion commands.
+
 ## Shared-database model
 
 Trekoon uses one live SQLite database per repository at
