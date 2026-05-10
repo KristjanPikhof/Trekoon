@@ -99,8 +99,9 @@ matches the user intent.
 - Prefer transactional/bulk commands for planning and narrow `--ids` for bulk
   updates.
 - In Claude Code, keep parallel `Bash` batches read-only for Trekoon commands.
-  Run status-changing Trekoon commands sequentially, or use atomic `claim` and
-  `task done` primitives where parallel agents may race.
+  Only `task claim` and `subtask claim` are safe parallel write exceptions.
+  Run `task done` and other status-changing commands sequentially after reading
+  current state.
 - Append progress, verification, and blocker notes with `--append`; do not
   rewrite descriptions unless fixing the plan itself.
 - Preview search/replace before `--apply`.
