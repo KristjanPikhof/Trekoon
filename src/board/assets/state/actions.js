@@ -488,13 +488,10 @@ export function createBoardActions(options) {
     },
     bulkSetStatus(epicId, newStatus) {
       const normalizedStatus = normalizeStatus(newStatus);
-      const currentEpic = store.snapshot?.epics?.find((candidate) => candidate.id === epicId);
-      const ifMatchVersion = typeof currentEpic?.version === "number" ? currentEpic.version : undefined;
       api.cascadeEpicStatus(
         epicId,
         normalizedStatus,
         (snapshot) => cascadeEpicStatusInSnapshot(snapshot, epicId, normalizedStatus, normalizeSnapshot),
-        { ifMatchVersion },
       );
     },
     toggleEpicStatusFilter(status) {
