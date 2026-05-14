@@ -202,6 +202,18 @@ export async function runSession(context: CliContext): Promise<CliResult> {
     const epicId: string | undefined = readOption(parsed.options, "epic");
     const itemId: string | undefined = readOption(parsed.options, "item");
 
+    if (epicId !== undefined && itemId !== undefined) {
+      return failResult({
+        command: "session",
+        human: "--epic and --item are mutually exclusive. Pass --epic to scope readiness by epic, or --item to resolve a specific entity.",
+        data: { code: "invalid_input", providedFlags: ["--epic", "--item"] },
+        error: {
+          code: "invalid_input",
+          message: "--epic and --item are mutually exclusive. Pass --epic to scope readiness by epic, or --item to resolve a specific entity.",
+        },
+      });
+    }
+
     database = openTrekoonDatabase(context.cwd);
     const diagnostics = database.diagnostics;
 
