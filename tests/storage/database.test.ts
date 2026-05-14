@@ -719,10 +719,11 @@ describe("storage lifecycle", (): void => {
       const summary = rollbackDatabase(storage.db, 6);
       const indexes: string[] = indexNames(storage.db);
 
-      expect(summary.fromVersion).toBe(11);
+      expect(summary.fromVersion).toBe(12);
       expect(summary.toVersion).toBe(6);
-      expect(summary.rolledBack).toBe(5);
+      expect(summary.rolledBack).toBe(6);
       expect(summary.rolledBackMigrations).toEqual([
+        "0012_dependency_kind_indexes",
         "0011_sync_conflicts_worktree_branch_scope",
         "0010_board_idempotency_retention_index",
         "0009_board_idempotency_storage",
@@ -735,6 +736,8 @@ describe("storage lifecycle", (): void => {
       expect(indexes).not.toContain("idx_subtasks_owner");
       expect(indexes).not.toContain("idx_board_idempotency_created_at");
       expect(indexes).not.toContain("idx_board_idempotency_state_created_at");
+      expect(indexes).not.toContain("uniq_dependencies_edge");
+      expect(indexes).not.toContain("idx_dependencies_target");
     } finally {
       storage.close();
     }
