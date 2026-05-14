@@ -91,9 +91,15 @@ describe("client If-Match header", () => {
 
     expect(fetchMock).toHaveBeenCalledTimes(3);
     const calls = fetchMock.mock.calls as unknown as Array<[string, RequestInit]>;
-    expect(new Headers(calls[0][1].headers).get("if-match")).toBe("1");
-    expect(new Headers(calls[1][1].headers).get("if-match")).toBe("3");
-    expect(new Headers(calls[2][1].headers).get("if-match")).toBe("12");
+    const first = calls[0];
+    const second = calls[1];
+    const third = calls[2];
+    if (!first || !second || !third) {
+      throw new Error("Expected three captured fetch calls");
+    }
+    expect(new Headers(first[1].headers).get("if-match")).toBe("1");
+    expect(new Headers(second[1].headers).get("if-match")).toBe("3");
+    expect(new Headers(third[1].headers).get("if-match")).toBe("12");
   });
 
   test("omits If-Match when version is undefined (server back-compat path)", async () => {
