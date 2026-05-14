@@ -93,6 +93,8 @@ interface SnapshotDeltaSelection {
   readonly taskIds?: readonly string[];
   readonly subtaskIds?: readonly string[];
   readonly dependencyIds?: readonly string[];
+  readonly deletedEpicIds?: readonly string[];
+  readonly deletedTaskIds?: readonly string[];
   readonly deletedSubtaskIds?: readonly string[];
   readonly deletedDependencyIds?: readonly string[];
 }
