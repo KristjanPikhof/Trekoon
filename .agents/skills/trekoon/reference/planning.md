@@ -139,6 +139,15 @@ compact specs: `\?`, `\.`, `\{`, `\(`, `\[` etc. fail before records are
 created. Prefer prose over exact regex in descriptions. Rephrase operators
 like `!=` as words to avoid escaping confusion.
 
+Spec shape (status optional, defaults to `todo`):
+
+- `--task <temp-key>|<title>|<description>` or `<temp-key>|<title>|<description>|<status>`
+- `--subtask <temp-key>|<title>|<description>` or `<temp-key>|<title>|<description>|<status>` (subtask create-many)
+- `--subtask <parent-ref>|<temp-key>|<title>|<description>` or `<parent-ref>|<temp-key>|<title>|<description>|<status>` (epic create/expand)
+
+Prefer the shorter form. Pass an explicit `|<status>` only when seeding a
+non-`todo` status.
+
 One-shot rules:
 
 - Declare tasks/subtasks with plain temp keys, e.g. `task-api`, `sub-tests`.
