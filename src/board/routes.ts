@@ -612,6 +612,16 @@ function preconditionFailedResponse(details: PreconditionFailedDetails): Respons
   });
 }
 
+function preconditionRequiredResponse(): Response {
+  return jsonResponse(428, {
+    ok: false,
+    error: {
+      code: "precondition_required",
+      message: "If-Match header is required for PATCH requests",
+    },
+  });
+}
+
 function readIdempotencyKey(request: Request, body: Record<string, unknown>): string | null {
   const headerKey = request.headers.get("x-trekoon-idempotency-key");
   if (typeof headerKey === "string" && headerKey.trim().length > 0) {
@@ -705,12 +715,12 @@ export function createBoardApiHandler(context: BoardRouteContext): (request: Req
           const body = await parseJsonBody(request);
           const status = readRequiredString(body, "status");
           const ifMatch = parseIfMatchHeader(request);
+          if (ifMatch === null) {
+            return preconditionRequiredResponse();
+          }
           // CAS path: precondition is enforced inside the write transaction
-          // (see PreconditionFailedError catch below). Missing-header path
-          // preserves back-compat with clients that don't send If-Match.
-          const plan = ifMatch !== null
-            ? mutations.updateEpicStatusCascadeWithIfMatch(epicId, ifMatch, status)
-            : mutations.updateEpicStatusCascade(epicId, status);
+          // (see PreconditionFailedError catch below).
+          const plan = mutations.updateEpicStatusCascadeWithIfMatch(epicId, ifMatch, status);
           return respondWithMutationDelta(domain, {
             plan,
           }, {

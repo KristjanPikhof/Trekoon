@@ -277,7 +277,7 @@ function getCurrentVersion(storeState, kind, id) {
  * }}
  */
 export function createMutationQueue(model, rerender) {
-  /** @type {Array<{ mutationId: string, optimistic?: function, request: function, onSuccess?: function, onError?: function, successMessage?: string }>} */
+  /** @type {Array<{ mutationId: string, optimistic?: function, request: function, onSuccess?: function, onError?: function, successMessage?: string, resolveIfMatch?: function }>} */
   const queue = [];
   let processing = false;
   /** @type {Array<() => void>} */
@@ -310,6 +310,19 @@ export function createMutationQueue(model, rerender) {
       // the request was in flight survive a rollback.
       let inverseDelta = null;
 
+      // Resolve the If-Match version LAZILY at fire-time so a queued
+      // second mutation on the same entity sees the post-success version that
+      // landed via mutation response or SSE delta. Capturing at enqueue time
+      // would 409 every rapid double-edit.
+      let ifMatchVersion;
+      if (typeof mutation.resolveIfMatch === "function") {
+        try {
+          ifMatchVersion = mutation.resolveIfMatch();
+        } catch {
+          ifMatchVersion = undefined;
+        }
+      }
+
       try {
         if (typeof mutation.optimistic === "function") {
           const previousSnapshot = model.store.snapshot;
@@ -324,7 +337,7 @@ export function createMutationQueue(model, rerender) {
           rerender();
         }
 
-        const data = await mutation.request();
+        const data = await mutation.request({ ifMatchVersion });
 
         if (data?.snapshot) {
           model.replaceSnapshot(data.snapshot);
