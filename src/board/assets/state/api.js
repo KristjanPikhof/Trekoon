@@ -509,7 +509,18 @@ export function createApi(model, options) {
         }
       },
       onError(error) {
-        lastFailedMutation = tagged;
+        // Stale-version 409s are NOT retryable — the captured optimistic
+        // payload was composed against pre-advance state and replaying it
+        // would 409 again. Skip lastFailedMutation so the retry path can't
+        // even be invoked, and surface the typed stale_version notice (which
+        // does not carry a retry button) so the UI stays consistent.
+        if (error?.code === "precondition_failed") {
+          if (lastFailedMutation?.mutationId === mutationId) {
+            lastFailedMutation = null;
+          }
+        } else {
+          lastFailedMutation = tagged;
+        }
         if (typeof tagged.onError === "function") {
           tagged.onError(error);
         }
