@@ -66,7 +66,25 @@ function changeKeyEqual(
   return a.version === b.version && a.updatedAt === b.updatedAt;
 }
 
+/**
+ * Test-only call counter for {@link derivedRecordFingerprint}. Tests assert the
+ * leaf short-circuit path never enters this function. Production callers ignore
+ * the counter entirely.
+ */
+let derivedFingerprintCalls = 0;
+
+/** @internal — exposed for tests to verify the leaf no-stringify invariant. */
+export function __resetDerivedFingerprintCallCount(): void {
+  derivedFingerprintCalls = 0;
+}
+
+/** @internal — exposed for tests to verify the leaf no-stringify invariant. */
+export function __getDerivedFingerprintCallCount(): number {
+  return derivedFingerprintCalls;
+}
+
 function derivedRecordFingerprint(value: unknown): string {
+  derivedFingerprintCalls += 1;
   if (!value || typeof value !== "object") {
     return JSON.stringify(value);
   }

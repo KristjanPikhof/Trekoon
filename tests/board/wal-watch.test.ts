@@ -9,7 +9,11 @@ import { startBoardServer } from "../../src/board/server";
 import { openTrekoonDatabase, type TrekoonDatabase } from "../../src/storage/database";
 import { MutationService } from "../../src/domain/mutation-service";
 import { createBoardEventBus } from "../../src/board/event-bus";
-import { startWalWatcher } from "../../src/board/wal-watcher";
+import {
+  __getDerivedFingerprintCallCount,
+  __resetDerivedFingerprintCallCount,
+  startWalWatcher,
+} from "../../src/board/wal-watcher";
 
 const tempDirs: string[] = [];
 
