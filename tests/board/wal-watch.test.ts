@@ -1285,3 +1285,160 @@ describe("WAL watcher publish failure recovery", (): void => {
     }
   });
 });
+
+describe("WAL watcher event-cursor skips full buildSnapshot", (): void => {
+  test("buildBoardSnapshot is not called across five successful event-cursor ticks", async (): Promise<void> => {
+    const workspace: string = createWorkspace();
+    const seedDb: TrekoonDatabase = openTrekoonDatabase(workspace);
+    const seedMutations = new MutationService(seedDb.db, workspace);
+    const epic = seedMutations.createEpic({ title: "No-build parent epic", description: "Seed" });
+    seedDb.close();
+
+    const watcherDb: TrekoonDatabase = openTrekoonDatabase(workspace);
+    const eventBus = createBoardEventBus();
+    const deltas: unknown[] = [];
+    eventBus.subscribe((event) => {
+      if (event.type === "snapshotDelta") {
+        deltas.push(event.snapshotDelta);
+      }
+    });
+
+    let buildSnapshotCalls = 0;
+    const paths: Array<{ path: string; reason?: string | undefined }> = [];
+    const watcher = startWalWatcher({
+      db: watcherDb.db,
+      databaseFile: watcherDb.paths.databaseFile,
+      eventBus,
+      debounceMs: 10,
+      buildSnapshot: (domain) => {
+        buildSnapshotCalls += 1;
+        // Delegate to the real builder so tests still exercise production
+        // logic. The wrapper only counts invocations.
+        return buildBoardSnapshot(domain);
+      },
+      onReconcile: (info) => {
+        paths.push({ path: info.path, reason: info.reason });
+      },
+    });
+
+    try {
+      // Watcher constructor calls buildSnapshot once to seed the baseline.
+      expect(buildSnapshotCalls).toBe(1);
+
+      // Drive five external task creates through five successful cursor ticks.
+      for (let i = 0; i < 5; i += 1) {
+        const cliDb: TrekoonDatabase = openTrekoonDatabase(workspace);
+        try {
+          new MutationService(cliDb.db, workspace).createTask({
+            epicId: epic.id,
+            title: `No-build task ${i}`,
+            description: "External",
+          });
+        } finally {
+          cliDb.close();
+        }
+
+        watcher.reconcile();
+      }
+
+      // Every tick took the optimized path.
+      expect(paths.length).toBe(5);
+      for (const tick of paths) {
+        expect(tick.path).toBe("event-cursor");
+      }
+
+      // buildBoardSnapshot must NOT have been called by the hot path. Only
+      // the one constructor-seed invocation should be present.
+      expect(buildSnapshotCalls).toBe(1);
+      // Each tick still published its own targeted delta.
+      expect(deltas.length).toBe(5);
+    } finally {
+      watcher.close();
+      eventBus.close();
+      watcherDb.close();
+    }
+  });
+
+  test("fallback path after stale baseline still publishes the latest committed state", async (): Promise<void> => {
+    const workspace: string = createWorkspace();
+    const seedDb: TrekoonDatabase = openTrekoonDatabase(workspace);
+    const epic = new MutationService(seedDb.db, workspace).createEpic({
+      title: "Stale-then-fallback epic",
+      description: "Seed",
+    });
+    seedDb.close();
+
+    const watcherDb: TrekoonDatabase = openTrekoonDatabase(workspace);
+    const eventBus = createBoardEventBus();
+    const deltas: unknown[] = [];
+    eventBus.subscribe((event) => {
+      if (event.type === "snapshotDelta") {
+        deltas.push(event.snapshotDelta);
+      }
+    });
+    const paths: Array<{ path: string; reason?: string | undefined }> = [];
+    const watcher = startWalWatcher({
+      db: watcherDb.db,
+      databaseFile: watcherDb.paths.databaseFile,
+      eventBus,
+      debounceMs: 10,
+      onReconcile: (info) => {
+        paths.push({ path: info.path, reason: info.reason });
+      },
+    });
+
+    try {
+      // First: a clean cursor tick. Hot path will mark the baseline stale
+      // without calling buildSnapshot.
+      const firstCliDb: TrekoonDatabase = openTrekoonDatabase(workspace);
+      try {
+        new MutationService(firstCliDb.db, workspace).createTask({
+          epicId: epic.id,
+          title: "Cursor tick task",
+          description: "First",
+        });
+      } finally {
+        firstCliDb.close();
+      }
+      watcher.reconcile();
+      expect(paths[0]?.path).toBe("event-cursor");
+
+      // Now write a second task and inject an unparseable event after it so
+      // the next tick is forced onto the fallback path. The baseline is
+      // stale (the hot path never rebuilt lastSnapshot), so the fallback
+      // must still produce a delta that surfaces the latest committed state.
+      const corruptDb: TrekoonDatabase = openTrekoonDatabase(workspace);
+      try {
+        new MutationService(corruptDb.db, workspace).createTask({
+          epicId: epic.id,
+          title: "Pre-corrupt task",
+          description: "Second",
+        });
+        corruptDb.db
+          .query(
+            `INSERT INTO events (id, entity_kind, entity_id, operation, payload, created_at, updated_at, version)
+             VALUES (?, ?, ?, ?, ?, ?, ?, 1);`,
+          )
+          .run("stale-fallback-corrupt-id", "epic", "stale-corrupt-epic", "epic.updated", "{not-json", Date.now() + 5000, Date.now() + 5000);
+      } finally {
+        corruptDb.close();
+      }
+
+      watcher.reconcile();
+
+      expect(paths[1]?.path).toBe("full-snapshot");
+      expect(paths[1]?.reason).toBe("event-parse-or-shape");
+
+      // Latest delta must include the "Pre-corrupt task" — proves the
+      // fallback path rebuilt the snapshot and surfaced changes the cursor
+      // never published.
+      const latestDelta = deltas[deltas.length - 1] as { tasks?: Array<{ title?: string }> };
+      const titles = (latestDelta.tasks ?? []).map((task) => task.title);
+      expect(titles).toContain("Pre-corrupt task");
+    } finally {
+      watcher.close();
+      eventBus.close();
+      watcherDb.close();
+    }
+  });
+});
