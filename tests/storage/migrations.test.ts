@@ -1136,7 +1136,7 @@ describe("migration 0012: dependency kind indexes", (): void => {
     }
   });
 
-  test("rollback to v11 drops new indexes without throwing", (): void => {
+  test("rollback to v11 drops new indexes and restores v2 single-column source/target indexes", (): void => {
     const workspace: string = createWorkspace();
     const storage = openTrekoonDatabase(workspace);
 
@@ -1145,13 +1145,15 @@ describe("migration 0012: dependency kind indexes", (): void => {
       expect(summary.toVersion).toBe(11);
 
       const indexRows = storage.db
-        .query("SELECT name FROM sqlite_master WHERE type = 'index' AND tbl_name = 'dependencies';")
-        .all() as Array<{ name: string }>;
+        .query("SELECT name, sql FROM sqlite_master WHERE type = 'index' AND tbl_name = 'dependencies';")
+        .all() as Array<{ name: string; sql: string | null }>;
 
-      const names = new Set(indexRows.map((row) => row.name));
-      expect(names.has("uniq_dependencies_edge")).toBe(false);
-      expect(names.has("idx_dependencies_source")).toBe(false);
-      expect(names.has("idx_dependencies_target")).toBe(false);
+      const byName = new Map(indexRows.map((row) => [row.name, row.sql ?? ""]));
+      expect(byName.has("uniq_dependencies_edge")).toBe(false);
+      expect(byName.has("idx_dependencies_target")).toBe(false);
+      // Source-side index restored to its v2 single-column shape.
+      expect(byName.get("idx_dependencies_source")).toMatch(/\(\s*source_id\s*\)/u);
+      expect(byName.get("idx_dependencies_depends_on")).toMatch(/\(\s*depends_on_id\s*\)/u);
     } finally {
       storage.close();
     }

@@ -142,6 +142,11 @@ const DEPENDENCY_KIND_INDEX_DOWN_STATEMENTS: readonly string[] = [
   "DROP INDEX IF EXISTS uniq_dependencies_edge;",
   "DROP INDEX IF EXISTS idx_dependencies_target;",
   "DROP INDEX IF EXISTS idx_dependencies_source;",
+  // v12 dropped the v2 single-column source/target indexes to make room for
+  // the composite versions of the same names. Restore the v2 indexes on
+  // rollback so v11 lookups continue to benefit from them.
+  "CREATE INDEX IF NOT EXISTS idx_dependencies_source ON dependencies(source_id);",
+  "CREATE INDEX IF NOT EXISTS idx_dependencies_depends_on ON dependencies(depends_on_id);",
 ];
 
 /**
@@ -159,6 +164,14 @@ const DEPENDENCY_KIND_INDEX_DOWN_STATEMENTS: readonly string[] = [
  * which is why down() throws migration_down_unsupported.
  */
 function migrateDependencyKindIndexes(db: Database): void {
+  // Defensive: skip the migration entirely if the dependencies table is
+  // missing. This guards partial-schema test fixtures (and any future
+  // legacy DBs that arrive without the v1 base schema) the same way
+  // migrateSyncConflictsScope and migrateBoardIdempotencyState do.
+  if (!tableExists(db, "dependencies")) {
+    return;
+  }
+
   // Step 1: dedupe rows that share the full edge, keeping the lowest
   // created_at survivor (tiebreak on id for determinism). Performed under
   // the same exclusive transaction the migration runner holds.
