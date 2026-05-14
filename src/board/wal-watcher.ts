@@ -539,6 +539,20 @@ export interface WalWatcherOptions {
    * Tests inject a throwing or stubbed builder to exercise failure paths.
    */
   readonly buildSnapshot?: (domain: TrackerDomain) => BoardSnapshot;
+  /**
+   * When `true`, the watcher always runs the legacy full-snapshot diff path
+   * even when a usable event cursor is available. Used by tests that verify
+   * the fallback contract is bit-identical to the optimized path.
+   */
+  readonly forceFullSnapshotReconcile?: boolean;
+  /**
+   * Optional reconcile observer for tests. Reports which path each tick used,
+   * along with the reason for any fallback. Production code ignores this.
+   */
+  readonly onReconcile?: (info: {
+    readonly path: "event-cursor" | "full-snapshot";
+    readonly reason?: string;
+  }) => void;
 }
 
 export interface WalWatcher {
