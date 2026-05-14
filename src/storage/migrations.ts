@@ -4,7 +4,7 @@ import { dirname, join } from "node:path";
 import { Database } from "bun:sqlite";
 
 import { DomainError } from "../domain/types";
-import { BASE_SCHEMA_STATEMENTS, SCHEMA_VERSION } from "./schema";
+import { BASE_SCHEMA_REVISION, BASE_SCHEMA_STATEMENTS } from "./schema";
 
 const BACKUP_HINT = "Run 'trekoon migrate backup' to snapshot .trekoon/trekoon.db before any manual recovery.";
 
