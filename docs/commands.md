@@ -288,6 +288,19 @@ trekoon session --epic <epic-id>
 
 Scopes session readiness to a specific epic instead of the full tracker.
 
+## Session item resolve
+
+```bash
+trekoon --toon session --item <id>
+```
+
+Resolves any epic/task/subtask id in one call. Returns
+`item: { id, kind, parentEpicId, entity, readiness, suggestedNext }` where
+`kind` is one of `epic|task|subtask`, `entity` is the same shape as
+`epic show --all` / `task show --all` / `subtask show`, and `readiness` is
+scoped to `parentEpicId`. Replaces the legacy
+`epic show || task show || subtask show` fallback cascade.
+
 ## Suggest
 
 ```bash
