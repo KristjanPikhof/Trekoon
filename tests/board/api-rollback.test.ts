@@ -116,7 +116,6 @@ describe("mutation queue rollback", () => {
     const queue = createMutationQueue(model, () => {});
 
     queue.enqueue({
-      mutationId: "test-rollback-1",
       optimistic(snapshot: TestSnapshot) {
         const updatedTasks = snapshot.tasks.map((task) =>
           task.id === "task-1" ? { ...task, title: "Optimistic Title" } : task,
@@ -173,7 +172,6 @@ describe("mutation queue rollback", () => {
     const queue = createMutationQueue(model, () => {});
 
     queue.enqueue({
-      mutationId: "test-rollback-create",
       optimistic(snapshot: TestSnapshot) {
         return {
           ...snapshot,
