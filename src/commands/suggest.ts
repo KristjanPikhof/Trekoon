@@ -125,7 +125,7 @@ function buildSuggestions(
     suggestions.push({
       priority: suggestions.length + 1,
       action: `claim task ${topReady.task.id}`,
-      command: `trekoon --toon task update ${topReady.task.id} --status in_progress`,
+      command: `trekoon --toon task claim ${topReady.task.id} --owner <TODO_OWNER>`,
       reason: `Highest priority ready task: ${topReady.task.title}`,
       category: "execution",
     });
