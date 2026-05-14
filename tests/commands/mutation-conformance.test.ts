@@ -420,7 +420,11 @@ describe("mutation conformance", (): void => {
 
       expect(taskDeleteEvent).toEqual({
         operation: ENTITY_OPERATIONS.task.deleted,
-        payload: { fields: {} },
+        payload: {
+          fields: expect.objectContaining({
+            epic_id: expect.any(String),
+          }),
+        },
       });
       expect(taskDeleteEventIdRow?.id).toBeString();
 
@@ -1020,6 +1024,7 @@ describe("mutation conformance", (): void => {
         method: "PATCH",
         headers: {
           "content-type": "application/json",
+          "if-match": "1",
         },
         body: JSON.stringify({ status: "in_progress" }),
       }));
@@ -1078,6 +1083,7 @@ describe("mutation conformance", (): void => {
         method: "PATCH",
         headers: {
           "content-type": "application/json",
+          "if-match": "1",
         },
         body: JSON.stringify({ status: "blocked" }),
       }));
@@ -1161,6 +1167,7 @@ describe("mutation conformance", (): void => {
         method: "PATCH",
         headers: {
           "content-type": "application/json",
+          "if-match": "1",
         },
         body: JSON.stringify({ status: "done" }),
       }));
@@ -1251,6 +1258,7 @@ describe("mutation conformance", (): void => {
         method: "PATCH",
         headers: {
           "content-type": "application/json",
+          "if-match": "1",
         },
         body: JSON.stringify({ status: "in_progress" }),
       }));

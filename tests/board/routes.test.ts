@@ -209,6 +209,7 @@ describe("board routes", (): void => {
         method: "PATCH",
         headers: {
           "content-type": "application/json",
+          "if-match": String(blocked.version),
         },
         body: JSON.stringify({ status: "in_progress" }),
       }));
@@ -237,6 +238,7 @@ describe("board routes", (): void => {
         method: "PATCH",
         headers: {
           "content-type": "application/json",
+          "if-match": String(task.version),
         },
         body: JSON.stringify({ status: "blocked" }),
       }));
@@ -273,6 +275,7 @@ describe("board routes", (): void => {
         method: "PATCH",
         headers: {
           "content-type": "application/json",
+          "if-match": String(epic.version),
         },
         body: JSON.stringify({ status: "done" }),
       }));
@@ -321,6 +324,7 @@ describe("board routes", (): void => {
         method: "PATCH",
         headers: {
           "content-type": "application/json",
+          "if-match": String(epic.version),
         },
         body: JSON.stringify({ status: "in_progress" }),
       }));
@@ -491,6 +495,7 @@ describe("board routes", (): void => {
         headers: {
           authorization: "Bearer secret-token",
           "content-type": "application/json",
+          "if-match": String(task.version),
         },
         body: JSON.stringify({ status: "in_progress" }),
       }));
@@ -532,6 +537,7 @@ describe("board routes", (): void => {
         method: "PATCH",
         headers: {
           "content-type": "application/json",
+          "if-match": String(emptySubtask.version),
         },
         body: JSON.stringify({
           title: "Triage regression",
@@ -566,6 +572,7 @@ describe("board routes", (): void => {
         method: "PATCH",
         headers: {
           "content-type": "application/json",
+          "if-match": String(describedSubtask.version),
         },
         body: JSON.stringify({
           title: describedSubtask.title,
@@ -814,13 +821,14 @@ describe("board routes", (): void => {
       const mutations = new MutationService(storage.db, cwd);
       const epic = mutations.createEpic({ title: "Roadmap", description: "Plan release" });
       const task = mutations.createTask({ epicId: epic.id, title: "Implement", description: "Ship board" });
-      mutations.updateTask(task.id, { owner: "alice" });
+      const taskAfterOwnerSet = mutations.updateTask(task.id, { owner: "alice" });
       const handler = createBoardApiHandler({ db: storage.db, cwd, token: "secret-token" });
 
       const response = await handler(new Request(`http://board.test/api/tasks/${task.id}?token=secret-token`, {
         method: "PATCH",
         headers: {
           "content-type": "application/json",
+          "if-match": String(taskAfterOwnerSet.version),
         },
         body: JSON.stringify({ owner: null }),
       }));
@@ -848,14 +856,15 @@ describe("board routes", (): void => {
       const epic = mutations.createEpic({ title: "Roadmap", description: "Plan release" });
       const task = mutations.createTask({ epicId: epic.id, title: "Implement", description: "Ship board" });
       const subtask = mutations.createSubtask({ taskId: task.id, title: "Verify", description: "Check owner normalization" });
-      mutations.updateTask(task.id, { owner: "alice" });
-      mutations.updateSubtask(subtask.id, { owner: "bob" });
+      const taskAfterOwnerSet = mutations.updateTask(task.id, { owner: "alice" });
+      const subtaskAfterOwnerSet = mutations.updateSubtask(subtask.id, { owner: "bob" });
       const handler = createBoardApiHandler({ db: storage.db, cwd, token: "secret-token" });
 
       const taskResponse = await handler(new Request(`http://board.test/api/tasks/${task.id}?token=secret-token`, {
         method: "PATCH",
         headers: {
           "content-type": "application/json",
+          "if-match": String(taskAfterOwnerSet.version),
         },
         body: JSON.stringify({ owner: "   " }),
       }));
@@ -863,6 +872,7 @@ describe("board routes", (): void => {
         method: "PATCH",
         headers: {
           "content-type": "application/json",
+          "if-match": String(subtaskAfterOwnerSet.version),
         },
         body: JSON.stringify({ owner: "   " }),
       }));
@@ -1420,7 +1430,7 @@ describe("board routes", (): void => {
       const response = await handler(
         new Request(`http://board.test/api/tasks/${task.id}?token=secret-token`, {
           method: "PATCH",
-          headers: { "content-type": "application/json" },
+          headers: { "content-type": "application/json", "if-match": String(task.version) },
           body: JSON.stringify({ status: maliciousStatus }),
         }),
       );
