@@ -338,10 +338,10 @@ export function startWalWatcher(options: WalWatcherOptions): WalWatcher {
 
     try {
       const fresh = buildSnapshot(domain);
-      const epicsDiff = diffById(lastSnapshot.epics, fresh.epics);
-      const tasksDiff = diffById(lastSnapshot.tasks, fresh.tasks);
-      const subtasksDiff = diffById(lastSnapshot.subtasks, fresh.subtasks);
-      const dependenciesDiff = diffById(lastSnapshot.dependencies, fresh.dependencies);
+      const epicsDiff = diffById(lastSnapshot.epics, fresh.epics, { isLeaf: false });
+      const tasksDiff = diffById(lastSnapshot.tasks, fresh.tasks, { isLeaf: false });
+      const subtasksDiff = diffById(lastSnapshot.subtasks, fresh.subtasks, { isLeaf: true });
+      const dependenciesDiff = diffById(lastSnapshot.dependencies, fresh.dependencies, { isLeaf: true });
 
       const shouldSuppressDiff = shouldSuppressInProcessTick
         ? {
@@ -349,21 +349,25 @@ export function startWalWatcher(options: WalWatcherOptions): WalWatcher {
               epicsDiff,
               recordsByIdFromDelta(options.eventBus.lastInProcessSnapshotDelta, "epics"),
               deletedIdsFromDelta(options.eventBus.lastInProcessSnapshotDelta, "deletedEpicIds"),
+              { isLeaf: false },
             ),
             tasks: suppressAlreadyPublishedDiff(
               tasksDiff,
               recordsByIdFromDelta(options.eventBus.lastInProcessSnapshotDelta, "tasks"),
               deletedIdsFromDelta(options.eventBus.lastInProcessSnapshotDelta, "deletedTaskIds"),
+              { isLeaf: false },
             ),
             subtasks: suppressAlreadyPublishedDiff(
               subtasksDiff,
               recordsByIdFromDelta(options.eventBus.lastInProcessSnapshotDelta, "subtasks"),
               deletedIdsFromDelta(options.eventBus.lastInProcessSnapshotDelta, "deletedSubtaskIds"),
+              { isLeaf: true },
             ),
             dependencies: suppressAlreadyPublishedDiff(
               dependenciesDiff,
               recordsByIdFromDelta(options.eventBus.lastInProcessSnapshotDelta, "dependencies"),
               deletedIdsFromDelta(options.eventBus.lastInProcessSnapshotDelta, "deletedDependencyIds"),
+              { isLeaf: true },
             ),
           }
         : null;
