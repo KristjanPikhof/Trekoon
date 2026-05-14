@@ -245,6 +245,7 @@ shell, worktree, or browser tab show up live without a manual refresh.
 | Create tasks in bulk | `trekoon task create-many ...` |
 | Add dependencies | `trekoon dep add-many ...` |
 | Start an agent session | `trekoon session --epic <id>` |
+| Resolve any epic/task/subtask id | `trekoon session --item <id>` |
 | Get next-action suggestions | `trekoon suggest --epic <id>` |
 | Check epic progress | `trekoon epic progress <id>` |
 | Export epic to Markdown | `trekoon epic export <id>` |
