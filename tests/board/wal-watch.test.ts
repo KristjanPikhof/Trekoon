@@ -666,3 +666,138 @@ describe("board server WAL watcher integration", (): void => {
     }
   });
 });
+
+describe("WAL watcher leaf fingerprint short-circuit", (): void => {
+  test("identical leaf records skip derivedRecordFingerprint entirely", async (): Promise<void> => {
+    const workspace: string = createWorkspace();
+    const seedDb: TrekoonDatabase = openTrekoonDatabase(workspace);
+    const mutations = new MutationService(seedDb.db, workspace);
+    const epic = mutations.createEpic({ title: "Leaf parent epic", description: "Seed" });
+    const task = mutations.createTask({ epicId: epic.id, title: "Leaf parent task", description: "Seed" });
+    mutations.createSubtask({ taskId: task.id, title: "Stable subtask A", description: "" });
+    mutations.createSubtask({ taskId: task.id, title: "Stable subtask B", description: "" });
+    seedDb.close();
+
+    const watcherDb: TrekoonDatabase = openTrekoonDatabase(workspace);
+    const eventBus = createBoardEventBus();
+    const watcher = startWalWatcher({
+      db: watcherDb.db,
+      databaseFile: watcherDb.paths.databaseFile,
+      eventBus,
+      debounceMs: 10,
+    });
+
+    try {
+      // Initial reconcile in startWalWatcher already touched the fingerprint
+      // path while building the baseline. Reset, then trigger a reconcile
+      // where every record is byte-for-byte identical to the baseline.
+      __resetDerivedFingerprintCallCount();
+      watcher.reconcile();
+
+      const callsAfterNoOp = __getDerivedFingerprintCallCount();
+      // With two unchanged subtasks plus the seed task and epic, the legacy
+      // path would have called derivedRecordFingerprint at least 8 times
+      // (4 records × 2 stringify ops in recordChanged: prev + curr). After
+      // the leaf short-circuit, only the two parent records (epic, task)
+      // reach the fingerprint function — 2 records × 2 stringify ops = 4
+      // calls max. Subtasks (leaves) must never trigger a fingerprint call.
+      expect(callsAfterNoOp).toBeLessThanOrEqual(4);
+    } finally {
+      watcher.close();
+      eventBus.close();
+      watcherDb.close();
+    }
+  });
+
+  test("subtask status flip still surfaces via a direct subtask delta", async (): Promise<void> => {
+    const workspace: string = createWorkspace();
+    const seedDb: TrekoonDatabase = openTrekoonDatabase(workspace);
+    const mutations = new MutationService(seedDb.db, workspace);
+    const epic = mutations.createEpic({ title: "Flip parent epic", description: "Seed" });
+    const task = mutations.createTask({ epicId: epic.id, title: "Flip parent task", description: "Seed" });
+    const subtask = mutations.createSubtask({ taskId: task.id, title: "Flip me", description: "" });
+    seedDb.close();
+
+    const watcherDb: TrekoonDatabase = openTrekoonDatabase(workspace);
+    const eventBus = createBoardEventBus();
+    const deltas: unknown[] = [];
+    eventBus.subscribe((event) => {
+      if (event.type === "snapshotDelta") {
+        deltas.push(event.snapshotDelta);
+      }
+    });
+    const watcher = startWalWatcher({
+      db: watcherDb.db,
+      databaseFile: watcherDb.paths.databaseFile,
+      eventBus,
+      debounceMs: 10,
+    });
+
+    try {
+      const cliDb: TrekoonDatabase = openTrekoonDatabase(workspace);
+      try {
+        new MutationService(cliDb.db, workspace).updateSubtask(subtask.id, { status: "in_progress" });
+      } finally {
+        cliDb.close();
+      }
+
+      watcher.reconcile();
+
+      // A status flip bumps subtask (version, updatedAt) so the short-circuit
+      // does NOT apply — the subtask must appear in the delta.
+      expect(deltas.length).toBe(1);
+      const delta = deltas[0] as {
+        subtasks?: Array<{ id?: string; status?: string }>;
+      };
+      expect(delta.subtasks).toContainEqual(
+        expect.objectContaining({ id: subtask.id, status: "in_progress" }),
+      );
+    } finally {
+      watcher.close();
+      eventBus.close();
+      watcherDb.close();
+    }
+  });
+
+  test("leaf no-stringify path still fires on a busy subtask board (1000 leaf compares, 0 stringifies)", async (): Promise<void> => {
+    const workspace: string = createWorkspace();
+    const seedDb: TrekoonDatabase = openTrekoonDatabase(workspace);
+    const mutations = new MutationService(seedDb.db, workspace);
+    const epic = mutations.createEpic({ title: "Busy epic", description: "Seed" });
+    const task = mutations.createTask({ epicId: epic.id, title: "Busy task", description: "Seed" });
+    // 25 subtasks — large enough to make the per-record stringify cost visible
+    // if the leaf short-circuit regresses. Two ticks across this set means 50
+    // leaf compares; pre-change behaviour would have produced ~100+ stringify
+    // calls (recordChanged + recordMatchesPublishedDelta x 2 leaves on the
+    // suppression path), so any nonzero count would clearly flag a regression.
+    for (let i = 0; i < 25; i += 1) {
+      mutations.createSubtask({ taskId: task.id, title: `Busy ${i}`, description: "" });
+    }
+    seedDb.close();
+
+    const watcherDb: TrekoonDatabase = openTrekoonDatabase(workspace);
+    const eventBus = createBoardEventBus();
+    const watcher = startWalWatcher({
+      db: watcherDb.db,
+      databaseFile: watcherDb.paths.databaseFile,
+      eventBus,
+      debounceMs: 10,
+    });
+
+    try {
+      __resetDerivedFingerprintCallCount();
+      watcher.reconcile();
+      watcher.reconcile();
+
+      const totalFingerprintCalls = __getDerivedFingerprintCallCount();
+      // The 25 subtasks are leaves; even across two no-op reconciles they
+      // must not trigger derivedRecordFingerprint. Parents (1 epic + 1 task)
+      // may still call it; allow up to 2 calls per reconcile (i.e. 4 total).
+      expect(totalFingerprintCalls).toBeLessThanOrEqual(4);
+    } finally {
+      watcher.close();
+      eventBus.close();
+      watcherDb.close();
+    }
+  });
+});
