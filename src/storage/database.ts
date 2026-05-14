@@ -467,8 +467,22 @@ export function openTrekoonDatabase(
     paths,
     diagnostics,
     close(): void {
-      db.exec("PRAGMA wal_checkpoint(PASSIVE);");
-      db.close(false);
+      // Best-effort checkpoint: matches closeCachedHandle's posture. WAL
+      // checkpointing is maintenance, not durability — skipping it cannot
+      // corrupt the DB. Suppressing errors here lets read-only contexts
+      // (read-only filesystem, immutable DB file, sandboxed agents) close
+      // cleanly instead of throwing SQLITE_READONLY on the very last
+      // syscall before db.close().
+      try {
+        db.exec("PRAGMA wal_checkpoint(PASSIVE);");
+      } catch {
+        /* best effort — checkpoint is maintenance, not durability */
+      }
+      try {
+        db.close(false);
+      } catch {
+        /* best effort — handle may already be closing */
+      }
     },
   };
 }
