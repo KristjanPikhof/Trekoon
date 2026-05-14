@@ -385,10 +385,10 @@ export function createMutationQueue(model, rerender) {
 
   return {
     enqueue(mutation) {
-      queue.push({
-        ...mutation,
-        mutationId: mutation.mutationId ?? crypto.randomUUID(),
-      });
+      if (!mutation.mutationId) {
+        throw new Error("enqueue: mutation.mutationId is required; enqueueMutation must assign one before calling enqueue");
+      }
+      queue.push({ ...mutation });
       processNext();
     },
 
