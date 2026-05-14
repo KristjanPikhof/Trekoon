@@ -249,32 +249,12 @@ export function buildBoardSnapshotDelta(domain: TrackerDomain, selection: Snapsh
   const snapshotTasks = tasks.map((task) => mapSnapshotTask(task, snapshotSubtasksByTaskId.get(task.id) ?? [], indexes));
   const snapshotEpics = epicIds.map((epicId) => domain.getEpic(epicId)).filter((epic): epic is EpicRecord => epic !== null).map((epic) => mapSnapshotEpic(epic, snapshotTasks.filter((task) => task.epicId === epic.id)));
 
-  // For explicitly requested dependencyIds, fetch each row directly by ID so
-  // dependencies whose source task/subtask is outside the current task/subtask
-  // selection are not silently dropped. The source-index path (indexes.dependencies)
-  // only covers dependencies whose source is in sourceIds, so it cannot satisfy
-  // out-of-scope requests.
-  const directDependencies: BoardSnapshotDependency[] = [];
-  for (const depId of requestedDependencyIds) {
-    const indexedRow = indexes.dependencies.find((d) => d.id === depId);
-    if (indexedRow !== undefined) {
-      directDependencies.push(indexedRow);
-    } else {
-      const row = domain.getDependency(depId);
-      if (row === null) {
-        console.warn(`[snapshot] dependencyId not found, skipping: ${depId}`);
-      } else {
-        directDependencies.push(mapDependency(row));
-      }
-    }
-  }
-
   return {
     generatedAt: Date.now(),
     epics: snapshotEpics,
     tasks: snapshotTasks.filter((task) => requestedTaskIds.includes(task.id)),
     subtasks: allSubtasks.map((subtask) => mapSnapshotSubtask(subtask, indexes)).filter((subtask) => requestedSubtaskIds.includes(subtask.id)),
-    dependencies: directDependencies,
+    dependencies: indexes.dependencies.filter((dependency) => requestedDependencyIds.has(dependency.id)),
     deletedEpicIds: [...(selection.deletedEpicIds ?? [])],
     deletedTaskIds: [...(selection.deletedTaskIds ?? [])],
     deletedSubtaskIds: [...(selection.deletedSubtaskIds ?? [])],
