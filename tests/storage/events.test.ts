@@ -451,8 +451,15 @@ describe("event retention", (): void => {
       expect(events[1]?.updated_at).toBe(events[1]?.created_at);
       expect(gitContext).not.toBeNull();
       expect(gitContext?.created_at).toBe(events[0]?.created_at);
-      expect(gitContext?.updated_at).toBe(events[1]?.created_at);
-      expect(gitContext?.version).toBe(2);
+      // git_context is now upserted at most once per transaction (the first
+      // appendEventWithGitContext flips the gitPersisted flag). Subsequent
+      // appends in the same write lock skip the redundant upsert, so the
+      // git_context row reflects exactly one insert — updated_at matches the
+      // initial persistedAt and version stays at 1. Per-event rows still
+      // carry git_branch/git_head from the shared context, so the events
+      // contract is unchanged.
+      expect(gitContext?.updated_at).toBe(events[0]?.created_at);
+      expect(gitContext?.version).toBe(1);
     } finally {
       storage.close();
     }
