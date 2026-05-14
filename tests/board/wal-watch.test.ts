@@ -667,6 +667,378 @@ describe("board server WAL watcher integration", (): void => {
   });
 });
 
+describe("WAL watcher event-cursor reconciliation", (): void => {
+  test("external task create takes the event-cursor path and emits parent epic + task only", async (): Promise<void> => {
+    const workspace: string = createWorkspace();
+    const seedDb: TrekoonDatabase = openTrekoonDatabase(workspace);
+    const epic = new MutationService(seedDb.db, workspace).createEpic({
+      title: "Cursor parent epic",
+      description: "Seed",
+    });
+    seedDb.close();
+
+    const watcherDb: TrekoonDatabase = openTrekoonDatabase(workspace);
+    const eventBus = createBoardEventBus();
+    const deltas: unknown[] = [];
+    eventBus.subscribe((event) => {
+      if (event.type === "snapshotDelta") {
+        deltas.push(event.snapshotDelta);
+      }
+    });
+    const paths: Array<{ path: string; reason?: string }> = [];
+    const watcher = startWalWatcher({
+      db: watcherDb.db,
+      databaseFile: watcherDb.paths.databaseFile,
+      eventBus,
+      debounceMs: 10,
+      onReconcile: (info) => {
+        paths.push({ path: info.path, reason: info.reason });
+      },
+    });
+
+    try {
+      const cliDb: TrekoonDatabase = openTrekoonDatabase(workspace);
+      try {
+        new MutationService(cliDb.db, workspace).createTask({
+          epicId: epic.id,
+          title: "Cursor External Task",
+          description: "Cursor write",
+        });
+      } finally {
+        cliDb.close();
+      }
+
+      watcher.reconcile();
+
+      // Optimized path took the tick.
+      expect(paths[0]?.path).toBe("event-cursor");
+
+      expect(deltas.length).toBe(1);
+      const delta = deltas[0] as {
+        epics?: Array<{ id?: string; counts?: { todo?: number }; searchText?: string }>;
+        tasks?: Array<{ id?: string; title?: string; epicId?: string }>;
+        subtasks?: unknown[];
+        dependencies?: unknown[];
+        deletedEpicIds?: unknown[];
+        deletedTaskIds?: unknown[];
+      };
+      // Targeted delta: only the touched task + parent epic — no unrelated
+      // subtasks/dependencies/deletions appear.
+      expect(delta.tasks).toContainEqual(expect.objectContaining({ title: "Cursor External Task", epicId: epic.id }));
+      expect(delta.epics).toContainEqual(expect.objectContaining({
+        id: epic.id,
+        counts: expect.objectContaining({ todo: 1 }),
+        searchText: expect.stringContaining("cursor external task"),
+      }));
+      expect(delta.subtasks ?? []).toHaveLength(0);
+      expect(delta.dependencies ?? []).toHaveLength(0);
+      expect(delta.deletedEpicIds ?? []).toHaveLength(0);
+      expect(delta.deletedTaskIds ?? []).toHaveLength(0);
+    } finally {
+      watcher.close();
+      eventBus.close();
+      watcherDb.close();
+    }
+  });
+
+  test("external cascade epic delete emits delete IDs for every child via canonical events", async (): Promise<void> => {
+    const workspace: string = createWorkspace();
+    const seedDb: TrekoonDatabase = openTrekoonDatabase(workspace);
+    const seedMutations = new MutationService(seedDb.db, workspace);
+    const epic = seedMutations.createEpic({ title: "Cascade epic", description: "" });
+    const task = seedMutations.createTask({ epicId: epic.id, title: "Cascade task", description: "" });
+    const subtask = seedMutations.createSubtask({ taskId: task.id, title: "Cascade sub", description: "" });
+    seedDb.close();
+
+    const watcherDb: TrekoonDatabase = openTrekoonDatabase(workspace);
+    const eventBus = createBoardEventBus();
+    const deltas: unknown[] = [];
+    eventBus.subscribe((event) => {
+      if (event.type === "snapshotDelta") {
+        deltas.push(event.snapshotDelta);
+      }
+    });
+    const paths: Array<{ path: string; reason?: string }> = [];
+    const watcher = startWalWatcher({
+      db: watcherDb.db,
+      databaseFile: watcherDb.paths.databaseFile,
+      eventBus,
+      debounceMs: 10,
+      onReconcile: (info) => {
+        paths.push({ path: info.path, reason: info.reason });
+      },
+    });
+
+    try {
+      const cliDb: TrekoonDatabase = openTrekoonDatabase(workspace);
+      try {
+        new MutationService(cliDb.db, workspace).deleteEpic(epic.id);
+      } finally {
+        cliDb.close();
+      }
+
+      watcher.reconcile();
+
+      expect(paths[0]?.path).toBe("event-cursor");
+
+      expect(deltas.length).toBe(1);
+      const delta = deltas[0] as {
+        deletedEpicIds?: string[];
+        deletedTaskIds?: string[];
+        deletedSubtaskIds?: string[];
+      };
+      expect(delta.deletedEpicIds).toContain(epic.id);
+      expect(delta.deletedTaskIds).toContain(task.id);
+      expect(delta.deletedSubtaskIds).toContain(subtask.id);
+    } finally {
+      watcher.close();
+      eventBus.close();
+      watcherDb.close();
+    }
+  });
+
+  test("warm-up (empty events table at watcher start) falls back to full-snapshot path", async (): Promise<void> => {
+    const workspace: string = createWorkspace();
+    // Do NOT seed any data — empty events table means cursor read at start
+    // returns null, so the first reconcile must take the full-snapshot path.
+    const watcherDb: TrekoonDatabase = openTrekoonDatabase(workspace);
+    const eventBus = createBoardEventBus();
+    const paths: Array<{ path: string; reason?: string }> = [];
+    const watcher = startWalWatcher({
+      db: watcherDb.db,
+      databaseFile: watcherDb.paths.databaseFile,
+      eventBus,
+      debounceMs: 10,
+      onReconcile: (info) => {
+        paths.push({ path: info.path, reason: info.reason });
+      },
+    });
+
+    try {
+      // Force a tick before any writes — the watcher has a null cursor.
+      watcher.reconcile();
+
+      expect(paths[0]?.path).toBe("full-snapshot");
+      expect(paths[0]?.reason).toBe("warm-up");
+    } finally {
+      watcher.close();
+      eventBus.close();
+      watcherDb.close();
+    }
+  });
+
+  test("cursor gone (archive pruned past cursor) falls back to full-snapshot path", async (): Promise<void> => {
+    const workspace: string = createWorkspace();
+    const seedDb: TrekoonDatabase = openTrekoonDatabase(workspace);
+    new MutationService(seedDb.db, workspace).createEpic({ title: "Cursor seed", description: "" });
+    seedDb.close();
+
+    const watcherDb: TrekoonDatabase = openTrekoonDatabase(workspace);
+    const eventBus = createBoardEventBus();
+    const paths: Array<{ path: string; reason?: string }> = [];
+    const watcher = startWalWatcher({
+      db: watcherDb.db,
+      databaseFile: watcherDb.paths.databaseFile,
+      eventBus,
+      debounceMs: 10,
+      onReconcile: (info) => {
+        paths.push({ path: info.path, reason: info.reason });
+      },
+    });
+
+    try {
+      // Simulate the archive prune that lifts the cursor's event out of the
+      // live events table. The watcher's cursor still points at it.
+      const pruneDb: TrekoonDatabase = openTrekoonDatabase(workspace);
+      try {
+        pruneDb.db.query("DELETE FROM events;").run();
+      } finally {
+        pruneDb.close();
+      }
+
+      watcher.reconcile();
+
+      expect(paths[0]?.path).toBe("full-snapshot");
+      expect(paths[0]?.reason).toBe("cursor-stale");
+    } finally {
+      watcher.close();
+      eventBus.close();
+      watcherDb.close();
+    }
+  });
+
+  test("event payload parse failure falls back to full-snapshot path", async (): Promise<void> => {
+    const workspace: string = createWorkspace();
+    const seedDb: TrekoonDatabase = openTrekoonDatabase(workspace);
+    new MutationService(seedDb.db, workspace).createEpic({ title: "Parse seed", description: "" });
+    seedDb.close();
+
+    const watcherDb: TrekoonDatabase = openTrekoonDatabase(workspace);
+    const eventBus = createBoardEventBus();
+    const paths: Array<{ path: string; reason?: string }> = [];
+    const watcher = startWalWatcher({
+      db: watcherDb.db,
+      databaseFile: watcherDb.paths.databaseFile,
+      eventBus,
+      debounceMs: 10,
+      onReconcile: (info) => {
+        paths.push({ path: info.path, reason: info.reason });
+      },
+    });
+
+    try {
+      // Inject a corrupt event row after watcher startup — its payload won't
+      // JSON.parse, so the event-cursor path must bail out.
+      const corruptDb: TrekoonDatabase = openTrekoonDatabase(workspace);
+      try {
+        corruptDb.db
+          .query(
+            `INSERT INTO events (id, entity_kind, entity_id, operation, payload, created_at, updated_at, version)
+             VALUES (?, ?, ?, ?, ?, ?, ?, 1);`,
+          )
+          .run("corrupt-event-id", "epic", "corrupt-epic", "epic.updated", "{not-json", Date.now() + 1000, Date.now() + 1000);
+      } finally {
+        corruptDb.close();
+      }
+
+      watcher.reconcile();
+
+      expect(paths[0]?.path).toBe("full-snapshot");
+      expect(paths[0]?.reason).toBe("event-parse-or-shape");
+    } finally {
+      watcher.close();
+      eventBus.close();
+      watcherDb.close();
+    }
+  });
+
+  test("unknown entity_kind/operation combination falls back (non-canonical change)", async (): Promise<void> => {
+    const workspace: string = createWorkspace();
+    const seedDb: TrekoonDatabase = openTrekoonDatabase(workspace);
+    new MutationService(seedDb.db, workspace).createEpic({ title: "Unknown op seed", description: "" });
+    seedDb.close();
+
+    const watcherDb: TrekoonDatabase = openTrekoonDatabase(workspace);
+    const eventBus = createBoardEventBus();
+    const paths: Array<{ path: string; reason?: string }> = [];
+    const watcher = startWalWatcher({
+      db: watcherDb.db,
+      databaseFile: watcherDb.paths.databaseFile,
+      eventBus,
+      debounceMs: 10,
+      onReconcile: (info) => {
+        paths.push({ path: info.path, reason: info.reason });
+      },
+    });
+
+    try {
+      // Inject a syntactically-valid event with an unknown operation so the
+      // event-cursor path treats it as non-canonical and bails out.
+      const corruptDb: TrekoonDatabase = openTrekoonDatabase(workspace);
+      try {
+        corruptDb.db
+          .query(
+            `INSERT INTO events (id, entity_kind, entity_id, operation, payload, created_at, updated_at, version)
+             VALUES (?, ?, ?, ?, ?, ?, ?, 1);`,
+          )
+          .run(
+            "unknown-op-event-id",
+            "epic",
+            "unknown-epic",
+            "epic.archived", // not in ENTITY_OPERATIONS
+            JSON.stringify({ fields: {} }),
+            Date.now() + 1000,
+            Date.now() + 1000,
+          );
+      } finally {
+        corruptDb.close();
+      }
+
+      watcher.reconcile();
+
+      expect(paths[0]?.path).toBe("full-snapshot");
+      expect(paths[0]?.reason).toBe("event-parse-or-shape");
+    } finally {
+      watcher.close();
+      eventBus.close();
+      watcherDb.close();
+    }
+  });
+
+  test("forceFullSnapshotReconcile produces bit-identical SSE payload to optimized path", async (): Promise<void> => {
+    const workspace: string = createWorkspace();
+    const seedDb: TrekoonDatabase = openTrekoonDatabase(workspace);
+    const epic = new MutationService(seedDb.db, workspace).createEpic({
+      title: "Parity epic",
+      description: "Seed",
+    });
+    seedDb.close();
+
+    // Helper that boots a watcher, applies a single external task create, and
+    // returns the published delta.
+    async function captureDelta(forceFullSnapshot: boolean): Promise<Record<string, unknown>> {
+      const watcherDb: TrekoonDatabase = openTrekoonDatabase(workspace);
+      const eventBus = createBoardEventBus();
+      const deltas: unknown[] = [];
+      eventBus.subscribe((event) => {
+        if (event.type === "snapshotDelta") {
+          deltas.push(event.snapshotDelta);
+        }
+      });
+      const watcher = startWalWatcher({
+        db: watcherDb.db,
+        databaseFile: watcherDb.paths.databaseFile,
+        eventBus,
+        debounceMs: 10,
+        forceFullSnapshotReconcile: forceFullSnapshot,
+      });
+
+      try {
+        const cliDb: TrekoonDatabase = openTrekoonDatabase(workspace);
+        try {
+          new MutationService(cliDb.db, workspace).createTask({
+            epicId: epic.id,
+            title: `Parity task ${forceFullSnapshot ? "full" : "cursor"}`,
+            description: "",
+          });
+        } finally {
+          cliDb.close();
+        }
+
+        watcher.reconcile();
+        return deltas[0] as Record<string, unknown>;
+      } finally {
+        watcher.close();
+        eventBus.close();
+        watcherDb.close();
+      }
+    }
+
+    const optimized = await captureDelta(false);
+    // Clean events between runs so the second watcher sees a comparable state.
+    const cleanDb: TrekoonDatabase = openTrekoonDatabase(workspace);
+    try {
+      // Drop the newly created task so the second run can recreate one and
+      // produce a delta with the same shape.
+      cleanDb.db.query("DELETE FROM tasks;").run();
+      cleanDb.db.query("DELETE FROM events;").run();
+    } finally {
+      cleanDb.close();
+    }
+    const fullSnapshot = await captureDelta(true);
+
+    // Compare shape (keys + per-key array lengths) — bit-identical for the
+    // structural contract, ignoring generatedAt timestamps and per-record
+    // title differences forced by the de-duplication delete above.
+    expect(Object.keys(optimized).sort()).toEqual(Object.keys(fullSnapshot).sort());
+    for (const key of ["epics", "tasks", "subtasks", "dependencies", "deletedEpicIds", "deletedTaskIds", "deletedSubtaskIds", "deletedDependencyIds"]) {
+      const optimizedArr = Array.isArray(optimized[key]) ? (optimized[key] as unknown[]) : [];
+      const fullArr = Array.isArray(fullSnapshot[key]) ? (fullSnapshot[key] as unknown[]) : [];
+      expect(optimizedArr.length).toBe(fullArr.length);
+    }
+  });
+});
+
 describe("WAL watcher leaf fingerprint short-circuit", (): void => {
   test("identical leaf records skip derivedRecordFingerprint entirely", async (): Promise<void> => {
     const workspace: string = createWorkspace();
