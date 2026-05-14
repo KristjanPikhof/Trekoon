@@ -74,7 +74,6 @@ describe("mutation queue", () => {
     });
 
     queue.enqueue({
-      mutationId: "test-mutation-1",
       successMessage: "Task saved.",
       request: () => new Promise((resolve) => {
         resolveRequest = resolve;
@@ -118,7 +117,6 @@ describe("mutation queue", () => {
     const queue = createMutationQueue(model, () => {});
 
     queue.enqueue({
-      mutationId: "test-mutation-first",
       optimistic(snapshot: TaskSnapshot) {
         const [task] = snapshot.tasks;
         if (task) task.title = "First optimistic";
@@ -130,7 +128,6 @@ describe("mutation queue", () => {
       },
     });
     queue.enqueue({
-      mutationId: "test-mutation-second",
       optimistic(snapshot: TaskSnapshot) {
         const [task] = snapshot.tasks;
         if (task) task.title = "Second optimistic";
@@ -172,7 +169,6 @@ describe("mutation queue", () => {
     const queue = createMutationQueue(model, () => {});
 
     queue.enqueue({
-      mutationId: "test-mutation-throw",
       optimistic() {
         throw new Error("optimistic failed");
       },
