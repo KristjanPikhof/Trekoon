@@ -826,6 +826,44 @@ export class TrackerDomain {
     return rows.map(mapDependency);
   }
 
+  /**
+   * Multi-node variant of {@link listDependenciesTouchingNode}. Returns every
+   * dependency row whose `source_id` OR `depends_on_id` is in the supplied
+   * set, deduped and ordered by (created_at, id).
+   *
+   * Used by epic-cascade delete to gather touching dependencies for the
+   * union of an epic's tasks and subtasks in a single chunked query rather
+   * than N per-node calls. Mirrors `planTaskDeletion`'s SQL shape.
+   *
+   * Callers do NOT need to pre-validate node existence — orphaned dep rows
+   * are surfaced as-is so the caller can clean them up. An empty input
+   * returns an empty array without touching the database.
+   */
+  listDependenciesTouchingNodes(nodeIds: readonly string[]): readonly DependencyRecord[] {
+    if (nodeIds.length === 0) {
+      return [];
+    }
+    const normalizedIds: string[] = nodeIds.map((nodeId) => assertNonEmpty("nodeId", nodeId));
+    const dependencyRows: DependencyRow[] = [];
+    const nodeIdChunks = chunkValues(normalizedIds, Math.floor(SQLITE_MAX_VARIABLES / 2));
+    for (const nodeIdChunk of nodeIdChunks) {
+      const placeholders = nodeIdChunk.map(() => "?").join(", ");
+      const rows = this.#db
+        .query(
+          `SELECT id, source_id, source_kind, depends_on_id, depends_on_kind, created_at, updated_at
+           FROM dependencies
+           WHERE source_id IN (${placeholders}) OR depends_on_id IN (${placeholders})
+           ORDER BY created_at ASC, id ASC;`,
+        )
+        .all(...nodeIdChunk, ...nodeIdChunk) as DependencyRow[];
+      dependencyRows.push(...rows);
+    }
+
+    return [...new Map(dependencyRows.map((row) => [row.id, row])).values()]
+      .sort((left, right) => left.created_at - right.created_at || left.id.localeCompare(right.id))
+      .map(mapDependency);
+  }
+
   planTaskDeletion(taskId: string): TaskDeletionPlan {
     const normalizedTaskId: string = assertNonEmpty("taskId", taskId);
     this.getTaskOrThrow(normalizedTaskId);
