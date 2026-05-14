@@ -207,9 +207,15 @@ PRAGMAs are tuned for read+write throughput:
   but the database file itself never corrupts. To restore the pre-tuning
   behaviour (`synchronous = FULL`), set `TREKOON_SQLITE_DURABILITY=full`
   before invoking any `trekoon` command.
-- `temp_store = MEMORY`, `mmap_size = 256 MiB`, `cache_size = -64000` (64 MiB),
-  `wal_autocheckpoint = 1000` — keep hot reads in-process and bound the WAL
-  size under sustained writes.
+- `temp_store = MEMORY`, `mmap_size = 256 MiB`, `wal_autocheckpoint = 1000` —
+  keep hot reads in-process and bound the WAL size under sustained writes.
+- `cache_size` — defaults to 64 MiB per connection. Override with
+  `TREKOON_SQLITE_CACHE_MIB=<N>` (non-negative integer). In daemon mode
+  (`trekoon serve`) up to 16 connections may be cached simultaneously, so
+  peak page-cache usage approaches `CACHED_DATABASES_CAPACITY × cache_size`
+  (e.g. 16 × 64 MiB = 1 GiB at the default). Lower `TREKOON_SQLITE_CACHE_MIB`
+  when memory is constrained (e.g. `TREKOON_SQLITE_CACHE_MIB=16` → 256 MiB
+  total for a 16-handle daemon).
 
 These pragmas apply per open connection. Recovery path on suspected
 corruption: `trekoon migrate backup`, then copy a known-good backup over
