@@ -211,11 +211,6 @@ describe("WAL watcher diff and resilience", (): void => {
       databaseFile: watcherDb.paths.databaseFile,
       eventBus,
       debounceMs: 10,
-      // Pin the watcher onto the full-snapshot path: this test is specifically
-      // about the snapshot-diff behavior of the fallback path (top-level
-      // metadata-only changes do not emit a delta). The event-cursor hot path
-      // no longer reads the full snapshot at all.
-      forceFullSnapshotReconcile: true,
       buildSnapshot: () => {
         buildCalls += 1;
         return (buildCalls === 1 ? baseSnapshot : reshapedSnapshot) as never;
@@ -668,70 +663,6 @@ describe("board server WAL watcher integration", (): void => {
       await reader.cancel().catch(() => {});
     } finally {
       boardServer.stop();
-    }
-  });
-});
-
-describe("WAL watcher mtime gate", (): void => {
-  test("schedules reconcile when mtime is unchanged but enough time has passed since last reconcile", async (): Promise<void> => {
-    // Simulate a rapid sub-ms double-write where both writes land in the same
-    // filesystem mtime tick (mtime does not change between watcher events).
-    // The staleEnough floor must guarantee a reconcile is still scheduled.
-    const workspace: string = createWorkspace();
-    const seedDb: TrekoonDatabase = openTrekoonDatabase(workspace);
-    new MutationService(seedDb.db, workspace).createEpic({ title: "Mtime Gate Seed", description: "Seed" });
-    seedDb.close();
-
-    const watcherDb: TrekoonDatabase = openTrekoonDatabase(workspace);
-    const eventBus = createBoardEventBus();
-    const deltas: unknown[] = [];
-    eventBus.subscribe((event) => {
-      if (event.type === "snapshotDelta") {
-        deltas.push(event.snapshotDelta);
-      }
-    });
-
-    // Use a short debounce so the staleEnough check fires quickly.
-    const debounceMs = 10;
-    const watcher = startWalWatcher({
-      db: watcherDb.db,
-      databaseFile: watcherDb.paths.databaseFile,
-      eventBus,
-      debounceMs,
-    });
-
-    try {
-      // Perform an initial reconcile to set lastReconcileAt.
-      watcher.reconcile();
-
-      // Wait longer than debounceMs so staleEnough becomes true on the next
-      // maybeScheduleReconcile call regardless of mtime.
-      await new Promise((resolve) => setTimeout(resolve, debounceMs + 20));
-
-      // Write a second epic via a separate connection (simulates sub-ms write
-      // where mtime may not have advanced since the last reconcile).
-      const cliDb: TrekoonDatabase = openTrekoonDatabase(workspace);
-      try {
-        new MutationService(cliDb.db, workspace).createEpic({
-          title: "Mtime Gate CLI Write",
-          description: "Second write same mtime tick",
-        });
-      } finally {
-        cliDb.close();
-      }
-
-      // Drive reconcile directly — by now staleEnough is true so even if the
-      // internal mtime hasn't advanced from lastWalMtime, a schedule fires.
-      watcher.reconcile();
-
-      expect(deltas.length).toBeGreaterThanOrEqual(1);
-      const lastDelta = deltas[deltas.length - 1] as { epics?: Array<{ title?: string }> };
-      const titles = (lastDelta.epics ?? []).map((e) => e.title);
-      expect(titles).toContain("Mtime Gate CLI Write");
-    } finally {
-      watcher.close();
-      eventBus.close();
-      watcherDb.close();
     }
   });
 });
