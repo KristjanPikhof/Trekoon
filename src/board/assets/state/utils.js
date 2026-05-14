@@ -205,6 +205,7 @@ export function normalizeSnapshot(rawSnapshot) {
       status: normalizeStatus(String(epic.status ?? "todo")),
       createdAt,
       updatedAt: normalizeTimestamp(epic.updatedAt, createdAt),
+      version: normalizeVersion(epic.version),
       taskIds: epicTasks.map((task) => task.id),
       counts: deriveCounts(epicTasks),
       searchText: "",
