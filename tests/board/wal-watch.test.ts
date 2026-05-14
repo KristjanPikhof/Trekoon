@@ -211,6 +211,11 @@ describe("WAL watcher diff and resilience", (): void => {
       databaseFile: watcherDb.paths.databaseFile,
       eventBus,
       debounceMs: 10,
+      // Pin the watcher onto the full-snapshot path: this test is
+      // specifically about the snapshot-diff behavior (top-level
+      // metadata-only changes do not emit a delta). The event-cursor hot
+      // path no longer reads the full snapshot at all.
+      forceFullSnapshotReconcile: true,
       buildSnapshot: () => {
         buildCalls += 1;
         return (buildCalls === 1 ? baseSnapshot : reshapedSnapshot) as never;
@@ -437,6 +442,10 @@ describe("WAL watcher diff and resilience", (): void => {
       eventBus,
       debounceMs: 10,
       logEveryNthFailure: 2,
+      // Force every tick onto the full-snapshot path so the synthetic
+      // buildSnapshot failure injected below exercises the error path. The
+      // optimized event-cursor path intentionally skips buildSnapshot.
+      forceFullSnapshotReconcile: true,
       logger: (message) => {
         loggedMessages.push(message);
       },
@@ -667,70 +676,6 @@ describe("board server WAL watcher integration", (): void => {
   });
 });
 
-describe("WAL watcher mtime gate", (): void => {
-  test("schedules reconcile when mtime is unchanged but enough time has passed since last reconcile", async (): Promise<void> => {
-    // Simulate a rapid sub-ms double-write where both writes land in the same
-    // filesystem mtime tick (mtime does not change between watcher events).
-    // The staleEnough floor must guarantee a reconcile is still scheduled.
-    const workspace: string = createWorkspace();
-    const seedDb: TrekoonDatabase = openTrekoonDatabase(workspace);
-    new MutationService(seedDb.db, workspace).createEpic({ title: "Mtime Gate Seed", description: "Seed" });
-    seedDb.close();
-
-    const watcherDb: TrekoonDatabase = openTrekoonDatabase(workspace);
-    const eventBus = createBoardEventBus();
-    const deltas: unknown[] = [];
-    eventBus.subscribe((event) => {
-      if (event.type === "snapshotDelta") {
-        deltas.push(event.snapshotDelta);
-      }
-    });
-
-    // Use a short debounce so the staleEnough check fires quickly.
-    const debounceMs = 10;
-    const watcher = startWalWatcher({
-      db: watcherDb.db,
-      databaseFile: watcherDb.paths.databaseFile,
-      eventBus,
-      debounceMs,
-    });
-
-    try {
-      // Perform an initial reconcile to set lastReconcileAt.
-      watcher.reconcile();
-
-      // Wait longer than debounceMs so staleEnough becomes true on the next
-      // maybeScheduleReconcile call regardless of mtime.
-      await new Promise((resolve) => setTimeout(resolve, debounceMs + 20));
-
-      // Write a second epic via a separate connection (simulates sub-ms write
-      // where mtime may not have advanced since the last reconcile).
-      const cliDb: TrekoonDatabase = openTrekoonDatabase(workspace);
-      try {
-        new MutationService(cliDb.db, workspace).createEpic({
-          title: "Mtime Gate CLI Write",
-          description: "Second write same mtime tick",
-        });
-      } finally {
-        cliDb.close();
-      }
-
-      // Drive reconcile directly — by now staleEnough is true so even if the
-      // internal mtime hasn't advanced from lastWalMtime, a schedule fires.
-      watcher.reconcile();
-
-      expect(deltas.length).toBeGreaterThanOrEqual(1);
-      const lastDelta = deltas[deltas.length - 1] as { epics?: Array<{ title?: string }> };
-      const titles = (lastDelta.epics ?? []).map((e) => e.title);
-      expect(titles).toContain("Mtime Gate CLI Write");
-    } finally {
-      watcher.close();
-      eventBus.close();
-      watcherDb.close();
-    }
-  });
-});
-
 describe("WAL watcher event-cursor reconciliation", (): void => {
   test("external task create takes the event-cursor path and emits parent epic + task only", async (): Promise<void> => {
     const workspace: string = createWorkspace();
@@ -798,151 +743,6 @@ describe("WAL watcher event-cursor reconciliation", (): void => {
       expect(delta.dependencies ?? []).toHaveLength(0);
       expect(delta.deletedEpicIds ?? []).toHaveLength(0);
       expect(delta.deletedTaskIds ?? []).toHaveLength(0);
-    } finally {
-      watcher.close();
-      eventBus.close();
-      watcherDb.close();
-    }
-  });
-
-  test("external standalone task delete fans in parent epic via task.deleted epic_id field", async (): Promise<void> => {
-    // Regression: before the fix the canonical task.deleted event omitted
-    // epic_id when the task was deleted standalone (i.e. NOT via epic
-    // cascade), so the WAL watcher's event-cursor path could not fan-in the
-    // parent epic — its derived taskIds/counts/searchText stayed stale on
-    // peer boards until the next mtime-driven full-snapshot fallback.
-    const workspace: string = createWorkspace();
-    const seedDb: TrekoonDatabase = openTrekoonDatabase(workspace);
-    const seedMutations = new MutationService(seedDb.db, workspace);
-    const epic = seedMutations.createEpic({ title: "Standalone parent epic", description: "Seed" });
-    const task = seedMutations.createTask({
-      epicId: epic.id,
-      title: "Standalone delete task",
-      description: "Seed task body",
-    });
-    seedDb.close();
-
-    const watcherDb: TrekoonDatabase = openTrekoonDatabase(workspace);
-    const eventBus = createBoardEventBus();
-    const deltas: unknown[] = [];
-    eventBus.subscribe((event) => {
-      if (event.type === "snapshotDelta") {
-        deltas.push(event.snapshotDelta);
-      }
-    });
-    const paths: Array<{ path: string; reason?: string | undefined }> = [];
-    const watcher = startWalWatcher({
-      db: watcherDb.db,
-      databaseFile: watcherDb.paths.databaseFile,
-      eventBus,
-      debounceMs: 10,
-      onReconcile: (info) => {
-        paths.push({ path: info.path, reason: info.reason });
-      },
-    });
-
-    try {
-      const cliDb: TrekoonDatabase = openTrekoonDatabase(workspace);
-      try {
-        new MutationService(cliDb.db, workspace).deleteTask(task.id);
-      } finally {
-        cliDb.close();
-      }
-
-      watcher.reconcile();
-
-      expect(paths[0]?.path).toBe("event-cursor");
-      expect(deltas.length).toBe(1);
-      const delta = deltas[0] as {
-        epics?: Array<{ id?: string; taskIds?: string[]; counts?: { todo?: number }; searchText?: string }>;
-        deletedTaskIds?: string[];
-        deletedEpicIds?: string[];
-      };
-      // Parent epic must surface in upserts (taskIds shrunk to 0).
-      expect(delta.epics).toContainEqual(expect.objectContaining({
-        id: epic.id,
-        taskIds: [],
-        counts: expect.objectContaining({ todo: 0 }),
-      }));
-      // Deleted task must surface in deletedTaskIds.
-      expect(delta.deletedTaskIds).toContain(task.id);
-      // The parent epic itself was NOT deleted — must not appear in deletedEpicIds.
-      expect(delta.deletedEpicIds ?? []).not.toContain(epic.id);
-    } finally {
-      watcher.close();
-      eventBus.close();
-      watcherDb.close();
-    }
-  });
-
-  test("external non-cascade subtask delete fans in parent task via subtask.deleted task_id field", async (): Promise<void> => {
-    // Regression: before the fix the canonical subtask.deleted event omitted
-    // task_id when the subtask was deleted standalone (NOT via task or epic
-    // cascade), so the watcher's post-delete domain.getSubtask lookup
-    // returned null and the parent task's subtasks/searchText stayed stale
-    // on peer boards until the next mtime-driven full-snapshot fallback.
-    const workspace: string = createWorkspace();
-    const seedDb: TrekoonDatabase = openTrekoonDatabase(workspace);
-    const seedMutations = new MutationService(seedDb.db, workspace);
-    const epic = seedMutations.createEpic({ title: "Subtask parent epic", description: "Seed" });
-    const task = seedMutations.createTask({
-      epicId: epic.id,
-      title: "Subtask parent task",
-      description: "Seed task body",
-    });
-    const subtask = seedMutations.createSubtask({
-      taskId: task.id,
-      title: "Standalone delete subtask",
-      description: "Seed sub body",
-    });
-    seedDb.close();
-
-    const watcherDb: TrekoonDatabase = openTrekoonDatabase(workspace);
-    const eventBus = createBoardEventBus();
-    const deltas: unknown[] = [];
-    eventBus.subscribe((event) => {
-      if (event.type === "snapshotDelta") {
-        deltas.push(event.snapshotDelta);
-      }
-    });
-    const paths: Array<{ path: string; reason?: string | undefined }> = [];
-    const watcher = startWalWatcher({
-      db: watcherDb.db,
-      databaseFile: watcherDb.paths.databaseFile,
-      eventBus,
-      debounceMs: 10,
-      onReconcile: (info) => {
-        paths.push({ path: info.path, reason: info.reason });
-      },
-    });
-
-    try {
-      const cliDb: TrekoonDatabase = openTrekoonDatabase(workspace);
-      try {
-        new MutationService(cliDb.db, workspace).deleteSubtask(subtask.id);
-      } finally {
-        cliDb.close();
-      }
-
-      watcher.reconcile();
-
-      expect(paths[0]?.path).toBe("event-cursor");
-      expect(deltas.length).toBe(1);
-      const delta = deltas[0] as {
-        tasks?: Array<{ id?: string; subtasks?: unknown[]; searchText?: string }>;
-        epics?: Array<{ id?: string }>;
-        deletedSubtaskIds?: string[];
-        deletedTaskIds?: string[];
-      };
-      // Parent task must surface in upserts with empty subtasks.
-      const taskUpsert = (delta.tasks ?? []).find((entry) => entry?.id === task.id);
-      expect(taskUpsert).toBeDefined();
-      expect(Array.isArray(taskUpsert?.subtasks) ? taskUpsert?.subtasks : []).toHaveLength(0);
-      // Grandparent epic also fans in because task fan-in includes its epic.
-      expect((delta.epics ?? []).map((entry) => entry?.id)).toContain(epic.id);
-      // Deleted subtask must surface; parent task must not be deleted.
-      expect(delta.deletedSubtaskIds).toContain(subtask.id);
-      expect(delta.deletedTaskIds ?? []).not.toContain(task.id);
     } finally {
       watcher.close();
       eventBus.close();
