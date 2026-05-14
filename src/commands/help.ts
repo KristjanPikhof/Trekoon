@@ -394,7 +394,7 @@ const SYNC_HELP = [
 ].join("\n");
 
 const SESSION_HELP = [
-  "Usage: trekoon session [--epic <epic-id>] [--json|--toon]",
+  "Usage: trekoon session [--epic <epic-id>] [--item <id>] [--json|--toon]",
   "",
   "One-call agent orientation. Opens the DB once and returns:",
   "  - diagnostics: storageMode, recoveryRequired, recoveryStatus",
@@ -405,6 +405,9 @@ const SESSION_HELP = [
   "",
   "Options:",
   "  --epic <epic-id>  Scope readiness to a specific epic.",
+  "  --item <id>       Resolve any epic/task/subtask id in one call. Returns",
+  "                    item: { kind, parentEpicId, entity, readiness, suggestedNext }.",
+  "                    Replaces the legacy epic-show || task-show || subtask-show cascade.",
   "",
   "Output modes:",
   "  human  Multi-section summary (default in TTY)",
@@ -415,6 +418,7 @@ const SESSION_HELP = [
   "  trekoon session",
   "  trekoon --toon session",
   "  trekoon --toon session --epic <epic-id>",
+  "  trekoon --toon session --item <id>",
   "  trekoon --json session",
 ].join("\n");
 
