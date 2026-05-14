@@ -328,6 +328,8 @@ const MIGRATE_HELP = [
   "",
   "Notes:",
   "  Migrations 0004, 0005, and 0006 are irreversible (ALTER TABLE / data cleanup).",
+  "  Migration 0012 drops only its new indexes on rollback; the deduplicated dependency",
+  "  edges it removed cannot be restored without a backup.",
   "  Rolling back below those versions errors with code migration_down_unsupported.",
   "  Take a backup first; restore by copying the backup over .trekoon/trekoon.db.",
   "",
