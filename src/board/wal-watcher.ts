@@ -185,7 +185,7 @@ function diffById(
       upserted.push(record);
       continue;
     }
-    if (recordChanged(previousRecord, record)) {
+    if (recordChanged(previousRecord, record, options)) {
       upserted.push(record);
     }
   }
@@ -230,6 +230,7 @@ function suppressAlreadyPublishedDiff(
   diff: CollectionDiff,
   publishedRecords: Map<string, unknown>,
   publishedDeletedIds: Set<string>,
+  options: { readonly isLeaf: boolean },
 ): CollectionDiff {
   return {
     upserted: diff.upserted.filter((record) => {
@@ -239,7 +240,7 @@ function suppressAlreadyPublishedDiff(
       }
 
       const publishedRecord = publishedRecords.get(id);
-      return publishedRecord === undefined || !recordMatchesPublishedDelta(record, publishedRecord);
+      return publishedRecord === undefined || !recordMatchesPublishedDelta(record, publishedRecord, options);
     }),
     deletedIds: diff.deletedIds.filter((id) => !publishedDeletedIds.has(id)),
   };
