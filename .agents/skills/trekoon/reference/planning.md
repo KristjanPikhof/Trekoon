@@ -111,12 +111,11 @@ Use subtask dependencies only when task-level ordering is too coarse.
 
 ## Create Records Efficiently
 
-Use `--toon` on every planning command. It saves tokens and gives agents a
-stable structured response.
+Use `--toon` on every planning command for stable structured responses.
 
-Prefer one transactional planning command over repeated single-item creates. If
-you know the epic, tasks, subtasks, and dependencies, one-shot the whole epic
-with `epic create --task ... --subtask ... --dep ...`. This saves tool calls and
+Prefer one transactional command over repeated single-item creates. If the
+epic, tasks, subtasks, and dependencies are known, one-shot with
+`epic create --task ... --subtask ... --dep ...`. This saves tool calls and
 keeps the graph internally consistent.
 
 | Situation | Command |
@@ -182,36 +181,26 @@ trekoon --toon epic create \
 
 ## Append Efficiently
 
-Use `--append` for progress notes, shared findings, verification requirements,
-or planning refinements. Appending is cheaper and safer than rewriting full
-descriptions.
+Use the append-progress recipe from `reference/harness-primitives.md` for
+planning notes, shared findings, verification, or refinements. Appending is
+cheaper and safer than rewriting full descriptions.
 
-Entity-specific append:
-
-```bash
-trekoon --toon epic update <epic-id> --append "Planning note: <text>"
-trekoon --toon task update <task-id> --append "Planning note: <text>"
-trekoon --toon subtask update <subtask-id> --append "Planning note: <text>"
-```
-
-Append to selected tasks or subtasks with IDs from `result.mappings`:
+Bulk append uses IDs from `result.mappings`, `epic show --all`, or
+`task ready`:
 
 ```bash
 trekoon --toon task update --ids id1,id2,id3 --append "Shared verification: bun test tests/payments"
-trekoon --toon subtask update --ids id1,id2 --append "Shared note: follow capture endpoint contract"
 ```
 
 Important:
 
 - `epic update <epic-id> --append ...` appends only to the epic description.
-- There is no scoped "append to all tasks in this epic" command. Use task IDs
-  from one-shot mappings, `epic show --all`, or `task ready`, then
-  `task update --ids ... --append ...`.
+- There is no scoped "append to all tasks in this epic" command.
 - Do not use `task update --all --append ...` unless you truly mean every task
   in the database.
 - `epic update <epic-id> --all` is cascade status mode only and rejects
   `--append`.
-- Bulk append is per-row, not one atomic transaction.
+- Bulk append is per-row, not atomic.
 
 ## Validate Before Handoff
 
