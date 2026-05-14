@@ -255,6 +255,8 @@ export function buildBoardSnapshotDelta(domain: TrackerDomain, selection: Snapsh
     tasks: snapshotTasks.filter((task) => requestedTaskIds.includes(task.id)),
     subtasks: allSubtasks.map((subtask) => mapSnapshotSubtask(subtask, indexes)).filter((subtask) => requestedSubtaskIds.includes(subtask.id)),
     dependencies: indexes.dependencies.filter((dependency) => requestedDependencyIds.has(dependency.id)),
+    deletedEpicIds: [...(selection.deletedEpicIds ?? [])],
+    deletedTaskIds: [...(selection.deletedTaskIds ?? [])],
     deletedSubtaskIds: [...(selection.deletedSubtaskIds ?? [])],
     deletedDependencyIds: [...(selection.deletedDependencyIds ?? [])],
   };
