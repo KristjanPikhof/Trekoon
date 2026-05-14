@@ -138,4 +138,49 @@ describe("output rendering", (): void => {
     expect(envelope.command).toBe("version");
     expect(envelope.metadata.compatibility).toBeUndefined();
   });
+
+  test("compact envelope omits metadata field entirely", (): void => {
+    const result = okResult({
+      command: "task.list",
+      human: "ok",
+      data: { tasks: [] },
+    });
+
+    const envelope = toToonEnvelope(result, { compact: true });
+
+    expect(envelope.metadata).toBeUndefined();
+  });
+
+  test("compact envelope output identical in bytes to non-compact sans metadata", (): void => {
+    const result = okResult({
+      command: "task.list",
+      human: "ok",
+      data: { tasks: [{ id: "abc123" }] },
+    });
+
+    const compact = JSON.stringify(toToonEnvelope(result, { compact: true }));
+    const full = JSON.stringify(toToonEnvelope(result, { compact: false }));
+    const fullWithoutMetadata = JSON.stringify({ ...JSON.parse(full) as object, metadata: undefined });
+
+    // compact should not contain a requestId or metadata key
+    expect(compact).not.toContain("requestId");
+    expect(compact).not.toContain("metadata");
+    // both carry the same ok/command/data
+    expect(compact).toContain('"task.list"');
+    expect(fullWithoutMetadata).toContain('"task.list"');
+  });
+
+  test("non-compact envelope still produces contract metadata with requestId", (): void => {
+    const result = okResult({
+      command: "task.show",
+      human: "ok",
+      data: { id: "xyz" },
+    });
+
+    const envelope = toToonEnvelope(result, { compact: false });
+
+    expect(envelope.metadata).toBeDefined();
+    expect(envelope.metadata!.contractVersion).toBe("1.0.0");
+    expect(envelope.metadata!.requestId).toMatch(/^req-[0-9a-f]{8}$/);
+  });
 });
