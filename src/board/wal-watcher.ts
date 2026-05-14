@@ -106,26 +106,63 @@ function derivedRecordFingerprint(value: unknown): string {
   return JSON.stringify(record);
 }
 
-function recordMatchesPublishedDelta(record: unknown, publishedRecord: unknown): boolean {
+function recordMatchesPublishedDelta(
+  record: unknown,
+  publishedRecord: unknown,
+  options: { readonly isLeaf: boolean },
+): boolean {
   const recordKey = recordChangeKey(record);
   const publishedKey = recordChangeKey(publishedRecord);
-  return changeKeyEqual(recordKey, publishedKey) &&
-    derivedRecordFingerprint(record) === derivedRecordFingerprint(publishedRecord);
+  if (!changeKeyEqual(recordKey, publishedKey)) {
+    return false;
+  }
+
+  // Leaf entities (subtask, dependency) have no derived-field fan-in beyond
+  // dependency rows themselves, and dependency rows always ship as their own
+  // collection delta. A matching (version, updatedAt) tuple is therefore
+  // sufficient to confirm the leaf record has not diverged from what the
+  // route handler already published — no JSON.stringify needed.
+  if (options.isLeaf) {
+    return true;
+  }
+
+  return derivedRecordFingerprint(record) === derivedRecordFingerprint(publishedRecord);
 }
 
-function recordChanged(previousRecord: unknown, currentRecord: unknown): boolean {
+function recordChanged(
+  previousRecord: unknown,
+  currentRecord: unknown,
+  options: { readonly isLeaf: boolean },
+): boolean {
   if (!changeKeyEqual(recordChangeKey(previousRecord), recordChangeKey(currentRecord))) {
     return true;
   }
 
-  // The board snapshot includes derived parent fields (for example epic task
-  // counts/search text and task subtask lists). Child writes do not bump the
-  // parent row version, but those derived fields still need to reach connected
-  // boards through WAL deltas.
+  // Leaf entities (subtask, dependency) carry only fields that are mutated
+  // through their own row writes — and those writes bump (version, updatedAt)
+  // in lockstep. Matching tuples therefore mean the leaf row is genuinely
+  // unchanged; we can short-circuit without paying the JSON.stringify cost.
+  //
+  // Subtask derived fields (blockedBy/blocks/dependencyIds/dependentIds) are
+  // recomputed by the client from the dependency-row collection (see
+  // src/board/assets/state/utils.js), so any dep change reaches subscribers
+  // via the dependencies delta even when the subtask short-circuits here.
+  if (options.isLeaf) {
+    return false;
+  }
+
+  // Parent entities (epic, task) carry derived fields (task counts, taskIds,
+  // subtasks list, searchText, blocks/blockedBy) that can shift without the
+  // parent row's version moving. Keep the fingerprint comparison so child
+  // writes still surface through the parent record.
   return derivedRecordFingerprint(previousRecord) !== derivedRecordFingerprint(currentRecord);
 }
 
-function diffById(previous: readonly unknown[] | undefined, current: readonly unknown[] | undefined): CollectionDiff {
+function diffById(
+  previous: readonly unknown[] | undefined,
+  current: readonly unknown[] | undefined,
+  options: { readonly isLeaf: boolean },
+): CollectionDiff {
   const previousIndex = new Map<string, unknown>();
   for (const record of previous ?? []) {
     const id = recordId(record);
