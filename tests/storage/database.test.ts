@@ -1102,42 +1102,27 @@ describe("close-time wal_checkpoint", (): void => {
     expect(checkpointSeen).toBe(true);
   });
 
-  test("close on a read-only handle does not throw", (): void => {
+  test("close() swallows SQLITE_READONLY from wal_checkpoint (read-only mount path)", (): void => {
+    // Simulate a read-only filesystem the way 3 of 6 review agents
+    // observed: wal_checkpoint fails with SQLITE_READONLY. The
+    // production close() must swallow that error so callers (e.g.
+    // session) can still exit cleanly.
     const workspace: string = createWorkspace();
-    // Bootstrap a populated DB, then close so the file is on disk and
-    // not held open by anyone else.
     const storage = openTrekoonDatabase(workspace);
-    const databasePath: string = storage.paths.databaseFile;
-    storage.close();
 
-    // Re-open the same file in read-only mode. The default close path
-    // will issue PRAGMA wal_checkpoint(PASSIVE) which fails on a readonly
-    // handle (SQLITE_READONLY); the close() wrapper must swallow that.
-    //
-    // We bypass openTrekoonDatabase (which would re-run migrate against
-    // the now-immutable handle) and construct a connection directly,
-    // then invoke the same close logic our wrapper would.
-    const readonlyDb = new Database(databasePath, { readonly: true });
-
-    // Mirror the close() helper's posture so the test is faithful to
-    // the production path.
-    let threw = false;
-    try {
-      try {
-        readonlyDb.exec("PRAGMA wal_checkpoint(PASSIVE);");
-      } catch {
-        /* swallowed in production */
+    // Replace exec so the next wal_checkpoint call throws like
+    // SQLITE_READONLY would. Subsequent unrelated exec calls
+    // (e.g. inside db.close internals) keep going via originalExec.
+    const originalExec = storage.db.exec.bind(storage.db);
+    (storage.db as unknown as { exec: (sql: string) => void }).exec = (sql: string): void => {
+      if (sql.includes("wal_checkpoint")) {
+        throw new Error("attempt to write a readonly database");
       }
-      try {
-        readonlyDb.close(false);
-      } catch {
-        /* swallowed in production */
-      }
-    } catch {
-      threw = true;
-    }
+      originalExec(sql);
+    };
 
-    expect(threw).toBe(false);
+    // The close() wrapper must not propagate the synthetic error.
+    expect((): void => storage.close()).not.toThrow();
   });
 });
 
