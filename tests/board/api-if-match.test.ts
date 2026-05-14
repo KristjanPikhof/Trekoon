@@ -169,9 +169,11 @@ describe("409 precondition_failed rollback", () => {
     );
     await waitForQueueTurn();
 
-    // Verify server-rejected 409 surfaces as an error notice without crashing.
-    expect(model.store.notice?.type).toBe("error");
-    expect(model.store.notice?.message).toContain("precondition_failed");
+    // Verify server-rejected 409 surfaces as a typed stale_version notice
+    // (not a generic error) so the UI can offer the right recovery affordance.
+    expect(model.store.notice?.type).toBe("warning");
+    expect((model.store.notice as { code?: string } | null)?.code).toBe("stale_version");
+    expect(model.store.notice?.message?.toLowerCase()).toContain("refresh");
 
     // Inverse delta must restore the original title and version on the optimistic record.
     const taskAfter = model.store.snapshot.tasks.find((task) => task.id === "task-1") as Record<string, unknown> | undefined;
