@@ -830,7 +830,7 @@ describe("WAL watcher event-cursor reconciliation", (): void => {
   test("cursor gone (archive pruned past cursor) falls back to full-snapshot path", async (): Promise<void> => {
     const workspace: string = createWorkspace();
     const seedDb: TrekoonDatabase = openTrekoonDatabase(workspace);
-    new MutationService(seedDb.db, workspace).createEpic({ title: "Cursor seed", description: "" });
+    new MutationService(seedDb.db, workspace).createEpic({ title: "Cursor seed", description: "Seed" });
     seedDb.close();
 
     const watcherDb: TrekoonDatabase = openTrekoonDatabase(workspace);
