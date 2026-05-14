@@ -289,6 +289,7 @@ describe("board SSE snapshot stream", (): void => {
         headers: {
           "content-type": "application/json",
           authorization: "Bearer quiet-drain-token",
+          "if-match": String(task.version),
         },
         body: JSON.stringify({ title: "Task after" }),
       }));
@@ -298,6 +299,7 @@ describe("board SSE snapshot stream", (): void => {
         headers: {
           "content-type": "application/json",
           authorization: "Bearer quiet-drain-token",
+          "if-match": String(subtask.version),
         },
         body: JSON.stringify({ title: "Subtask after" }),
       }));
