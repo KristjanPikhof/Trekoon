@@ -140,14 +140,19 @@ export function toToonEnvelope(result: CliResult, options: RenderOptions = {}): 
   const compact: boolean = options.compact ?? false;
   const command: string = resolveCompatibilityCommand(result.command, compatibilityMode);
 
-  return {
+  const base: ToonEnvelope = {
     ok: result.ok,
     command,
     data: result.data,
-    ...(compact ? {} : { metadata: createContractMetadata(result, compatibilityMode) }),
     ...(result.error ? { error: result.error } : {}),
     ...(result.meta ? { meta: result.meta } : {}),
   };
+
+  if (!compact) {
+    base.metadata = createContractMetadata(result, compatibilityMode);
+  }
+
+  return base;
 }
 
 export function renderResult(result: CliResult, mode: OutputMode, options: RenderOptions = {}): string {
