@@ -651,7 +651,6 @@ export function startWalWatcher(options: WalWatcherOptions): WalWatcher {
   let closed = false;
   let failures = 0;
   let lastSuppressedInProcessWriteAt = 0;
-  let lastReconcileAt = 0;
 
   function runFullSnapshotReconcile(shouldSuppressInProcessTick: boolean, inProcessWriteAt: number): void {
     const fresh = buildSnapshot(domain);
@@ -866,7 +865,6 @@ export function startWalWatcher(options: WalWatcherOptions): WalWatcher {
     if (closed) {
       return;
     }
-    lastReconcileAt = Date.now();
     const inProcessWriteAt = options.eventBus.lastInProcessWriteAt;
     const shouldSuppressInProcessTick =
       inProcessWriteAt > lastSuppressedInProcessWriteAt &&
@@ -918,13 +916,7 @@ export function startWalWatcher(options: WalWatcherOptions): WalWatcher {
     const currentMtime = readMtime(walFile);
     // mtime can equal 0 when the WAL was just checkpointed and removed; treat
     // any change (including transitions to/from 0) as worth reconciling.
-    // Additionally, treat rapid sub-ms writes — where mtime is unchanged but
-    // enough wall-clock time has elapsed since the last reconcile — as worth
-    // reconciling. This prevents missed updates when two writes land in the
-    // same filesystem mtime tick.
-    const mtimeChanged = currentMtime !== lastWalMtime;
-    const staleEnough = Date.now() - lastReconcileAt > debounceMs;
-    if (mtimeChanged || staleEnough) {
+    if (currentMtime !== lastWalMtime) {
       lastWalMtime = currentMtime;
       scheduleReconcile();
     }
