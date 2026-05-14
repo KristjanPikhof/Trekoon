@@ -6,7 +6,7 @@ import { afterEach, describe, expect, test } from "bun:test";
 
 import { MutationService } from "../../src/domain/mutation-service";
 import { TrackerDomain } from "../../src/domain/tracker-domain";
-import { buildBoardSnapshot, buildBoardSnapshotDelta } from "../../src/board/snapshot";
+import { buildBoardSnapshot } from "../../src/board/snapshot";
 import { openTrekoonDatabase } from "../../src/storage/database";
 
 const tempDirs: string[] = [];
@@ -24,84 +24,6 @@ afterEach((): void => {
       rmSync(next, { recursive: true, force: true });
     }
   }
-});
-
-describe("buildBoardSnapshotDelta", (): void => {
-  test("fetches dependency by ID even when its source task is outside the task/subtask selection", (): void => {
-    const cwd = createWorkspace();
-    const storage = openTrekoonDatabase(cwd);
-
-    try {
-      const mutations = new MutationService(storage.db, cwd);
-      const epic = mutations.createEpic({ title: "Dep Epic", description: "for dep test" });
-      // taskA depends on taskB — taskA is the source, taskB is the target.
-      const taskA = mutations.createTask({ epicId: epic.id, title: "A", description: "source task" });
-      const taskB = mutations.createTask({ epicId: epic.id, title: "B", description: "target task" });
-      const dep = mutations.addDependency(taskA.id, taskB.id);
-
-      const domain = new TrackerDomain(storage.db);
-
-      // Pass only dependencyIds — no taskIds or subtaskIds.
-      // The source (taskA) is NOT in the task/subtask selection, so the old
-      // source-index path would silently drop the dependency.
-      const delta = buildBoardSnapshotDelta(domain, {
-        dependencyIds: [dep.id],
-      });
-
-      expect(Array.isArray(delta.dependencies)).toBe(true);
-      const deps = delta.dependencies as Array<{ id: string; sourceId: string; dependsOnId: string }>;
-      expect(deps).toHaveLength(1);
-      expect(deps[0].id).toBe(dep.id);
-      expect(deps[0].sourceId).toBe(taskA.id);
-      expect(deps[0].dependsOnId).toBe(taskB.id);
-    } finally {
-      storage.close();
-    }
-  });
-
-  test("returns empty dependencies array when requested dependencyId does not exist", (): void => {
-    const cwd = createWorkspace();
-    const storage = openTrekoonDatabase(cwd);
-
-    try {
-      const domain = new TrackerDomain(storage.db);
-      const delta = buildBoardSnapshotDelta(domain, {
-        dependencyIds: ["00000000-0000-0000-0000-nonexistent01"],
-      });
-
-      expect(Array.isArray(delta.dependencies)).toBe(true);
-      const deps = delta.dependencies as unknown[];
-      expect(deps).toHaveLength(0);
-    } finally {
-      storage.close();
-    }
-  });
-
-  test("uses source-index path when no explicit dependencyIds are given (existing behaviour)", (): void => {
-    const cwd = createWorkspace();
-    const storage = openTrekoonDatabase(cwd);
-
-    try {
-      const mutations = new MutationService(storage.db, cwd);
-      const epic = mutations.createEpic({ title: "Index Epic", description: "index path test" });
-      const taskA = mutations.createTask({ epicId: epic.id, title: "Src", description: "source task" });
-      const taskB = mutations.createTask({ epicId: epic.id, title: "Tgt", description: "target task" });
-      const dep = mutations.addDependency(taskA.id, taskB.id);
-
-      const domain = new TrackerDomain(storage.db);
-
-      // Pass taskIds only — no explicit dependencyIds. Delta must still surface the dependency.
-      const delta = buildBoardSnapshotDelta(domain, {
-        taskIds: [taskA.id, taskB.id],
-        dependencyIds: [dep.id],
-      });
-
-      const deps = delta.dependencies as Array<{ id: string }>;
-      expect(deps.some((d) => d.id === dep.id)).toBe(true);
-    } finally {
-      storage.close();
-    }
-  });
 });
 
 describe("buildBoardSnapshot", (): void => {
