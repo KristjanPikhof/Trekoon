@@ -955,8 +955,15 @@ export class MutationService {
   deleteTask(id: string): { deletedSubtaskIds: string[]; deletedDependencyIds: string[] } {
     return this.#writeTransaction((): { deletedSubtaskIds: string[]; deletedDependencyIds: string[] } => {
       const plan = this.#domain.planTaskDeletion(id);
+      // Capture the parent epic id BEFORE delete so the canonical task.deleted
+      // event can fan-in to the parent epic in the WAL watcher event-cursor
+      // path. Without this the watcher cannot reconstruct the parent epic
+      // change (taskIds / counts / searchText) from the event stream alone
+      // for non-cascade deletes.
+      const existing = this.#domain.getTaskOrThrow(id);
+      const parentEpicId = existing.epicId;
       this.#domain.deleteTask(id);
-      const taskDeleteEventId = this.#emitTaskDeleted(id);
+      const taskDeleteEventId = this.#emitTaskDeleted(id, { epicId: parentEpicId });
 
       for (const subtaskId of plan.subtaskIds) {
         this.#emitSubtaskDeleted(subtaskId, { taskId: id, sourceEventId: taskDeleteEventId });
