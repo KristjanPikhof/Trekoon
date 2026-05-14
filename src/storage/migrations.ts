@@ -564,6 +564,20 @@ const MIGRATIONS: readonly Migration[] = [
       }
     },
   },
+  {
+    version: 13,
+    name: "0013_task_ordered_scan_indexes",
+    up(db: Database): void {
+      for (const statement of TASK_ORDERED_SCAN_INDEX_UP_STATEMENTS) {
+        db.exec(statement);
+      }
+    },
+    down(db: Database): void {
+      for (const statement of TASK_ORDERED_SCAN_INDEX_DOWN_STATEMENTS) {
+        db.exec(statement);
+      }
+    },
+  },
 ];
 
 function migrationTableExists(db: Database): boolean {
