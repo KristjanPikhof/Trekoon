@@ -1159,6 +1159,71 @@ describe("migration 0012: dependency kind indexes", (): void => {
     }
   });
 
+  test("0013 indexes exist and survive rollback round-trip cleanly", (): void => {
+    const workspace: string = createWorkspace();
+    const storage = openTrekoonDatabase(workspace);
+
+    try {
+      const initial = storage.db
+        .query("SELECT name FROM sqlite_master WHERE type = 'index';")
+        .all() as Array<{ name: string }>;
+      const initialNames = new Set(initial.map((row) => row.name));
+      expect(initialNames.has("idx_tasks_epic_created")).toBe(true);
+      expect(initialNames.has("idx_subtasks_task_created")).toBe(true);
+
+      // Roll back v13 and confirm the indexes are gone. v12 above v13 is
+      // index-only, so the rollback should reverse cleanly without
+      // tripping the irreversible guards.
+      const summary = rollbackDatabase(storage.db, 12);
+      expect(summary.toVersion).toBe(12);
+
+      const after = storage.db
+        .query("SELECT name FROM sqlite_master WHERE type = 'index';")
+        .all() as Array<{ name: string }>;
+      const afterNames = new Set(after.map((row) => row.name));
+      expect(afterNames.has("idx_tasks_epic_created")).toBe(false);
+      expect(afterNames.has("idx_subtasks_task_created")).toBe(false);
+    } finally {
+      storage.close();
+    }
+  });
+
+  test("tasks WHERE epic_id ORDER BY created_at, id plan uses idx_tasks_epic_created (no temp b-tree)", (): void => {
+    const workspace: string = createWorkspace();
+    const storage = openTrekoonDatabase(workspace);
+
+    try {
+      const plan = storage.db
+        .query(
+          "EXPLAIN QUERY PLAN SELECT id, epic_id, title, status, created_at FROM tasks WHERE epic_id = ? ORDER BY created_at ASC, id ASC LIMIT ?;",
+        )
+        .all("epic-1", 50) as Array<{ detail: string }>;
+      const text = plan.map((row) => row.detail ?? "").join(" | ");
+      expect(text).toContain("idx_tasks_epic_created");
+      expect(text).not.toContain("USE TEMP B-TREE FOR ORDER BY");
+    } finally {
+      storage.close();
+    }
+  });
+
+  test("subtasks WHERE task_id ORDER BY created_at, id plan uses idx_subtasks_task_created", (): void => {
+    const workspace: string = createWorkspace();
+    const storage = openTrekoonDatabase(workspace);
+
+    try {
+      const plan = storage.db
+        .query(
+          "EXPLAIN QUERY PLAN SELECT id, task_id, title, status, created_at FROM subtasks WHERE task_id = ? ORDER BY created_at ASC, id ASC LIMIT ?;",
+        )
+        .all("task-1", 50) as Array<{ detail: string }>;
+      const text = plan.map((row) => row.detail ?? "").join(" | ");
+      expect(text).toContain("idx_subtasks_task_created");
+      expect(text).not.toContain("USE TEMP B-TREE FOR ORDER BY");
+    } finally {
+      storage.close();
+    }
+  });
+
   test("dep list / dep reverse query plans use the new indexes", (): void => {
     const workspace: string = createWorkspace();
     const storage = openTrekoonDatabase(workspace);
