@@ -78,3 +78,40 @@ checks and record the review gap or decision:
 ```bash
 trekoon --toon task update <task-id> --append "Review: <summary or accepted gap>"
 ```
+
+## Atomic Claim And Append-Progress Recipe
+
+Canonical recipe for owning a Trekoon item and recording progress. Other
+references point here instead of restating these commands.
+
+Atomic claim before editing:
+
+```bash
+trekoon --toon task claim <task-id> --owner <name>
+trekoon --toon subtask claim <subtask-id> --owner <name>
+```
+
+`task claim` races safely across parallel subagents; the loser sees the
+existing owner. `task update --status in_progress` does not race; prefer
+`claim` for ownership transitions.
+
+Append progress, verification, blocker notes:
+
+```bash
+trekoon --toon task update <task-id> --append "Started implementation"
+trekoon --toon task update <task-id> --append "Verified: <commands/results>"
+trekoon --toon task update <task-id> --append "Review: <result or accepted gap>"
+trekoon --toon task update <task-id> --append "Blocked by <reason>" --status blocked
+```
+
+Append, do not rewrite descriptions. Use `--ids <csv>` for bulk append; bulk
+mode supports only `--append` and/or `--status`.
+
+Finish:
+
+```bash
+trekoon --toon task done <task-id>
+```
+
+`task done` auto-walks `todo` or `blocked` through `in_progress`. For subtasks,
+move through `in_progress` (claim or status) before `done`.
