@@ -448,10 +448,16 @@ function eventsToCursorDelta(events: readonly EventRow[], domain: TrackerDomain)
         if (event.operation === "task.created" || event.operation === "task.updated") {
           includeTaskAndEpicForTaskId(event.entity_id, fields.epic_id);
         } else if (event.operation === "task.deleted") {
+          // Non-cascade task deletes carry `epic_id` in fields so the watcher
+          // can fan-in the parent epic (taskIds / counts / searchText all
+          // change). Cascade deletes omit `epic_id` because the matching
+          // `epic.deleted` event already surfaces the epic-level change —
+          // including the parent there would emit an upsert for a doomed
+          // epic alongside its deletedEpicIds entry.
+          if (typeof fields.epic_id === "string" && fields.epic_id.length > 0) {
+            epicIds.add(fields.epic_id);
+          }
           deletedTaskIds.add(event.entity_id);
-          // No need to fan in the parent epic on cascade deletes: the
-          // canonical event stream emits the matching `epic.deleted` row that
-          // already surfaces the epic-level change.
         } else {
           return null;
         }
