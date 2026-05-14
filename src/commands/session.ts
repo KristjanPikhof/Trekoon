@@ -211,11 +211,14 @@ export async function runSession(context: CliContext): Promise<CliResult> {
     if (itemId !== undefined) {
       const resolved = resolveItem(domain, itemId);
       if (resolved === null) {
-        return failureResult({
+        return failResult({
           command: "session",
-          code: "not_found",
           human: `No epic, task, or subtask matches id ${itemId}`,
-          data: { id: itemId },
+          data: { code: "not_found", id: itemId },
+          error: {
+            code: "not_found",
+            message: `No epic, task, or subtask matches id ${itemId}`,
+          },
         });
       }
 
