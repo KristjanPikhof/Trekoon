@@ -83,9 +83,9 @@ describe("buildBoardSnapshotDelta", (): void => {
 
     try {
       const mutations = new MutationService(storage.db, cwd);
-      const epic = mutations.createEpic({ title: "Index Epic", description: "" });
-      const taskA = mutations.createTask({ epicId: epic.id, title: "Src", description: "" });
-      const taskB = mutations.createTask({ epicId: epic.id, title: "Tgt", description: "" });
+      const epic = mutations.createEpic({ title: "Index Epic", description: "index path test" });
+      const taskA = mutations.createTask({ epicId: epic.id, title: "Src", description: "source task" });
+      const taskB = mutations.createTask({ epicId: epic.id, title: "Tgt", description: "target task" });
       const dep = mutations.addDependency(taskA.id, taskB.id);
 
       const domain = new TrackerDomain(storage.db);
