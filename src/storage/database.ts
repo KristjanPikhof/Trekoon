@@ -435,7 +435,7 @@ export function openTrekoonDatabase(
   const cacheMib: number = cacheMibRaw.length > 0 ? Number(cacheMibRaw) : 64;
   if (!Number.isInteger(cacheMib) || cacheMib < 0) {
     throw new DomainError({
-      code: "invalid_config",
+      code: "invalid_input",
       message:
         `TREKOON_SQLITE_CACHE_MIB must be a non-negative integer (got ${JSON.stringify(cacheMibRaw)}).`,
       details: { envVar: "TREKOON_SQLITE_CACHE_MIB", provided: cacheMibRaw },
