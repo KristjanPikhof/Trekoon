@@ -39,7 +39,7 @@ describe("buildBoardSnapshot", (): void => {
       const taskA2 = mutations.createTask({ epicId: epicA.id, title: "A2", description: "task two" });
       const taskB1 = mutations.createTask({ epicId: epicB.id, title: "B1", description: "task three" });
 
-      const domain = new TrackerDomain(storage.db, cwd);
+      const domain = new TrackerDomain(storage.db);
       const snapshot = buildBoardSnapshot(domain);
 
       const alpha = snapshot.epics.find((epic) => epic.id === epicA.id);
@@ -70,7 +70,7 @@ describe("buildBoardSnapshot", (): void => {
       const epicPopulated = mutations.createEpic({ title: "Populated", description: "Has work" });
       mutations.createTask({ epicId: epicPopulated.id, title: "T1", description: "first task" });
 
-      const domain = new TrackerDomain(storage.db, cwd);
+      const domain = new TrackerDomain(storage.db);
       const snapshot = buildBoardSnapshot(domain);
 
       const empty = snapshot.epics.find((epic) => epic.id === epicEmpty.id);
@@ -94,7 +94,7 @@ describe("buildBoardSnapshot", (): void => {
       mutations.createTask({ epicId: epic.id, title: "Second", description: "beta description" });
       mutations.createTask({ epicId: epic.id, title: "Third", description: "gamma description" });
 
-      const domain = new TrackerDomain(storage.db, cwd);
+      const domain = new TrackerDomain(storage.db);
       const snapshot = buildBoardSnapshot(domain);
 
       const epicSnapshot = snapshot.epics.find((entry) => entry.id === epic.id);
