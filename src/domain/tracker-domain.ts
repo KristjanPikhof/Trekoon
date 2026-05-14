@@ -1233,6 +1233,15 @@ export class TrackerDomain {
     return result.changes;
   }
 
+  getDependency(id: string): DependencyRecord | null {
+    const row = this.#db
+      .query(
+        "SELECT id, source_id, source_kind, depends_on_id, depends_on_kind, created_at, updated_at FROM dependencies WHERE id = ?;",
+      )
+      .get(id) as DependencyRow | null;
+    return row ? mapDependency(row) : null;
+  }
+
   listDependencies(sourceId: string): readonly DependencyRecord[] {
     const normalizedSourceId: string = assertNonEmpty("sourceId", sourceId);
     this.resolveNodeKind(normalizedSourceId);
