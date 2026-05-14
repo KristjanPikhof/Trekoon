@@ -648,6 +648,7 @@ any `ok: false` response will be one of the following strings.
 | `outside_repo_target` | Skill install target path is outside the repository root. |
 | `permission_denied` | File-system permission denied for the requested path. |
 | `precondition_failed` | `If-Match` precondition header did not match the entity's current version. Error details include `currentVersion` and `providedVersion`. |
+| `precondition_required` | `If-Match` header is required on a PATCH route but was omitted. |
 | `row_not_found` | Sync resolve target row no longer exists in the database. |
 | `status_transition_invalid` | Requested status transition is not permitted by the status machine. |
 | `stream_unavailable` | SSE snapshot stream is not available (board not initialised or shutting down). |
