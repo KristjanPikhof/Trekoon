@@ -612,16 +612,6 @@ function preconditionFailedResponse(details: PreconditionFailedDetails): Respons
   });
 }
 
-function preconditionRequiredResponse(): Response {
-  return jsonResponse(428, {
-    ok: false,
-    error: {
-      code: "precondition_required",
-      message: "If-Match header is required for PATCH requests",
-    },
-  });
-}
-
 function readIdempotencyKey(request: Request, body: Record<string, unknown>): string | null {
   const headerKey = request.headers.get("x-trekoon-idempotency-key");
   if (typeof headerKey === "string" && headerKey.trim().length > 0) {
@@ -715,12 +705,12 @@ export function createBoardApiHandler(context: BoardRouteContext): (request: Req
           const body = await parseJsonBody(request);
           const status = readRequiredString(body, "status");
           const ifMatch = parseIfMatchHeader(request);
-          if (ifMatch === null) {
-            return preconditionRequiredResponse();
-          }
           // CAS path: precondition is enforced inside the write transaction
-          // (see PreconditionFailedError catch below).
-          const plan = mutations.updateEpicStatusCascadeWithIfMatch(epicId, ifMatch, status);
+          // (see PreconditionFailedError catch below). Missing-header path
+          // preserves back-compat with clients that don't send If-Match.
+          const plan = ifMatch !== null
+            ? mutations.updateEpicStatusCascadeWithIfMatch(epicId, ifMatch, status)
+            : mutations.updateEpicStatusCascade(epicId, status);
           return respondWithMutationDelta(domain, {
             plan,
           }, {
@@ -735,15 +725,14 @@ export function createBoardApiHandler(context: BoardRouteContext): (request: Req
         const epicId = epicMatch[1] ?? "";
         const body = await parseJsonBody(request);
         const ifMatch = parseIfMatchHeader(request);
-        if (ifMatch === null) {
-          return preconditionRequiredResponse();
-        }
         const epicInput = {
           title: readOptionalString(body, "title"),
           description: readOptionalString(body, "description"),
           status: readOptionalString(body, "status"),
         };
-        const epic = mutations.updateEpicWithIfMatch(epicId, ifMatch, epicInput);
+        const epic = ifMatch !== null
+          ? mutations.updateEpicWithIfMatch(epicId, ifMatch, epicInput)
+          : mutations.updateEpic(epicId, epicInput);
           return respondWithMutationDelta(domain, { epic }, { epicIds: [epic.id] });
         }
 
@@ -752,16 +741,15 @@ export function createBoardApiHandler(context: BoardRouteContext): (request: Req
         const taskId = taskMatch[1] ?? "";
         const body = await parseJsonBody(request);
         const ifMatch = parseIfMatchHeader(request);
-        if (ifMatch === null) {
-          return preconditionRequiredResponse();
-        }
         const taskInput = {
           title: readOptionalString(body, "title"),
           description: readOptionalString(body, "description"),
           status: readOptionalString(body, "status"),
           owner: readOptionalNullableString(body, "owner"),
         };
-        const task = mutations.updateTaskWithIfMatch(taskId, ifMatch, taskInput);
+        const task = ifMatch !== null
+          ? mutations.updateTaskWithIfMatch(taskId, ifMatch, taskInput)
+          : mutations.updateTask(taskId, taskInput);
           return respondWithMutationDelta(domain, { task }, { epicIds: [task.epicId], taskIds: [task.id] });
         }
 
@@ -770,16 +758,15 @@ export function createBoardApiHandler(context: BoardRouteContext): (request: Req
         const subtaskId = subtaskMatch[1] ?? "";
         const body = await parseJsonBody(request);
         const ifMatch = parseIfMatchHeader(request);
-        if (ifMatch === null) {
-          return preconditionRequiredResponse();
-        }
         const subtaskInput = {
           title: readOptionalString(body, "title"),
           description: readOptionalString(body, "description"),
           status: readOptionalString(body, "status"),
           owner: readOptionalNullableString(body, "owner"),
         };
-        const subtask = mutations.updateSubtaskWithIfMatch(subtaskId, ifMatch, subtaskInput);
+        const subtask = ifMatch !== null
+          ? mutations.updateSubtaskWithIfMatch(subtaskId, ifMatch, subtaskInput)
+          : mutations.updateSubtask(subtaskId, subtaskInput);
           const task = domain.getTaskOrThrow(subtask.taskId);
           return respondWithMutationDelta(domain, { subtask }, { epicIds: [task.epicId], taskIds: [task.id], subtaskIds: [subtask.id] });
         }
