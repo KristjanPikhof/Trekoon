@@ -72,21 +72,18 @@ matches the user intent.
 
 ## Execution Defaults
 
-- Start with `trekoon --toon session`; scope with `--epic <id>` when known.
+- Start with `session`; scope with `--epic <id>` when known.
 - If ready work exists, keep moving. After each `task done`, inspect
   `unblocked`, `warning`/`openSubtaskIds`, and `next`.
-- When executing an epic, use subagents by default for any meaningful work that
-  can run independently. Keep small or tightly coupled tasks in the parent
-  agent.
+- When executing an epic, use subagents by default for meaningful independent
+  work. Keep small or tightly coupled tasks in the parent agent.
 - Use your context for orchestration, dependency decisions, user communication,
   and final synthesis. Your job is to finish the epic, not personally perform
   every implementation step.
 - If a higher-priority harness rule blocks subagents without explicit user
-  wording, ask immediately and explain that Trekoon execution preserves the
-  parent context for orchestration.
-- For non-trivial implementation, run relevant tests and a separate review pass
-  when a review agent/skill is available. Record checks and review results in
-  Trekoon before closing work.
+  wording, ask immediately.
+- For non-trivial implementation, run relevant tests and a separate review pass.
+  Record checks and review results in Trekoon before closing work.
 
 ## Non-Negotiables
 
@@ -111,15 +108,14 @@ matches the user intent.
 
 ## Status Reminder
 
-Normal status flow is `todo -> in_progress -> done`; `blocked` requires an
-appended reason. Use `task done` for task completion because it auto-transitions
-from `todo` or `blocked` through `in_progress`. Load
-`reference/status-machine.md` for transition errors or uncertainty. For
-subtasks, claim or move through `in_progress` before marking `done`.
+`task done` auto-transitions from `todo` or `blocked` through `in_progress`,
+so prefer it for completion. Subtasks must claim or move through `in_progress`
+before `done`. Load `reference/status-machine.md` for transition errors or
+uncertainty.
 
 ## Recovery
 
-If Trekoon diagnostics show `recoveryRequired`, stop task selection and run:
+If diagnostics show `recoveryRequired`, stop task selection and run:
 
 ```bash
 trekoon --toon init
