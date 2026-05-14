@@ -268,6 +268,242 @@ function hasDiffChanges(...diffs: readonly CollectionDiff[]): boolean {
   return diffs.some((diff) => diff.upserted.length > 0 || diff.deletedIds.length > 0);
 }
 
+// -- Event-cursor reconciliation -------------------------------------------
+//
+// Reads canonical mutation events appended by `appendEventWithGitContext`
+// (src/sync/event-writes.ts) and translates them into the minimal set of
+// entity IDs whose snapshot rows must be re-read. This lets the watcher avoid
+// a full board read on every WAL tick — the dominant cost on large boards.
+//
+// The full-snapshot diff path is kept as a fallback for cases where the event
+// stream is not safely consumable (cursor pruned, parse failure, first-tick
+// warm-up, or any unexpected event shape).
+
+interface EventRow {
+  readonly id: string;
+  readonly entity_kind: string;
+  readonly entity_id: string;
+  readonly operation: string;
+  readonly payload: string;
+  readonly created_at: number;
+}
+
+interface EventCursor {
+  readonly createdAt: number;
+  readonly id: string;
+}
+
+interface EventCursorDelta {
+  readonly epicIds: string[];
+  readonly taskIds: string[];
+  readonly subtaskIds: string[];
+  readonly dependencyIds: string[];
+  readonly deletedEpicIds: string[];
+  readonly deletedTaskIds: string[];
+  readonly deletedSubtaskIds: string[];
+  readonly deletedDependencyIds: string[];
+}
+
+type EventCursorReconcileResult =
+  | { readonly kind: "ok"; readonly newCursor: EventCursor; readonly delta: EventCursorDelta }
+  | { readonly kind: "fallback"; readonly reason: string };
+
+/** Read the most recent event row to seed the cursor at watcher start. */
+function readLatestEventCursor(db: Database): EventCursor | null {
+  const row = db
+    .query(
+      "SELECT id, created_at FROM events ORDER BY created_at DESC, id DESC LIMIT 1;",
+    )
+    .get() as { id: string; created_at: number } | null;
+  if (!row) {
+    return null;
+  }
+  return { createdAt: row.created_at, id: row.id };
+}
+
+/**
+ * Determine whether a non-null cursor predates the retained-events window —
+ * i.e. the event the cursor points at is missing from the live `events` table
+ * AND there are older retained events on any branch. When that happens the
+ * watcher cannot derive the diff from events alone and must fall back.
+ *
+ * We avoid the more expensive per-branch retention check that `sync/service.ts`
+ * does for sync cursors: the watcher consumes events across all branches, so a
+ * single "is this cursor.id still present in events?" check is enough — if the
+ * row is gone, the safe move is fallback.
+ */
+function isCursorStale(db: Database, cursor: EventCursor): boolean {
+  const row = db
+    .query("SELECT 1 AS hit FROM events WHERE id = ? LIMIT 1;")
+    .get(cursor.id) as { hit: number } | null;
+  return row === null;
+}
+
+/**
+ * Read events after `cursor` ordered by (created_at, id). When `cursor` is
+ * null the caller must already be on the fallback path; this helper is not
+ * invoked.
+ */
+function readEventsSinceCursor(db: Database, cursor: EventCursor): EventRow[] {
+  return db
+    .query(
+      `SELECT id, entity_kind, entity_id, operation, payload, created_at
+       FROM events
+       WHERE (created_at > ?) OR (created_at = ? AND id > ?)
+       ORDER BY created_at ASC, id ASC;`,
+    )
+    .all(cursor.createdAt, cursor.createdAt, cursor.id) as EventRow[];
+}
+
+/**
+ * Translate a list of event rows into per-kind upsert/delete ID sets that
+ * can be fed to {@link buildBoardSnapshotDelta}. Returns `null` if any event
+ * payload fails to parse or the entity_kind/operation pair is unknown — the
+ * caller treats `null` as a signal to fall back to the full-snapshot path.
+ */
+function eventsToCursorDelta(events: readonly EventRow[]): EventCursorDelta | null {
+  const epicIds = new Set<string>();
+  const taskIds = new Set<string>();
+  const subtaskIds = new Set<string>();
+  const dependencyIds = new Set<string>();
+  const deletedEpicIds = new Set<string>();
+  const deletedTaskIds = new Set<string>();
+  const deletedSubtaskIds = new Set<string>();
+  const deletedDependencyIds = new Set<string>();
+
+  for (const event of events) {
+    let parsedPayload: unknown;
+    try {
+      parsedPayload = JSON.parse(event.payload);
+    } catch {
+      return null;
+    }
+
+    const fields = (parsedPayload as { fields?: Record<string, unknown> })?.fields ?? {};
+
+    switch (event.entity_kind) {
+      case "epic": {
+        if (event.operation === "epic.created" || event.operation === "epic.updated") {
+          epicIds.add(event.entity_id);
+        } else if (event.operation === "epic.deleted") {
+          deletedEpicIds.add(event.entity_id);
+        } else {
+          return null;
+        }
+        break;
+      }
+      case "task": {
+        if (event.operation === "task.created" || event.operation === "task.updated") {
+          taskIds.add(event.entity_id);
+        } else if (event.operation === "task.deleted") {
+          deletedTaskIds.add(event.entity_id);
+        } else {
+          return null;
+        }
+        break;
+      }
+      case "subtask": {
+        if (event.operation === "subtask.created" || event.operation === "subtask.updated") {
+          subtaskIds.add(event.entity_id);
+        } else if (event.operation === "subtask.deleted") {
+          deletedSubtaskIds.add(event.entity_id);
+        } else {
+          return null;
+        }
+        break;
+      }
+      case "dependency": {
+        // Dependency entity_id is the composite "sourceKind:sourceId->dependsOnKind:dependsOnId".
+        // The actual dependency row id lives in payload.fields.dependency_id (see
+        // mutation-service.#dependencyEventFields). Without that field we cannot
+        // safely surface the dependency delta — fall back.
+        const dependencyId = fields.dependency_id;
+        if (typeof dependencyId !== "string" || dependencyId.length === 0) {
+          return null;
+        }
+        if (event.operation === "dependency.added") {
+          dependencyIds.add(dependencyId);
+        } else if (event.operation === "dependency.removed") {
+          deletedDependencyIds.add(dependencyId);
+        } else {
+          return null;
+        }
+        break;
+      }
+      default:
+        return null;
+    }
+  }
+
+  return {
+    epicIds: [...epicIds],
+    taskIds: [...taskIds],
+    subtaskIds: [...subtaskIds],
+    dependencyIds: [...dependencyIds],
+    deletedEpicIds: [...deletedEpicIds],
+    deletedTaskIds: [...deletedTaskIds],
+    deletedSubtaskIds: [...deletedSubtaskIds],
+    deletedDependencyIds: [...deletedDependencyIds],
+  };
+}
+
+function tryEventCursorReconcile(
+  db: Database,
+  cursor: EventCursor | null,
+): EventCursorReconcileResult {
+  if (cursor === null) {
+    return { kind: "fallback", reason: "warm-up" };
+  }
+
+  if (isCursorStale(db, cursor)) {
+    return { kind: "fallback", reason: "cursor-stale" };
+  }
+
+  const events = readEventsSinceCursor(db, cursor);
+  if (events.length === 0) {
+    return {
+      kind: "ok",
+      newCursor: cursor,
+      delta: {
+        epicIds: [],
+        taskIds: [],
+        subtaskIds: [],
+        dependencyIds: [],
+        deletedEpicIds: [],
+        deletedTaskIds: [],
+        deletedSubtaskIds: [],
+        deletedDependencyIds: [],
+      },
+    };
+  }
+
+  const delta = eventsToCursorDelta(events);
+  if (delta === null) {
+    return { kind: "fallback", reason: "event-parse-or-shape" };
+  }
+
+  const lastEvent = events[events.length - 1]!;
+  return {
+    kind: "ok",
+    newCursor: { createdAt: lastEvent.created_at, id: lastEvent.id },
+    delta,
+  };
+}
+
+function recordIdsFromRecords(records: unknown): string[] {
+  if (!Array.isArray(records)) {
+    return [];
+  }
+  const ids: string[] = [];
+  for (const record of records) {
+    const id = recordId(record);
+    if (id !== null) {
+      ids.push(id);
+    }
+  }
+  return ids;
+}
+
 function readMtime(path: string): number {
   if (!existsSync(path)) {
     return 0;
