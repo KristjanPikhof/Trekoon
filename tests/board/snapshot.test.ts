@@ -51,10 +51,9 @@ describe("buildBoardSnapshotDelta", (): void => {
       expect(Array.isArray(delta.dependencies)).toBe(true);
       const deps = delta.dependencies as Array<{ id: string; sourceId: string; dependsOnId: string }>;
       expect(deps).toHaveLength(1);
-      const firstDep = deps[0];
-      expect(firstDep?.id).toBe(dep.id);
-      expect(firstDep?.sourceId).toBe(taskA.id);
-      expect(firstDep?.dependsOnId).toBe(taskB.id);
+      expect(deps[0].id).toBe(dep.id);
+      expect(deps[0].sourceId).toBe(taskA.id);
+      expect(deps[0].dependsOnId).toBe(taskB.id);
     } finally {
       storage.close();
     }
