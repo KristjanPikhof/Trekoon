@@ -205,6 +205,69 @@ describe("mutation conformance", (): void => {
     }
   });
 
+  // Coverage for the chunked multi-row VALUES INSERT in
+  // TrackerDomain.addDependencyBatch. The SQL collapses N per-row INSERTs into
+  // ceil(N / 142) statements (DEP_COLS_PER_ROW = 7, SQLITE_MAX_VARIABLES = 999),
+  // but mutation-service must still emit one canonical `dependency.added`
+  // event per edge — never a synthetic batch event. These three sizes exercise:
+  //   - N=1   : single-row INSERT path
+  //   - N=10  : single multi-row statement
+  //   - N=200 : crosses the per-statement chunk boundary (2 statements)
+  for (const batchSize of [1, 10, 200] as const) {
+    test(`addDependencyBatch emits one dependency.added event per edge (N=${batchSize})`, async (): Promise<void> => {
+      const cwd = createWorkspace();
+      const storage = openTrekoonDatabase(cwd);
+
+      try {
+        const mutations = new MutationService(storage.db, cwd);
+        const epic = mutations.createEpic({ title: "Roadmap", description: "Scope" });
+        const blocker = mutations.createTask({ epicId: epic.id, title: "Blocker", description: "Upstream" });
+
+        // Create N source tasks; each will depend on the shared blocker.
+        const sourceTasks = Array.from({ length: batchSize }, (_, index) =>
+          mutations.createTask({
+            epicId: epic.id,
+            title: `Source ${index + 1}`,
+            description: "Downstream",
+          }),
+        );
+
+        const result = mutations.addDependencyBatch({
+          specs: sourceTasks.map((source) => ({
+            source: { kind: "id" as const, id: source.id },
+            dependsOn: { kind: "id" as const, id: blocker.id },
+          })),
+        });
+
+        expect(result.dependencies).toHaveLength(batchSize);
+
+        // Per-edge canonical events: one `dependency.added` per inserted row.
+        const dependencyAddedCount = storage.db
+          .query("SELECT COUNT(*) AS count FROM events WHERE entity_kind = 'dependency' AND operation = ?;")
+          .get(ENTITY_OPERATIONS.dependency.added) as { count: number };
+        expect(dependencyAddedCount.count).toBe(batchSize);
+
+        // Verify every edge has its own canonical event row keyed by the
+        // synthetic `task:source->task:depends_on` entity_id.
+        for (const source of sourceTasks) {
+          const dependencyEventId = `task:${source.id}->task:${blocker.id}`;
+          expect(eventOperationsForEntity(cwd, "dependency", dependencyEventId)).toEqual([
+            ENTITY_OPERATIONS.dependency.added,
+          ]);
+        }
+
+        // SQL rows reflect the same edge count — chunked INSERT preserves
+        // every input row.
+        const insertedRowCount = storage.db
+          .query("SELECT COUNT(*) AS count FROM dependencies WHERE depends_on_id = ?;")
+          .get(blocker.id) as { count: number };
+        expect(insertedRowCount.count).toBe(batchSize);
+      } finally {
+        storage.close();
+      }
+    });
+  }
+
   test("subtask update events preserve explicit empty descriptions", async (): Promise<void> => {
     const cwd = createWorkspace();
     const storage = openTrekoonDatabase(cwd);
