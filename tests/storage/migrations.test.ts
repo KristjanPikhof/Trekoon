@@ -1021,3 +1021,167 @@ describe("migration fast-path: racing rollback vs unlocked stamp", (): void => {
     }
   });
 });
+
+// ---------------------------------------------------------------------------
+// Migration 0012: dependency polymorphic-edge indexes
+// ---------------------------------------------------------------------------
+
+describe("migration 0012: dependency kind indexes", (): void => {
+  test("creates idx_dependencies_source, idx_dependencies_target, uniq_dependencies_edge", (): void => {
+    const workspace: string = createWorkspace();
+    const storage = openTrekoonDatabase(workspace);
+
+    try {
+      const indexRows = storage.db
+        .query("SELECT name FROM sqlite_master WHERE type = 'index' AND tbl_name = 'dependencies';")
+        .all() as Array<{ name: string }>;
+
+      const names = new Set(indexRows.map((row) => row.name));
+      expect(names.has("idx_dependencies_source")).toBe(true);
+      expect(names.has("idx_dependencies_target")).toBe(true);
+      expect(names.has("uniq_dependencies_edge")).toBe(true);
+    } finally {
+      storage.close();
+    }
+  });
+
+  test("uniq_dependencies_edge rejects duplicate 4-tuple inserts", (): void => {
+    const workspace: string = createWorkspace();
+    const storage = openTrekoonDatabase(workspace);
+
+    try {
+      const now = Date.now();
+      storage.db
+        .query(
+          "INSERT INTO dependencies (id, source_id, source_kind, depends_on_id, depends_on_kind, created_at, updated_at, version) VALUES (?, ?, ?, ?, ?, ?, ?, 1);",
+        )
+        .run("dep-a", "src-1", "task", "tgt-1", "task", now, now);
+
+      let caught: unknown;
+      try {
+        storage.db
+          .query(
+            "INSERT INTO dependencies (id, source_id, source_kind, depends_on_id, depends_on_kind, created_at, updated_at, version) VALUES (?, ?, ?, ?, ?, ?, ?, 1);",
+          )
+          .run("dep-b", "src-1", "task", "tgt-1", "task", now, now);
+      } catch (error: unknown) {
+        caught = error;
+      }
+
+      expect(caught).toBeDefined();
+      expect(String((caught as Error).message ?? "")).toMatch(/UNIQUE|constraint/iu);
+    } finally {
+      storage.close();
+    }
+  });
+
+  test("dedupe step keeps lowest created_at row when duplicates exist on legacy DB", (): void => {
+    // Simulate a pre-0012 DB by rolling back to v11 (drops the indexes and
+    // the schema_migrations row), seeding duplicate rows, then re-running
+    // migrateDatabase. The dedupe step must collapse duplicates so the
+    // UNIQUE index creation succeeds.
+    const workspace: string = createWorkspace();
+    const storage = openTrekoonDatabase(workspace);
+
+    try {
+      // Drop the v12 schema_migrations row and the indexes/UNIQUE so we
+      // can stage a "before" snapshot the migration will fix up.
+      storage.db.exec("DELETE FROM schema_migrations WHERE version = 12;");
+      storage.db.exec("DROP INDEX IF EXISTS uniq_dependencies_edge;");
+      storage.db.exec("DROP INDEX IF EXISTS idx_dependencies_target;");
+      storage.db.exec("DROP INDEX IF EXISTS idx_dependencies_source;");
+      // Also drop the v5 (source_id, depends_on_id) UNIQUE so we can insert
+      // duplicates that share the full 4-tuple. v5 is irreversible via the
+      // normal rollback path, so we surgically drop the index here for the
+      // test fixture only.
+      storage.db.exec("DROP INDEX IF EXISTS idx_dependencies_edge;");
+
+      const base = Date.now();
+      // Two duplicate rows for the same logical edge — different ids, different created_at.
+      storage.db
+        .query(
+          "INSERT INTO dependencies (id, source_id, source_kind, depends_on_id, depends_on_kind, created_at, updated_at, version) VALUES (?, ?, ?, ?, ?, ?, ?, 1);",
+        )
+        .run("dup-old", "src-1", "task", "tgt-1", "task", base, base);
+      storage.db
+        .query(
+          "INSERT INTO dependencies (id, source_id, source_kind, depends_on_id, depends_on_kind, created_at, updated_at, version) VALUES (?, ?, ?, ?, ?, ?, ?, 1);",
+        )
+        .run("dup-new", "src-1", "task", "tgt-1", "task", base + 1000, base + 1000);
+      // A non-duplicate row that must survive untouched.
+      storage.db
+        .query(
+          "INSERT INTO dependencies (id, source_id, source_kind, depends_on_id, depends_on_kind, created_at, updated_at, version) VALUES (?, ?, ?, ?, ?, ?, ?, 1);",
+        )
+        .run("solo", "src-2", "task", "tgt-2", "subtask", base, base);
+
+      // Reset user_version + marker so the slow path runs.
+      storage.db.exec("PRAGMA user_version = 11;");
+      const markerPath = join(workspace, ".trekoon", "migration-version");
+      writeFileSync(markerPath, JSON.stringify({ version: 11, userVersion: 11 }), "utf8");
+
+      migrateDatabase(storage.db);
+
+      const rows = storage.db
+        .query("SELECT id FROM dependencies ORDER BY id ASC;")
+        .all() as Array<{ id: string }>;
+      const ids = rows.map((row) => row.id).sort();
+      // Lowest-created_at survivor wins per logical edge.
+      expect(ids).toContain("dup-old");
+      expect(ids).not.toContain("dup-new");
+      expect(ids).toContain("solo");
+      expect(readCurrentMigrationVersionReadOnly(storage.db)).toBe(LATEST_MIGRATION_VERSION);
+    } finally {
+      storage.close();
+    }
+  });
+
+  test("rollback to v11 drops new indexes without throwing", (): void => {
+    const workspace: string = createWorkspace();
+    const storage = openTrekoonDatabase(workspace);
+
+    try {
+      const summary = rollbackDatabase(storage.db, 11);
+      expect(summary.toVersion).toBe(11);
+
+      const indexRows = storage.db
+        .query("SELECT name FROM sqlite_master WHERE type = 'index' AND tbl_name = 'dependencies';")
+        .all() as Array<{ name: string }>;
+
+      const names = new Set(indexRows.map((row) => row.name));
+      expect(names.has("uniq_dependencies_edge")).toBe(false);
+      expect(names.has("idx_dependencies_source")).toBe(false);
+      expect(names.has("idx_dependencies_target")).toBe(false);
+    } finally {
+      storage.close();
+    }
+  });
+
+  test("dep list / dep reverse query plans use the new indexes", (): void => {
+    const workspace: string = createWorkspace();
+    const storage = openTrekoonDatabase(workspace);
+
+    try {
+      // dep list reads dependencies WHERE source_id = ? — should use the
+      // source-side index (either the new composite or the existing v2
+      // single-col idx_dependencies_source -> v12 replaces with composite).
+      const sourcePlan = storage.db
+        .query(
+          "EXPLAIN QUERY PLAN SELECT id, source_id, source_kind, depends_on_id, depends_on_kind, created_at, updated_at FROM dependencies WHERE source_id = ? ORDER BY created_at ASC, id ASC;",
+        )
+        .all("src-1") as Array<{ detail: string }>;
+      const sourcePlanText = sourcePlan.map((row) => row.detail ?? "").join(" | ");
+      expect(sourcePlanText).toMatch(/idx_dependencies_(source|edge)/iu);
+
+      // dep reverse seeds the recursive CTE with WHERE depends_on_id = ?
+      // and joins on depends_on_id again — should use the target index.
+      const targetPlan = storage.db
+        .query("EXPLAIN QUERY PLAN SELECT source_id, source_kind FROM dependencies WHERE depends_on_id = ?;")
+        .all("tgt-1") as Array<{ detail: string }>;
+      const targetPlanText = targetPlan.map((row) => row.detail ?? "").join(" | ");
+      expect(targetPlanText).toMatch(/idx_dependencies_(target|depends_on)/iu);
+    } finally {
+      storage.close();
+    }
+  });
+});
