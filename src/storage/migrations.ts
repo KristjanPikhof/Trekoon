@@ -23,7 +23,7 @@ function migrationDownUnsupported(migrationName: string, version: number): Domai
 }
 
 const BASE_MIGRATION_VERSION = 1;
-const BASE_MIGRATION_NAME = `0001_base_schema_v${SCHEMA_VERSION}`;
+const BASE_MIGRATION_NAME = `0001_base_schema_v${BASE_SCHEMA_REVISION}`;
 const LEGACY_BASE_MIGRATION_NAME_PATTERNS: readonly string[] = [
   "0001_base_schema_v*",
 ];
