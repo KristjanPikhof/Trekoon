@@ -138,6 +138,16 @@ const SYNC_CONFLICTS_SCOPE_DOWN_STATEMENTS: readonly string[] = [
   "DROP INDEX IF EXISTS idx_sync_conflicts_scope_resolution;",
 ];
 
+const TASK_ORDERED_SCAN_INDEX_UP_STATEMENTS: readonly string[] = [
+  "CREATE INDEX IF NOT EXISTS idx_tasks_epic_created ON tasks(epic_id, created_at, id);",
+  "CREATE INDEX IF NOT EXISTS idx_subtasks_task_created ON subtasks(task_id, created_at, id);",
+];
+
+const TASK_ORDERED_SCAN_INDEX_DOWN_STATEMENTS: readonly string[] = [
+  "DROP INDEX IF EXISTS idx_subtasks_task_created;",
+  "DROP INDEX IF EXISTS idx_tasks_epic_created;",
+];
+
 const DEPENDENCY_KIND_INDEX_DOWN_STATEMENTS: readonly string[] = [
   "DROP INDEX IF EXISTS uniq_dependencies_edge;",
   "DROP INDEX IF EXISTS idx_dependencies_target;",
