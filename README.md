@@ -194,6 +194,27 @@ Trekoon enforces valid transitions. You can't skip straight from `todo` to
 Exception: `task done` auto-transitions through `in_progress`, so agents can
 call it from any non-done status.
 
+## Storage and durability
+
+Trekoon stores all state in `.trekoon/trekoon.db` (SQLite, WAL mode). The
+database file lives outside the git object store; never commit it. Open-time
+PRAGMAs are tuned for read+write throughput:
+
+- `journal_mode = WAL` — required for concurrent readers + a single writer.
+- `synchronous = NORMAL` — paired with WAL per the
+  [SQLite recommendation](https://www.sqlite.org/wal.html#performance_considerations).
+  On a hard kernel/OS crash, the last few unfsynced transactions may be lost,
+  but the database file itself never corrupts. To restore the pre-tuning
+  behaviour (`synchronous = FULL`), set `TREKOON_SQLITE_DURABILITY=full`
+  before invoking any `trekoon` command.
+- `temp_store = MEMORY`, `mmap_size = 256 MiB`, `cache_size = -64000` (64 MiB),
+  `wal_autocheckpoint = 1000` — keep hot reads in-process and bound the WAL
+  size under sustained writes.
+
+These pragmas apply per open connection. Recovery path on suspected
+corruption: `trekoon migrate backup`, then copy a known-good backup over
+`.trekoon/trekoon.db`.
+
 ## Local board
 
 Trekoon includes a browser-based board for humans who like having a visual
