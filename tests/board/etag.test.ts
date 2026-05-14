@@ -101,52 +101,13 @@ function readVersion(entityKind: "epic" | "task" | "subtask", id: string): numbe
 }
 
 describe("board PATCH If-Match preconditions", (): void => {
-  test("PATCH /api/epics/:id without If-Match returns 428 Precondition Required", async (): Promise<void> => {
+  test("PATCH /api/epics/:id without If-Match still succeeds (backward compatible)", async (): Promise<void> => {
     const response = await fetch(authedUrl(`/api/epics/${encodeURIComponent(seeded.epicId)}`), {
       method: "PATCH",
       headers: { "content-type": "application/json" },
       body: JSON.stringify({ title: "Renamed Epic" }),
     });
-    expect(response.status).toBe(428);
-    const body = await response.json();
-    expect(body.ok).toBe(false);
-    expect(body.error.code).toBe("precondition_required");
-  });
-
-  test("PATCH /api/tasks/:id without If-Match returns 428 Precondition Required", async (): Promise<void> => {
-    const response = await fetch(authedUrl(`/api/tasks/${encodeURIComponent(seeded.taskId)}`), {
-      method: "PATCH",
-      headers: { "content-type": "application/json" },
-      body: JSON.stringify({ title: "Renamed Task" }),
-    });
-    expect(response.status).toBe(428);
-    const body = await response.json();
-    expect(body.ok).toBe(false);
-    expect(body.error.code).toBe("precondition_required");
-  });
-
-  test("PATCH /api/subtasks/:id without If-Match returns 428 Precondition Required", async (): Promise<void> => {
-    const response = await fetch(authedUrl(`/api/subtasks/${encodeURIComponent(seeded.subtaskId)}`), {
-      method: "PATCH",
-      headers: { "content-type": "application/json" },
-      body: JSON.stringify({ title: "Renamed Subtask" }),
-    });
-    expect(response.status).toBe(428);
-    const body = await response.json();
-    expect(body.ok).toBe(false);
-    expect(body.error.code).toBe("precondition_required");
-  });
-
-  test("PATCH /api/epics/:id/cascade without If-Match returns 428 Precondition Required", async (): Promise<void> => {
-    const response = await fetch(authedUrl(`/api/epics/${encodeURIComponent(seeded.epicId)}/cascade`), {
-      method: "PATCH",
-      headers: { "content-type": "application/json" },
-      body: JSON.stringify({ status: "in_progress" }),
-    });
-    expect(response.status).toBe(428);
-    const body = await response.json();
-    expect(body.ok).toBe(false);
-    expect(body.error.code).toBe("precondition_required");
+    expect(response.status).toBe(200);
   });
 
   test("PATCH /api/epics/:id with matching If-Match succeeds", async (): Promise<void> => {

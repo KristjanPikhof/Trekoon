@@ -377,16 +377,13 @@ export function createBoardActions(options) {
         description: String(formData.get("description") || "").trim(),
         status: normalizeStatus(String(formData.get("status") || "todo")),
       };
-      // Capture the entity version at optimistic-apply time so the PATCH carries
-      // an If-Match header. A stale version triggers a 409 on the server, which
-      // the mutation queue rolls back via inverse delta.
-      const currentTask = store.snapshot?.tasks?.find((candidate) => candidate.id === taskId);
-      const ifMatchVersion = typeof currentTask?.version === "number" ? currentTask.version : undefined;
+      // No eager version capture: api.patchTask resolves the If-Match version
+      // lazily at queue fire time so back-to-back edits on the same task see
+      // the post-success version landed via mutation response or SSE delta.
       api.patchTask(
         taskId,
         updates,
         (snapshot) => updateTaskInSnapshot(snapshot, taskId, updates, normalizeSnapshot),
-        { ifMatchVersion },
       );
     },
     submitSubtaskForm(subtaskId, formData) {
@@ -396,13 +393,10 @@ export function createBoardActions(options) {
         status: normalizeStatus(String(formData.get("status") || "todo")),
       };
       syncState({ selectedSubtaskId: subtaskId });
-      const currentSubtask = store.snapshot?.subtasks?.find((candidate) => candidate.id === subtaskId);
-      const ifMatchVersion = typeof currentSubtask?.version === "number" ? currentSubtask.version : undefined;
       api.patchSubtask(
         subtaskId,
         updates,
         (snapshot) => updateSubtaskInSnapshot(snapshot, subtaskId, updates, normalizeSnapshot),
-        { ifMatchVersion },
       );
     },
     submitCreateSubtask(taskId, formData) {
@@ -473,18 +467,15 @@ export function createBoardActions(options) {
       }
       // Drag/drop is a status change only; do not mutate selection or modal state,
       // otherwise dropping a card while another task modal is open hijacks it.
-      const ifMatchVersion = typeof task.version === "number" ? task.version : undefined;
+      // If-Match version resolved lazily by api.patchTask at fire time.
       api.patchTask(
         taskId,
         { status: nextStatus },
         (snapshot) => updateTaskInSnapshot(snapshot, taskId, { status: nextStatus }, normalizeSnapshot),
-        { ifMatchVersion },
       );
     },
     changeEpicStatus(epicId, newStatus) {
       const normalizedStatus = normalizeStatus(newStatus);
-      const currentEpic = store.snapshot?.epics?.find((candidate) => candidate.id === epicId);
-      const ifMatchVersion = typeof currentEpic?.version === "number" ? currentEpic.version : undefined;
       api.patchEpic(
         epicId,
         { status: normalizedStatus },
@@ -493,18 +484,14 @@ export function createBoardActions(options) {
           if (epic) epic.status = normalizedStatus;
           return snapshot;
         },
-        { ifMatchVersion },
       );
     },
     bulkSetStatus(epicId, newStatus) {
       const normalizedStatus = normalizeStatus(newStatus);
-      const currentEpic = store.snapshot?.epics?.find((candidate) => candidate.id === epicId);
-      const ifMatchVersion = typeof currentEpic?.version === "number" ? currentEpic.version : undefined;
       api.cascadeEpicStatus(
         epicId,
         normalizedStatus,
         (snapshot) => cascadeEpicStatusInSnapshot(snapshot, epicId, normalizedStatus, normalizeSnapshot),
-        { ifMatchVersion },
       );
     },
     toggleEpicStatusFilter(status) {
