@@ -191,6 +191,16 @@ function migrateDependencyKindIndexes(db: Database): void {
 
   // Step 2: indexes that accelerate the polymorphic listDependencies /
   // listReverseDependencies / addDependency lookup paths.
+  //
+  // v2 already created single-column idx_dependencies_source(source_id) and
+  // idx_dependencies_depends_on(depends_on_id). Replace both with composite
+  // (id, kind) indexes — the source-side keeps the v2 name so the schema
+  // surface stays minimal, the target-side gets a new idx_dependencies_target
+  // name. We drop the v2 indexes first because CREATE INDEX IF NOT EXISTS
+  // would otherwise be a no-op against the existing single-column index of
+  // the same name.
+  db.exec("DROP INDEX IF EXISTS idx_dependencies_source;");
+  db.exec("DROP INDEX IF EXISTS idx_dependencies_depends_on;");
   db.exec("CREATE INDEX IF NOT EXISTS idx_dependencies_source ON dependencies(source_id, source_kind);");
   db.exec("CREATE INDEX IF NOT EXISTS idx_dependencies_target ON dependencies(depends_on_id, depends_on_kind);");
   db.exec(
