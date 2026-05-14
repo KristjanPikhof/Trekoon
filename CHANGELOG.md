@@ -2,6 +2,57 @@
 
 All notable changes to Trekoon are documented in this file.
 
+## 0.4.6
+
+### Added
+
+- Require `If-Match: <version>` on board PATCH routes (`/api/epics/:id`,
+  `/api/tasks/:id`, `/api/subtasks/:id`, `/api/epics/:id/cascade`). Missing
+  header returns `428 precondition_required`. Stale version returns `409
+  precondition_failed` with `currentVersion` and `providedVersion`. Bare,
+  quoted, and weak (`W/"…"`) ETag forms are accepted.
+- Configurable SQLite page cache via `TREKOON_SQLITE_CACHE_MIB` (default 64).
+  Non-integer or negative values fail fast with `invalid_input`.
+- Schema v12: composite and `UNIQUE` indexes on dependency edges. The
+  migration dedupes existing duplicate edges; its down step is destructive
+  and not reversible.
+- Schema v13: ordered-scan indexes for tasks and subtasks so paged board
+  reads avoid sort spilling on large epics.
+- `precondition_required` error code in the machine-contract error registry.
+
+### Changed
+
+- Apply open-time SQLite pragmas on every connection: `synchronous=NORMAL`,
+  `temp_store=MEMORY`, `mmap_size=256 MiB`. Set
+  `TREKOON_SQLITE_DURABILITY=full` to opt back into `synchronous=FULL`.
+- WAL watcher reconciles external writes through the canonical events table
+  when an event cursor is available, and falls back to full-snapshot diffing
+  only on warm-up or cursor staleness. Boards see CLI writes with less churn.
+- WAL watcher advances its event cursor only after the snapshot delta is
+  published, so a crash mid-publish replays the same events on restart
+  instead of dropping them.
+- Leaf entities (subtasks, dependencies) short-circuit WAL change detection
+  on `(version, updatedAt)` equality, skipping JSON fingerprinting. Parent
+  rows (epics, tasks) still fingerprint to catch derived-field drift.
+- Optimistic rollback now filters its inverse delta against the live
+  snapshot, so concurrent SSE-pushed advances on unrelated entities are no
+  longer clobbered when a mutation fails.
+- `task.deleted` events carry `epic_id`; `subtask.deleted` events carry
+  `task_id`. Cascade epic delete emits explicit `dependency.removed` events
+  for cross-tree edges that the dependency table cannot foreign-key to.
+
+### Fixed
+
+- Stale-version `409 precondition_failed` responses surface a `stale_version`
+  warning notice without a retry affordance. Resubmitting the same payload
+  would 409 again, so retry is suppressed.
+- Rapid successive edits on the same entity no longer race to send the same
+  stale version. The mutation queue captures `If-Match` at fire time, after
+  the prior mutation's success or SSE delta lands.
+- `lastFailedMutation` clears by `mutationId` identity, so a late success on
+  an earlier mutation no longer clears the error tag of a more recent
+  failure.
+
 ## 0.4.5
 
 ### Added
