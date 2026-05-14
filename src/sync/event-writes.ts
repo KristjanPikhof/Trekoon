@@ -111,7 +111,19 @@ export function appendEventWithGitContext(
   const git: ResolvedGitContext = context?.git ?? resolveGitContext(cwd, now);
   const eventId: string = randomUUID();
 
-  persistGitContext(db, git, now);
+  // Bulk mutations append many events under one BEGIN IMMEDIATE write lock.
+  // persistGitContext upserts the same (worktree_path, branch_name, head_sha)
+  // row every call, so we only need it once per transaction. Inside a
+  // transaction context the first call flips `gitPersisted` to `true` and
+  // subsequent appends skip the redundant upsert. Single-event paths (no
+  // active transaction context) still upsert on every call — preserving
+  // existing behaviour for direct callers like sync-helpers.
+  if (context === undefined) {
+    persistGitContext(db, git, now);
+  } else if (!context.gitPersisted) {
+    persistGitContext(db, git, now);
+    context.gitPersisted = true;
+  }
 
   if (context) {
     context.nextTimestamp += 1;
