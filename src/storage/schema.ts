@@ -145,4 +145,6 @@ export const BASE_SCHEMA_STATEMENTS: readonly string[] = [
   `CREATE INDEX IF NOT EXISTS idx_dependencies_source ON dependencies(source_id, source_kind);`,
   `CREATE INDEX IF NOT EXISTS idx_dependencies_target ON dependencies(depends_on_id, depends_on_kind);`,
   `CREATE UNIQUE INDEX IF NOT EXISTS uniq_dependencies_edge ON dependencies(source_id, source_kind, depends_on_id, depends_on_kind);`,
+  `CREATE INDEX IF NOT EXISTS idx_tasks_epic_created ON tasks(epic_id, created_at, id);`,
+  `CREATE INDEX IF NOT EXISTS idx_subtasks_task_created ON subtasks(task_id, created_at, id);`,
 ];
