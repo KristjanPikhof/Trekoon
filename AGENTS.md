@@ -1,16 +1,15 @@
 # Trekoon Agent Guide
 
-## Bootstrap (start of every session)
-
-1. `trekoon --toon session` — diagnostics, sync state, next ready task. If `recoveryRequired`, stop and `trekoon --toon init`.
-2. Scope to active work: `trekoon --toon session --epic <id>`.
-3. Trekoon is the source of truth for tracked work — do not duplicate plans elsewhere.
+Trekoon skill at `.agents/skills/trekoon/`. SKILL.md is the lean router; deep
+guidance in `reference/*`. Bootstrap (`session`, recovery flow), mode
+contracts, and status flow live there — this file holds repo-specific
+workflow, coding, and architecture rules.
 
 ## Workflow rules
 
 - **Atomic-commits hook is active.** Every Edit/Write triggers a per-file commit. Do **not** run `git commit`, `git add`, or `git push` manually unless the user asks.
 - **Tracker DB is shared, repo-scoped.** `.trekoon/trekoon.db` lives outside the git object store; never commit it. `git checkout` does not roll back tracker state.
-- **Trekoon skill** at `.agents/skills/trekoon/`. SKILL.md is the lean router (≤250 LOC); deep guidance in `reference/*`. Status-machine table is canonical at `reference/status-machine.md` — do not restate elsewhere.
+- **Status-machine table is canonical** at `.agents/skills/trekoon/reference/status-machine.md` — do not restate elsewhere.
 - **Prefer minimal, targeted edits.** No broad rewrites. Preserve existing examples unless fixing factual issues.
 
 ## Dev CLI and verify
