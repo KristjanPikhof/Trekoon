@@ -1180,16 +1180,110 @@ describe("open-time pragma tuning", (): void => {
     }
   });
 
-  test("cache_size pinned to -64000 (64 MiB)", (): void => {
+  test("cache_size defaults to -65536 (64 MiB in KiB negative form)", (): void => {
     const workspace: string = createWorkspace();
+    const previous: string | undefined = process.env.TREKOON_SQLITE_CACHE_MIB;
+    delete process.env.TREKOON_SQLITE_CACHE_MIB;
+
     const storage = openTrekoonDatabase(workspace);
 
     try {
       const row = storage.db.query("PRAGMA cache_size;").get() as { cache_size: number } | null;
-      expect(row?.cache_size).toBe(-64000);
+      // 64 MiB * 1024 KiB/MiB = 65536 KiB, stored as negative value.
+      expect(row?.cache_size).toBe(-65536);
     } finally {
       storage.close();
+      if (previous === undefined) {
+        delete process.env.TREKOON_SQLITE_CACHE_MIB;
+      } else {
+        process.env.TREKOON_SQLITE_CACHE_MIB = previous;
+      }
     }
+  });
+
+  test("TREKOON_SQLITE_CACHE_MIB=16 produces cache_size = -16384", (): void => {
+    const workspace: string = createWorkspace();
+    const previous: string | undefined = process.env.TREKOON_SQLITE_CACHE_MIB;
+    process.env.TREKOON_SQLITE_CACHE_MIB = "16";
+
+    const storage = openTrekoonDatabase(workspace);
+
+    try {
+      const row = storage.db.query("PRAGMA cache_size;").get() as { cache_size: number } | null;
+      // 16 MiB * 1024 = 16384 KiB, stored as negative value.
+      expect(row?.cache_size).toBe(-16384);
+    } finally {
+      storage.close();
+      if (previous === undefined) {
+        delete process.env.TREKOON_SQLITE_CACHE_MIB;
+      } else {
+        process.env.TREKOON_SQLITE_CACHE_MIB = previous;
+      }
+    }
+  });
+
+  test("TREKOON_SQLITE_CACHE_MIB=0 produces cache_size = 0", (): void => {
+    const workspace: string = createWorkspace();
+    const previous: string | undefined = process.env.TREKOON_SQLITE_CACHE_MIB;
+    process.env.TREKOON_SQLITE_CACHE_MIB = "0";
+
+    const storage = openTrekoonDatabase(workspace);
+
+    try {
+      const row = storage.db.query("PRAGMA cache_size;").get() as { cache_size: number } | null;
+      expect(row?.cache_size).toBe(0);
+    } finally {
+      storage.close();
+      if (previous === undefined) {
+        delete process.env.TREKOON_SQLITE_CACHE_MIB;
+      } else {
+        process.env.TREKOON_SQLITE_CACHE_MIB = previous;
+      }
+    }
+  });
+
+  test("TREKOON_SQLITE_CACHE_MIB=-1 throws invalid_config DomainError", (): void => {
+    const workspace: string = createWorkspace();
+    const previous: string | undefined = process.env.TREKOON_SQLITE_CACHE_MIB;
+    process.env.TREKOON_SQLITE_CACHE_MIB = "-1";
+
+    let caught: unknown;
+    try {
+      openTrekoonDatabase(workspace);
+    } catch (error: unknown) {
+      caught = error;
+    } finally {
+      if (previous === undefined) {
+        delete process.env.TREKOON_SQLITE_CACHE_MIB;
+      } else {
+        process.env.TREKOON_SQLITE_CACHE_MIB = previous;
+      }
+    }
+
+    expect(caught).toBeInstanceOf(DomainError);
+    expect((caught as DomainError).code).toBe("invalid_config");
+  });
+
+  test("TREKOON_SQLITE_CACHE_MIB=abc throws invalid_config DomainError", (): void => {
+    const workspace: string = createWorkspace();
+    const previous: string | undefined = process.env.TREKOON_SQLITE_CACHE_MIB;
+    process.env.TREKOON_SQLITE_CACHE_MIB = "abc";
+
+    let caught: unknown;
+    try {
+      openTrekoonDatabase(workspace);
+    } catch (error: unknown) {
+      caught = error;
+    } finally {
+      if (previous === undefined) {
+        delete process.env.TREKOON_SQLITE_CACHE_MIB;
+      } else {
+        process.env.TREKOON_SQLITE_CACHE_MIB = previous;
+      }
+    }
+
+    expect(caught).toBeInstanceOf(DomainError);
+    expect((caught as DomainError).code).toBe("invalid_config");
   });
 
   test("wal_autocheckpoint pinned to 1000", (): void => {
