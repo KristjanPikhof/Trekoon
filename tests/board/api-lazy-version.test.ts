@@ -169,6 +169,11 @@ describe("lazy If-Match resolution via normalized store", () => {
     // Let both queue turns drain.
     await waitForQueueTurn();
     await waitForQueueTurn();
+    await waitForQueueTurn();
+
+    // Debug: snapshot state after queue drain
+    const task = model.getSnapshot().tasks.find((t: { id: string }) => t.id === "task-1");
+    expect(task?.version).toBeDefined();
 
     expect(fetchMock).toHaveBeenCalledTimes(2);
     const calls = fetchMock.mock.calls as unknown as Array<[string, RequestInit]>;
