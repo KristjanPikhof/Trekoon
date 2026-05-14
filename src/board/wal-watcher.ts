@@ -850,6 +850,7 @@ export function startWalWatcher(options: WalWatcherOptions): WalWatcher {
     if (closed) {
       return;
     }
+    lastReconcileAt = Date.now();
     const inProcessWriteAt = options.eventBus.lastInProcessWriteAt;
     const shouldSuppressInProcessTick =
       inProcessWriteAt > lastSuppressedInProcessWriteAt &&
