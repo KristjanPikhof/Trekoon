@@ -651,9 +651,20 @@ export function startWalWatcher(options: WalWatcherOptions): WalWatcher {
   let closed = false;
   let failures = 0;
   let lastSuppressedInProcessWriteAt = 0;
-  // Initialised to now because the baseline snapshot was just built above;
-  // the first maybeScheduleReconcile call should not fire as stale.
-  let lastReconcileAt = Date.now();
+  let lastReconcileAt = 0;
+  // The event-cursor hot path no longer rebuilds `lastSnapshot` on every
+  // successful tick — that full snapshot read was the dominant cost on large
+  // boards. Setting this flag tells the fallback path that the baseline may
+  // be older than what subscribers have already received via cursor deltas.
+  // The fallback diff against a stale baseline can over-publish, but that is
+  // strictly a recovery operation triggered only when the cursor path bails
+  // (warm-up, cursor pruned, unknown event shape) — already a heavier path.
+  let lastSnapshotStale = false;
+  // Tracks the most recently logged reconcile-failure message so the catch
+  // block in reconcile() can emit a log on every distinct message even when
+  // the modulo counter would otherwise throttle it. Empty string means "no
+  // failure logged yet" — the first failure of any kind will surface.
+  let lastLoggedFailureMessage = "";
 
   function runFullSnapshotReconcile(shouldSuppressInProcessTick: boolean, inProcessWriteAt: number): void {
     const fresh = buildSnapshot(domain);
@@ -703,6 +714,10 @@ export function startWalWatcher(options: WalWatcherOptions): WalWatcher {
     const hasChanges = hasDiffChanges(publishEpicsDiff, publishTasksDiff, publishSubtasksDiff, publishDependenciesDiff);
 
     lastSnapshot = fresh;
+    // The fallback just rebuilt the snapshot from the live domain, so the
+    // baseline is no longer stale. Future event-cursor ticks may set the
+    // flag again as they advance without rebuilding lastSnapshot.
+    lastSnapshotStale = false;
     // Reseat the cursor at the latest event so the next tick can attempt the
     // optimized path again. Without this, every subsequent tick would also
     // see "cursor stale" on a freshly-recovered watcher.
@@ -742,20 +757,21 @@ export function startWalWatcher(options: WalWatcherOptions): WalWatcher {
       delta.deletedSubtaskIds.length === 0 &&
       delta.deletedDependencyIds.length === 0;
 
-    // Even on the optimized path, keep lastSnapshot fresh: if a future tick
-    // triggers fallback, the snapshot diff baseline must reflect the latest
-    // committed state. Skipping this would re-emit every event the optimized
-    // path already published on the very first fallback tick.
+    // The event-cursor hot path used to rebuild `lastSnapshot` on every tick
+    // via `buildSnapshot(domain)` — the full board read that dominates CPU on
+    // large boards. We now skip it entirely and mark the baseline stale so
+    // the next fallback tick (cursor pruned / parse failure / etc.) knows it
+    // may need to publish a recovery delta against an older baseline.
     //
-    // Both `lastSnapshot` and `lastEventCursor` advance ONLY after the publish
-    // call below returns successfully (or when there is nothing to publish).
-    // If `publishSnapshotDelta` throws, leaving these at their prior values
-    // ensures the next tick re-runs the same cursor delta — subscribers never
-    // miss a row because of a transient listener error.
-    const fresh = buildSnapshot(domain);
+    // Both `lastEventCursor` and the staleness flag advance ONLY after the
+    // publish call below returns successfully (or when there is nothing to
+    // publish). If `publishSnapshotDelta` throws, leaving these at their
+    // prior values ensures the next tick re-runs the same cursor delta —
+    // subscribers never miss a row because of a transient listener error.
 
     if (noChanges) {
-      lastSnapshot = fresh;
+      // No events to process means the cursor itself did not move (see
+      // tryEventCursorReconcile). Nothing to advance, nothing to mark stale.
       lastEventCursor = newCursor;
       if (shouldSuppressInProcessTick) {
         lastSuppressedInProcessWriteAt = inProcessWriteAt;
@@ -831,10 +847,12 @@ export function startWalWatcher(options: WalWatcherOptions): WalWatcher {
     if (!hasDiffChanges(publishEpicsDiff, publishTasksDiff, publishSubtasksDiff, publishDependenciesDiff)) {
       // Nothing to publish (suppression filtered the in-process duplicate, or
       // the targeted snapshot read returned no rows for the touched IDs).
-      // Advance cursor + baseline since the canonical events have been
-      // accounted for; replaying them would not produce a different result.
-      lastSnapshot = fresh;
+      // Advance cursor since the canonical events have been accounted for;
+      // replaying them would not produce a different result. Mark the
+      // baseline stale because the underlying domain has moved even though
+      // no delta needed to ship.
       lastEventCursor = newCursor;
+      lastSnapshotStale = true;
       if (shouldSuppressInProcessTick) {
         lastSuppressedInProcessWriteAt = inProcessWriteAt;
       }
@@ -854,11 +872,12 @@ export function startWalWatcher(options: WalWatcherOptions): WalWatcher {
       deletedDependencyIds: publishDependenciesDiff.deletedIds,
     });
 
-    // Publish succeeded — only now is it safe to advance cursor + baseline.
-    // If the call above threw, the outer reconcile() catch handles it and
-    // leaves these unchanged so the next tick replays the same delta.
-    lastSnapshot = fresh;
+    // Publish succeeded — only now is it safe to advance cursor and mark the
+    // baseline stale. If the call above threw, the outer reconcile() catch
+    // handles it and leaves these unchanged so the next tick replays the
+    // same delta.
     lastEventCursor = newCursor;
+    lastSnapshotStale = true;
     if (shouldSuppressInProcessTick) {
       lastSuppressedInProcessWriteAt = inProcessWriteAt;
     }
@@ -890,11 +909,21 @@ export function startWalWatcher(options: WalWatcherOptions): WalWatcher {
     } catch (error) {
       // Reconciliation must never crash the server. Errors here usually mean
       // the database is mid-write or a downstream snapshot builder threw; the
-      // next mtime tick will retry. Log every Nth failure to keep operators
-      // informed without flooding stderr on persistent faults.
+      // next mtime tick will retry.
+      //
+      // Logging policy: always log the first occurrence of every distinct
+      // failure message so operators see new fault modes immediately, then
+      // throttle subsequent identical messages via the modulo counter to
+      // keep stderr quiet on persistent faults. Without the first-occurrence
+      // guarantee, a transient one-shot failure with `logEveryNthFailure=5`
+      // would be silenced entirely until four more identical failures piled
+      // up — exactly the wrong signal for an operator.
       failures += 1;
-      if (failures % logEveryNthFailure === 0) {
+      const failureMessage = error instanceof Error ? error.message : String(error);
+      const isNewMessage = failureMessage !== lastLoggedFailureMessage;
+      if (isNewMessage || failures % logEveryNthFailure === 0) {
         logger(`wal-watcher: reconcile failed (${failures} total failures)`, error);
+        lastLoggedFailureMessage = failureMessage;
       }
     }
   }
