@@ -404,20 +404,42 @@ export function createMutationQueue(model, rerender) {
           ? { type: "success", message: mutation.successMessage }
           : null;
       } catch (error) {
-        // Revert only the entities this mutation touched. Any unrelated
-        // entities updated by concurrent server deltas remain intact.
-        if (inverseDelta) {
-          model.applySnapshotDelta(inverseDelta);
+        const isStaleVersion = error?.code === "precondition_failed";
+
+        // Revert only the entities this mutation touched, but ALSO drop any
+        // entity whose live store version has already advanced past the
+        // optimistic version we sent: that means an SSE delta (or another
+        // queued mutation reconciliation) landed mid-flight and clobbering it
+        // with the pre-optimistic record would lose the user's most recent
+        // server-authoritative state.
+        const adjustedInverseDelta = inverseDelta
+          ? stripUpToDateEntitiesFromInverse(inverseDelta, model.store?.snapshot, ifMatchVersion)
+          : null;
+
+        if (adjustedInverseDelta) {
+          model.applySnapshotDelta(adjustedInverseDelta);
         }
 
-        const message = error instanceof Error ? error.message : String(error);
-        model.store.notice = {
-          type: "error",
-          title: "Action failed",
-          message,
-          retryLabel: "Retry",
-          retryMutationId: mutation.mutationId,
-        };
+        if (isStaleVersion) {
+          // Typed `stale_version` notice — no retry button because replaying
+          // the optimistic payload against the post-advance state would 409
+          // again. The user needs to refresh to compose against latest.
+          model.store.notice = {
+            type: "warning",
+            code: "stale_version",
+            title: "Stale update",
+            message: "Updated by another session — refresh to load the latest version.",
+          };
+        } else {
+          const message = error instanceof Error ? error.message : String(error);
+          model.store.notice = {
+            type: "error",
+            title: "Action failed",
+            message,
+            retryLabel: "Retry",
+            retryMutationId: mutation.mutationId,
+          };
+        }
 
         if (typeof mutation.onError === "function") {
           mutation.onError(error);
