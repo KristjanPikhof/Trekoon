@@ -1158,7 +1158,11 @@ export class MutationService {
       const task = this.#domain.getTaskOrThrow(existingSubtask.taskId);
       const touchingDependencies = this.#domain.listDependenciesTouchingNode(input.id);
       this.#domain.deleteSubtask(input.id);
-      const subtaskDeleteEventId = this.#emitSubtaskDeleted(input.id);
+      // Emit task_id on the canonical subtask.deleted event so the WAL
+      // watcher's event-cursor path can fan-in the parent task without a
+      // post-delete domain lookup (which returns null). Same field shape as
+      // the cascade path's emitter call, minus source_event_id.
+      const subtaskDeleteEventId = this.#emitSubtaskDeleted(input.id, { taskId: existingSubtask.taskId });
       for (const dependency of touchingDependencies) {
         this.#appendEntityEvent(
           "dependency",
