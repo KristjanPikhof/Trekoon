@@ -333,4 +333,20 @@ describe("session command", (): void => {
     expect(result.ok).toBeFalse();
     expect(result.error?.code).toBe("not_found");
   });
+
+  test("passing both --epic and --item yields invalid_input with a clear message", async (): Promise<void> => {
+    const cwd = createWorkspace();
+    initializeRepository(cwd);
+
+    const result = await runSession({
+      cwd,
+      mode: "toon",
+      args: ["--epic", randomUUID(), "--item", randomUUID()],
+    });
+
+    expect(result.ok).toBeFalse();
+    expect(result.error?.code).toBe("invalid_input");
+    expect(result.error?.message).toContain("--epic and --item are mutually exclusive");
+    expect(result.human).toContain("--epic and --item are mutually exclusive");
+  });
 });

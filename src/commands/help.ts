@@ -412,6 +412,7 @@ const SESSION_HELP = [
   "  --item <id>       Resolve any epic/task/subtask id in one call. Returns",
   "                    item: { kind, parentEpicId, entity, readiness, suggestedNext }.",
   "                    Replaces the legacy epic-show || task-show || subtask-show cascade.",
+  "                    Mutually exclusive with --epic; passing both yields invalid_input.",
   "",
   "Output modes:",
   "  human  Multi-section summary (default in TTY)",
