@@ -1271,6 +1271,33 @@ export class TrackerDomain {
     return result.changes;
   }
 
+  /**
+   * Bulk delete dependency rows by primary key, chunked to respect
+   * {@link SQLITE_MAX_VARIABLES}. Used by the epic-cascade deletion path:
+   * SQLite ON DELETE CASCADE covers tasks/subtasks but NOT the dependencies
+   * table (no FK exists) — without this, dep rows touching cascaded
+   * tasks/subtasks are left orphaned after `deleteEpic`.
+   *
+   * Returns the total number of rows actually deleted across all chunks.
+   * Empty input is a no-op and returns 0 without touching the database.
+   */
+  removeDependenciesByIds(ids: readonly string[]): number {
+    if (ids.length === 0) {
+      return 0;
+    }
+    this.#assertInTransaction("removeDependenciesByIds");
+    const normalized: string[] = ids.map((id) => assertNonEmpty("id", id));
+    let totalChanges = 0;
+    for (const chunk of chunkValues(normalized, SQLITE_MAX_VARIABLES)) {
+      const placeholders = chunk.map(() => "?").join(", ");
+      const result = this.#db
+        .query(`DELETE FROM dependencies WHERE id IN (${placeholders});`)
+        .run(...chunk);
+      totalChanges += result.changes;
+    }
+    return totalChanges;
+  }
+
   getDependency(id: string): DependencyRecord | null {
     const row = this.#db
       .query(

@@ -434,7 +434,32 @@ export class MutationService {
         ? this.#domain.listSubtasksByTaskIds(taskIds)
         : new Map<string, readonly SubtaskRecord[]>();
 
+      // Collect every dependency touching the cascaded tasks/subtasks BEFORE
+      // the epic delete fires. The dependencies table has no FK to
+      // tasks/subtasks so SQLite ON DELETE CASCADE leaves these rows
+      // orphaned — we must clean them up here AND emit canonical
+      // `dependency.removed` events so the WAL watcher's event-cursor path
+      // can surface deletedDependencyIds to peer boards without falling
+      // back to a full-snapshot rebuild.
+      const cascadeNodeIds: string[] = [];
+      for (const task of tasks) {
+        cascadeNodeIds.push(task.id);
+        const subtasks = subtasksByTaskId.get(task.id) ?? [];
+        for (const subtask of subtasks) {
+          cascadeNodeIds.push(subtask.id);
+        }
+      }
+      const cascadedDependencies = cascadeNodeIds.length > 0
+        ? this.#domain.listDependenciesTouchingNodes(cascadeNodeIds)
+        : [];
+
       this.#domain.deleteEpic(id);
+      // Explicitly delete the dependency rows that touched the cascaded
+      // nodes. domain.deleteEpic relies on SQLite CASCADE for tasks/subtasks
+      // but does not (and cannot) reach the dependencies table.
+      if (cascadedDependencies.length > 0) {
+        this.#domain.removeDependenciesByIds(cascadedDependencies.map((dependency) => dependency.id));
+      }
 
       const epicDeleteEventId = this.#emitEpicDeleted(id);
 
@@ -449,6 +474,26 @@ export class MutationService {
         for (const subtask of subtasks) {
           this.#emitSubtaskDeleted(subtask.id, { taskId: task.id, sourceEventId: taskDeleteEventId });
         }
+      }
+
+      // Emit dependency.removed for each cascaded dep. Stamp them with the
+      // epic-delete event id so peer worktrees can suppress the per-dep
+      // conflict the same way cascaded task.deleted events are suppressed
+      // behind a pending epic-level conflict.
+      for (const dependency of cascadedDependencies) {
+        this.#appendEntityEvent(
+          "dependency",
+          this.#dependencyEventEntityId(dependency),
+          ENTITY_OPERATIONS.dependency.removed,
+          this.#dependencyEventFields({
+            dependencyId: dependency.id,
+            sourceId: dependency.sourceId,
+            sourceKind: dependency.sourceKind,
+            dependsOnId: dependency.dependsOnId,
+            dependsOnKind: dependency.dependsOnKind,
+            sourceEventId: epicDeleteEventId,
+          }),
+        );
       }
     });
   }
