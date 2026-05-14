@@ -1111,16 +1111,8 @@ export class MutationService {
   deleteSubtask(id: string): { deletedDependencyIds: string[] } {
     return this.#writeTransaction((): { deletedDependencyIds: string[] } => {
       const touchingDependencies = this.#domain.listDependenciesTouchingNode(id);
-      // Capture the parent task id BEFORE delete so the canonical
-      // subtask.deleted event can fan-in to the parent task in the WAL
-      // watcher event-cursor path. Without this the watcher cannot
-      // reconstruct the parent task change (subtasks list / searchText /
-      // counts) from the event stream — domain.getSubtask(id) returns null
-      // post-delete.
-      const existing = this.#domain.getSubtaskOrThrow(id);
-      const parentTaskId = existing.taskId;
       this.#domain.deleteSubtask(id);
-      const subtaskDeleteEventId = this.#emitSubtaskDeleted(id, { taskId: parentTaskId });
+      const subtaskDeleteEventId = this.#emitSubtaskDeleted(id);
       for (const dependency of touchingDependencies) {
         this.#appendEntityEvent(
           "dependency",
@@ -1158,11 +1150,7 @@ export class MutationService {
       const task = this.#domain.getTaskOrThrow(existingSubtask.taskId);
       const touchingDependencies = this.#domain.listDependenciesTouchingNode(input.id);
       this.#domain.deleteSubtask(input.id);
-      // Emit task_id on the canonical subtask.deleted event so the WAL
-      // watcher's event-cursor path can fan-in the parent task without a
-      // post-delete domain lookup (which returns null). Same field shape as
-      // the cascade path's emitter call, minus source_event_id.
-      const subtaskDeleteEventId = this.#emitSubtaskDeleted(input.id, { taskId: existingSubtask.taskId });
+      const subtaskDeleteEventId = this.#emitSubtaskDeleted(input.id);
       for (const dependency of touchingDependencies) {
         this.#appendEntityEvent(
           "dependency",
@@ -1532,15 +1520,11 @@ export class MutationService {
 
   #emitSubtaskDeleted(
     subtaskId: string,
-    options?: { taskId?: string | undefined; sourceEventId?: string | undefined } | undefined,
+    cascade?: { taskId: string; sourceEventId: string } | undefined,
   ): string {
-    const fields: Record<string, unknown> = {};
-    if (options?.taskId) {
-      fields.task_id = options.taskId;
-    }
-    if (options?.sourceEventId) {
-      fields.source_event_id = options.sourceEventId;
-    }
+    const fields: Record<string, unknown> = cascade
+      ? { task_id: cascade.taskId, source_event_id: cascade.sourceEventId }
+      : {};
     return this.#appendEntityEvent("subtask", subtaskId, ENTITY_OPERATIONS.subtask.deleted, fields);
   }
 
