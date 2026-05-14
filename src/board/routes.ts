@@ -770,16 +770,15 @@ export function createBoardApiHandler(context: BoardRouteContext): (request: Req
         const subtaskId = subtaskMatch[1] ?? "";
         const body = await parseJsonBody(request);
         const ifMatch = parseIfMatchHeader(request);
-        if (ifMatch === null) {
-          return preconditionRequiredResponse();
-        }
         const subtaskInput = {
           title: readOptionalString(body, "title"),
           description: readOptionalString(body, "description"),
           status: readOptionalString(body, "status"),
           owner: readOptionalNullableString(body, "owner"),
         };
-        const subtask = mutations.updateSubtaskWithIfMatch(subtaskId, ifMatch, subtaskInput);
+        const subtask = ifMatch !== null
+          ? mutations.updateSubtaskWithIfMatch(subtaskId, ifMatch, subtaskInput)
+          : mutations.updateSubtask(subtaskId, subtaskInput);
           const task = domain.getTaskOrThrow(subtask.taskId);
           return respondWithMutationDelta(domain, { subtask }, { epicIds: [task.epicId], taskIds: [task.id], subtaskIds: [subtask.id] });
         }
