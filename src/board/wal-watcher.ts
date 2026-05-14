@@ -589,83 +589,79 @@ export function startWalWatcher(options: WalWatcherOptions): WalWatcher {
   const buildSnapshot = options.buildSnapshot ?? buildBoardSnapshot;
 
   let lastSnapshot = buildSnapshot(domain);
+  let lastEventCursor: EventCursor | null = readLatestEventCursor(options.db);
 
   let debounceTimer: ReturnType<typeof setTimeout> | null = null;
   let closed = false;
   let failures = 0;
   let lastSuppressedInProcessWriteAt = 0;
 
-  function reconcile(): void {
-    if (closed) {
+  function runFullSnapshotReconcile(shouldSuppressInProcessTick: boolean, inProcessWriteAt: number): void {
+    const fresh = buildSnapshot(domain);
+    const epicsDiff = diffById(lastSnapshot.epics, fresh.epics, { isLeaf: false });
+    const tasksDiff = diffById(lastSnapshot.tasks, fresh.tasks, { isLeaf: false });
+    const subtasksDiff = diffById(lastSnapshot.subtasks, fresh.subtasks, { isLeaf: true });
+    const dependenciesDiff = diffById(lastSnapshot.dependencies, fresh.dependencies, { isLeaf: true });
+
+    const shouldSuppressDiff = shouldSuppressInProcessTick
+      ? {
+          epics: suppressAlreadyPublishedDiff(
+            epicsDiff,
+            recordsByIdFromDelta(options.eventBus.lastInProcessSnapshotDelta, "epics"),
+            deletedIdsFromDelta(options.eventBus.lastInProcessSnapshotDelta, "deletedEpicIds"),
+            { isLeaf: false },
+          ),
+          tasks: suppressAlreadyPublishedDiff(
+            tasksDiff,
+            recordsByIdFromDelta(options.eventBus.lastInProcessSnapshotDelta, "tasks"),
+            deletedIdsFromDelta(options.eventBus.lastInProcessSnapshotDelta, "deletedTaskIds"),
+            { isLeaf: false },
+          ),
+          subtasks: suppressAlreadyPublishedDiff(
+            subtasksDiff,
+            recordsByIdFromDelta(options.eventBus.lastInProcessSnapshotDelta, "subtasks"),
+            deletedIdsFromDelta(options.eventBus.lastInProcessSnapshotDelta, "deletedSubtaskIds"),
+            { isLeaf: true },
+          ),
+          dependencies: suppressAlreadyPublishedDiff(
+            dependenciesDiff,
+            recordsByIdFromDelta(options.eventBus.lastInProcessSnapshotDelta, "dependencies"),
+            deletedIdsFromDelta(options.eventBus.lastInProcessSnapshotDelta, "deletedDependencyIds"),
+            { isLeaf: true },
+          ),
+        }
+      : null;
+
+    if (shouldSuppressInProcessTick) {
+      lastSuppressedInProcessWriteAt = inProcessWriteAt;
+    }
+
+    const publishEpicsDiff = shouldSuppressDiff?.epics ?? epicsDiff;
+    const publishTasksDiff = shouldSuppressDiff?.tasks ?? tasksDiff;
+    const publishSubtasksDiff = shouldSuppressDiff?.subtasks ?? subtasksDiff;
+    const publishDependenciesDiff = shouldSuppressDiff?.dependencies ?? dependenciesDiff;
+
+    const hasChanges = hasDiffChanges(publishEpicsDiff, publishTasksDiff, publishSubtasksDiff, publishDependenciesDiff);
+
+    lastSnapshot = fresh;
+    // Reseat the cursor at the latest event so the next tick can attempt the
+    // optimized path again. Without this, every subsequent tick would also
+    // see "cursor stale" on a freshly-recovered watcher.
+    lastEventCursor = readLatestEventCursor(options.db);
+
+    if (!hasChanges) {
       return;
     }
-    const inProcessWriteAt = options.eventBus.lastInProcessWriteAt;
-    const shouldSuppressInProcessTick =
-      inProcessWriteAt > lastSuppressedInProcessWriteAt &&
-      Date.now() - inProcessWriteAt <= IN_PROCESS_WAL_SUPPRESS_MS;
 
-    try {
-      const fresh = buildSnapshot(domain);
-      const epicsDiff = diffById(lastSnapshot.epics, fresh.epics, { isLeaf: false });
-      const tasksDiff = diffById(lastSnapshot.tasks, fresh.tasks, { isLeaf: false });
-      const subtasksDiff = diffById(lastSnapshot.subtasks, fresh.subtasks, { isLeaf: true });
-      const dependenciesDiff = diffById(lastSnapshot.dependencies, fresh.dependencies, { isLeaf: true });
-
-      const shouldSuppressDiff = shouldSuppressInProcessTick
-        ? {
-            epics: suppressAlreadyPublishedDiff(
-              epicsDiff,
-              recordsByIdFromDelta(options.eventBus.lastInProcessSnapshotDelta, "epics"),
-              deletedIdsFromDelta(options.eventBus.lastInProcessSnapshotDelta, "deletedEpicIds"),
-              { isLeaf: false },
-            ),
-            tasks: suppressAlreadyPublishedDiff(
-              tasksDiff,
-              recordsByIdFromDelta(options.eventBus.lastInProcessSnapshotDelta, "tasks"),
-              deletedIdsFromDelta(options.eventBus.lastInProcessSnapshotDelta, "deletedTaskIds"),
-              { isLeaf: false },
-            ),
-            subtasks: suppressAlreadyPublishedDiff(
-              subtasksDiff,
-              recordsByIdFromDelta(options.eventBus.lastInProcessSnapshotDelta, "subtasks"),
-              deletedIdsFromDelta(options.eventBus.lastInProcessSnapshotDelta, "deletedSubtaskIds"),
-              { isLeaf: true },
-            ),
-            dependencies: suppressAlreadyPublishedDiff(
-              dependenciesDiff,
-              recordsByIdFromDelta(options.eventBus.lastInProcessSnapshotDelta, "dependencies"),
-              deletedIdsFromDelta(options.eventBus.lastInProcessSnapshotDelta, "deletedDependencyIds"),
-              { isLeaf: true },
-            ),
-          }
-        : null;
-
-      if (shouldSuppressInProcessTick) {
-        lastSuppressedInProcessWriteAt = inProcessWriteAt;
-      }
-
-      const publishEpicsDiff = shouldSuppressDiff?.epics ?? epicsDiff;
-      const publishTasksDiff = shouldSuppressDiff?.tasks ?? tasksDiff;
-      const publishSubtasksDiff = shouldSuppressDiff?.subtasks ?? subtasksDiff;
-      const publishDependenciesDiff = shouldSuppressDiff?.dependencies ?? dependenciesDiff;
-
-      const hasChanges = hasDiffChanges(publishEpicsDiff, publishTasksDiff, publishSubtasksDiff, publishDependenciesDiff);
-
-      lastSnapshot = fresh;
-
-      if (!hasChanges) {
-        return;
-      }
-
-      options.eventBus.publishSnapshotDelta({
-        generatedAt: Date.now(),
-        source: "wal-watcher",
-        epics: publishEpicsDiff.upserted,
-        tasks: publishTasksDiff.upserted,
-        subtasks: publishSubtasksDiff.upserted,
-        dependencies: publishDependenciesDiff.upserted,
-        deletedEpicIds: publishEpicsDiff.deletedIds,
-        deletedTaskIds: publishTasksDiff.deletedIds,
+    options.eventBus.publishSnapshotDelta({
+      generatedAt: Date.now(),
+      source: "wal-watcher",
+      epics: publishEpicsDiff.upserted,
+      tasks: publishTasksDiff.upserted,
+      subtasks: publishSubtasksDiff.upserted,
+      dependencies: publishDependenciesDiff.upserted,
+      deletedEpicIds: publishEpicsDiff.deletedIds,
+      deletedTaskIds: publishTasksDiff.deletedIds,
         deletedSubtaskIds: publishSubtasksDiff.deletedIds,
         deletedDependencyIds: publishDependenciesDiff.deletedIds,
       });
