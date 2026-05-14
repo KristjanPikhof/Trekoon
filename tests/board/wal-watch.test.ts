@@ -870,7 +870,7 @@ describe("WAL watcher event-cursor reconciliation", (): void => {
   test("event payload parse failure falls back to full-snapshot path", async (): Promise<void> => {
     const workspace: string = createWorkspace();
     const seedDb: TrekoonDatabase = openTrekoonDatabase(workspace);
-    new MutationService(seedDb.db, workspace).createEpic({ title: "Parse seed", description: "" });
+    new MutationService(seedDb.db, workspace).createEpic({ title: "Parse seed", description: "Seed" });
     seedDb.close();
 
     const watcherDb: TrekoonDatabase = openTrekoonDatabase(workspace);
@@ -915,7 +915,7 @@ describe("WAL watcher event-cursor reconciliation", (): void => {
   test("unknown entity_kind/operation combination falls back (non-canonical change)", async (): Promise<void> => {
     const workspace: string = createWorkspace();
     const seedDb: TrekoonDatabase = openTrekoonDatabase(workspace);
-    new MutationService(seedDb.db, workspace).createEpic({ title: "Unknown op seed", description: "" });
+    new MutationService(seedDb.db, workspace).createEpic({ title: "Unknown op seed", description: "Seed" });
     seedDb.close();
 
     const watcherDb: TrekoonDatabase = openTrekoonDatabase(workspace);
