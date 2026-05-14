@@ -6,6 +6,12 @@ All notable changes to Trekoon are documented in this file.
 
 ### Added
 
+- `trekoon session --item <id>`: one-call resolve for epic, task, or subtask
+  IDs. Returns `item: { id, kind, parentEpicId, entity, readiness,
+  suggestedNext }` where `kind` is `epic|task|subtask`, `entity` carries the
+  full detailed payload, `readiness` is epic-scoped, and `suggestedNext` is a
+  ready-to-run follow-up command. Replaces the legacy
+  `epic show || task show || subtask show` fallback cascade used by agents.
 - Document Claude Code parallel tool-call safety for Trekoon workflows: keep
   parallel Bash reads safe, allow atomic task and subtask claims, and serialize
   `task done` plus other status-changing commands after reading current state.
