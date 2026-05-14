@@ -6,7 +6,7 @@ import { afterEach, describe, expect, test } from "bun:test";
 
 import { MutationService } from "../../src/domain/mutation-service";
 import { TrackerDomain } from "../../src/domain/tracker-domain";
-import { buildBoardSnapshot } from "../../src/board/snapshot";
+import { buildBoardSnapshot, buildBoardSnapshotDelta } from "../../src/board/snapshot";
 import { openTrekoonDatabase } from "../../src/storage/database";
 
 const tempDirs: string[] = [];
