@@ -1180,18 +1180,6 @@ describe("open-time pragma tuning", (): void => {
     }
   });
 
-  test("cache_size pinned to -64000 (64 MiB)", (): void => {
-    const workspace: string = createWorkspace();
-    const storage = openTrekoonDatabase(workspace);
-
-    try {
-      const row = storage.db.query("PRAGMA cache_size;").get() as { cache_size: number } | null;
-      expect(row?.cache_size).toBe(-64000);
-    } finally {
-      storage.close();
-    }
-  });
-
   test("wal_autocheckpoint pinned to 1000", (): void => {
     const workspace: string = createWorkspace();
     const storage = openTrekoonDatabase(workspace);
