@@ -568,6 +568,12 @@ const MIGRATIONS: readonly Migration[] = [
     version: 13,
     name: "0013_task_ordered_scan_indexes",
     up(db: Database): void {
+      // Guard against partial-schema fixtures the same way 0011/0012 do.
+      // If tasks or subtasks are missing the base v1 schema never ran;
+      // there is nothing to index against.
+      if (!tableExists(db, "tasks") || !tableExists(db, "subtasks")) {
+        return;
+      }
       for (const statement of TASK_ORDERED_SCAN_INDEX_UP_STATEMENTS) {
         db.exec(statement);
       }
