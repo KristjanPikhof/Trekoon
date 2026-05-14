@@ -745,8 +745,8 @@ describe("WAL watcher event-cursor reconciliation", (): void => {
     const workspace: string = createWorkspace();
     const seedDb: TrekoonDatabase = openTrekoonDatabase(workspace);
     const seedMutations = new MutationService(seedDb.db, workspace);
-    const epic = seedMutations.createEpic({ title: "Cascade epic", description: "" });
-    const task = seedMutations.createTask({ epicId: epic.id, title: "Cascade task", description: "" });
+    const epic = seedMutations.createEpic({ title: "Cascade epic", description: "Seed" });
+    const task = seedMutations.createTask({ epicId: epic.id, title: "Cascade task", description: "Seed" });
     const subtask = seedMutations.createSubtask({ taskId: task.id, title: "Cascade sub", description: "" });
     seedDb.close();
 
