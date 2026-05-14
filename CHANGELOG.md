@@ -12,6 +12,12 @@ All notable changes to Trekoon are documented in this file.
   full detailed payload, `readiness` is epic-scoped, and `suggestedNext` is a
   ready-to-run follow-up command. Replaces the legacy
   `epic show || task show || subtask show` fallback cascade used by agents.
+- Compact create-spec status field is now optional. `--task` and `--subtask`
+  specs in `task create-many`, `subtask create-many`, `epic create`, and
+  `epic expand` accept the short shape (status defaults to `todo`):
+  `<temp-key>|<title>|<description>` (or with parent ref for `epic create`
+  subtasks: `<parent-ref>|<temp-key>|<title>|<description>`). The existing
+  trailing `|<status>` shape still works for non-`todo` seeds.
 - Document Claude Code parallel tool-call safety for Trekoon workflows: keep
   parallel Bash reads safe, allow atomic task and subtask claims, and serialize
   `task done` plus other status-changing commands after reading current state.
