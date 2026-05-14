@@ -9,6 +9,7 @@ import { startBoardServer } from "../../src/board/server";
 import { openTrekoonDatabase, type TrekoonDatabase } from "../../src/storage/database";
 import { MutationService } from "../../src/domain/mutation-service";
 import { createBoardEventBus } from "../../src/board/event-bus";
+import { buildBoardSnapshot } from "../../src/board/snapshot";
 import {
   __getDerivedFingerprintCallCount,
   __resetDerivedFingerprintCallCount,
@@ -437,6 +438,10 @@ describe("WAL watcher diff and resilience", (): void => {
       eventBus,
       debounceMs: 10,
       logEveryNthFailure: 2,
+      // Force every tick onto the full-snapshot path so the synthetic
+      // buildSnapshot failure injected below exercises the error path. The
+      // optimized event-cursor path intentionally skips buildSnapshot.
+      forceFullSnapshotReconcile: true,
       logger: (message) => {
         loggedMessages.push(message);
       },
