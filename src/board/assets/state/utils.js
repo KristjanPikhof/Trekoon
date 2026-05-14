@@ -134,6 +134,7 @@ export function normalizeSnapshot(rawSnapshot) {
       owner: normalizeOwner(subtask.owner),
       createdAt,
       updatedAt: normalizeTimestamp(subtask.updatedAt, createdAt),
+      version: normalizeVersion(subtask.version),
       blockedBy: [],
       blocks: [],
       dependencyIds: [],
