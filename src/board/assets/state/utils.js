@@ -47,6 +47,21 @@ function normalizeOwner(value) {
 }
 
 /**
+ * Normalize a server-provided version into a non-negative integer, or null if
+ * the value is missing/invalid. The board uses this to populate If-Match
+ * headers; non-integers and negative numbers are silently dropped here so the
+ * mutation queue treats the entity as version-less (back-compat path).
+ * @param {unknown} value
+ * @returns {number|null}
+ */
+function normalizeVersion(value) {
+  if (typeof value !== "number" || !Number.isFinite(value) || !Number.isInteger(value) || value < 0) {
+    return null;
+  }
+  return value;
+}
+
+/**
  * @param {any[]} tasks
  * @returns {Record<string, number>}
  */
