@@ -672,7 +672,7 @@ describe("storage lifecycle", (): void => {
         .query("SELECT COALESCE(MAX(version), 0) AS version FROM schema_migrations;")
         .get() as { version: number };
 
-      expect(row.version).toBe(12);
+      expect(row.version).toBe(13);
     } finally {
       storage.close();
     }
@@ -683,10 +683,10 @@ describe("storage lifecycle", (): void => {
     const storage = openTrekoonDatabase(workspace);
 
     try {
-      const summary = rollbackDatabase(storage.db, 12);
+      const summary = rollbackDatabase(storage.db, 13);
 
-      expect(summary.fromVersion).toBe(12);
-      expect(summary.toVersion).toBe(12);
+      expect(summary.fromVersion).toBe(13);
+      expect(summary.toVersion).toBe(13);
       expect(summary.rolledBack).toBe(0);
       expect(summary.rolledBackMigrations).toEqual([]);
     } finally {
@@ -723,10 +723,11 @@ describe("storage lifecycle", (): void => {
       const summary = rollbackDatabase(storage.db, 6);
       const indexes: string[] = indexNames(storage.db);
 
-      expect(summary.fromVersion).toBe(12);
+      expect(summary.fromVersion).toBe(13);
       expect(summary.toVersion).toBe(6);
-      expect(summary.rolledBack).toBe(6);
+      expect(summary.rolledBack).toBe(7);
       expect(summary.rolledBackMigrations).toEqual([
+        "0013_task_ordered_scan_indexes",
         "0012_dependency_kind_indexes",
         "0011_sync_conflicts_worktree_branch_scope",
         "0010_board_idempotency_retention_index",
