@@ -512,6 +512,7 @@ function eventsToCursorDelta(events: readonly EventRow[], domain: TrackerDomain)
 
 function tryEventCursorReconcile(
   db: Database,
+  domain: TrackerDomain,
   cursor: EventCursor | null,
 ): EventCursorReconcileResult {
   if (cursor === null) {
@@ -540,7 +541,7 @@ function tryEventCursorReconcile(
     };
   }
 
-  const delta = eventsToCursorDelta(events);
+  const delta = eventsToCursorDelta(events, domain);
   if (delta === null) {
     return { kind: "fallback", reason: "event-parse-or-shape" };
   }
