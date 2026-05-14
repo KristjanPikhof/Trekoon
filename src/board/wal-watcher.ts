@@ -360,8 +360,18 @@ function readEventsSinceCursor(db: Database, cursor: EventCursor): EventRow[] {
  * can be fed to {@link buildBoardSnapshotDelta}. Returns `null` if any event
  * payload fails to parse or the entity_kind/operation pair is unknown — the
  * caller treats `null` as a signal to fall back to the full-snapshot path.
+ *
+ * Parent-ascendant fan-in: when a task event fires, the parent epic must also
+ * be included so derived fields (taskIds, counts, searchText) reach the
+ * client. When a subtask event fires, the parent task and grandparent epic
+ * must also be included. We pull payloads (`epic_id`, `task_id`) first and
+ * fall back to a domain lookup for deletions or older events without those
+ * fields.
+ *
+ * Dependency events fan in both endpoints' parents so blocked-by/blocks
+ * derived arrays on the endpoints' epic/task records stay in sync.
  */
-function eventsToCursorDelta(events: readonly EventRow[]): EventCursorDelta | null {
+function eventsToCursorDelta(events: readonly EventRow[], domain: TrackerDomain): EventCursorDelta | null {
   const epicIds = new Set<string>();
   const taskIds = new Set<string>();
   const subtaskIds = new Set<string>();
@@ -370,6 +380,48 @@ function eventsToCursorDelta(events: readonly EventRow[]): EventCursorDelta | nu
   const deletedTaskIds = new Set<string>();
   const deletedSubtaskIds = new Set<string>();
   const deletedDependencyIds = new Set<string>();
+
+  const includeTaskAndEpicForTaskId = (taskId: string, payloadEpicId: unknown): void => {
+    taskIds.add(taskId);
+    if (typeof payloadEpicId === "string" && payloadEpicId.length > 0) {
+      epicIds.add(payloadEpicId);
+      return;
+    }
+    const task = domain.getTask(taskId);
+    if (task) {
+      epicIds.add(task.epicId);
+    }
+  };
+
+  const includeSubtaskWithAscendants = (subtaskId: string, payloadTaskId: unknown): void => {
+    subtaskIds.add(subtaskId);
+    let resolvedTaskId: string | null = null;
+    if (typeof payloadTaskId === "string" && payloadTaskId.length > 0) {
+      resolvedTaskId = payloadTaskId;
+    } else {
+      resolvedTaskId = domain.getSubtask(subtaskId)?.taskId ?? null;
+    }
+    if (resolvedTaskId !== null) {
+      includeTaskAndEpicForTaskId(resolvedTaskId, undefined);
+    }
+  };
+
+  const includeDependencyEndpointParents = (sourceId: unknown, sourceKind: unknown, targetId: unknown, targetKind: unknown): void => {
+    const endpoints: Array<{ id: string; kind: string }> = [];
+    if (typeof sourceId === "string" && sourceId.length > 0) {
+      endpoints.push({ id: sourceId, kind: typeof sourceKind === "string" ? sourceKind : "" });
+    }
+    if (typeof targetId === "string" && targetId.length > 0) {
+      endpoints.push({ id: targetId, kind: typeof targetKind === "string" ? targetKind : "" });
+    }
+    for (const endpoint of endpoints) {
+      if (endpoint.kind === "subtask") {
+        includeSubtaskWithAscendants(endpoint.id, undefined);
+      } else {
+        includeTaskAndEpicForTaskId(endpoint.id, undefined);
+      }
+    }
+  };
 
   for (const event of events) {
     let parsedPayload: unknown;
@@ -394,9 +446,12 @@ function eventsToCursorDelta(events: readonly EventRow[]): EventCursorDelta | nu
       }
       case "task": {
         if (event.operation === "task.created" || event.operation === "task.updated") {
-          taskIds.add(event.entity_id);
+          includeTaskAndEpicForTaskId(event.entity_id, fields.epic_id);
         } else if (event.operation === "task.deleted") {
           deletedTaskIds.add(event.entity_id);
+          // No need to fan in the parent epic on cascade deletes: the
+          // canonical event stream emits the matching `epic.deleted` row that
+          // already surfaces the epic-level change.
         } else {
           return null;
         }
@@ -404,9 +459,16 @@ function eventsToCursorDelta(events: readonly EventRow[]): EventCursorDelta | nu
       }
       case "subtask": {
         if (event.operation === "subtask.created" || event.operation === "subtask.updated") {
-          subtaskIds.add(event.entity_id);
+          includeSubtaskWithAscendants(event.entity_id, fields.task_id);
         } else if (event.operation === "subtask.deleted") {
           deletedSubtaskIds.add(event.entity_id);
+          // Parent task's subtasks list / searchText changed too: re-emit it.
+          const parentTaskId = typeof fields.task_id === "string" && fields.task_id.length > 0
+            ? fields.task_id
+            : domain.getSubtask(event.entity_id)?.taskId ?? null;
+          if (parentTaskId !== null) {
+            includeTaskAndEpicForTaskId(parentTaskId, undefined);
+          }
         } else {
           return null;
         }
@@ -428,6 +490,7 @@ function eventsToCursorDelta(events: readonly EventRow[]): EventCursorDelta | nu
         } else {
           return null;
         }
+        includeDependencyEndpointParents(fields.source_id, fields.source_kind, fields.depends_on_id, fields.depends_on_kind);
         break;
       }
       default:
