@@ -14,6 +14,16 @@ interface EventRecordInput {
 interface EventWriteContext {
   readonly git: ResolvedGitContext;
   nextTimestamp: number;
+  /**
+   * Transaction-scoped guard: `persistGitContext` upserts the same
+   * (worktree_path, branch_name, head_sha) row on every call, so doing it
+   * once per appended event row is wasted IO under bulk creates. The first
+   * `appendEventWithGitContext` inside the transaction flips this to `true`;
+   * subsequent appends within the same write lock skip the upsert. Per-event
+   * rows still carry `git_branch` / `git_head` from `context.git`, so the
+   * events-table contract is unchanged.
+   */
+  gitPersisted: boolean;
 }
 
 const transactionEventContexts: WeakMap<Database, EventWriteContext> = new WeakMap();
@@ -79,7 +89,7 @@ export function withTransactionEventContext<T>(db: Database, git: ResolvedGitCon
   // subprocess invocations happen here.
   const nextTimestamp: number = nextEventTimestamp(db);
   const resolvedGit: ResolvedGitContext = { ...git, persistedAt: nextTimestamp };
-  const context: EventWriteContext = { git: resolvedGit, nextTimestamp };
+  const context: EventWriteContext = { git: resolvedGit, nextTimestamp, gitPersisted: false };
 
   transactionEventContexts.set(db, context);
 
