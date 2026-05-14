@@ -514,6 +514,25 @@ const MIGRATIONS: readonly Migration[] = [
       }
     },
   },
+  {
+    version: 12,
+    name: "0012_dependency_kind_indexes",
+    up(db: Database): void {
+      migrateDependencyKindIndexes(db);
+    },
+    down(db: Database): void {
+      // The up() migration deduplicates rows that share the full polymorphic
+      // edge (source_id, source_kind, depends_on_id, depends_on_kind). Those
+      // deletions are unrecoverable. down() therefore only drops the
+      // indexes; reverting the data loss requires restoring from a backup.
+      // We surface this irreversibility with migration_down_unsupported so
+      // operators get an explicit `trekoon migrate backup` hint.
+      for (const statement of DEPENDENCY_KIND_INDEX_DOWN_STATEMENTS) {
+        db.exec(statement);
+      }
+      throw migrationDownUnsupported("0012_dependency_kind_indexes", 12);
+    },
+  },
 ];
 
 function migrationTableExists(db: Database): boolean {
