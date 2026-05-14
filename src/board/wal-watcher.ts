@@ -843,7 +843,7 @@ export function startWalWatcher(options: WalWatcherOptions): WalWatcher {
 
     try {
       if (!options.forceFullSnapshotReconcile) {
-        const cursorResult = tryEventCursorReconcile(options.db, lastEventCursor);
+        const cursorResult = tryEventCursorReconcile(options.db, domain, lastEventCursor);
         if (cursorResult.kind === "ok") {
           options.onReconcile?.({ path: "event-cursor" });
           runEventCursorReconcile(cursorResult, shouldSuppressInProcessTick, inProcessWriteAt);
