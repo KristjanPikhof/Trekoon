@@ -473,20 +473,38 @@ export function createBoardActions(options) {
       }
       // Drag/drop is a status change only; do not mutate selection or modal state,
       // otherwise dropping a card while another task modal is open hijacks it.
-      api.patchTask(taskId, { status: nextStatus }, (snapshot) => updateTaskInSnapshot(snapshot, taskId, { status: nextStatus }, normalizeSnapshot));
+      const ifMatchVersion = typeof task.version === "number" ? task.version : undefined;
+      api.patchTask(
+        taskId,
+        { status: nextStatus },
+        (snapshot) => updateTaskInSnapshot(snapshot, taskId, { status: nextStatus }, normalizeSnapshot),
+        { ifMatchVersion },
+      );
     },
     changeEpicStatus(epicId, newStatus) {
       const normalizedStatus = normalizeStatus(newStatus);
-      api.patchEpic(epicId, { status: normalizedStatus }, (snapshot) => {
-        const epic = snapshot.epics.find(e => e.id === epicId);
-        if (epic) epic.status = normalizedStatus;
-        return snapshot;
-      });
+      const currentEpic = store.snapshot?.epics?.find((candidate) => candidate.id === epicId);
+      const ifMatchVersion = typeof currentEpic?.version === "number" ? currentEpic.version : undefined;
+      api.patchEpic(
+        epicId,
+        { status: normalizedStatus },
+        (snapshot) => {
+          const epic = snapshot.epics.find(e => e.id === epicId);
+          if (epic) epic.status = normalizedStatus;
+          return snapshot;
+        },
+        { ifMatchVersion },
+      );
     },
     bulkSetStatus(epicId, newStatus) {
       const normalizedStatus = normalizeStatus(newStatus);
-      api.cascadeEpicStatus(epicId, normalizedStatus, (snapshot) =>
-        cascadeEpicStatusInSnapshot(snapshot, epicId, normalizedStatus, normalizeSnapshot),
+      const currentEpic = store.snapshot?.epics?.find((candidate) => candidate.id === epicId);
+      const ifMatchVersion = typeof currentEpic?.version === "number" ? currentEpic.version : undefined;
+      api.cascadeEpicStatus(
+        epicId,
+        normalizedStatus,
+        (snapshot) => cascadeEpicStatusInSnapshot(snapshot, epicId, normalizedStatus, normalizeSnapshot),
+        { ifMatchVersion },
       );
     },
     toggleEpicStatusFilter(status) {
