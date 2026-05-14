@@ -1532,11 +1532,15 @@ export class MutationService {
 
   #emitSubtaskDeleted(
     subtaskId: string,
-    cascade?: { taskId: string; sourceEventId: string } | undefined,
+    options?: { taskId?: string | undefined; sourceEventId?: string | undefined } | undefined,
   ): string {
-    const fields: Record<string, unknown> = cascade
-      ? { task_id: cascade.taskId, source_event_id: cascade.sourceEventId }
-      : {};
+    const fields: Record<string, unknown> = {};
+    if (options?.taskId) {
+      fields.task_id = options.taskId;
+    }
+    if (options?.sourceEventId) {
+      fields.source_event_id = options.sourceEventId;
+    }
     return this.#appendEntityEvent("subtask", subtaskId, ENTITY_OPERATIONS.subtask.deleted, fields);
   }
 
