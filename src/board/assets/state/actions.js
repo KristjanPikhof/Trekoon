@@ -377,7 +377,17 @@ export function createBoardActions(options) {
         description: String(formData.get("description") || "").trim(),
         status: normalizeStatus(String(formData.get("status") || "todo")),
       };
-      api.patchTask(taskId, updates, (snapshot) => updateTaskInSnapshot(snapshot, taskId, updates, normalizeSnapshot));
+      // Capture the entity version at optimistic-apply time so the PATCH carries
+      // an If-Match header. A stale version triggers a 409 on the server, which
+      // the mutation queue rolls back via inverse delta.
+      const currentTask = store.snapshot?.tasks?.find((candidate) => candidate.id === taskId);
+      const ifMatchVersion = typeof currentTask?.version === "number" ? currentTask.version : undefined;
+      api.patchTask(
+        taskId,
+        updates,
+        (snapshot) => updateTaskInSnapshot(snapshot, taskId, updates, normalizeSnapshot),
+        { ifMatchVersion },
+      );
     },
     submitSubtaskForm(subtaskId, formData) {
       const updates = {
@@ -386,7 +396,14 @@ export function createBoardActions(options) {
         status: normalizeStatus(String(formData.get("status") || "todo")),
       };
       syncState({ selectedSubtaskId: subtaskId });
-      api.patchSubtask(subtaskId, updates, (snapshot) => updateSubtaskInSnapshot(snapshot, subtaskId, updates, normalizeSnapshot));
+      const currentSubtask = store.snapshot?.subtasks?.find((candidate) => candidate.id === subtaskId);
+      const ifMatchVersion = typeof currentSubtask?.version === "number" ? currentSubtask.version : undefined;
+      api.patchSubtask(
+        subtaskId,
+        updates,
+        (snapshot) => updateSubtaskInSnapshot(snapshot, subtaskId, updates, normalizeSnapshot),
+        { ifMatchVersion },
+      );
     },
     submitCreateSubtask(taskId, formData) {
       const input = {

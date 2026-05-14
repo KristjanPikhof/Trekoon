@@ -209,6 +209,23 @@ function createTimeoutError(method, path, timeoutMs) {
 }
 
 /**
+ * Normalize a caller-supplied entity version into a bare integer suitable for
+ * the If-Match header. The server accepts a bare integer, a quoted ETag, or a
+ * W/-prefixed weak ETag (RFC 7232 §3.1) — we emit the bare integer form for
+ * simplicity. Returns null when the caller didn't pass a usable version
+ * (preserves back-compat with older callers that omit the argument).
+ */
+function normalizeIfMatchVersion(version) {
+  if (version === undefined || version === null) {
+    return null;
+  }
+  if (typeof version === "number" && Number.isFinite(version) && version >= 0 && Number.isInteger(version)) {
+    return String(version);
+  }
+  return null;
+}
+
+/**
  * Create a serial mutation queue.
  *
  * Mutations are enqueued and processed one at a time in FIFO order.
@@ -431,45 +448,53 @@ export function createApi(model, options) {
       return true;
     },
 
-    patchEpic(epicId, updates, optimistic) {
+    patchEpic(epicId, updates, optimistic, options) {
+      const ifMatch = normalizeIfMatchVersion(options?.ifMatchVersion);
       enqueueMutation({
         optimistic,
         successMessage: "Epic saved.",
         request: () => request(`/api/epics/${encodeURIComponent(epicId)}`, {
           method: "PATCH",
+          headers: ifMatch !== null ? { "if-match": ifMatch } : undefined,
           body: JSON.stringify(updates),
         }),
       });
     },
 
-    patchTask(taskId, updates, optimistic) {
+    patchTask(taskId, updates, optimistic, options) {
+      const ifMatch = normalizeIfMatchVersion(options?.ifMatchVersion);
       enqueueMutation({
         optimistic,
         successMessage: "Task saved.",
         request: () => request(`/api/tasks/${encodeURIComponent(taskId)}`, {
           method: "PATCH",
+          headers: ifMatch !== null ? { "if-match": ifMatch } : undefined,
           body: JSON.stringify(updates),
         }),
       });
     },
 
-    patchSubtask(subtaskId, updates, optimistic) {
+    patchSubtask(subtaskId, updates, optimistic, options) {
+      const ifMatch = normalizeIfMatchVersion(options?.ifMatchVersion);
       enqueueMutation({
         optimistic,
         successMessage: "Subtask saved.",
         request: () => request(`/api/subtasks/${encodeURIComponent(subtaskId)}`, {
           method: "PATCH",
+          headers: ifMatch !== null ? { "if-match": ifMatch } : undefined,
           body: JSON.stringify(updates),
         }),
       });
     },
 
-    cascadeEpicStatus(epicId, status, optimistic) {
+    cascadeEpicStatus(epicId, status, optimistic, options) {
+      const ifMatch = normalizeIfMatchVersion(options?.ifMatchVersion);
       enqueueMutation({
         optimistic,
         successMessage: "Epic cascade status updated.",
         request: () => request(`/api/epics/${encodeURIComponent(epicId)}/cascade`, {
           method: "PATCH",
+          headers: ifMatch !== null ? { "if-match": ifMatch } : undefined,
           body: JSON.stringify({ status }),
         }),
       });
