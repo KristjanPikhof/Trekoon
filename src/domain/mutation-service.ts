@@ -1487,9 +1487,15 @@ export class MutationService {
 
   #emitTaskDeleted(
     taskId: string,
-    cascade?: { sourceEventId: string } | undefined,
+    options?: { epicId?: string | undefined; sourceEventId?: string | undefined } | undefined,
   ): string {
-    const fields: Record<string, unknown> = cascade ? { source_event_id: cascade.sourceEventId } : {};
+    const fields: Record<string, unknown> = {};
+    if (options?.epicId) {
+      fields.epic_id = options.epicId;
+    }
+    if (options?.sourceEventId) {
+      fields.source_event_id = options.sourceEventId;
+    }
     return this.#appendEntityEvent("task", taskId, ENTITY_OPERATIONS.task.deleted, fields);
   }
 
