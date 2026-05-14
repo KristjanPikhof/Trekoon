@@ -20,7 +20,7 @@ import { type Database } from "bun:sqlite";
 
 import { TrackerDomain } from "../domain/tracker-domain";
 import { type BoardEventBus } from "./event-bus";
-import { buildBoardSnapshot, type BoardSnapshot } from "./snapshot";
+import { buildBoardSnapshot, buildBoardSnapshotDelta, type BoardSnapshot } from "./snapshot";
 
 const IN_PROCESS_WAL_SUPPRESS_MS = 500;
 
