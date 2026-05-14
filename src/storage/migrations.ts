@@ -138,6 +138,66 @@ const SYNC_CONFLICTS_SCOPE_DOWN_STATEMENTS: readonly string[] = [
   "DROP INDEX IF EXISTS idx_sync_conflicts_scope_resolution;",
 ];
 
+const DEPENDENCY_KIND_INDEX_DOWN_STATEMENTS: readonly string[] = [
+  "DROP INDEX IF EXISTS uniq_dependencies_edge;",
+  "DROP INDEX IF EXISTS idx_dependencies_target;",
+  "DROP INDEX IF EXISTS idx_dependencies_source;",
+];
+
+/**
+ * Migration 0012: dedupe dependency rows that share the full polymorphic
+ * edge (source_id, source_kind, depends_on_id, depends_on_kind), then add
+ * a source-side composite index, a target-side composite index, and a
+ * UNIQUE index on the full 4-column edge. This closes the polymorphic-FK
+ * gap left by 0005 (which made (source_id, depends_on_id) unique but did
+ * not include kind columns in the UNIQUE constraint).
+ *
+ * Step 1 is idempotent: the DELETE is a no-op when no duplicates exist.
+ * The dedupe keeps the row with the lowest created_at per logical edge.
+ * The dropped duplicates are not recoverable — rollback only drops the
+ * indexes; the migration is irreversibly destructive of duplicate rows,
+ * which is why down() throws migration_down_unsupported.
+ */
+function migrateDependencyKindIndexes(db: Database): void {
+  // Step 1: dedupe rows that share the full edge, keeping the lowest
+  // created_at survivor (tiebreak on id for determinism). Performed under
+  // the same exclusive transaction the migration runner holds.
+  const dedupeResult = db
+    .query(
+      `
+      DELETE FROM dependencies
+      WHERE id NOT IN (
+        SELECT id FROM (
+          SELECT id,
+                 ROW_NUMBER() OVER (
+                   PARTITION BY source_id, source_kind, depends_on_id, depends_on_kind
+                   ORDER BY created_at ASC, id ASC
+                 ) AS rn
+          FROM dependencies
+        )
+        WHERE rn = 1
+      );
+      `,
+    )
+    .run();
+
+  const dedupedCount: number = Number(dedupeResult.changes ?? 0);
+  if (dedupedCount > 0) {
+    console.warn(
+      `[trekoon] migration 0012_dependency_kind_indexes: removed ${dedupedCount} duplicate dependency edge(s) ` +
+        "before adding uniq_dependencies_edge UNIQUE index (irreversible).",
+    );
+  }
+
+  // Step 2: indexes that accelerate the polymorphic listDependencies /
+  // listReverseDependencies / addDependency lookup paths.
+  db.exec("CREATE INDEX IF NOT EXISTS idx_dependencies_source ON dependencies(source_id, source_kind);");
+  db.exec("CREATE INDEX IF NOT EXISTS idx_dependencies_target ON dependencies(depends_on_id, depends_on_kind);");
+  db.exec(
+    "CREATE UNIQUE INDEX IF NOT EXISTS uniq_dependencies_edge ON dependencies(source_id, source_kind, depends_on_id, depends_on_kind);",
+  );
+}
+
 function migrateSyncConflictsScope(db: Database): void {
   if (!tableExists(db, "sync_conflicts")) {
     return;
