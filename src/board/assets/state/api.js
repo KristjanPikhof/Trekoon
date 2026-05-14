@@ -214,6 +214,9 @@ function createTimeoutError(method, path, timeoutMs) {
  * W/-prefixed weak ETag (RFC 7232 §3.1) — we emit the bare integer form for
  * simplicity. Returns null when the caller didn't pass a usable version
  * (preserves back-compat with older callers that omit the argument).
+ *
+ * Logs a single console.warn when a non-null/non-undefined input is rejected so
+ * a regression silently dropping the If-Match header is easy to spot in dev.
  */
 function normalizeIfMatchVersion(version) {
   if (version === undefined || version === null) {
@@ -222,7 +225,42 @@ function normalizeIfMatchVersion(version) {
   if (typeof version === "number" && Number.isFinite(version) && version >= 0 && Number.isInteger(version)) {
     return String(version);
   }
+  try {
+    console.warn(`normalizeIfMatchVersion: ignoring non-integer/negative version ${JSON.stringify(version)} — If-Match header will be omitted`);
+  } catch {
+    // best-effort logging only
+  }
   return null;
+}
+
+const ENTITY_KIND_COLLECTION = {
+  epic: "epics",
+  task: "tasks",
+  subtask: "subtasks",
+};
+
+/**
+ * Look up the current version of an entity from the live store snapshot.
+ *
+ * Resolved lazily at queue-executor fire time (rather than at action-enqueue
+ * time) so a second mutation enqueued while the first is in flight reads the
+ * post-success version — the server-acked snapshot landed via mutation
+ * response or SSE delta before processNext shifts the next mutation off the
+ * queue. Without this lazy read, rapid double-edits would carry stale
+ * If-Match versions and 409.
+ *
+ * @param {object} storeState - The live `model.store` mutable state object.
+ * @param {"epic"|"task"|"subtask"} kind
+ * @param {string} id
+ * @returns {number|undefined}
+ */
+function getCurrentVersion(storeState, kind, id) {
+  const collection = ENTITY_KIND_COLLECTION[kind];
+  if (!collection) return undefined;
+  const records = storeState?.snapshot?.[collection];
+  if (!Array.isArray(records)) return undefined;
+  const record = records.find((entry) => entry?.id === id);
+  return typeof record?.version === "number" ? record.version : undefined;
 }
 
 /**
