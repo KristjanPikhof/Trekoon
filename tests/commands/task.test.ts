@@ -167,6 +167,62 @@ describe("task command", (): void => {
     expect(created.human).toContain("Unexpected positional arguments: unexpected.");
   });
 
+  test("create-many accepts 3-field specs and defaults missing status to todo", async (): Promise<void> => {
+    const cwd = createWorkspace();
+    const epicCreated = await runEpic({
+      cwd,
+      mode: "human",
+      args: ["create", "--title", "Roadmap", "--description", "desc"],
+    });
+    const epicId = (epicCreated.data as { epic: { id: string } }).epic.id;
+
+    const created = await runTask({
+      cwd,
+      mode: "toon",
+      args: [
+        "create-many",
+        "--epic",
+        epicId,
+        "--task",
+        "seed-1|First|Desc one",
+        "--task",
+        "seed-2|Second|Desc two|in_progress",
+      ],
+    });
+
+    expect(created.ok).toBeTrue();
+    expect((created.data as { tasks: Array<{ title: string; status: string }> }).tasks).toMatchObject([
+      { title: "First", status: "todo" },
+      { title: "Second", status: "in_progress" },
+    ]);
+  });
+
+  test("create-many rejects 5-field specs as invalid_input", async (): Promise<void> => {
+    const cwd = createWorkspace();
+    const epicCreated = await runEpic({
+      cwd,
+      mode: "human",
+      args: ["create", "--title", "Roadmap", "--description", "desc"],
+    });
+    const epicId = (epicCreated.data as { epic: { id: string } }).epic.id;
+
+    const created = await runTask({
+      cwd,
+      mode: "toon",
+      args: [
+        "create-many",
+        "--epic",
+        epicId,
+        "--task",
+        "seed-1|First|Desc|todo|extra",
+      ],
+    });
+
+    expect(created.ok).toBeFalse();
+    expect(created.error?.code).toBe("invalid_input");
+    expect(created.human).toContain("Task specs must use");
+  });
+
   test("create-many rejects duplicate temp keys without partial inserts", async (): Promise<void> => {
     const cwd = createWorkspace();
     const epicCreated = await runEpic({
