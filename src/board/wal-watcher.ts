@@ -651,6 +651,9 @@ export function startWalWatcher(options: WalWatcherOptions): WalWatcher {
   let closed = false;
   let failures = 0;
   let lastSuppressedInProcessWriteAt = 0;
+  // Initialised to now because the baseline snapshot was just built above;
+  // the first maybeScheduleReconcile call should not fire as stale.
+  let lastReconcileAt = Date.now();
 
   function runFullSnapshotReconcile(shouldSuppressInProcessTick: boolean, inProcessWriteAt: number): void {
     const fresh = buildSnapshot(domain);
