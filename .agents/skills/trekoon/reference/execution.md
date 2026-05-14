@@ -1,16 +1,19 @@
 # Execution Reference
 
 You are an orchestrator. Execute work from Trekoon, not markdown plan files.
-Execution is complete only when the epic is marked `done`, all remaining work is
-blocked with recorded reasons, or real user input is required.
+Execution is complete only when the epic is `done`, all remaining work is
+`blocked` with recorded reasons, or real user input is required.
 
-When executing an epic, use subagents by default for any meaningful work that
-can run independently. Keep small or tightly coupled tasks in the parent agent.
-Use your context for orchestration, dependency decisions, user communication,
-and final synthesis.
+Use subagents by default for meaningful independent work. Keep small or tightly
+coupled tasks in the parent. Use your context for orchestration, dependency
+decisions, user communication, and synthesis.
 
 If the plan has unclear requirements or meaningful tradeoffs, ask before
 starting. Do not stop at status reporting when ready work exists.
+
+The atomic-claim, append-progress, and `task done` recipes live in
+`reference/harness-primitives.md`. This file references them rather than
+restating.
 
 ## Choose Shape
 
@@ -79,39 +82,27 @@ Scope:
 - Read first: <paths/patterns to inspect before editing>
 - Do not touch: <paths owned by other lanes>
 
-Before each task:
-- trekoon --toon task claim <id> --owner <lane-name>
-- trekoon --toon task update <id> --append "Starting implementation"
+For each task use the atomic-claim + append-progress recipe in
+reference/harness-primitives.md:
+- claim with --owner <lane-name>
+- append progress, verification, and blockers; do not rewrite descriptions
+- task done on completion; for subtasks move through in_progress first
+- on block: append reason + dependency id + failing command output, then
+  --status blocked
 
-While working:
-- Complete required subtasks and update subtask statuses.
-- Append meaningful progress notes; do not rewrite task descriptions.
-- Respect status flow: todo -> in_progress -> done. Use task done for task
-  completion; for subtasks, claim or move through in_progress before done.
-- Assume other agents may edit unrelated files. Do not revert unrelated changes.
+Assume other agents may edit unrelated files. Do not revert unrelated changes.
 
-On completion:
-- Append verification evidence.
-- trekoon --toon task done <id>
-- Read and report unblocked tasks, open subtask warnings, and next candidate.
-- For non-trivial code changes, report review result or review gap.
-
-If blocked:
-- Append blocker reason, dependency id, and exact failing command/output.
-- trekoon --toon task update <id> --append "Blocked by <reason>" --status blocked
+Claude Code parallel tool calls:
+- Parallel Trekoon Bash calls must stay read-only (session, progress, ready,
+  suggest, targeted show).
+- Do not issue multiple status-changing Bash commands in one parallel batch.
+  Use task/subtask claim for atomic races, then serialize updates and
+  completion commands.
+- If a parallel batch reports sibling cancellation, re-read the affected task
+  before retrying; recover from current Trekoon state.
 
 Use --compact in noisy Trekoon reads. Do not create branches, commits, pushes,
 or PRs unless the user explicitly asked and harness policy allows it.
-
-Claude Code parallel tool calls:
-- Parallel Trekoon Bash calls are for read-only commands such as session,
-  progress, ready, suggest, and targeted show.
-- Do not issue multiple Trekoon status-changing Bash commands in one parallel
-  tool batch. Use task/subtask claim for atomic races, then serialize updates
-  and completion commands.
-- If a parallel batch reports sibling cancellation, re-read the affected task or
-  subtask before retrying; recover from current Trekoon state, not the cancelled
-  command text.
 
 Final report: tasks completed, files changed, checks, review result/gap,
 task done response, blockers.
@@ -144,26 +135,13 @@ lanes are already delegated.
 2. If diagnostics show `recoveryRequired`, stop and run `trekoon --toon init`.
 3. If behind or conflicts exist, resolve sync before claiming work. Load
    `reference/sync.md` for conflict handling.
-4. Claim:
-   ```bash
-   trekoon --toon task claim <task-id> --owner <name>
-   ```
-5. Work and append notes:
-   ```bash
-   trekoon --toon task update <task-id> --append "Started implementation"
-   ```
-6. Update important subtasks explicitly:
+4. Claim, append, finish per the recipe in `reference/harness-primitives.md`.
+5. Update important subtasks explicitly:
    ```bash
    trekoon --toon subtask claim <subtask-id> --owner <name>
    trekoon --toon subtask update <subtask-id> --append "Verified with fixture set" --status done
    ```
-7. Finish or block:
-   ```bash
-   trekoon --toon task update <task-id> --append "Completed implementation and checks"
-   trekoon --toon task done <task-id>
-   trekoon --toon task update <task-id> --append "Blocked by <reason>" --status blocked
-   ```
-8. Repeat from the returned `unblocked`/`next` data. A fresh `session` is not
+6. Repeat from the returned `unblocked`/`next` data. A fresh `session` is not
    needed mid-loop unless you need updated diagnostics or switch epics.
 
 If `task done` warns about open subtasks, decide whether the task is genuinely
@@ -195,27 +173,21 @@ All applicable checks must pass before marking the epic done.
 ### Review
 
 For non-trivial implementation, run a separate review pass before closing the
-task or epic. Prefer a specialized review agent/skill when available. Review
-the actual diff for correctness, regressions, missing tests, security,
-reliability, performance, and integration risks. Tiny docs/mechanical changes
-may skip separate review, but record that decision.
+task or epic. Prefer a specialized review agent/skill. Review the diff for
+correctness, regressions, missing tests, security, reliability, performance,
+and integration risks. Tiny docs/mechanical changes may skip separate review
+but record that decision.
 
-### Tests and Manual Checks
+### Tests And Manual Checks
 
-- Run the relevant automated tests for touched scope.
-- Run broader tests when shared behavior, cross-module contracts, or user flows
-  changed.
-- Exercise CLI/API/parser/integration changes with realistic inputs when
-  possible.
+- Run relevant automated tests for touched scope.
+- Run broader tests when shared behavior or cross-module contracts changed.
+- Exercise CLI/API/parser/integration changes with realistic inputs.
 - Record gaps when credentials or external services are unavailable.
 - Fix confusing errors, noisy output, inconsistent behavior, or rough DX.
 
-Append evidence:
-
-```bash
-trekoon --toon task update <task-id> --append "Verified: <commands/results>"
-trekoon --toon task update <task-id> --append "Review: <result or accepted gap>"
-```
+Append evidence with the `task update --append` recipe in
+`reference/harness-primitives.md`.
 
 ## Close The Epic
 
@@ -238,7 +210,7 @@ remaining blockers, and dependency state.
 
 ## Update And Read Policies
 
-Use descriptions as the durable work log. Append progress instead of rewriting
+Descriptions are the durable work log. Append progress instead of rewriting
 descriptions unless the plan itself is wrong.
 
 Preferred commands:
@@ -265,3 +237,35 @@ Bulk updates:
 - `--append` and `--description` are mutually exclusive.
 - Use `--all` only for clear maintenance sweeps or when the user explicitly
   wants broad updates.
+
+## Claude Agent Teams (Appendix)
+
+Use this section only when the user explicitly asks for Claude Code Agent
+Teams and `CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS=true`. Otherwise use the
+standard subagent flow above.
+
+Team-specific surface:
+
+| Purpose | Tool |
+|---|---|
+| Create team | `TeamCreate` |
+| Manage shared tasks | `TaskCreate` / `TaskList` / `TaskUpdate` / `TaskGet` |
+| Spawn teammates | `Agent` with `team_name` |
+| Communicate | `SendMessage` |
+| Clean up | `TeamDelete` |
+
+Flow:
+
+1. Build the graph and mark the epic in progress per the standard flow.
+2. `TeamCreate` with name `<epic-slug>` and a description naming the epic.
+3. One `TaskCreate` per lane. Reuse the standard subagent prompt body
+   (claim, append, task done, blocker handling). Use `blockedBy` for
+   sequential lanes.
+4. `Agent` with `team_name` to spawn one teammate per parallel lane.
+   Use `general-purpose`; reserve `Explore`/`Plan` for read-only research.
+   Use 3-5 teammates for most epics.
+5. Coordinate via `SendMessage`. Update Trekoon owners with
+   `task update <task-id> --owner <teammate-name>`. When all teammates
+   block, run `suggest --epic <epic-id>`.
+6. Close the epic per the standard flow. Then `shutdown_request` each
+   teammate and `TeamDelete`.
