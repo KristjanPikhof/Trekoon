@@ -999,7 +999,7 @@ describe("WAL watcher event-cursor reconciliation", (): void => {
           new MutationService(cliDb.db, workspace).createTask({
             epicId: epic.id,
             title: `Parity task ${forceFullSnapshot ? "full" : "cursor"}`,
-            description: "",
+            description: "Body",
           });
         } finally {
           cliDb.close();
