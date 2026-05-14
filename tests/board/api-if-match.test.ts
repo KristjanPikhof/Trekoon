@@ -102,7 +102,7 @@ describe("client If-Match header", () => {
     expect(new Headers(third[1].headers).get("if-match")).toBe("12");
   });
 
-  test("omits If-Match when version is undefined (server back-compat path)", async () => {
+  test("omits If-Match when version is undefined (caller must supply version to avoid 428)", async () => {
     const fetchMock = mock(() => Promise.resolve(jsonResponse(200, { ok: true, data: { snapshotDelta: { tasks: [] } } })));
     globalThis.fetch = fetchMock as unknown as typeof fetch;
 

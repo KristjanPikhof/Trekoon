@@ -74,6 +74,7 @@ describe("mutation queue", () => {
     });
 
     queue.enqueue({
+      mutationId: "test-mutation-1",
       successMessage: "Task saved.",
       request: () => new Promise((resolve) => {
         resolveRequest = resolve;
