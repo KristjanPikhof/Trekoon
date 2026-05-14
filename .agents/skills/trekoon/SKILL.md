@@ -38,18 +38,26 @@ task tool rules, and review guidance.
 
 ## Route Input
 
-Resolve the first non-mode argument as an epic, task, or subtask:
+Resolve the first non-mode argument as an epic, task, or subtask in one call:
 
 ```bash
+trekoon --toon session --item <id>
+```
+
+Returns `kind` (`epic`|`task`|`subtask`), `parentEpicId`, the entity payload,
+epic-scoped readiness, and `suggestedNext`. Use this instead of the legacy
+three-call fallback:
+
+```bash
+# Legacy fallback (kept working, but burns ~3x the tokens):
 trekoon --toon epic show <id> 2>/dev/null || \
 trekoon --toon task show <id> 2>/dev/null || \
 trekoon --toon subtask show <id> 2>/dev/null
 ```
 
-If the ID is a task or subtask, resolve its parent epic and scope `session`,
-`suggest`, and `epic progress` to that epic. If the user asked to execute a task
-or subtask, start with that item; continue broader epic execution only when it
-matches the user intent.
+If the ID is a task or subtask, scope `suggest` and `epic progress` to its
+`parentEpicId`. If the user asked to execute that item, start with it;
+continue broader epic execution only when it matches the user intent.
 
 | User signal | Mode |
 |---|---|
