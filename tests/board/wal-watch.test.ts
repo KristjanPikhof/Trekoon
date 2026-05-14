@@ -211,6 +211,11 @@ describe("WAL watcher diff and resilience", (): void => {
       databaseFile: watcherDb.paths.databaseFile,
       eventBus,
       debounceMs: 10,
+      // Pin the watcher onto the full-snapshot path: this test is specifically
+      // about the snapshot-diff behavior of the fallback path (top-level
+      // metadata-only changes do not emit a delta). The event-cursor hot path
+      // no longer reads the full snapshot at all.
+      forceFullSnapshotReconcile: true,
       buildSnapshot: () => {
         buildCalls += 1;
         return (buildCalls === 1 ? baseSnapshot : reshapedSnapshot) as never;
