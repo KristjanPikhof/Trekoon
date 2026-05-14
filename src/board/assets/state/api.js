@@ -140,6 +140,57 @@ export function computeInverseDelta(previousSnapshot, optimisticSnapshot) {
   return inverse;
 }
 
+/**
+ * Filter an inverse delta produced by computeInverseDelta so we don't undo
+ * concurrent SSE-pushed advances that landed on the same entity while a
+ * mutation was in flight. Any record whose live snapshot `version` is strictly
+ * greater than the optimistic `ifMatchVersion` we sent is dropped from the
+ * `restored` arrays — the server-pushed state stays.
+ *
+ * If `optimisticVersion` is undefined/null/not-a-number we conservatively
+ * return the inverse delta unchanged (back-compat: legacy mutations without an
+ * If-Match version can't be reasoned about, so the original behavior wins).
+ *
+ * @param {object} inverseDelta - Inverse delta from computeInverseDelta.
+ * @param {object|null|undefined} currentSnapshot - Latest store snapshot.
+ * @param {number|null|undefined} optimisticVersion - The version we sent as If-Match.
+ * @returns {object}
+ */
+export function stripUpToDateEntitiesFromInverse(inverseDelta, currentSnapshot, optimisticVersion) {
+  if (typeof optimisticVersion !== "number" || !Number.isFinite(optimisticVersion)) {
+    return inverseDelta;
+  }
+  if (!inverseDelta || typeof inverseDelta !== "object") {
+    return inverseDelta;
+  }
+
+  const next = { ...inverseDelta };
+  for (const collection of SNAPSHOT_COLLECTIONS) {
+    const restored = inverseDelta[collection];
+    if (!Array.isArray(restored) || restored.length === 0) continue;
+
+    const liveRecords = Array.isArray(currentSnapshot?.[collection]) ? currentSnapshot[collection] : [];
+    const liveById = indexById(liveRecords);
+    const filtered = restored.filter((record) => {
+      if (!record || typeof record !== "object" || typeof record.id !== "string") return true;
+      const live = liveById.get(record.id);
+      const liveVersion = typeof live?.version === "number" ? live.version : null;
+      if (liveVersion === null) return true;
+      // Drop the restore when the live snapshot's version has already advanced
+      // past what we sent — an SSE delta or another mutation reconciliation
+      // moved this record forward and the user must see that.
+      return !(liveVersion > optimisticVersion);
+    });
+
+    if (filtered.length === 0) {
+      delete next[collection];
+    } else if (filtered.length !== restored.length) {
+      next[collection] = filtered;
+    }
+  }
+  return next;
+}
+
 async function readJsonPayload(response) {
   const text = await response.text();
   if (text.length === 0) {
