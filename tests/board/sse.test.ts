@@ -181,7 +181,6 @@ describe("board SSE snapshot stream", (): void => {
           headers: {
             "content-type": "application/json",
             authorization: "Bearer multi-client-token",
-            "if-match": String(epicResult.version),
           },
           body: JSON.stringify({ title: "SSE Epic Renamed" }),
         });
@@ -289,7 +288,6 @@ describe("board SSE snapshot stream", (): void => {
         headers: {
           "content-type": "application/json",
           authorization: "Bearer quiet-drain-token",
-          "if-match": String(task.version),
         },
         body: JSON.stringify({ title: "Task after" }),
       }));
@@ -299,7 +297,6 @@ describe("board SSE snapshot stream", (): void => {
         headers: {
           "content-type": "application/json",
           authorization: "Bearer quiet-drain-token",
-          "if-match": String(subtask.version),
         },
         body: JSON.stringify({ title: "Subtask after" }),
       }));
