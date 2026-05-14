@@ -28,14 +28,13 @@ outside Trekoon.
 |---|---|
 | Any Trekoon request | This file |
 | Plan, break down, design tracked work | `reference/harness-primitives.md`, then `reference/planning.md` |
-| Execute, implement, complete tracked work | `reference/harness-primitives.md`, then `reference/execution.md` |
-| User explicitly asks for Claude team execution | `reference/harness-primitives.md`, then `reference/execution-with-team.md` |
+| Execute, implement, complete tracked work | `reference/harness-primitives.md`, then `reference/execution.md` (Team appendix at end) |
 | Sync gaps, conflicts, shared-storage questions | `reference/sync.md` |
 | Status transition error or status uncertainty | `reference/status-machine.md` |
 
-`reference/harness-primitives.md` is required before planning or execution
-because those modes may need local task displays, user questions, subagents,
-review agents, testing tools, and Trekoon evidence recording.
+`reference/harness-primitives.md` is required before planning or execution; it
+holds the canonical claim/append/finish recipe, harness runtime notes, local
+task tool rules, and review guidance.
 
 ## Route Input
 
