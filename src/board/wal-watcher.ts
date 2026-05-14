@@ -662,9 +662,148 @@ export function startWalWatcher(options: WalWatcherOptions): WalWatcher {
       dependencies: publishDependenciesDiff.upserted,
       deletedEpicIds: publishEpicsDiff.deletedIds,
       deletedTaskIds: publishTasksDiff.deletedIds,
-        deletedSubtaskIds: publishSubtasksDiff.deletedIds,
-        deletedDependencyIds: publishDependenciesDiff.deletedIds,
-      });
+      deletedSubtaskIds: publishSubtasksDiff.deletedIds,
+      deletedDependencyIds: publishDependenciesDiff.deletedIds,
+    });
+  }
+
+  function runEventCursorReconcile(
+    cursorResult: Extract<EventCursorReconcileResult, { kind: "ok" }>,
+    shouldSuppressInProcessTick: boolean,
+    inProcessWriteAt: number,
+  ): void {
+    const { newCursor, delta } = cursorResult;
+    const noChanges =
+      delta.epicIds.length === 0 &&
+      delta.taskIds.length === 0 &&
+      delta.subtaskIds.length === 0 &&
+      delta.dependencyIds.length === 0 &&
+      delta.deletedEpicIds.length === 0 &&
+      delta.deletedTaskIds.length === 0 &&
+      delta.deletedSubtaskIds.length === 0 &&
+      delta.deletedDependencyIds.length === 0;
+
+    // Even on the optimized path, keep lastSnapshot fresh: if a future tick
+    // triggers fallback, the snapshot diff baseline must reflect the latest
+    // committed state. Skipping this would re-emit every event the optimized
+    // path already published on the very first fallback tick.
+    const fresh = buildSnapshot(domain);
+    lastSnapshot = fresh;
+    lastEventCursor = newCursor;
+
+    if (shouldSuppressInProcessTick) {
+      lastSuppressedInProcessWriteAt = inProcessWriteAt;
+    }
+
+    if (noChanges) {
+      return;
+    }
+
+    const snapshotDelta = buildBoardSnapshotDelta(domain, {
+      epicIds: delta.epicIds,
+      taskIds: delta.taskIds,
+      subtaskIds: delta.subtaskIds,
+      dependencyIds: delta.dependencyIds,
+      deletedEpicIds: delta.deletedEpicIds,
+      deletedTaskIds: delta.deletedTaskIds,
+      deletedSubtaskIds: delta.deletedSubtaskIds,
+      deletedDependencyIds: delta.deletedDependencyIds,
+    });
+
+    // Pack the targeted-read result into the same CollectionDiff shape the
+    // suppression helper expects, then run the standard in-process duplicate
+    // filter against the route handler's last published delta.
+    const epicsDiff: CollectionDiff = {
+      upserted: Array.isArray(snapshotDelta.epics) ? (snapshotDelta.epics as unknown[]) : [],
+      deletedIds: [...delta.deletedEpicIds],
+    };
+    const tasksDiff: CollectionDiff = {
+      upserted: Array.isArray(snapshotDelta.tasks) ? (snapshotDelta.tasks as unknown[]) : [],
+      deletedIds: [...delta.deletedTaskIds],
+    };
+    const subtasksDiff: CollectionDiff = {
+      upserted: Array.isArray(snapshotDelta.subtasks) ? (snapshotDelta.subtasks as unknown[]) : [],
+      deletedIds: [...delta.deletedSubtaskIds],
+    };
+    const dependenciesDiff: CollectionDiff = {
+      upserted: Array.isArray(snapshotDelta.dependencies) ? (snapshotDelta.dependencies as unknown[]) : [],
+      deletedIds: [...delta.deletedDependencyIds],
+    };
+
+    const suppressed = shouldSuppressInProcessTick
+      ? {
+          epics: suppressAlreadyPublishedDiff(
+            epicsDiff,
+            recordsByIdFromDelta(options.eventBus.lastInProcessSnapshotDelta, "epics"),
+            deletedIdsFromDelta(options.eventBus.lastInProcessSnapshotDelta, "deletedEpicIds"),
+            { isLeaf: false },
+          ),
+          tasks: suppressAlreadyPublishedDiff(
+            tasksDiff,
+            recordsByIdFromDelta(options.eventBus.lastInProcessSnapshotDelta, "tasks"),
+            deletedIdsFromDelta(options.eventBus.lastInProcessSnapshotDelta, "deletedTaskIds"),
+            { isLeaf: false },
+          ),
+          subtasks: suppressAlreadyPublishedDiff(
+            subtasksDiff,
+            recordsByIdFromDelta(options.eventBus.lastInProcessSnapshotDelta, "subtasks"),
+            deletedIdsFromDelta(options.eventBus.lastInProcessSnapshotDelta, "deletedSubtaskIds"),
+            { isLeaf: true },
+          ),
+          dependencies: suppressAlreadyPublishedDiff(
+            dependenciesDiff,
+            recordsByIdFromDelta(options.eventBus.lastInProcessSnapshotDelta, "dependencies"),
+            deletedIdsFromDelta(options.eventBus.lastInProcessSnapshotDelta, "deletedDependencyIds"),
+            { isLeaf: true },
+          ),
+        }
+      : null;
+
+    const publishEpicsDiff = suppressed?.epics ?? epicsDiff;
+    const publishTasksDiff = suppressed?.tasks ?? tasksDiff;
+    const publishSubtasksDiff = suppressed?.subtasks ?? subtasksDiff;
+    const publishDependenciesDiff = suppressed?.dependencies ?? dependenciesDiff;
+
+    if (!hasDiffChanges(publishEpicsDiff, publishTasksDiff, publishSubtasksDiff, publishDependenciesDiff)) {
+      return;
+    }
+
+    options.eventBus.publishSnapshotDelta({
+      generatedAt: Date.now(),
+      source: "wal-watcher",
+      epics: publishEpicsDiff.upserted,
+      tasks: publishTasksDiff.upserted,
+      subtasks: publishSubtasksDiff.upserted,
+      dependencies: publishDependenciesDiff.upserted,
+      deletedEpicIds: publishEpicsDiff.deletedIds,
+      deletedTaskIds: publishTasksDiff.deletedIds,
+      deletedSubtaskIds: publishSubtasksDiff.deletedIds,
+      deletedDependencyIds: publishDependenciesDiff.deletedIds,
+    });
+  }
+
+  function reconcile(): void {
+    if (closed) {
+      return;
+    }
+    const inProcessWriteAt = options.eventBus.lastInProcessWriteAt;
+    const shouldSuppressInProcessTick =
+      inProcessWriteAt > lastSuppressedInProcessWriteAt &&
+      Date.now() - inProcessWriteAt <= IN_PROCESS_WAL_SUPPRESS_MS;
+
+    try {
+      if (!options.forceFullSnapshotReconcile) {
+        const cursorResult = tryEventCursorReconcile(options.db, lastEventCursor);
+        if (cursorResult.kind === "ok") {
+          options.onReconcile?.({ path: "event-cursor" });
+          runEventCursorReconcile(cursorResult, shouldSuppressInProcessTick, inProcessWriteAt);
+          return;
+        }
+        options.onReconcile?.({ path: "full-snapshot", reason: cursorResult.reason });
+      } else {
+        options.onReconcile?.({ path: "full-snapshot", reason: "forced" });
+      }
+      runFullSnapshotReconcile(shouldSuppressInProcessTick, inProcessWriteAt);
     } catch (error) {
       // Reconciliation must never crash the server. Errors here usually mean
       // the database is mid-write or a downstream snapshot builder threw; the
