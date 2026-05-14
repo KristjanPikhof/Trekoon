@@ -94,11 +94,11 @@ Board mutations from any source — board UI, CLI in another shell, or another
 worktree — propagate to every connected client through the SSE stream. The CLI
 side is driven by a WAL-watcher that diffs the snapshot when
 `.trekoon/trekoon.db-wal` changes; in-process mutations publish deltas
-directly. PATCH endpoints accept `If-Match: <version>` for optimistic
-concurrency; RFC 7232 strong or `W/`-prefixed weak ETag forms are accepted,
-but the `*` wildcard is not. A stale value returns `409` with
-`currentVersion` and `providedVersion`. Missing `If-Match` is allowed for
-back-compat.
+directly. PATCH endpoints require `If-Match: <version>` for optimistic concurrency; RFC
+7232 strong or `W/`-prefixed weak ETag forms are accepted, but the `*`
+wildcard is not. A stale value returns `409` with `currentVersion` and
+`providedVersion`. A missing `If-Match` header returns `428 Precondition
+Required` with error code `precondition_required`.
 
 Repos that already have an ignored `.trekoon/board` directory keep those files
 on disk, but current Trekoon versions no longer read, create, refresh, or
