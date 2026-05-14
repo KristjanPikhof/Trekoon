@@ -181,6 +181,7 @@ describe("board SSE snapshot stream", (): void => {
           headers: {
             "content-type": "application/json",
             authorization: "Bearer multi-client-token",
+            "if-match": String(epicResult.version),
           },
           body: JSON.stringify({ title: "SSE Epic Renamed" }),
         });
