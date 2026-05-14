@@ -1241,7 +1241,7 @@ describe("open-time pragma tuning", (): void => {
     }
 
     expect(caught).toBeInstanceOf(DomainError);
-    expect((caught as DomainError).code).toBe("invalid_config");
+    expect((caught as DomainError).code).toBe("invalid_input");
   });
 
   test("TREKOON_SQLITE_CACHE_MIB=abc throws invalid_config DomainError", (): void => {
@@ -1263,7 +1263,7 @@ describe("open-time pragma tuning", (): void => {
     }
 
     expect(caught).toBeInstanceOf(DomainError);
-    expect((caught as DomainError).code).toBe("invalid_config");
+    expect((caught as DomainError).code).toBe("invalid_input");
   });
 
   test("wal_autocheckpoint pinned to 1000", (): void => {
