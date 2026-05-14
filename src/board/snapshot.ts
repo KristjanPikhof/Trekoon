@@ -265,21 +265,7 @@ export function buildBoardSnapshot(domain: TrackerDomain): BoardSnapshot {
   const subtasks = domain.listSubtasks();
   const sourceIds = [...tasks.map((task) => task.id), ...subtasks.map((subtask) => subtask.id)];
   const dependenciesBySourceId = domain.listDependenciesBySourceIds(sourceIds);
-  const subtasksByTaskId = new Map<string, SubtaskRecord[]>();
-  const tasksByEpicId = new Map<string, TaskRecord[]>();
   const indexes = buildDependencyIndexes(dependenciesBySourceId, sourceIds);
-
-  for (const task of tasks) {
-    const existing = tasksByEpicId.get(task.epicId) ?? [];
-    existing.push(task);
-    tasksByEpicId.set(task.epicId, existing);
-  }
-
-  for (const subtask of subtasks) {
-    const existing = subtasksByTaskId.get(subtask.taskId) ?? [];
-    existing.push(subtask);
-    subtasksByTaskId.set(subtask.taskId, existing);
-  }
 
   const snapshotSubtasks: BoardSnapshotSubtask[] = subtasks.map((subtask) => mapSnapshotSubtask(subtask, indexes));
   const snapshotSubtasksByTaskId = new Map<string, BoardSnapshotSubtask[]>();
@@ -290,14 +276,14 @@ export function buildBoardSnapshot(domain: TrackerDomain): BoardSnapshot {
   }
 
   const snapshotTasks: BoardSnapshotTask[] = tasks.map((task) => mapSnapshotTask(task, snapshotSubtasksByTaskId.get(task.id) ?? [], indexes));
-  const taskSearchTextByEpicId = new Map<string, string[]>();
+  const snapshotTasksByEpicId = new Map<string, BoardSnapshotTask[]>();
   for (const task of snapshotTasks) {
-    const existing = taskSearchTextByEpicId.get(task.epicId) ?? [];
-    existing.push(task.searchText);
-    taskSearchTextByEpicId.set(task.epicId, existing);
+    const existing = snapshotTasksByEpicId.get(task.epicId) ?? [];
+    existing.push(task);
+    snapshotTasksByEpicId.set(task.epicId, existing);
   }
 
-  const snapshotEpics: BoardSnapshotEpic[] = epics.map((epic) => mapSnapshotEpic(epic, snapshotTasks.filter((task) => task.epicId === epic.id)));
+  const snapshotEpics: BoardSnapshotEpic[] = epics.map((epic) => mapSnapshotEpic(epic, snapshotTasksByEpicId.get(epic.id) ?? []));
 
   return {
     generatedAt,
