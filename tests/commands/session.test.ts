@@ -7,6 +7,7 @@ import { afterEach, describe, expect, test } from "bun:test";
 
 import { runEpic } from "../../src/commands/epic";
 import { runSession } from "../../src/commands/session";
+import { runSubtask } from "../../src/commands/subtask";
 import { runTask } from "../../src/commands/task";
 import { openTrekoonDatabase } from "../../src/storage/database";
 
