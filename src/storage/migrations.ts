@@ -4,7 +4,7 @@ import { dirname, join } from "node:path";
 import { Database } from "bun:sqlite";
 
 import { DomainError } from "../domain/types";
-import { BASE_SCHEMA_STATEMENTS, SCHEMA_VERSION } from "./schema";
+import { BASE_SCHEMA_REVISION, BASE_SCHEMA_STATEMENTS } from "./schema";
 
 const BACKUP_HINT = "Run 'trekoon migrate backup' to snapshot .trekoon/trekoon.db before any manual recovery.";
 
@@ -23,7 +23,7 @@ function migrationDownUnsupported(migrationName: string, version: number): Domai
 }
 
 const BASE_MIGRATION_VERSION = 1;
-const BASE_MIGRATION_NAME = `0001_base_schema_v${SCHEMA_VERSION}`;
+const BASE_MIGRATION_NAME = `0001_base_schema_v${BASE_SCHEMA_REVISION}`;
 const LEGACY_BASE_MIGRATION_NAME_PATTERNS: readonly string[] = [
   "0001_base_schema_v*",
 ];
