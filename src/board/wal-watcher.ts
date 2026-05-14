@@ -737,15 +737,20 @@ export function startWalWatcher(options: WalWatcherOptions): WalWatcher {
     // triggers fallback, the snapshot diff baseline must reflect the latest
     // committed state. Skipping this would re-emit every event the optimized
     // path already published on the very first fallback tick.
+    //
+    // Both `lastSnapshot` and `lastEventCursor` advance ONLY after the publish
+    // call below returns successfully (or when there is nothing to publish).
+    // If `publishSnapshotDelta` throws, leaving these at their prior values
+    // ensures the next tick re-runs the same cursor delta — subscribers never
+    // miss a row because of a transient listener error.
     const fresh = buildSnapshot(domain);
-    lastSnapshot = fresh;
-    lastEventCursor = newCursor;
-
-    if (shouldSuppressInProcessTick) {
-      lastSuppressedInProcessWriteAt = inProcessWriteAt;
-    }
 
     if (noChanges) {
+      lastSnapshot = fresh;
+      lastEventCursor = newCursor;
+      if (shouldSuppressInProcessTick) {
+        lastSuppressedInProcessWriteAt = inProcessWriteAt;
+      }
       return;
     }
 
