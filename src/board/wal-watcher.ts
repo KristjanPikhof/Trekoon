@@ -490,20 +490,6 @@ function tryEventCursorReconcile(
   };
 }
 
-function recordIdsFromRecords(records: unknown): string[] {
-  if (!Array.isArray(records)) {
-    return [];
-  }
-  const ids: string[] = [];
-  for (const record of records) {
-    const id = recordId(record);
-    if (id !== null) {
-      ids.push(id);
-    }
-  }
-  return ids;
-}
-
 function readMtime(path: string): number {
   if (!existsSync(path)) {
     return 0;
