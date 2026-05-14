@@ -1,6 +1,6 @@
 ---
 name: trekoon
-description: "Use for Trekoon-based planning and execution: creating epics, tasks, and subtasks; breaking work into dependency-aware graphs; checking status and progress; planning backlog or sprint work; and coordinating agent execution from Trekoon. Prefer this whenever the user wants tracked implementation planning or Trekoon entity management, even if they do not explicitly say \"Trekoon\"."
+description: "Use for Trekoon-based planning and execution: epics, tasks, subtasks, dependency-aware graphs, status and progress, sprint or backlog work, and agent execution. Prefer whenever the user wants tracked implementation planning or Trekoon entity management, even if they do not say Trekoon."
 ---
 
 # Trekoon Skill
@@ -12,17 +12,15 @@ them.
 
 ## Mode Contracts
 
-- `trekoon plan <goal>`: create an execution-ready epic in Trekoon.
-- `trekoon <id>`: orient on the epic/task/subtask and report current state,
-  blockers, and next action.
-- `trekoon <id> execute`: own the epic until it is done, hard-blocked, or needs
-  user input. Use subagents by default for meaningful work that can run
-  independently when the harness exposes them.
-- `trekoon <id> team execute`: same completion contract, using Claude Agent
-  Teams only when the user explicitly asks and the environment supports it.
+- `trekoon plan <goal>`: create an execution-ready epic.
+- `trekoon <id>`: orient on the epic/task/subtask; report state, blockers, next.
+- `trekoon <id> execute`: own the epic until done, hard-blocked, or needs user
+  input. Use subagents by default for meaningful independent work.
+- `trekoon <id> team execute`: same contract, using Claude Agent Teams only
+  when the user explicitly asks and the environment supports it.
 
-Do not stop at analysis when Trekoon shows ready work. Do not invent a parallel
-plan outside Trekoon.
+Do not stop at analysis when ready work exists. Do not invent a parallel plan
+outside Trekoon.
 
 ## Load Rules
 
