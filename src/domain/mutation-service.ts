@@ -1111,8 +1111,16 @@ export class MutationService {
   deleteSubtask(id: string): { deletedDependencyIds: string[] } {
     return this.#writeTransaction((): { deletedDependencyIds: string[] } => {
       const touchingDependencies = this.#domain.listDependenciesTouchingNode(id);
+      // Capture the parent task id BEFORE delete so the canonical
+      // subtask.deleted event can fan-in to the parent task in the WAL
+      // watcher event-cursor path. Without this the watcher cannot
+      // reconstruct the parent task change (subtasks list / searchText /
+      // counts) from the event stream — domain.getSubtask(id) returns null
+      // post-delete.
+      const existing = this.#domain.getSubtaskOrThrow(id);
+      const parentTaskId = existing.taskId;
       this.#domain.deleteSubtask(id);
-      const subtaskDeleteEventId = this.#emitSubtaskDeleted(id);
+      const subtaskDeleteEventId = this.#emitSubtaskDeleted(id, { taskId: parentTaskId });
       for (const dependency of touchingDependencies) {
         this.#appendEntityEvent(
           "dependency",
