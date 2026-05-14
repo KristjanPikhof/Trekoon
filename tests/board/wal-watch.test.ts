@@ -1176,3 +1176,103 @@ describe("WAL watcher leaf fingerprint short-circuit", (): void => {
     }
   });
 });
+
+describe("WAL watcher publish failure recovery", (): void => {
+  test("transient publishSnapshotDelta throw leaves cursor and baseline so next tick re-publishes the same delta", async (): Promise<void> => {
+    const workspace: string = createWorkspace();
+    const seedDb: TrekoonDatabase = openTrekoonDatabase(workspace);
+    const epic = new MutationService(seedDb.db, workspace).createEpic({
+      title: "Publish-throw parent epic",
+      description: "Seed",
+    });
+    seedDb.close();
+
+    const watcherDb: TrekoonDatabase = openTrekoonDatabase(workspace);
+    const realBus = createBoardEventBus();
+    const deltas: Record<string, unknown>[] = [];
+    realBus.subscribe((event) => {
+      if (event.type === "snapshotDelta") {
+        deltas.push(event.snapshotDelta);
+      }
+    });
+
+    // Wrap the bus so publishSnapshotDelta throws on the first call and
+    // delegates to the underlying bus on every subsequent call. The
+    // event-bus's own try/catch only protects listener invocations, so a
+    // throw here surfaces directly into the watcher's publish path — exactly
+    // the failure mode the deferred-advance guarantee is meant to cover.
+    let publishCalls = 0;
+    const publishedPayloads: Record<string, unknown>[] = [];
+    const wrappedBus = {
+      publishSnapshotDelta(snapshotDelta: Record<string, unknown>) {
+        publishCalls += 1;
+        publishedPayloads.push(snapshotDelta);
+        if (publishCalls === 1) {
+          throw new Error("synthetic publish failure");
+        }
+        return realBus.publishSnapshotDelta(snapshotDelta);
+      },
+      markInProcessWrite: realBus.markInProcessWrite.bind(realBus),
+      subscribe: realBus.subscribe.bind(realBus),
+      get lastInProcessWriteAt() {
+        return realBus.lastInProcessWriteAt;
+      },
+      get lastInProcessSnapshotDelta() {
+        return realBus.lastInProcessSnapshotDelta;
+      },
+      get subscriberCount() {
+        return realBus.subscriberCount;
+      },
+      close: realBus.close.bind(realBus),
+    } as unknown as ReturnType<typeof createBoardEventBus>;
+
+    const watcher = startWalWatcher({
+      db: watcherDb.db,
+      databaseFile: watcherDb.paths.databaseFile,
+      eventBus: wrappedBus,
+      debounceMs: 10,
+    });
+
+    try {
+      const cliDb: TrekoonDatabase = openTrekoonDatabase(workspace);
+      try {
+        new MutationService(cliDb.db, workspace).createTask({
+          epicId: epic.id,
+          title: "Publish-throw task",
+          description: "Created via CLI",
+        });
+      } finally {
+        cliDb.close();
+      }
+
+      // First tick: publish throws. No delta should reach the real bus and the
+      // watcher must NOT have advanced its cursor (failure count moves to 1).
+      watcher.reconcile();
+      expect(publishCalls).toBe(1);
+      expect(deltas.length).toBe(0);
+      expect(watcher.failureCount()).toBe(1);
+
+      // Second tick: same cursor delta replays and publish succeeds. The
+      // delta surfaces to subscribers with the same task payload.
+      watcher.reconcile();
+      expect(publishCalls).toBe(2);
+      expect(deltas.length).toBe(1);
+
+      const firstPayload = publishedPayloads[0] as { tasks?: Array<{ title?: string; epicId?: string }>; epics?: Array<{ id?: string }> };
+      const secondPayload = publishedPayloads[1] as { tasks?: Array<{ title?: string; epicId?: string }>; epics?: Array<{ id?: string }> };
+      expect(firstPayload.tasks).toContainEqual(expect.objectContaining({ title: "Publish-throw task", epicId: epic.id }));
+      expect(secondPayload.tasks).toContainEqual(expect.objectContaining({ title: "Publish-throw task", epicId: epic.id }));
+      expect(firstPayload.epics?.[0]?.id).toBe(epic.id);
+      expect(secondPayload.epics?.[0]?.id).toBe(epic.id);
+
+      // Third tick: no further events to ingest, no further publishes.
+      watcher.reconcile();
+      expect(publishCalls).toBe(2);
+      expect(deltas.length).toBe(1);
+    } finally {
+      watcher.close();
+      realBus.close();
+      watcherDb.close();
+    }
+  });
+});
