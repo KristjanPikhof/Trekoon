@@ -205,4 +205,132 @@ describe("session command", (): void => {
     expect(result.human).not.toContain("Pruned events:");
     expect(result.human).not.toContain("Pruned conflicts:");
   });
+
+  test("--item resolves an epic id and returns scoped readiness + suggested next", async (): Promise<void> => {
+    const cwd = createWorkspace();
+    initializeRepository(cwd);
+
+    const epicCreated = await runEpic({
+      cwd,
+      mode: "toon",
+      args: ["create", "--title", "Epic", "--description", "e"],
+    });
+    const epicId = (epicCreated.data as { epic: { id: string } }).epic.id;
+
+    await runTask({
+      cwd,
+      mode: "toon",
+      args: ["create", "--epic", epicId, "--title", "T", "--description", "d"],
+    });
+
+    const result = await runSession({ cwd, mode: "toon", args: ["--item", epicId] });
+
+    expect(result.ok).toBeTrue();
+    const data = result.data as {
+      item: {
+        id: string;
+        kind: string;
+        parentEpicId: string;
+        entity: { id: string; title: string };
+        readiness: { readyCount: number; blockedCount: number };
+        suggestedNext: string;
+      };
+    };
+
+    expect(data.item.id).toBe(epicId);
+    expect(data.item.kind).toBe("epic");
+    expect(data.item.parentEpicId).toBe(epicId);
+    expect(data.item.entity.id).toBe(epicId);
+    expect(data.item.entity.title).toBe("Epic");
+    expect(data.item.readiness.readyCount).toBeGreaterThanOrEqual(1);
+    expect(data.item.suggestedNext).toContain("epic progress");
+    expect(result.human).toContain("=== Item ===");
+    expect(result.human).toContain("=== Suggested Next ===");
+  });
+
+  test("--item resolves a task id and returns parent epic + claim suggestion", async (): Promise<void> => {
+    const cwd = createWorkspace();
+    initializeRepository(cwd);
+
+    const epicCreated = await runEpic({
+      cwd,
+      mode: "toon",
+      args: ["create", "--title", "Epic", "--description", "e"],
+    });
+    const epicId = (epicCreated.data as { epic: { id: string } }).epic.id;
+
+    const taskCreated = await runTask({
+      cwd,
+      mode: "toon",
+      args: ["create", "--epic", epicId, "--title", "T", "--description", "d"],
+    });
+    const taskId = (taskCreated.data as { task: { id: string } }).task.id;
+
+    const result = await runSession({ cwd, mode: "toon", args: ["--item", taskId] });
+
+    expect(result.ok).toBeTrue();
+    const data = result.data as {
+      item: {
+        kind: string;
+        parentEpicId: string;
+        entity: { id: string; epicId: string };
+        suggestedNext: string;
+      };
+    };
+
+    expect(data.item.kind).toBe("task");
+    expect(data.item.parentEpicId).toBe(epicId);
+    expect(data.item.entity.id).toBe(taskId);
+    expect(data.item.entity.epicId).toBe(epicId);
+    expect(data.item.suggestedNext).toContain("task claim");
+    expect(data.item.suggestedNext).toContain(taskId);
+  });
+
+  test("--item resolves a subtask id and returns parent epic via task", async (): Promise<void> => {
+    const cwd = createWorkspace();
+    initializeRepository(cwd);
+
+    const epicCreated = await runEpic({
+      cwd,
+      mode: "toon",
+      args: ["create", "--title", "Epic", "--description", "e"],
+    });
+    const epicId = (epicCreated.data as { epic: { id: string } }).epic.id;
+
+    const taskCreated = await runTask({
+      cwd,
+      mode: "toon",
+      args: ["create", "--epic", epicId, "--title", "T", "--description", "d"],
+    });
+    const taskId = (taskCreated.data as { task: { id: string } }).task.id;
+
+    const subtaskCreated = await runSubtask({
+      cwd,
+      mode: "toon",
+      args: ["create", "--task", taskId, "--title", "S", "--description", "ds"],
+    });
+    const subtaskId = (subtaskCreated.data as { subtask: { id: string } }).subtask.id;
+
+    const result = await runSession({ cwd, mode: "toon", args: ["--item", subtaskId] });
+
+    expect(result.ok).toBeTrue();
+    const data = result.data as {
+      item: { kind: string; parentEpicId: string; entity: { id: string; taskId: string } };
+    };
+
+    expect(data.item.kind).toBe("subtask");
+    expect(data.item.parentEpicId).toBe(epicId);
+    expect(data.item.entity.id).toBe(subtaskId);
+    expect(data.item.entity.taskId).toBe(taskId);
+  });
+
+  test("--item returns not_found when no entity matches", async (): Promise<void> => {
+    const cwd = createWorkspace();
+    initializeRepository(cwd);
+
+    const result = await runSession({ cwd, mode: "toon", args: ["--item", randomUUID()] });
+
+    expect(result.ok).toBeFalse();
+    expect(result.error?.code).toBe("not_found");
+  });
 });
