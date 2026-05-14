@@ -920,7 +920,13 @@ export function startWalWatcher(options: WalWatcherOptions): WalWatcher {
     const currentMtime = readMtime(walFile);
     // mtime can equal 0 when the WAL was just checkpointed and removed; treat
     // any change (including transitions to/from 0) as worth reconciling.
-    if (currentMtime !== lastWalMtime) {
+    // Additionally, treat rapid sub-ms writes — where mtime is unchanged but
+    // enough wall-clock time has elapsed since the last reconcile — as worth
+    // reconciling. This prevents missed updates when two writes land in the
+    // same filesystem mtime tick.
+    const mtimeChanged = currentMtime !== lastWalMtime;
+    const staleEnough = Date.now() - lastReconcileAt > debounceMs;
+    if (mtimeChanged || staleEnough) {
       lastWalMtime = currentMtime;
       scheduleReconcile();
     }
