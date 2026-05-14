@@ -467,18 +467,15 @@ export function createBoardActions(options) {
       }
       // Drag/drop is a status change only; do not mutate selection or modal state,
       // otherwise dropping a card while another task modal is open hijacks it.
-      const ifMatchVersion = typeof task.version === "number" ? task.version : undefined;
+      // If-Match version resolved lazily by api.patchTask at fire time.
       api.patchTask(
         taskId,
         { status: nextStatus },
         (snapshot) => updateTaskInSnapshot(snapshot, taskId, { status: nextStatus }, normalizeSnapshot),
-        { ifMatchVersion },
       );
     },
     changeEpicStatus(epicId, newStatus) {
       const normalizedStatus = normalizeStatus(newStatus);
-      const currentEpic = store.snapshot?.epics?.find((candidate) => candidate.id === epicId);
-      const ifMatchVersion = typeof currentEpic?.version === "number" ? currentEpic.version : undefined;
       api.patchEpic(
         epicId,
         { status: normalizedStatus },
@@ -487,18 +484,14 @@ export function createBoardActions(options) {
           if (epic) epic.status = normalizedStatus;
           return snapshot;
         },
-        { ifMatchVersion },
       );
     },
     bulkSetStatus(epicId, newStatus) {
       const normalizedStatus = normalizeStatus(newStatus);
-      const currentEpic = store.snapshot?.epics?.find((candidate) => candidate.id === epicId);
-      const ifMatchVersion = typeof currentEpic?.version === "number" ? currentEpic.version : undefined;
       api.cascadeEpicStatus(
         epicId,
         normalizedStatus,
         (snapshot) => cascadeEpicStatusInSnapshot(snapshot, epicId, normalizedStatus, normalizeSnapshot),
-        { ifMatchVersion },
       );
     },
     toggleEpicStatusFilter(status) {
