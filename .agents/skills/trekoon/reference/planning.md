@@ -94,20 +94,17 @@ Can run in parallel with: billing-lane. Blocked by: task-types.
 
 ## Design For Delegated Execution
 
-Plan so meaningful independent work can run in subagents:
-
 - Tasks with no dependency edge are parallel candidates.
 - Different subsystems usually become different lanes.
 - Same subsystem work should usually be grouped or sequenced.
-- Keep each active subsystem lane to about 3-4 tasks.
-- Add owners after creation when lanes are clear:
+- Keep each active lane to about 3-4 tasks.
+- Add owners after creation:
   ```bash
-  trekoon --toon task update <task-id> --owner auth-lane
-  trekoon --toon task update <task-id> --owner billing-lane
+  trekoon --toon task update <task-id> --owner <lane-name>
   ```
 
-Use dependencies only for hard prerequisites. Prefer task-to-task dependencies.
-Use subtask dependencies only when task-level ordering is too coarse.
+Use dependencies for hard prerequisites only. Prefer task-to-task; use subtask
+dependencies only when task-level ordering is too coarse.
 
 ## Create Records Efficiently
 
@@ -241,16 +238,9 @@ Verification: bun run build && bun run test
 
 ## Search And Replace
 
-Use scoped search before manual tree reads when locating repeated paths, labels,
-owners, or migration targets.
-
-Narrowest valid scope first:
-
-1. `subtask search` / `subtask replace`
-2. `task search` / `task replace`
-3. `epic search` / `epic replace`
-
-Workflow:
+Use scoped search before manual tree reads for repeated paths, labels, owners,
+or migration targets. Narrowest scope first:
+`subtask search`/`replace`, then `task`, then `epic`.
 
 ```bash
 trekoon --toon epic search <epic-id> "path/to/somewhere"
