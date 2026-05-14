@@ -133,7 +133,7 @@ export async function runQuickstart(_: CliContext): Promise<CliResult> {
       ],
       executionLoop: [
         "trekoon --toon session",
-        "trekoon --toon task update <task-id> --status in_progress",
+        "trekoon --toon task claim <task-id> --owner <TODO_OWNER>",
         "trekoon --toon task update <task-id> --append \"Completed implementation\"",
         "trekoon --toon task done <task-id>",
       ],
