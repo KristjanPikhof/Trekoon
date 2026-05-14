@@ -826,6 +826,15 @@ export function startWalWatcher(options: WalWatcherOptions): WalWatcher {
     const publishDependenciesDiff = suppressed?.dependencies ?? dependenciesDiff;
 
     if (!hasDiffChanges(publishEpicsDiff, publishTasksDiff, publishSubtasksDiff, publishDependenciesDiff)) {
+      // Nothing to publish (suppression filtered the in-process duplicate, or
+      // the targeted snapshot read returned no rows for the touched IDs).
+      // Advance cursor + baseline since the canonical events have been
+      // accounted for; replaying them would not produce a different result.
+      lastSnapshot = fresh;
+      lastEventCursor = newCursor;
+      if (shouldSuppressInProcessTick) {
+        lastSuppressedInProcessWriteAt = inProcessWriteAt;
+      }
       return;
     }
 
@@ -841,6 +850,15 @@ export function startWalWatcher(options: WalWatcherOptions): WalWatcher {
       deletedSubtaskIds: publishSubtasksDiff.deletedIds,
       deletedDependencyIds: publishDependenciesDiff.deletedIds,
     });
+
+    // Publish succeeded — only now is it safe to advance cursor + baseline.
+    // If the call above threw, the outer reconcile() catch handles it and
+    // leaves these unchanged so the next tick replays the same delta.
+    lastSnapshot = fresh;
+    lastEventCursor = newCursor;
+    if (shouldSuppressInProcessTick) {
+      lastSuppressedInProcessWriteAt = inProcessWriteAt;
+    }
   }
 
   function reconcile(): void {
