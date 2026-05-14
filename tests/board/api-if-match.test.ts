@@ -102,7 +102,7 @@ describe("client If-Match header", () => {
     expect(new Headers(third[1].headers).get("if-match")).toBe("12");
   });
 
-  test("omits If-Match when version is undefined (caller must supply version to avoid 428)", async () => {
+  test("omits If-Match when version is undefined (server back-compat path)", async () => {
     const fetchMock = mock(() => Promise.resolve(jsonResponse(200, { ok: true, data: { snapshotDelta: { tasks: [] } } })));
     globalThis.fetch = fetchMock as unknown as typeof fetch;
 
@@ -169,9 +169,11 @@ describe("409 precondition_failed rollback", () => {
     );
     await waitForQueueTurn();
 
-    // Verify server-rejected 409 surfaces as an error notice without crashing.
-    expect(model.store.notice?.type).toBe("error");
-    expect(model.store.notice?.message).toContain("precondition_failed");
+    // Verify server-rejected 409 surfaces as a typed stale_version notice
+    // (not a generic error) so the UI can offer the right recovery affordance.
+    expect(model.store.notice?.type).toBe("warning");
+    expect((model.store.notice as { code?: string } | null)?.code).toBe("stale_version");
+    expect(model.store.notice?.message?.toLowerCase()).toContain("refresh");
 
     // Inverse delta must restore the original title and version on the optimistic record.
     const taskAfter = model.store.snapshot.tasks.find((task) => task.id === "task-1") as Record<string, unknown> | undefined;
@@ -220,5 +222,97 @@ describe("409 precondition_failed rollback", () => {
     // task-2 must keep the unrelated server-pushed update (inverse delta is targeted, not a wholesale replace).
     const task2After = model.store.snapshot.tasks.find((entry) => entry.id === "task-2") as Record<string, unknown> | undefined;
     expect(task2After?.title).toBe("Other (pushed)");
+  });
+
+  test("SSE delta on the SAME entity arriving mid-flight survives the 409 rollback (no clobber)", async () => {
+    // Simulate the classic race: optimistic mutation sends version=3, an SSE
+    // delta lands while the request is in flight advancing the entity to
+    // version=5 with a different title, then the server replies with a 409
+    // because we sent version=3. The rollback must NOT clobber the SSE-pushed
+    // record (which is server-authoritative and newer than our optimistic
+    // baseline).
+    const fetchMock = mock(() => Promise.resolve(jsonResponse(409, {
+      ok: false,
+      error: {
+        code: "precondition_failed",
+        message: "If-Match version does not match current version",
+        details: { entityKind: "task", entityId: "task-1", currentVersion: 5, providedVersion: 3 },
+      },
+    })));
+    globalThis.fetch = fetchMock as unknown as typeof fetch;
+
+    const task = { id: "task-1", title: "Original", status: "todo", description: "", epicId: "epic-1", version: 3 };
+    const model = createTestModel({ ...emptySnapshot(), tasks: [task] });
+    const api = createApi(model, { sessionToken: "", rerender: () => {} });
+
+    api.patchTask(
+      "task-1",
+      { title: "Renamed locally" },
+      (snap: Snapshot) => {
+        const next = { ...snap, tasks: snap.tasks.map((entry) => ({ ...entry })) };
+        const target = next.tasks.find((entry) => entry.id === "task-1");
+        if (target) target.title = "Renamed locally";
+        return next;
+      },
+      { ifMatchVersion: 3 },
+    );
+
+    // While the request is in flight, simulate an SSE push that bumps task-1
+    // to version=5 with a server-authoritative title.
+    model.applySnapshotDelta({ tasks: [{ id: "task-1", title: "Edited elsewhere", status: "todo", description: "", epicId: "epic-1", version: 5 }] });
+
+    await waitForQueueTurn();
+
+    // task-1 MUST keep the SSE-pushed state — NOT roll back to "Original" or
+    // restore our optimistic "Renamed locally".
+    const task1After = model.store.snapshot.tasks.find((entry) => entry.id === "task-1") as Record<string, unknown> | undefined;
+    expect(task1After?.title).toBe("Edited elsewhere");
+    expect(task1After?.version).toBe(5);
+
+    // Typed stale_version notice (no retry button).
+    expect(model.store.notice?.type).toBe("warning");
+    expect((model.store.notice as { code?: string; retryLabel?: string } | null)?.code).toBe("stale_version");
+    expect((model.store.notice as { retryLabel?: string } | null)?.retryLabel).toBeUndefined();
+  });
+
+  test("409 stale-version does NOT enter the retry path (no infinite retry loop)", async () => {
+    // Whether the user smashes the retry button or a higher-level handler
+    // re-enqueues, retryLastFailedMutation() must be a no-op after a
+    // precondition_failed because the optimistic payload is composed against
+    // a now-stale baseline and would 409 again forever.
+    const fetchMock = mock(() => Promise.resolve(jsonResponse(409, {
+      ok: false,
+      error: {
+        code: "precondition_failed",
+        message: "If-Match version does not match current version",
+        details: { entityKind: "task", entityId: "task-1", currentVersion: 9, providedVersion: 7 },
+      },
+    })));
+    globalThis.fetch = fetchMock as unknown as typeof fetch;
+
+    const original = { id: "task-1", title: "Original", status: "todo", description: "", epicId: "epic-1", version: 7 };
+    const model = createTestModel({ ...emptySnapshot(), tasks: [original] });
+    const api = createApi(model, { sessionToken: "", rerender: () => {} });
+
+    api.patchTask(
+      "task-1",
+      { title: "Renamed" },
+      (snap: Snapshot) => {
+        const next = { ...snap, tasks: snap.tasks.map((task) => ({ ...task })) };
+        const target = next.tasks.find((task) => task.id === "task-1");
+        if (target) target.title = "Renamed";
+        return next;
+      },
+      { ifMatchVersion: 7 },
+    );
+    await waitForQueueTurn();
+
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    // Replaying is forbidden — retryLastFailedMutation should refuse to
+    // re-enqueue because the failed mutation was never stored.
+    const replayed = api.retryLastFailedMutation();
+    expect(replayed).toBe(false);
+    await waitForQueueTurn();
+    expect(fetchMock).toHaveBeenCalledTimes(1);
   });
 });
