@@ -140,57 +140,6 @@ export function computeInverseDelta(previousSnapshot, optimisticSnapshot) {
   return inverse;
 }
 
-/**
- * Filter an inverse delta produced by computeInverseDelta so we don't undo
- * concurrent SSE-pushed advances that landed on the same entity while a
- * mutation was in flight. Any record whose live snapshot `version` is strictly
- * greater than the optimistic `ifMatchVersion` we sent is dropped from the
- * `restored` arrays — the server-pushed state stays.
- *
- * If `optimisticVersion` is undefined/null/not-a-number we conservatively
- * return the inverse delta unchanged (back-compat: legacy mutations without an
- * If-Match version can't be reasoned about, so the original behavior wins).
- *
- * @param {object} inverseDelta - Inverse delta from computeInverseDelta.
- * @param {object|null|undefined} currentSnapshot - Latest store snapshot.
- * @param {number|null|undefined} optimisticVersion - The version we sent as If-Match.
- * @returns {object}
- */
-function stripUpToDateEntitiesFromInverse(inverseDelta, currentSnapshot, optimisticVersion) {
-  if (typeof optimisticVersion !== "number" || !Number.isFinite(optimisticVersion)) {
-    return inverseDelta;
-  }
-  if (!inverseDelta || typeof inverseDelta !== "object") {
-    return inverseDelta;
-  }
-
-  const next = { ...inverseDelta };
-  for (const collection of SNAPSHOT_COLLECTIONS) {
-    const restored = inverseDelta[collection];
-    if (!Array.isArray(restored) || restored.length === 0) continue;
-
-    const liveRecords = Array.isArray(currentSnapshot?.[collection]) ? currentSnapshot[collection] : [];
-    const liveById = indexById(liveRecords);
-    const filtered = restored.filter((record) => {
-      if (!record || typeof record !== "object" || typeof record.id !== "string") return true;
-      const live = liveById.get(record.id);
-      const liveVersion = typeof live?.version === "number" ? live.version : null;
-      if (liveVersion === null) return true;
-      // Drop the restore when the live snapshot's version has already advanced
-      // past what we sent — an SSE delta or another mutation reconciliation
-      // moved this record forward and the user must see that.
-      return !(liveVersion > optimisticVersion);
-    });
-
-    if (filtered.length === 0) {
-      delete next[collection];
-    } else if (filtered.length !== restored.length) {
-      next[collection] = filtered;
-    }
-  }
-  return next;
-}
-
 async function readJsonPayload(response) {
   const text = await response.text();
   if (text.length === 0) {
@@ -404,40 +353,20 @@ export function createMutationQueue(model, rerender) {
           ? { type: "success", message: mutation.successMessage }
           : null;
       } catch (error) {
-        const isStaleVersion = error?.code === "precondition_failed";
-
-        // Build an inverse delta that EXCLUDES any entity whose live store
-        // version has already advanced past the optimistic version we sent.
-        // This keeps SSE-pushed updates on the same entity intact instead of
-        // clobbering them with the pre-optimistic record.
-        const adjustedInverseDelta = inverseDelta
-          ? stripUpToDateEntitiesFromInverse(inverseDelta, model.store?.snapshot, ifMatchVersion)
-          : null;
-
-        if (adjustedInverseDelta) {
-          model.applySnapshotDelta(adjustedInverseDelta);
+        // Revert only the entities this mutation touched. Any unrelated
+        // entities updated by concurrent server deltas remain intact.
+        if (inverseDelta) {
+          model.applySnapshotDelta(inverseDelta);
         }
 
-        if (isStaleVersion) {
-          // Typed notice — copy decided in task description; no retry button
-          // because the optimistic version is stale by definition and the user
-          // needs the latest server state to compose a valid mutation.
-          model.store.notice = {
-            type: "warning",
-            code: "stale_version",
-            title: "Stale update",
-            message: "Updated by another session — refresh to load the latest version.",
-          };
-        } else {
-          const message = error instanceof Error ? error.message : String(error);
-          model.store.notice = {
-            type: "error",
-            title: "Action failed",
-            message,
-            retryLabel: "Retry",
-            retryMutationId: mutation.mutationId,
-          };
-        }
+        const message = error instanceof Error ? error.message : String(error);
+        model.store.notice = {
+          type: "error",
+          title: "Action failed",
+          message,
+          retryLabel: "Retry",
+          retryMutationId: mutation.mutationId,
+        };
 
         if (typeof mutation.onError === "function") {
           mutation.onError(error);
@@ -456,10 +385,10 @@ export function createMutationQueue(model, rerender) {
 
   return {
     enqueue(mutation) {
-      if (!mutation.mutationId) {
-        throw new Error("enqueue: mutation.mutationId is required; enqueueMutation must assign one before calling enqueue");
-      }
-      queue.push({ ...mutation });
+      queue.push({
+        ...mutation,
+        mutationId: mutation.mutationId ?? crypto.randomUUID(),
+      });
       processNext();
     },
 
@@ -507,18 +436,7 @@ export function createApi(model, options) {
         }
       },
       onError(error) {
-        // Stale-version 409s are NOT retryable — the captured optimistic
-        // payload was composed against the pre-advance state and replaying it
-        // would 409 again. Skip lastFailedMutation so the retry path can't
-        // even be invoked. The typed `stale_version` notice we surfaced does
-        // not carry a retry button, so the UI stays consistent.
-        if (error?.code === "precondition_failed") {
-          if (lastFailedMutation?.mutationId === mutationId) {
-            lastFailedMutation = null;
-          }
-        } else {
-          lastFailedMutation = tagged;
-        }
+        lastFailedMutation = tagged;
         if (typeof tagged.onError === "function") {
           tagged.onError(error);
         }
