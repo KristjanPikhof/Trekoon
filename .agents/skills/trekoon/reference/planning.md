@@ -206,15 +206,11 @@ Verify:
 
 ## Handoff Summary
 
-Do not stop at a prose-only design. Return the actual Trekoon epic and first
-execution wave.
+Return the actual Trekoon epic and first execution wave, not prose-only design.
 
-Rules:
-
-- Always use full UUIDs for epic/task IDs in summaries.
-- Never use temp keys (`task-api`, `@sub-tests`) outside create commands.
+- Full UUIDs in summaries; never temp keys outside create commands.
 - Render IDs in code formatting.
-- Group tasks by wave with title, owner/lane, and dependencies.
+- Group tasks by wave with title, owner/lane, dependencies.
 - Include final verification gate.
 
 Format:
