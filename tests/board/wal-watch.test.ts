@@ -792,8 +792,11 @@ describe("WAL watcher leaf fingerprint short-circuit", (): void => {
       const totalFingerprintCalls = __getDerivedFingerprintCallCount();
       // The 25 subtasks are leaves; even across two no-op reconciles they
       // must not trigger derivedRecordFingerprint. Parents (1 epic + 1 task)
-      // may still call it; allow up to 2 calls per reconcile (i.e. 4 total).
-      expect(totalFingerprintCalls).toBeLessThanOrEqual(4);
+      // may still call it: 2 records × 2 stringify ops (prev + curr) × 2
+      // reconciles = 8 max. Pre-change behaviour would have produced
+      // (25 + 2) × 2 × 2 = 108 calls (the leaves dominate), so any reading
+      // above 8 clearly flags a leaf regression.
+      expect(totalFingerprintCalls).toBeLessThanOrEqual(8);
     } finally {
       watcher.close();
       eventBus.close();
