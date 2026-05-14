@@ -385,10 +385,10 @@ export function createMutationQueue(model, rerender) {
 
   return {
     enqueue(mutation) {
-      if (!mutation.mutationId) {
-        throw new Error("enqueue: mutation.mutationId is required; enqueueMutation must assign one before calling enqueue");
-      }
-      queue.push({ ...mutation });
+      queue.push({
+        ...mutation,
+        mutationId: mutation.mutationId ?? crypto.randomUUID(),
+      });
       processNext();
     },
 
@@ -500,93 +500,54 @@ export function createApi(model, options) {
     },
 
     patchEpic(epicId, updates, optimistic, options) {
-      // Per-call override wins; otherwise read the live store at fire-time so
-      // queued back-to-back edits on the same entity carry the post-success
-      // version rather than a stale enqueue-time snapshot.
-      const explicitVersion = options?.ifMatchVersion;
-      const resolveIfMatch = explicitVersion !== undefined
-        ? () => explicitVersion
-        : () => getCurrentVersion(model.store, "epic", epicId);
+      const ifMatch = normalizeIfMatchVersion(options?.ifMatchVersion);
       enqueueMutation({
         optimistic,
         successMessage: "Epic saved.",
-        entityKind: "epic",
-        entityId: epicId,
-        resolveIfMatch,
-        request: ({ ifMatchVersion } = {}) => {
-          const ifMatch = normalizeIfMatchVersion(ifMatchVersion);
-          return request(`/api/epics/${encodeURIComponent(epicId)}`, {
-            method: "PATCH",
-            headers: ifMatch !== null ? { "if-match": ifMatch } : undefined,
-            body: JSON.stringify(updates),
-          });
-        },
+        request: () => request(`/api/epics/${encodeURIComponent(epicId)}`, {
+          method: "PATCH",
+          headers: ifMatch !== null ? { "if-match": ifMatch } : undefined,
+          body: JSON.stringify(updates),
+        }),
       });
     },
 
     patchTask(taskId, updates, optimistic, options) {
-      const explicitVersion = options?.ifMatchVersion;
-      const resolveIfMatch = explicitVersion !== undefined
-        ? () => explicitVersion
-        : () => getCurrentVersion(model.store, "task", taskId);
+      const ifMatch = normalizeIfMatchVersion(options?.ifMatchVersion);
       enqueueMutation({
         optimistic,
         successMessage: "Task saved.",
-        entityKind: "task",
-        entityId: taskId,
-        resolveIfMatch,
-        request: ({ ifMatchVersion } = {}) => {
-          const ifMatch = normalizeIfMatchVersion(ifMatchVersion);
-          return request(`/api/tasks/${encodeURIComponent(taskId)}`, {
-            method: "PATCH",
-            headers: ifMatch !== null ? { "if-match": ifMatch } : undefined,
-            body: JSON.stringify(updates),
-          });
-        },
+        request: () => request(`/api/tasks/${encodeURIComponent(taskId)}`, {
+          method: "PATCH",
+          headers: ifMatch !== null ? { "if-match": ifMatch } : undefined,
+          body: JSON.stringify(updates),
+        }),
       });
     },
 
     patchSubtask(subtaskId, updates, optimistic, options) {
-      const explicitVersion = options?.ifMatchVersion;
-      const resolveIfMatch = explicitVersion !== undefined
-        ? () => explicitVersion
-        : () => getCurrentVersion(model.store, "subtask", subtaskId);
+      const ifMatch = normalizeIfMatchVersion(options?.ifMatchVersion);
       enqueueMutation({
         optimistic,
         successMessage: "Subtask saved.",
-        entityKind: "subtask",
-        entityId: subtaskId,
-        resolveIfMatch,
-        request: ({ ifMatchVersion } = {}) => {
-          const ifMatch = normalizeIfMatchVersion(ifMatchVersion);
-          return request(`/api/subtasks/${encodeURIComponent(subtaskId)}`, {
-            method: "PATCH",
-            headers: ifMatch !== null ? { "if-match": ifMatch } : undefined,
-            body: JSON.stringify(updates),
-          });
-        },
+        request: () => request(`/api/subtasks/${encodeURIComponent(subtaskId)}`, {
+          method: "PATCH",
+          headers: ifMatch !== null ? { "if-match": ifMatch } : undefined,
+          body: JSON.stringify(updates),
+        }),
       });
     },
 
     cascadeEpicStatus(epicId, status, optimistic, options) {
-      const explicitVersion = options?.ifMatchVersion;
-      const resolveIfMatch = explicitVersion !== undefined
-        ? () => explicitVersion
-        : () => getCurrentVersion(model.store, "epic", epicId);
+      const ifMatch = normalizeIfMatchVersion(options?.ifMatchVersion);
       enqueueMutation({
         optimistic,
         successMessage: "Epic cascade status updated.",
-        entityKind: "epic",
-        entityId: epicId,
-        resolveIfMatch,
-        request: ({ ifMatchVersion } = {}) => {
-          const ifMatch = normalizeIfMatchVersion(ifMatchVersion);
-          return request(`/api/epics/${encodeURIComponent(epicId)}/cascade`, {
-            method: "PATCH",
-            headers: ifMatch !== null ? { "if-match": ifMatch } : undefined,
-            body: JSON.stringify({ status }),
-          });
-        },
+        request: () => request(`/api/epics/${encodeURIComponent(epicId)}/cascade`, {
+          method: "PATCH",
+          headers: ifMatch !== null ? { "if-match": ifMatch } : undefined,
+          body: JSON.stringify({ status }),
+        }),
       });
     },
 
