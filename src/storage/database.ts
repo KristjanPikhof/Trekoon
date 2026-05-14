@@ -425,10 +425,23 @@ export function openTrekoonDatabase(
   // the previous value if the platform does not support mmap.
   db.exec("PRAGMA mmap_size = 268435456;");
 
-  // cache_size negative value -> KiB (here 64 MiB), positive value -> pages.
-  // Larger than the default 2 MiB so that warm reads stay in-process even
-  // under heavier session/suggest/list traffic.
-  db.exec("PRAGMA cache_size = -64000;");
+  // cache_size negative value -> KiB, positive value -> pages.
+  // Default: 64 MiB. Override with TREKOON_SQLITE_CACHE_MIB (integer MiB).
+  // Negative values are rejected. With 16-handle daemon mode the per-process
+  // page cache approaches CACHED_DATABASES_CAPACITY × cache_size, so
+  // operators should lower TREKOON_SQLITE_CACHE_MIB (e.g. to 16) when memory
+  // is constrained.
+  const cacheMibRaw: string = (process.env.TREKOON_SQLITE_CACHE_MIB ?? "").trim();
+  const cacheMib: number = cacheMibRaw.length > 0 ? Number(cacheMibRaw) : 64;
+  if (!Number.isInteger(cacheMib) || cacheMib < 0) {
+    throw new DomainError({
+      code: "invalid_config",
+      message:
+        `TREKOON_SQLITE_CACHE_MIB must be a non-negative integer (got ${JSON.stringify(cacheMibRaw)}).`,
+      details: { envVar: "TREKOON_SQLITE_CACHE_MIB", provided: cacheMibRaw },
+    });
+  }
+  db.exec(`PRAGMA cache_size = ${-(cacheMib * 1024)};`);
 
   // Trigger a checkpoint roughly every 1000 frames so the WAL file does
   // not grow unbounded under sustained writes. Default is 1000 already,
