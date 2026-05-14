@@ -1,10 +1,10 @@
 import { parseArgs, readOption } from "./arg-parser";
-import { failureResult, unexpectedFailureResult } from "./error-utils";
+import { unexpectedFailureResult } from "./error-utils";
 import { DEFAULT_SOURCE_BRANCH, resolveSyncStatus } from "./sync-helpers";
 import { buildTaskReadiness, type DependencyBlocker } from "./task-readiness";
 
 import { TrackerDomain } from "../domain/tracker-domain";
-import { okResult } from "../io/output";
+import { failResult, okResult } from "../io/output";
 import { type CliContext, type CliResult } from "../runtime/command-types";
 import { openTrekoonDatabase, type TrekoonDatabase } from "../storage/database";
 import { type GitContextSnapshot } from "../sync/types";
