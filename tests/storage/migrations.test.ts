@@ -1084,12 +1084,15 @@ describe("migration 0012: dependency kind indexes", (): void => {
     const storage = openTrekoonDatabase(workspace);
 
     try {
-      // Drop the v12 schema_migrations row and the indexes/UNIQUE so we
+      // Drop the v12+ schema_migrations rows and the indexes/UNIQUE so we
       // can stage a "before" snapshot the migration will fix up.
-      storage.db.exec("DELETE FROM schema_migrations WHERE version = 12;");
+      storage.db.exec("DELETE FROM schema_migrations WHERE version >= 12;");
       storage.db.exec("DROP INDEX IF EXISTS uniq_dependencies_edge;");
       storage.db.exec("DROP INDEX IF EXISTS idx_dependencies_target;");
       storage.db.exec("DROP INDEX IF EXISTS idx_dependencies_source;");
+      // Restore the v2 single-column source index so the dependencies
+      // table looks like a pre-v12 schema before we seed duplicates.
+      storage.db.exec("CREATE INDEX IF NOT EXISTS idx_dependencies_source ON dependencies(source_id);");
       // Also drop the v5 (source_id, depends_on_id) UNIQUE so we can insert
       // duplicates that share the full 4-tuple. v5 is irreversible via the
       // normal rollback path, so we surgically drop the index here for the
