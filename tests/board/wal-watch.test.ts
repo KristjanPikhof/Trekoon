@@ -685,7 +685,7 @@ describe("WAL watcher event-cursor reconciliation", (): void => {
         deltas.push(event.snapshotDelta);
       }
     });
-    const paths: Array<{ path: string; reason?: string }> = [];
+    const paths: Array<{ path: string; reason?: string | undefined }> = [];
     const watcher = startWalWatcher({
       db: watcherDb.db,
       databaseFile: watcherDb.paths.databaseFile,
@@ -758,7 +758,7 @@ describe("WAL watcher event-cursor reconciliation", (): void => {
         deltas.push(event.snapshotDelta);
       }
     });
-    const paths: Array<{ path: string; reason?: string }> = [];
+    const paths: Array<{ path: string; reason?: string | undefined }> = [];
     const watcher = startWalWatcher({
       db: watcherDb.db,
       databaseFile: watcherDb.paths.databaseFile,
@@ -803,7 +803,7 @@ describe("WAL watcher event-cursor reconciliation", (): void => {
     // returns null, so the first reconcile must take the full-snapshot path.
     const watcherDb: TrekoonDatabase = openTrekoonDatabase(workspace);
     const eventBus = createBoardEventBus();
-    const paths: Array<{ path: string; reason?: string }> = [];
+    const paths: Array<{ path: string; reason?: string | undefined }> = [];
     const watcher = startWalWatcher({
       db: watcherDb.db,
       databaseFile: watcherDb.paths.databaseFile,
@@ -835,7 +835,7 @@ describe("WAL watcher event-cursor reconciliation", (): void => {
 
     const watcherDb: TrekoonDatabase = openTrekoonDatabase(workspace);
     const eventBus = createBoardEventBus();
-    const paths: Array<{ path: string; reason?: string }> = [];
+    const paths: Array<{ path: string; reason?: string | undefined }> = [];
     const watcher = startWalWatcher({
       db: watcherDb.db,
       databaseFile: watcherDb.paths.databaseFile,
@@ -875,7 +875,7 @@ describe("WAL watcher event-cursor reconciliation", (): void => {
 
     const watcherDb: TrekoonDatabase = openTrekoonDatabase(workspace);
     const eventBus = createBoardEventBus();
-    const paths: Array<{ path: string; reason?: string }> = [];
+    const paths: Array<{ path: string; reason?: string | undefined }> = [];
     const watcher = startWalWatcher({
       db: watcherDb.db,
       databaseFile: watcherDb.paths.databaseFile,
@@ -920,7 +920,7 @@ describe("WAL watcher event-cursor reconciliation", (): void => {
 
     const watcherDb: TrekoonDatabase = openTrekoonDatabase(workspace);
     const eventBus = createBoardEventBus();
-    const paths: Array<{ path: string; reason?: string }> = [];
+    const paths: Array<{ path: string; reason?: string | undefined }> = [];
     const watcher = startWalWatcher({
       db: watcherDb.db,
       databaseFile: watcherDb.paths.databaseFile,
