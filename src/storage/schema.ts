@@ -1,4 +1,4 @@
-export const SCHEMA_VERSION = 3;
+export const SCHEMA_VERSION = 4;
 
 export const BASE_SCHEMA_STATEMENTS: readonly string[] = [
   `PRAGMA foreign_keys = ON;`,
