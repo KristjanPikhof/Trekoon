@@ -398,6 +398,44 @@ export function openTrekoonDatabase(
   db.exec("PRAGMA journal_mode = WAL;");
   db.exec("PRAGMA foreign_keys = ON;");
 
+  // Open-time read+write throughput tuning. WAL is required (set above);
+  // the rest are layered on top.
+  //
+  // synchronous: WAL+NORMAL is the documented standard pairing
+  // (https://www.sqlite.org/wal.html#performance_considerations) — durability
+  // semantics: on a hard kernel/OS crash the last unfsynced transactions can
+  // be lost, but the DB file itself never corrupts. Operators who want the
+  // pre-tuning behaviour (synchronous=FULL) can set
+  // TREKOON_SQLITE_DURABILITY=full at open time.
+  const durabilityMode: string = (process.env.TREKOON_SQLITE_DURABILITY ?? "").toLowerCase();
+  if (durabilityMode === "full") {
+    db.exec("PRAGMA synchronous = FULL;");
+  } else {
+    db.exec("PRAGMA synchronous = NORMAL;");
+  }
+
+  // temp_store=MEMORY keeps temp B-tree sorts and intermediate result sets
+  // out of the temp file on disk — most relevant for the ORDER BY paths
+  // that pre-0013 schemas relied on temp-b-tree sorts for.
+  db.exec("PRAGMA temp_store = MEMORY;");
+
+  // mmap_size: opportunistic memory-mapped reads for the first 256 MiB of
+  // the DB file. Reduces read syscall overhead for hot pages. bun:sqlite
+  // forwards the PRAGMA to libsqlite3; the connection will silently keep
+  // the previous value if the platform does not support mmap.
+  db.exec("PRAGMA mmap_size = 268435456;");
+
+  // cache_size negative value -> KiB (here 64 MiB), positive value -> pages.
+  // Larger than the default 2 MiB so that warm reads stay in-process even
+  // under heavier session/suggest/list traffic.
+  db.exec("PRAGMA cache_size = -64000;");
+
+  // Trigger a checkpoint roughly every 1000 frames so the WAL file does
+  // not grow unbounded under sustained writes. Default is 1000 already,
+  // but we pin it explicitly so the value cannot drift if libsqlite3
+  // changes its default in a future bump.
+  db.exec("PRAGMA wal_autocheckpoint = 1000;");
+
   if (options.autoMigrate ?? true) {
     migrateDatabase(db);
   }
