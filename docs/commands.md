@@ -10,7 +10,7 @@ the quickest way to get started, read [Quickstart](quickstart.md) first.
 - `trekoon help [command]`
 - `trekoon quickstart`
 - `trekoon epic <create|expand|list|show|search|replace|update|delete|progress>`
-- `trekoon session [--epic <epic-id>]`
+- `trekoon session [--epic <epic-id>] [--item <id>]`
 - `trekoon suggest [--epic <epic-id>]`
 - `trekoon task <create|create-many|list|show|ready|next|done|search|replace|update|delete|claim>`
 - `trekoon subtask <create|create-many|list|search|replace|update|delete|claim>`
