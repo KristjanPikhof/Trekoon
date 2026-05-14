@@ -1146,7 +1146,13 @@ export class TrackerDomain {
     }
 
     const dependencies: DependencyRecord[] = [];
-    const newIds: string[] = [];
+    const newRows: Array<{
+      id: string;
+      sourceId: string;
+      sourceKind: string;
+      dependsOnId: string;
+      dependsOnKind: string;
+    }> = [];
     const batchNow: number = Date.now();
 
     for (const spec of resolvedSpecs) {
@@ -1157,15 +1163,38 @@ export class TrackerDomain {
         continue;
       }
 
-      const id: string = randomUUID();
+      newRows.push({
+        id: randomUUID(),
+        sourceId: spec.sourceId,
+        sourceKind: spec.sourceKind,
+        dependsOnId: spec.dependsOnId,
+        dependsOnKind: spec.dependsOnKind,
+      });
+    }
 
+    // Chunked multi-row INSERT. Each row binds 7 parameters (the trailing
+    // `version` literal stays in the VALUES tuple to mirror the createTaskBatch
+    // shape). Cap the chunk size by the global SQLite bound-parameter limit so
+    // a 200-edge batch produces ~ceil(200/142) = 2 statements rather than 200.
+    // Per-edge canonical `dependency.added` events are still emitted upstream
+    // (mutation-service) — this only collapses the SQL writes, never the
+    // event-row contract.
+    const DEP_COLS_PER_ROW = 7; // id, source_id, source_kind, depends_on_id, depends_on_kind, created_at, updated_at (version is literal 1)
+    const WRITE_CHUNK_SIZE: number = Math.floor(SQLITE_MAX_VARIABLES / DEP_COLS_PER_ROW);
+    const newIds: string[] = newRows.map((row) => row.id);
+
+    for (let offset = 0; offset < newRows.length; offset += WRITE_CHUNK_SIZE) {
+      const chunk = newRows.slice(offset, offset + WRITE_CHUNK_SIZE);
+      const placeholders: string = chunk.map(() => "(?, ?, ?, ?, ?, ?, ?, 1)").join(", ");
+      const params: Array<string | number> = [];
+      for (const row of chunk) {
+        params.push(row.id, row.sourceId, row.sourceKind, row.dependsOnId, row.dependsOnKind, batchNow, batchNow);
+      }
       this.#db
         .query(
-          "INSERT INTO dependencies (id, source_id, source_kind, depends_on_id, depends_on_kind, created_at, updated_at, version) VALUES (?, ?, ?, ?, ?, ?, ?, 1);",
+          `INSERT INTO dependencies (id, source_id, source_kind, depends_on_id, depends_on_kind, created_at, updated_at, version) VALUES ${placeholders};`,
         )
-        .run(id, spec.sourceId, spec.sourceKind, spec.dependsOnId, spec.dependsOnKind, batchNow, batchNow);
-
-      newIds.push(id);
+        .run(...params);
     }
 
     // Batch-fetch all newly inserted dependencies instead of one getDependencyOrThrow per row.
