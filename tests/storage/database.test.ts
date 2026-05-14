@@ -608,8 +608,12 @@ describe("storage lifecycle", (): void => {
       expect(indexes).toContain("idx_events_created_at");
       expect(indexes).toContain("idx_events_git_branch");
       expect(indexes).toContain("idx_events_created_at_id");
+      // v12 replaced the v2 single-column indexes with composite (id, kind)
+      // forms; the source-side name is reused, the target-side renamed.
       expect(indexes).toContain("idx_dependencies_source");
-      expect(indexes).toContain("idx_dependencies_depends_on");
+      expect(indexes).toContain("idx_dependencies_target");
+      expect(indexes).not.toContain("idx_dependencies_depends_on");
+      expect(indexes).toContain("uniq_dependencies_edge");
       expect(indexes).toContain("idx_conflicts_resolution_updated_at");
       expect(indexes).toContain("idx_board_idempotency_created_at");
       expect(indexes).not.toContain("idx_conflicts_entity");
