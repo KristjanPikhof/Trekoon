@@ -185,31 +185,48 @@ function migrateDependencyKindIndexes(db: Database): void {
   // Step 1: dedupe rows that share the full edge, keeping the lowest
   // created_at survivor (tiebreak on id for determinism). Performed under
   // the same exclusive transaction the migration runner holds.
-  const dedupeResult = db
+  //
+  // EXISTS guard: skip the expensive window-function DELETE entirely when
+  // the table has no duplicate edges. This avoids a full-table scan on
+  // clean databases and prevents spurious console.warn output.
+  const hasDuplicates = db
     .query(
       `
-      DELETE FROM dependencies
-      WHERE id NOT IN (
-        SELECT id FROM (
-          SELECT id,
-                 ROW_NUMBER() OVER (
-                   PARTITION BY source_id, source_kind, depends_on_id, depends_on_kind
-                   ORDER BY created_at ASC, id ASC
-                 ) AS rn
-          FROM dependencies
-        )
-        WHERE rn = 1
-      );
+      SELECT 1 FROM dependencies
+      GROUP BY source_id, source_kind, depends_on_id, depends_on_kind
+      HAVING count(*) > 1
+      LIMIT 1;
       `,
     )
-    .run();
+    .get() as Record<string, unknown> | null;
 
-  const dedupedCount: number = Number(dedupeResult.changes ?? 0);
-  if (dedupedCount > 0) {
-    console.warn(
-      `[trekoon] migration 0012_dependency_kind_indexes: removed ${dedupedCount} duplicate dependency edge(s) ` +
-        "before adding uniq_dependencies_edge UNIQUE index (irreversible).",
-    );
+  if (hasDuplicates !== null) {
+    const dedupeResult = db
+      .query(
+        `
+        DELETE FROM dependencies
+        WHERE id NOT IN (
+          SELECT id FROM (
+            SELECT id,
+                   ROW_NUMBER() OVER (
+                     PARTITION BY source_id, source_kind, depends_on_id, depends_on_kind
+                     ORDER BY created_at ASC, id ASC
+                   ) AS rn
+            FROM dependencies
+          )
+          WHERE rn = 1
+        );
+        `,
+      )
+      .run();
+
+    const dedupedCount: number = Number(dedupeResult.changes ?? 0);
+    if (dedupedCount > 0) {
+      console.warn(
+        `[trekoon] migration 0012_dependency_kind_indexes: removed ${dedupedCount} duplicate dependency edge(s) ` +
+          "before adding uniq_dependencies_edge UNIQUE index (irreversible).",
+      );
+    }
   }
 
   // Step 2: indexes that accelerate the polymorphic listDependencies /
