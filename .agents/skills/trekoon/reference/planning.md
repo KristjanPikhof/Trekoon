@@ -158,16 +158,16 @@ One-shot rules:
   handoff summaries and follow-up updates. Never show temp keys as real IDs.
 - `dep add-many` does not resolve temp keys from earlier commands. Use real IDs.
 
-One-shot example:
+One-shot example (status omitted, defaults to `todo`):
 
 ```bash
 trekoon --toon epic create \
   --title "Checkout: add idempotent payment capture" \
   --description "Goal: prevent duplicate charges.\nVerification: bun test tests/payments" \
-  --task "task-api|[API] add capture endpoint|Target files: src/payments/capture.ts\nRead first: src/payments/service.ts\nDo not touch: src/ui/*\nAcceptance: duplicate request returns prior result.\nVerify: bun test tests/payments/capture.test.ts\nOwner: api-lane\nCan run in parallel with: task-ui.|todo" \
-  --task "task-ui|[UI] show capture states|Target files: src/ui/checkout.tsx\nRead first: src/ui/form.tsx\nDo not touch: src/payments/*\nAcceptance: loading and retry states render.\nVerify: bun test tests/ui/checkout.test.ts\nOwner: ui-lane\nBlocked by: task-api.|todo" \
-  --subtask "@task-api|sub-api-tests|Write capture tests|Cover idempotent retry and conflict responses.|todo" \
-  --subtask "@task-ui|sub-ui-states|Write UI state tests|Cover loading, success, retry, and error states.|todo" \
+  --task "task-api|[API] add capture endpoint|Target files: src/payments/capture.ts\nRead first: src/payments/service.ts\nDo not touch: src/ui/*\nAcceptance: duplicate request returns prior result.\nVerify: bun test tests/payments/capture.test.ts\nOwner: api-lane\nCan run in parallel with: task-ui." \
+  --task "task-ui|[UI] show capture states|Target files: src/ui/checkout.tsx\nRead first: src/ui/form.tsx\nDo not touch: src/payments/*\nAcceptance: loading and retry states render.\nVerify: bun test tests/ui/checkout.test.ts\nOwner: ui-lane\nBlocked by: task-api." \
+  --subtask "@task-api|sub-api-tests|Write capture tests|Cover idempotent retry and conflict responses." \
+  --subtask "@task-ui|sub-ui-states|Write UI state tests|Cover loading, success, retry, and error states." \
   --dep "@task-ui|@task-api"
 ```
 
