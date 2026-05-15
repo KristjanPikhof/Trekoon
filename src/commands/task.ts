@@ -1,5 +1,7 @@
 import {
   SEARCH_REPLACE_FIELDS,
+  describeCompactPipeIssue,
+  endsWithBareCompactPipe,
   findUnknownOption,
   hasFlag,
   isValidCompactTempKey,
