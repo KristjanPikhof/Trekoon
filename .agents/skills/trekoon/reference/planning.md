@@ -139,14 +139,15 @@ compact specs: `\?`, `\.`, `\{`, `\(`, `\[` etc. fail before records are
 created. Prefer prose over exact regex in descriptions. Rephrase operators
 like `!=` as words to avoid escaping confusion.
 
-Bare `|` inside field values is a field separator. Shell pipes
-(`cmd a | cmd b`) and `||` fallbacks in Verify lines must be escaped as `\|`
-or rephrased. The parser does not validate the resulting status field, so an
-unescaped `|` in a description silently pushes text into the status slot and
-the record looks fine until the status machine rejects an update — corrupted
-records silently slip past creation. Concrete failure: a Verify line that
-reads `Verify: bun test foo | tail -20` splits into fields, and `tail -20`
-becomes the status field.
+Bare `|` inside field values is a field separator and will silently corrupt
+records. Shell pipes (`cmd a | cmd b`) and `||` fallbacks in Verify lines must
+be escaped as `\|` or rephrased. The parser does not validate the resulting
+status field, so an unescaped `|` in a description silently pushes text into
+the status slot and the record looks fine until the status machine rejects an
+update. Concrete failure: a Verify line that reads
+`Verify: bun test foo | tail -20` splits into fields, `tail -20` becomes the
+status field, and creation succeeds; the bad status only surfaces on the next
+status transition.
 
 Spec shape (status optional, defaults to `todo`):
 
