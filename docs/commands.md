@@ -179,6 +179,23 @@ Rules:
 - Subtask cascade is accepted for consistency but just updates one subtask
 - Success response includes `data.cascade` with changed/unchanged IDs and counts
 
+## Epic create and expand
+
+### Temp-key rules
+
+Temp keys in `--task` and `--subtask` share one flat namespace per `epic create` / `epic expand` invocation — reusing a key across any two records in the same call fails the batch. Prefix subtask keys with the parent task key to keep them unique (e.g. `task-a-sub-1` under `task-a`).
+
+`task create-many` and `subtask create-many` use their own scoped namespaces, independent of each other and of `epic create`.
+
+```bash
+trekoon epic create \
+  --title "Launch" \
+  --task "task-a|First task|Description|todo" \
+  --task "task-b|Second task|Description|todo" \
+  --subtask "@task-a|task-a-sub-1|First subtask|Description|todo" \
+  --subtask "@task-b|task-b-sub-1|Second subtask|Description|todo"
+```
+
 ## Status machine
 
 Statuses: `todo`, `in_progress`, `done`, `blocked`. The hyphenated `in-progress`
