@@ -98,6 +98,8 @@ trekoon --toon epic create \
   --dep "@sub-a|@task-a"
 ```
 
+All temp keys (task and subtask) must be unique across the whole command — they share one flat namespace. Prefix subtask keys with the parent task key to stay unique.
+
 This is better than sequential creates because later records can reference
 earlier ones with `@temp-key`, and you get one atomic operation with mappings
 and counts in the response.
