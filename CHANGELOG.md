@@ -26,7 +26,6 @@ All notable changes to Trekoon are documented in this file.
   explicitly, and includes a pre-flight `grep -nE '(^|[^\\])\|\||\|$'`
   recipe. `SKILL.md` Non-Negotiables now points at it so agents see the
   rule without backtracking through the escape table.
-
 - Document the temp-key flat-namespace rule in `EPIC_HELP`, the planning
   reference, `docs/quickstart.md`, and `docs/commands.md`. `--task` and
   `--subtask` keys share one namespace per `epic create` or `epic expand`
