@@ -187,6 +187,8 @@ Temp keys in `--task` and `--subtask` share one flat namespace per `epic create`
 
 `task create-many` and `subtask create-many` use their own scoped namespaces, independent of each other and of `epic create`.
 
+Escape any literal `|` inside field values as `\|`. A bare `|` is parsed as a field separator and will silently corrupt records — shell pipes and `||` fallbacks in Verify lines push text into the status field and creation still succeeds. See the planning skill for the full pipe-escape rules.
+
 ```bash
 trekoon epic create \
   --title "Launch" \
