@@ -148,6 +148,55 @@ describe("epic command", (): void => {
     expect((listed.data as { epics: unknown[] }).epics).toEqual([]);
   });
 
+  test("create surfaces flat-namespace remediation on duplicate temp key", async (): Promise<void> => {
+    const cwd = createWorkspace();
+    const result = await runEpic({
+      cwd,
+      mode: "toon",
+      args: [
+        "create",
+        "--title",
+        "Roadmap",
+        "--description",
+        "Top-level work",
+        "--task",
+        "shared-key|Build parser|Parser desc|todo",
+        "--subtask",
+        "@shared-key|shared-key|Write tests|Test desc|todo",
+      ],
+    });
+
+    expect(result.ok).toBeFalse();
+    expect(result.error?.code).toBe("invalid_input");
+    expect(result.human).toContain("Duplicate temp key 'shared-key'");
+    expect(result.human).toContain("flat namespace");
+    expect(result.human).toContain("prefix subtask temp keys with the parent task key");
+  });
+
+  test("expand surfaces flat-namespace remediation on duplicate temp key", async (): Promise<void> => {
+    const cwd = createWorkspace();
+    const epic = await createEpic(cwd, { title: "Roadmap", description: "Top-level work" });
+
+    const expanded = await runEpic({
+      cwd,
+      mode: "toon",
+      args: [
+        "expand",
+        epic.id,
+        "--task",
+        "shared-key|Build parser|Parser desc|todo",
+        "--subtask",
+        "@shared-key|shared-key|Write tests|Test desc|todo",
+      ],
+    });
+
+    expect(expanded.ok).toBeFalse();
+    expect(expanded.error?.code).toBe("invalid_input");
+    expect(expanded.human).toContain("Duplicate temp key 'shared-key'");
+    expect(expanded.human).toContain("flat namespace");
+    expect(expanded.human).toContain("per epic expand");
+  });
+
   test("epic show returns aggregate tree", async (): Promise<void> => {
     const cwd = createWorkspace();
     const createdEpic = await runEpic({
