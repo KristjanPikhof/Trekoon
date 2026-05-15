@@ -172,30 +172,11 @@ Spec shape (status optional, defaults to `todo`):
 Prefer the shorter form. Pass an explicit `|<status>` only when seeding a
 non-`todo` status.
 
-### CAUTION — bare-pipe footguns in field values
-
-Every unescaped `|` in a field value adds a field. Three failure modes recur:
-
-1. **`||` inside a description** (JS logical-OR `a || b`, shell OR
-   `cmd || cmd`). Adds two extra fields per occurrence; overshoots
-   field-count gate. Rephrase `||` as "or" or escape as `\|\|`.
-2. **Single `|` mid-value** (shell pipe in a Verify line, table separator,
-   etc.). Adds one field. If the spec has no explicit `|<status>`, this
-   silently lands as the status. Escape as `\|` or rephrase.
-3. **Trailing `|` as a "terminator"**. Creates an empty final field; on the
-   4-field subtask shape this becomes an empty description and fails with
-   "missing a description". Drop trailing pipes — there is no terminator.
-
-Pre-flight every `--task`/`--subtask`/`--dep` value before invoking
-`epic create` / `epic expand` / `task create-many` / `subtask create-many` /
-`dep add-many`. Quick scan:
-
-```bash
-# Flags both bare `||` and trailing-`|` in any line of a spec file.
-grep -nE '(^|[^\\])\|\||\|$' specs.txt
-```
-
-When in doubt, build descriptions as plain prose without operator characters.
+The three bare-pipe footguns (`||`, single mid-value `|`, trailing `|`) and
+the pre-flight `grep -nE '(^|[^\\])\|\||\|$'` recipe live in
+`reference/harness-primitives.md` "Compact Spec Hazards". The paragraphs
+above add the silent-vs-loud detail that the quick-ref points at. When in
+doubt, build descriptions as plain prose without operator characters.
 
 One-shot rules:
 
