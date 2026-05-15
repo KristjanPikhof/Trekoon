@@ -849,7 +849,7 @@ export async function runEpic(context: CliContext): Promise<CliResult> {
 
         const duplicateTempKey = findDuplicateExpandTempKey(parsedTasks.specs, parsedSubtasks.specs);
         if (duplicateTempKey !== null) {
-          return failBatchSpec("epic.expand", `Duplicate temp key '${duplicateTempKey}' across --task and --subtask specs.`, {
+          return failBatchSpec("epic.expand", `Duplicate temp key '${duplicateTempKey}' across --task and --subtask specs. Temp keys share one flat namespace per epic expand — prefix subtask temp keys with the parent task key (e.g. sub-<task-key>-tests) to disambiguate.`, {
             tempKey: duplicateTempKey,
           });
         }
