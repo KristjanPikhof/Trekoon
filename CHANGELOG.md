@@ -17,16 +17,17 @@ All notable changes to Trekoon are documented in this file.
 
 ### Changed
 
-- Planning reference adds a "CAUTION — bare-pipe footguns" block adjacent
-  to the spec-shape examples, names the trailing-`|` failure mode
-  explicitly, and includes a pre-flight `grep -nE '(^|[^\\])\|\||\|$'`
-  recipe. `SKILL.md` Non-Negotiables now points at it so agents see the
-  rule without backtracking through the escape table.
 - `reference/harness-primitives.md` gains a "Compact Spec Hazards"
-  subsection covering the same three footguns + grep recipe. Loaded for
+  subsection — three footguns (`||`, single mid-value `|`, trailing `|`)
+  plus the pre-flight `grep -nE '(^|[^\\])\|\||\|$'` recipe. Loaded for
   both plan and execute modes, so an executor running mid-execution
-  `epic expand` / `*-create-many` / `dep add-many` no longer needs to
-  hand-load `planning.md` to see the rules.
+  `epic expand` / `*-create-many` / `dep add-many` sees the rules without
+  hand-loading `planning.md`.
+- Planning reference explicitly names the trailing-`|` failure mode and
+  keeps the silent-vs-loud failure matrix as the deeper reference. Points
+  at `harness-primitives.md` for the quick-ref to avoid duplication.
+  `SKILL.md` Non-Negotiables one-liner stays so any Trekoon request sees
+  the rule before mode-specific loads.
 - `trekoon quickstart` CLI output (`src/commands/quickstart.ts`) gains a
   new "Batch planning with compact specs" section: spec shapes, flat
   temp-key namespace, three bare-pipe footguns, and pre-flight grep.
