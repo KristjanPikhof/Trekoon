@@ -295,7 +295,7 @@ function parseSubtaskCreateManySpecs(parentTaskId: string, rawSpecs: readonly st
     if (parsed.fields.length !== 3 && parsed.fields.length !== 4) {
       return {
         specs: [],
-        error: failBatchSpec("subtask.create-many", `Subtask specs must use <temp-key>|<title>|<description> or <temp-key>|<title>|<description>|<status> in --subtask spec ${index + 1}.`, {
+        error: failBatchSpec("subtask.create-many", `Subtask specs must use <temp-key>|<title>|<description> or <temp-key>|<title>|<description>|<status> in --subtask spec ${index + 1}. ${describeCompactPipeIssue(rawSpec)}`, {
           option: "subtask",
           index,
           rawSpec,
