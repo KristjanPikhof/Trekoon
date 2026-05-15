@@ -100,7 +100,19 @@ trekoon --toon epic create \
 
 All temp keys (task and subtask) must be unique across the whole command — they share one flat namespace. Prefix subtask keys with the parent task key to stay unique.
 
-Escape any literal `|` inside field values as `\|`. A bare `|` on a spec without an explicit `|<status>` field silently pushes trailing text into the status slot (e.g. `Verify: bun test foo | tail` lets `tail` become the status, and creation still succeeds). Specs that already pass `|<status>` fail loudly on the same input. See the planning skill for full rules.
+Escape any literal `|` inside field values as `\|`. Three recurring footguns:
+
+- **Single mid-value `|`** on a spec without explicit `|<status>` silently pushes trailing text into the status slot (e.g. `Verify: bun test foo | tail` lets `tail` become the status, and creation still succeeds). Specs that already pass `|<status>` fail loudly on the same input.
+- **`||`** (JS logical-OR `a || b`, shell OR `cmd || cmd`) adds two extra fields per occurrence; the field-count gate rejects with `Task specs must use ...` / `Subtask specs must use ...`. Rephrase `||` as "or" or escape as `\|\|`.
+- **Trailing `|`** is not a terminator. It creates an empty final field; on a 4-field subtask shape that empty field becomes the description and the parser rejects with "is missing a description". Drop trailing pipes.
+
+Pre-flight any batch before invoking `epic create`/`epic expand`/`task create-many`/`subtask create-many`:
+
+```bash
+grep -nE '(^|[^\\])\|\||\|$' specs.txt
+```
+
+See the planning skill for full rules.
 
 This is better than sequential creates because later records can reference
 earlier ones with `@temp-key`, and you get one atomic operation with mappings
