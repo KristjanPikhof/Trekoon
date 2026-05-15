@@ -22,6 +22,11 @@ All notable changes to Trekoon are documented in this file.
   explicitly, and includes a pre-flight `grep -nE '(^|[^\\])\|\||\|$'`
   recipe. `SKILL.md` Non-Negotiables now points at it so agents see the
   rule without backtracking through the escape table.
+- `reference/harness-primitives.md` gains a "Compact Spec Hazards"
+  subsection covering the same three footguns + grep recipe. Loaded for
+  both plan and execute modes, so an executor running mid-execution
+  `epic expand` / `*-create-many` / `dep add-many` no longer needs to
+  hand-load `planning.md` to see the rules.
 - `trekoon quickstart` CLI output (`src/commands/quickstart.ts`) gains a
   new "Batch planning with compact specs" section: spec shapes, flat
   temp-key namespace, three bare-pipe footguns, and pre-flight grep.
