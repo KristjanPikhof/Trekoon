@@ -126,6 +126,7 @@ const EPIC_HELP = [
   "  --task <temp-key>|<title>|<description>|<status>   (explicit status)",
   `  --subtask <parent-ref>|<temp-key>|<title>|<description>            (status defaults to todo) (${"@"}<temp-key> for new parents)`,
   `  --subtask <parent-ref>|<temp-key>|<title>|<description>|<status>   (explicit status)`,
+  "  Temp keys in --task and --subtask share one namespace per command. Prefix subtask keys with parent task key.",
   `  --dep <source-ref>|<depends-on-ref>  (refs can be IDs or ${"@"}<temp-key>)`,
   "  Escapes in compact specs: \\| for |, \\\\ for \\, \\n, \\r, \\t",
   "",

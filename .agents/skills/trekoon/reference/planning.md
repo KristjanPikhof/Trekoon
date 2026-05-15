@@ -150,8 +150,13 @@ non-`todo` status.
 
 One-shot rules:
 
-- Declare tasks/subtasks with plain temp keys, e.g. `task-api`, `sub-tests`.
-- Refer to records created in the same command as `@task-api` or `@sub-tests`.
+- Declare tasks/subtasks with plain temp keys, e.g. `task-api`, `sub-api-tests`.
+- Temp keys form a flat namespace per command. Every `--task` and `--subtask`
+  key must be unique across the whole `epic create` / `epic expand` call, not
+  per parent task. Prefix subtask keys with the parent task key
+  (`sub-api-tests`, `sub-ui-states`) to stay safe across re-runs.
+- Refer to records created in the same command as `@task-api` or
+  `@sub-api-tests`.
 - Use `@task-key` as the subtask parent ref and in `--dep` specs.
 - `--dep <source>|<depends-on>` points from blocked item to prerequisite.
 - `epic create` returns `result.mappings` and counts. Use those real UUIDs in
