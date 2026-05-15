@@ -399,7 +399,11 @@ function failUnexpectedPositionals(command: string, unexpected: readonly string[
 
 function failEmptyCompactField(command: string, option: string, index: number, rawSpec: string, field: string): CliResult {
   const label = option === "task" ? "Task" : "Subtask";
-  return failBatchSpec(command, `${label} spec ${index + 1} is missing a ${field}.`, {
+  let human = `${label} spec ${index + 1} is missing a ${field}.`;
+  if (field === "description" && endsWithBareCompactPipe(rawSpec)) {
+    human += " Spec ends with a bare `|` — the trailing `|` is not a terminator and creates an empty description field. Drop the trailing `|` and write an actual description.";
+  }
+  return failBatchSpec(command, human, {
     option,
     index,
     rawSpec,
