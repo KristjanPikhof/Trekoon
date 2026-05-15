@@ -128,6 +128,7 @@ const EPIC_HELP = [
   `  --subtask <parent-ref>|<temp-key>|<title>|<description>|<status>   (explicit status)`,
   "  Temp keys in --task and --subtask share one namespace per command. Prefix subtask keys with parent task key.",
   `  --dep <source-ref>|<depends-on-ref>  (refs can be IDs or ${"@"}<temp-key>)`,
+  "  Escape literal | inside field values (\\|); bare | is a field separator and will silently corrupt records.",
   "  Escapes in compact specs: \\| for |, \\\\ for \\, \\n, \\r, \\t",
   "",
   "List:",
