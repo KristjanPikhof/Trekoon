@@ -100,6 +100,8 @@ trekoon --toon epic create \
 
 All temp keys (task and subtask) must be unique across the whole command — they share one flat namespace. Prefix subtask keys with the parent task key to stay unique.
 
+Escape any literal `|` inside field values as `\|`. A bare `|` is a field separator and will silently corrupt records (e.g. `Verify: bun test foo | tail` pushes `tail` into the status field). See the planning skill for full rules.
+
 This is better than sequential creates because later records can reference
 earlier ones with `@temp-key`, and you get one atomic operation with mappings
 and counts in the response.
