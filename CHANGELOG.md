@@ -22,6 +22,12 @@ All notable changes to Trekoon are documented in this file.
   explicitly, and includes a pre-flight `grep -nE '(^|[^\\])\|\||\|$'`
   recipe. `SKILL.md` Non-Negotiables now points at it so agents see the
   rule without backtracking through the escape table.
+- `trekoon quickstart` CLI output (`src/commands/quickstart.ts`) gains a
+  new "Batch planning with compact specs" section: spec shapes, flat
+  temp-key namespace, three bare-pipe footguns, and pre-flight grep.
+  Previously the CLI quickstart had no compact-spec guidance at all.
+  `docs/quickstart.md` is extended from a single `\|` sentence to the
+  full three-failure-mode list with the same pre-flight recipe.
 
 ## 0.4.7
 
