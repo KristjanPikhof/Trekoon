@@ -471,7 +471,7 @@ function parseExpandTaskSpecs(rawSpecs: readonly string[]): { specs: CompactTask
     if (parsed.fields.length !== 3 && parsed.fields.length !== 4) {
       return {
         specs: [],
-        error: failBatchSpec("epic.expand", `Task specs must use <temp-key>|<title>|<description> or <temp-key>|<title>|<description>|<status> in --task spec ${index + 1}.`, {
+        error: failBatchSpec("epic.expand", `Task specs must use <temp-key>|<title>|<description> or <temp-key>|<title>|<description>|<status> in --task spec ${index + 1}. ${describeCompactPipeIssue(rawSpec)}`, {
           option: "task",
           index,
           rawSpec,
