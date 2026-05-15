@@ -93,9 +93,9 @@ trekoon --toon epic create \
   --description "Ship one-shot planning workflows" \
   --task "task-a|First task|First description|todo" \
   --task "task-b|Second task|Second description|todo" \
-  --subtask "@task-a|sub-a|First subtask|Subtask description|todo" \
+  --subtask "@task-a|sub-a-first|First subtask|Subtask description|todo" \
   --dep "@task-b|@task-a" \
-  --dep "@sub-a|@task-a"
+  --dep "@sub-a-first|@task-a"
 ```
 
 All temp keys (task and subtask) must be unique across the whole command — they share one flat namespace. Prefix subtask keys with the parent task key to stay unique.
