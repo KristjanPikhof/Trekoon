@@ -14,8 +14,11 @@ All notable changes to Trekoon are documented in this file.
   namespace per command; prefix subtask keys with the parent task key.
 - Document the compact-spec pipe-escape rule across the same surfaces. Bare
   `|` inside field values is a field separator and silently corrupts records
-  (shell pipes and `||` fallbacks in Verify lines push trailing text into the
-  status slot); literal `|` must be escaped as `\|` or rephrased.
+  when the spec omits an explicit `|<status>` field — a single shell pipe in
+  a Verify line pushes trailing text into the status slot, creation succeeds,
+  and the bad status only surfaces on the next update. Multi-pipe constructs
+  like `||` fall over loudly on the field-count check. Literal `|` must be
+  escaped as `\|` or rephrased.
 
 ### Fixed
 
