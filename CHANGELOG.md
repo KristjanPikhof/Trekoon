@@ -2,14 +2,10 @@
 
 All notable changes to Trekoon are documented in this file.
 
-## 0.4.7
+## 0.4.8
 
 ### Fixed
 
-- Duplicate-temp-key errors from `epic create` and `epic expand` now include
-  the rule and a fix. The bare `Duplicate temp key 'X' across --task and
-  --subtask specs.` gains flat-namespace context and a `sub-<task-key>-tests`
-  example.
 - Compact-spec field-count errors now identify the likely pipe footgun.
   `Task specs must use ...` / `Subtask specs must use ...` from
   `epic create`, `epic expand`, `task create-many`, and
@@ -26,6 +22,18 @@ All notable changes to Trekoon are documented in this file.
   explicitly, and includes a pre-flight `grep -nE '(^|[^\\])\|\||\|$'`
   recipe. `SKILL.md` Non-Negotiables now points at it so agents see the
   rule without backtracking through the escape table.
+
+## 0.4.7
+
+### Fixed
+
+- Duplicate-temp-key errors from `epic create` and `epic expand` now include
+  the rule and a fix. The bare `Duplicate temp key 'X' across --task and
+  --subtask specs.` gains flat-namespace context and a `sub-<task-key>-tests`
+  example.
+
+### Changed
+
 - Document the temp-key flat-namespace rule in `EPIC_HELP`, the planning
   reference, `docs/quickstart.md`, and `docs/commands.md`. `--task` and
   `--subtask` keys share one namespace per `epic create` or `epic expand`
