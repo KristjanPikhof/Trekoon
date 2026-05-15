@@ -285,6 +285,58 @@ export function parseCompactFields(rawValue: string): ParsedCompactFields {
   };
 }
 
+export function endsWithBareCompactPipe(rawSpec: string): boolean {
+  if (!rawSpec.endsWith("|")) {
+    return false;
+  }
+  let backslashes = 0;
+  for (let i = rawSpec.length - 2; i >= 0 && rawSpec[i] === "\\"; i--) {
+    backslashes++;
+  }
+  return backslashes % 2 === 0;
+}
+
+export function containsBareDoubleCompactPipe(rawSpec: string): boolean {
+  let escaping = false;
+  let prevBarePipe = false;
+  for (const character of rawSpec) {
+    if (escaping) {
+      escaping = false;
+      prevBarePipe = false;
+      continue;
+    }
+    if (character === "\\") {
+      escaping = true;
+      prevBarePipe = false;
+      continue;
+    }
+    if (character === "|") {
+      if (prevBarePipe) {
+        return true;
+      }
+      prevBarePipe = true;
+      continue;
+    }
+    prevBarePipe = false;
+  }
+  return false;
+}
+
+export function describeCompactPipeIssue(rawSpec: string): string {
+  const doublePipe = containsBareDoubleCompactPipe(rawSpec);
+  const trailingPipe = endsWithBareCompactPipe(rawSpec);
+  if (doublePipe && trailingPipe) {
+    return "Spec has bare `||` and ends with a trailing `|`. `||` (logical-OR or back-to-back pipes) adds two extra fields per occurrence; a trailing `|` creates an empty final field. Escape literal pipes as `\\|` or rephrase (e.g. `||` -> `or`), and drop the trailing `|`.";
+  }
+  if (doublePipe) {
+    return "Spec has bare `||` (two pipes back-to-back) — common with JS logical-OR (`a || b`) or shell OR (`cmd a || cmd b`). Every unescaped `|` adds a field, so `||` adds two extra fields. Escape literal pipes as `\\|` or rephrase the operator (e.g. `||` -> `or`).";
+  }
+  if (trailingPipe) {
+    return "Spec ends with a bare `|`. The trailing `|` is not a terminator — it creates an empty final field. Drop the trailing `|`.";
+  }
+  return "Bare `|` inside a field value is a field separator. Escape literal pipes as `\\|` or rephrase the value to avoid `|`.";
+}
+
 export function parseCompactEntityRef(rawValue: string): CompactEntityRef {
   if (rawValue.startsWith(COMPACT_TEMP_KEY_PREFIX)) {
     const tempKey = rawValue.slice(COMPACT_TEMP_KEY_PREFIX.length);
