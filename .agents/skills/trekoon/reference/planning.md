@@ -151,10 +151,12 @@ becomes the status, and the bad status only surfaces on the next update.
 
 Escape literal `|` as `\|` or rephrase to avoid the character. `||` fallbacks
 (`cmd a || cmd b`) and other multi-pipe constructs are caught loudly by the
-parser (extra empty/extra fields → field-count or empty-field error), so the
-silent failure mode is specifically the single-pipe / no-explicit-status
-case. Specs that already pass `|<status>` will fail loudly even on a single
-unescaped `|`.
+parser: every unescaped `|` adds a field, so multi-pipe input overshoots the
+field-count gate and fails before any record is written. The empty-field gate
+fires on a different shape — a single bare middle pipe like
+`key|title||desc`. Either way, the silent failure mode is specifically the
+single-pipe / no-explicit-status case. Specs that already pass `|<status>`
+fail loudly even on a single unescaped `|`.
 
 Spec shape (status optional, defaults to `todo`):
 
