@@ -2,6 +2,28 @@
 
 All notable changes to Trekoon are documented in this file.
 
+## 0.4.7
+
+### Changed
+
+- Document compact-spec temp-key flat-namespace rule across
+  `.agents/skills/trekoon/reference/planning.md`, `EPIC_HELP`,
+  `docs/quickstart.md`, and `docs/commands.md` so agents stop tripping the
+  cross-namespace duplicate-temp-key validator on `epic create` /
+  `epic expand`. Temp keys in `--task` and `--subtask` share one flat
+  namespace per command; prefix subtask keys with the parent task key.
+- Document the compact-spec pipe-escape rule across the same surfaces. Bare
+  `|` inside field values is a field separator and silently corrupts records
+  (shell pipes and `||` fallbacks in Verify lines push trailing text into the
+  status slot); literal `|` must be escaped as `\|` or rephrased.
+
+### Fixed
+
+- Duplicate-temp-key error from `epic create` / `epic expand` now includes
+  remediation guidance (flat namespace, prefix subtask temp keys with the
+  parent task key, example temp-key shape). Covers both the create and expand
+  emission sites in `src/commands/epic.ts`.
+
 ## 0.4.6
 
 ### Added
