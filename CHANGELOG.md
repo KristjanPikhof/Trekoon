@@ -6,28 +6,24 @@ All notable changes to Trekoon are documented in this file.
 
 ### Fixed
 
-- `epic create` and `epic expand` previously rejected duplicate temp keys
-  with a bare `Duplicate temp key 'X' across --task and --subtask specs.`
-  message, leaving agents to rediscover the cause. The message now spells out
-  the rule and the remediation: temp keys share one flat namespace per
-  `epic create` / `epic expand` call, and subtask temp keys should be
-  prefixed with the parent task key (e.g. `sub-<task-key>-tests`) to
-  disambiguate. Covers both emission sites in `src/commands/epic.ts`.
+- Duplicate-temp-key errors from `epic create` and `epic expand` now name the
+  rule and the fix. The old `Duplicate temp key 'X' across --task and
+  --subtask specs.` is replaced with a message that tells agents temp keys
+  share one flat namespace per call, and that subtask keys should be prefixed
+  with the parent task key (e.g. `sub-<task-key>-tests`).
 
 ### Changed
 
-- Document the temp-key flat-namespace rule across
-  `.agents/skills/trekoon/reference/planning.md`, `EPIC_HELP`,
-  `docs/quickstart.md`, and `docs/commands.md`. Temp keys in `--task` and
-  `--subtask` share one flat namespace per command; prefix subtask keys with
-  the parent task key.
-- Document the compact-spec pipe-escape rule across the same surfaces. Bare
-  `|` inside field values is a field separator and silently corrupts records
-  when the spec omits an explicit `|<status>` field — a single shell pipe in
-  a Verify line pushes trailing text into the status slot, creation succeeds,
-  and the bad status only surfaces on the next update. Multi-pipe constructs
-  like `||` fall over loudly on the field-count check. Literal `|` must be
-  escaped as `\|` or rephrased.
+- Document the temp-key flat-namespace rule in `EPIC_HELP`, the planning
+  skill, `docs/quickstart.md`, and `docs/commands.md`. `--task` and
+  `--subtask` keys share one namespace per `epic create` or `epic expand`
+  call; prefix subtask keys with the parent task key.
+- Document the compact-spec pipe-escape rule on the same surfaces. A bare
+  `|` inside a field value is a field separator. On a spec that omits
+  `|<status>`, a single unescaped `|` (for example a shell pipe in a Verify
+  line) silently pushes trailing text into the status slot, and the bad
+  status only surfaces on the next update. `||` and other multi-pipe input
+  is caught loudly by the field-count check. Escape literal `|` as `\|`.
 
 ## 0.4.6
 
