@@ -4,14 +4,23 @@ All notable changes to Trekoon are documented in this file.
 
 ## 0.4.7
 
+### Fixed
+
+- `epic create` and `epic expand` previously rejected duplicate temp keys
+  with a bare `Duplicate temp key 'X' across --task and --subtask specs.`
+  message, leaving agents to rediscover the cause. The message now spells out
+  the rule and the remediation: temp keys share one flat namespace per
+  `epic create` / `epic expand` call, and subtask temp keys should be
+  prefixed with the parent task key (e.g. `sub-<task-key>-tests`) to
+  disambiguate. Covers both emission sites in `src/commands/epic.ts`.
+
 ### Changed
 
-- Document compact-spec temp-key flat-namespace rule across
+- Document the temp-key flat-namespace rule across
   `.agents/skills/trekoon/reference/planning.md`, `EPIC_HELP`,
-  `docs/quickstart.md`, and `docs/commands.md` so agents stop tripping the
-  cross-namespace duplicate-temp-key validator on `epic create` /
-  `epic expand`. Temp keys in `--task` and `--subtask` share one flat
-  namespace per command; prefix subtask keys with the parent task key.
+  `docs/quickstart.md`, and `docs/commands.md`. Temp keys in `--task` and
+  `--subtask` share one flat namespace per command; prefix subtask keys with
+  the parent task key.
 - Document the compact-spec pipe-escape rule across the same surfaces. Bare
   `|` inside field values is a field separator and silently corrupts records
   when the spec omits an explicit `|<status>` field — a single shell pipe in
@@ -19,13 +28,6 @@ All notable changes to Trekoon are documented in this file.
   and the bad status only surfaces on the next update. Multi-pipe constructs
   like `||` fall over loudly on the field-count check. Literal `|` must be
   escaped as `\|` or rephrased.
-
-### Fixed
-
-- Duplicate-temp-key error from `epic create` / `epic expand` now includes
-  remediation guidance (flat namespace, prefix subtask temp keys with the
-  parent task key, example temp-key shape). Covers both the create and expand
-  emission sites in `src/commands/epic.ts`.
 
 ## 0.4.6
 
