@@ -106,6 +106,9 @@ continue broader epic execution only when it matches the user intent.
   current state.
 - Append progress, verification, and blocker notes with `--append`; do not
   rewrite descriptions unless fixing the plan itself.
+- Compact specs are pipe-split. Before any `--task`/`--subtask`/`--dep`,
+  rephrase or escape bare `|` (especially `||` and trailing `|`) as `\|`.
+  See `reference/planning.md` "CAUTION — bare-pipe footguns".
 - Preview search/replace before `--apply`.
 - Never edit `.trekoon/trekoon.db` directly. Keep `.trekoon` gitignored.
 - Never run `trekoon wipe --yes --toon` unless the user explicitly asks.
