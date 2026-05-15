@@ -140,14 +140,21 @@ created. Prefer prose over exact regex in descriptions. Rephrase operators
 like `!=` as words to avoid escaping confusion.
 
 Bare `|` inside field values is a field separator and will silently corrupt
-records. Shell pipes (`cmd a | cmd b`) and `||` fallbacks in Verify lines must
-be escaped as `\|` or rephrased. The parser does not validate the resulting
-status field, so an unescaped `|` in a description silently pushes text into
-the status slot and the record looks fine until the status machine rejects an
-update. Concrete failure: a Verify line that reads
-`Verify: bun test foo | tail -20` splits into fields, `tail -20` becomes the
-status field, and creation succeeds; the bad status only surfaces on the next
-status transition.
+records when the spec omits an explicit `|<status>` field. A single shell
+pipe (`cmd a | cmd b`) in a Verify line on a 3-field task spec or 4-field
+subtask spec (epic create/expand) splits into one extra field, and the parser
+treats that trailing fragment as the status — but does not validate it.
+Creation succeeds and the record only breaks on the next status transition.
+Concrete failure: `--task "task-x|API|Verify: bun test foo | tail -20"`
+splits to `[task-x, API, "Verify: bun test foo ", " tail -20"]`; ` tail -20`
+becomes the status, and the bad status only surfaces on the next update.
+
+Escape literal `|` as `\|` or rephrase to avoid the character. `||` fallbacks
+(`cmd a || cmd b`) and other multi-pipe constructs are caught loudly by the
+parser (extra empty/extra fields → field-count or empty-field error), so the
+silent failure mode is specifically the single-pipe / no-explicit-status
+case. Specs that already pass `|<status>` will fail loudly even on a single
+unescaped `|`.
 
 Spec shape (status optional, defaults to `todo`):
 
