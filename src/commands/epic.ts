@@ -567,7 +567,7 @@ function parseExpandSubtaskSpecs(rawSpecs: readonly string[]): { specs: CompactS
     if (parsed.fields.length !== 4 && parsed.fields.length !== 5) {
       return {
         specs: [],
-        error: failBatchSpec("epic.expand", `Subtask specs must use <parent-ref>|<temp-key>|<title>|<description> or <parent-ref>|<temp-key>|<title>|<description>|<status> in --subtask spec ${index + 1}.`, {
+        error: failBatchSpec("epic.expand", `Subtask specs must use <parent-ref>|<temp-key>|<title>|<description> or <parent-ref>|<temp-key>|<title>|<description>|<status> in --subtask spec ${index + 1}. ${describeCompactPipeIssue(rawSpec)}`, {
           option: "subtask",
           index,
           rawSpec,
