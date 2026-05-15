@@ -6,24 +6,23 @@ All notable changes to Trekoon are documented in this file.
 
 ### Fixed
 
-- Duplicate-temp-key errors from `epic create` and `epic expand` now name the
-  rule and the fix. The old `Duplicate temp key 'X' across --task and
-  --subtask specs.` is replaced with a message that tells agents temp keys
-  share one flat namespace per call, and that subtask keys should be prefixed
-  with the parent task key (e.g. `sub-<task-key>-tests`).
+- Duplicate-temp-key errors from `epic create` and `epic expand` now include
+  the rule and a fix. The bare `Duplicate temp key 'X' across --task and
+  --subtask specs.` gains flat-namespace context and a `sub-<task-key>-tests`
+  example.
 
 ### Changed
 
 - Document the temp-key flat-namespace rule in `EPIC_HELP`, the planning
-  skill, `docs/quickstart.md`, and `docs/commands.md`. `--task` and
+  reference, `docs/quickstart.md`, and `docs/commands.md`. `--task` and
   `--subtask` keys share one namespace per `epic create` or `epic expand`
-  call; prefix subtask keys with the parent task key.
+  call.
 - Document the compact-spec pipe-escape rule on the same surfaces. A bare
-  `|` inside a field value is a field separator. On a spec that omits
-  `|<status>`, a single unescaped `|` (for example a shell pipe in a Verify
-  line) silently pushes trailing text into the status slot, and the bad
-  status only surfaces on the next update. `||` and other multi-pipe input
-  is caught loudly by the field-count check. Escape literal `|` as `\|`.
+  `|` in a field value is a field separator. On a spec without `|<status>`,
+  a single unescaped `|` (for example a shell pipe in a verify line)
+  silently pushes trailing text into the status slot, and the bad status
+  only surfaces on the next update. `||` and other multi-pipe input fails
+  loudly on the field-count check. Escape literal `|` as `\|`.
 
 ## 0.4.6
 
