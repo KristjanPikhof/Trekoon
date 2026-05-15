@@ -115,3 +115,28 @@ trekoon --toon task done <task-id>
 
 `task done` auto-walks `todo` or `blocked` through `in_progress`. For subtasks,
 move through `in_progress` (claim or status) before `done`.
+
+## Compact Spec Hazards
+
+Any batch creation command (`epic create`, `epic expand`, `task create-many`,
+`subtask create-many`, `dep add-many`) splits `--task`/`--subtask`/`--dep`
+values on raw `|`. Three recurring footguns — applies in plan and execute
+modes (e.g. mid-execution `epic expand`):
+
+1. **Single mid-value `|`** with no explicit `|<status>` field: trailing
+   text silently lands in the status slot. Creation succeeds, fails on next
+   transition.
+2. **`||`** (JS logical-OR, shell OR): adds two extra fields per occurrence,
+   overshoots the field-count gate. Rephrase as "or" or escape as `\|\|`.
+3. **Trailing `|`** is not a terminator: creates an empty final field; on a
+   4-field subtask shape that becomes an empty description and the parser
+   rejects with "is missing a description".
+
+Escape literal `|` as `\|`. Pre-flight specs:
+
+```bash
+grep -nE '(^|[^\\])\|\||\|$' specs.txt
+```
+
+Full rules and the silent/loud failure matrix live in
+`reference/planning.md` "CAUTION — bare-pipe footguns".
