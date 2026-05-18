@@ -1,1 +1,0 @@
-- Replace long planning compact-spec hazard examples with a dense failure table plus one canonical example.
