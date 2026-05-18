@@ -10,6 +10,7 @@ Trekoon is source of truth for plans, readiness, owners, blockers, progress, ver
 ## Modes
 
 - `trekoon plan <goal>`: create execution-ready epic.
+- `trekoon brainstorm: <topic>` / `trekoon brainstorming: <topic>`: design only; create no Trekoon items until user accepts.
 - `trekoon <id>`: orient on epic/task/subtask; report state, blockers, ready work, next.
 - `trekoon <id> execute`: execute until epic done, rest blocked with reasons, or real user input required; delegate independent work by default.
 - `trekoon <id> team execute`: same with Claude Agent Teams only when explicitly requested/supported.
@@ -21,6 +22,7 @@ Do not stop at analysis while ready work exists or invent non-Trekoon parallel p
 | Situation | Load |
 |---|---|
 | Any Trekoon request | this file |
+| Explicit `brainstorm:` / `brainstorming:` | `reference/brainstorming.md`; after accepted design, `reference/harness-primitives.md` + `reference/planning.md` |
 | Plan/design tracked work | `reference/harness-primitives.md` + `reference/planning.md` |
 | Execute/implement/complete | `reference/harness-primitives.md` + `reference/execution.md` |
 | Sync gaps/conflicts/storage | `reference/sync.md` |
@@ -47,6 +49,7 @@ For task/subtask IDs, scope `suggest`/`epic progress` to `parentEpicId`; execute
 |---|---|
 | ID only | Orient: `session --epic <epic-id>` or targeted show |
 | `status`, `progress`, `analyze`, `review`, `check` | Analyze: `epic progress`, targeted show, `suggest --epic` |
+| `trekoon brainstorm:`, `trekoon brainstorming:`, `/trekoon brainstorming:` | Brainstorm, then Plan only after accepted design |
 | `plan`, `break down`, `design`, `architect` | Plan |
 | `execute`, `implement`, `do`, `complete`, `start`, `run` | Execute |
 | `team execute`, `execute with team` | Team execute |
