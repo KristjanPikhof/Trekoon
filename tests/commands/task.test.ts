@@ -79,6 +79,53 @@ describe("task command", (): void => {
     expect(afterDelete.error?.code).toBe("not_found");
   });
 
+  test("accepts --desc as description alias for create and update", async (): Promise<void> => {
+    const cwd = createWorkspace();
+    const epicCreated = await runEpic({
+      cwd,
+      mode: "human",
+      args: ["create", "--title", "Roadmap", "--description", "desc"],
+    });
+    const epicId = (epicCreated.data as { epic: { id: string } }).epic.id;
+
+    const created = await runTask({
+      cwd,
+      mode: "toon",
+      args: ["create", "--epic", epicId, "--title", "Implement", "--desc", "build it"],
+    });
+    expect(created.ok).toBeTrue();
+    const taskId = (created.data as { task: { id: string; description: string } }).task.id;
+    expect((created.data as { task: { description: string } }).task.description).toBe("build it");
+
+    const updated = await runTask({
+      cwd,
+      mode: "toon",
+      args: ["update", taskId, "--desc", "ship it"],
+    });
+    expect(updated.ok).toBeTrue();
+    expect((updated.data as { task: { description: string } }).task.description).toBe("ship it");
+  });
+
+  test("rejects conflicting task description aliases", async (): Promise<void> => {
+    const cwd = createWorkspace();
+    const epicCreated = await runEpic({
+      cwd,
+      mode: "human",
+      args: ["create", "--title", "Roadmap", "--description", "desc"],
+    });
+    const epicId = (epicCreated.data as { epic: { id: string } }).epic.id;
+
+    const result = await runTask({
+      cwd,
+      mode: "toon",
+      args: ["create", "--epic", epicId, "--title", "Implement", "--description", "canonical", "--desc", "alias"],
+    });
+
+    expect(result.ok).toBeFalse();
+    expect(result.error?.code).toBe("invalid_input");
+    expect(result.human).toContain("Conflicting values for --description");
+  });
+
   test("create-many creates tasks in input order with compact mappings", async (): Promise<void> => {
     const cwd = createWorkspace();
     const epicCreated = await runEpic({

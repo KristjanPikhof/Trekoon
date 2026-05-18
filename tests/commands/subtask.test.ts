@@ -80,6 +80,39 @@ describe("subtask command", (): void => {
     expect(removed.ok).toBeTrue();
   });
 
+  test("accepts --desc as description alias for create and update", async (): Promise<void> => {
+    const cwd = createWorkspace();
+    const epicCreated = await runEpic({
+      cwd,
+      mode: "human",
+      args: ["create", "--title", "Roadmap", "--description", "desc"],
+    });
+    const epicId = (epicCreated.data as { epic: { id: string } }).epic.id;
+    const taskCreated = await runTask({
+      cwd,
+      mode: "human",
+      args: ["create", "--epic", epicId, "--title", "Implement", "--description", "task desc"],
+    });
+    const taskId = (taskCreated.data as { task: { id: string } }).task.id;
+
+    const created = await runSubtask({
+      cwd,
+      mode: "toon",
+      args: ["create", "--task", taskId, "--title", "A subtask", "--desc", "first desc"],
+    });
+    expect(created.ok).toBeTrue();
+    const subtaskId = (created.data as { subtask: { id: string; description: string } }).subtask.id;
+    expect((created.data as { subtask: { description: string } }).subtask.description).toBe("first desc");
+
+    const updated = await runSubtask({
+      cwd,
+      mode: "toon",
+      args: ["update", subtaskId, "--desc", "next desc"],
+    });
+    expect(updated.ok).toBeTrue();
+    expect((updated.data as { subtask: { description: string } }).subtask.description).toBe("next desc");
+  });
+
   test("create-many creates subtasks in input order with compact mappings", async (): Promise<void> => {
     const cwd = createWorkspace();
     const epicCreated = await runEpic({

@@ -167,6 +167,21 @@ function resolveEpicExpandEntityRef(
   }
 
   const id = assertNonEmptyLocal(field === "parent" ? "taskId" : `${field}Id`, reference.id);
+  const unprefixedTempKey = mappings.find((candidate) => candidate.tempKey === id);
+  if (unprefixedTempKey !== undefined) {
+    throw new DomainError({
+      code: "invalid_input",
+      message: `Unprefixed temp key '${id}' in --${option} spec ${index + 1} ${field} ref matches a same-command ${unprefixedTempKey.kind} temp key. Use @${id} instead.`,
+      details: {
+        index,
+        field,
+        option,
+        tempKey: id,
+        suggestedRef: `@${id}`,
+        matchedKind: unprefixedTempKey.kind,
+      },
+    });
+  }
   return { id, kind: resolveNodeKindLocal(id, reader) };
 }
 

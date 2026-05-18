@@ -5,6 +5,8 @@ import {
   findUnknownOption,
   hasFlag,
   isValidCompactTempKey,
+  normalizeOptionAliases,
+  type OptionAliasConflict,
   parseArgs,
   parseCompactFields,
   parseCsvEnumOption,
@@ -51,6 +53,7 @@ const CREATE_MANY_OPTIONS = ["epic", "e", "task"] as const;
 const UPDATE_OPTIONS = ["all", "ids", "append", "description", "d", "status", "s", "title", "t", "owner"] as const;
 const CLAIM_OPTIONS = ["owner"] as const;
 const STATUS_CASCADE_UPDATE_STATUSES = ["done", "todo"] as const;
+const DESCRIPTION_OPTION_ALIASES = [{ canonical: "description", aliases: ["desc"] }] as const;
 
 function parseIdsOption(rawIds: string | undefined): string[] {
   if (rawIds === undefined) {
@@ -81,6 +84,23 @@ function unknownOption(command: string, option: string, allowedOptions: readonly
     error: {
       code: "unknown_option",
       message: `Unknown option --${option}`,
+    },
+  });
+}
+
+function optionAliasConflict(command: string, conflict: OptionAliasConflict): CliResult {
+  const options = conflict.keys.map((key) => `--${key}`);
+  return failResult({
+    command,
+    human: `Conflicting values for --${conflict.canonical}: ${options.join(" and ")}. Use only --${conflict.canonical}.`,
+    data: {
+      code: "invalid_input",
+      canonicalOption: `--${conflict.canonical}`,
+      conflictingOptions: options,
+    },
+    error: {
+      code: "invalid_input",
+      message: `Conflicting values for --${conflict.canonical}`,
     },
   });
 }
@@ -471,28 +491,33 @@ export async function runTask(context: CliContext): Promise<CliResult> {
 
     switch (subcommand) {
       case "create": {
-        const createUnknownOption = findUnknownOption(parsed, CREATE_OPTIONS);
+        const normalized = normalizeOptionAliases(parsed, DESCRIPTION_OPTION_ALIASES);
+        if (normalized.conflict !== undefined) {
+          return optionAliasConflict("task.create", normalized.conflict);
+        }
+        const commandParsed = normalized.parsed;
+        const createUnknownOption = findUnknownOption(commandParsed, CREATE_OPTIONS);
         if (createUnknownOption !== undefined) {
           return unknownOption("task.create", createUnknownOption, CREATE_OPTIONS);
         }
 
-        const unexpectedCreatePositionals = readUnexpectedPositionals(parsed, 1);
+        const unexpectedCreatePositionals = readUnexpectedPositionals(commandParsed, 1);
         if (unexpectedCreatePositionals.length > 0) {
           return failUnexpectedPositionals("task.create", unexpectedCreatePositionals);
         }
 
         const missingCreateOption =
-          readMissingOptionValue(parsed.missingOptionValues, "epic", "e") ??
-          readMissingOptionValue(parsed.missingOptionValues, "description", "d") ??
-          readMissingOptionValue(parsed.missingOptionValues, "status", "s");
+          readMissingOptionValue(commandParsed.missingOptionValues, "epic", "e") ??
+          readMissingOptionValue(commandParsed.missingOptionValues, "description", "d") ??
+          readMissingOptionValue(commandParsed.missingOptionValues, "status", "s");
         if (missingCreateOption !== undefined) {
           return failMissingOptionValue("task.create", missingCreateOption);
         }
 
-        const epicId: string | undefined = readOption(parsed.options, "epic", "e");
-        const title: string | undefined = readOption(parsed.options, "title", "t");
-        const description: string | undefined = readOption(parsed.options, "description", "d");
-        const status: string | undefined = readOption(parsed.options, "status", "s");
+        const epicId: string | undefined = readOption(commandParsed.options, "epic", "e");
+        const title: string | undefined = readOption(commandParsed.options, "title", "t");
+        const description: string | undefined = readOption(commandParsed.options, "description", "d");
+        const status: string | undefined = readOption(commandParsed.options, "status", "s");
         const task = mutations.createTask({
           epicId: epicId ?? "",
           title: title ?? "",
@@ -1064,35 +1089,40 @@ export async function runTask(context: CliContext): Promise<CliResult> {
         });
       }
       case "update": {
-        const updateUnknownOption = findUnknownOption(parsed, UPDATE_OPTIONS);
+        const normalized = normalizeOptionAliases(parsed, DESCRIPTION_OPTION_ALIASES);
+        if (normalized.conflict !== undefined) {
+          return optionAliasConflict("task.update", normalized.conflict);
+        }
+        const commandParsed = normalized.parsed;
+        const updateUnknownOption = findUnknownOption(commandParsed, UPDATE_OPTIONS);
         if (updateUnknownOption !== undefined) {
           return unknownOption("task.update", updateUnknownOption, UPDATE_OPTIONS);
         }
 
-        const unexpectedUpdatePositionals = readUnexpectedPositionals(parsed, 2);
+        const unexpectedUpdatePositionals = readUnexpectedPositionals(commandParsed, 2);
         if (unexpectedUpdatePositionals.length > 0) {
           return failUnexpectedPositionals("task.update", unexpectedUpdatePositionals);
         }
 
         const missingUpdateOption =
-          readMissingOptionValue(parsed.missingOptionValues, "ids") ??
-          readMissingOptionValue(parsed.missingOptionValues, "append") ??
-          readMissingOptionValue(parsed.missingOptionValues, "description", "d") ??
-          readMissingOptionValue(parsed.missingOptionValues, "status", "s") ??
-          readMissingOptionValue(parsed.missingOptionValues, "owner");
+          readMissingOptionValue(commandParsed.missingOptionValues, "ids") ??
+          readMissingOptionValue(commandParsed.missingOptionValues, "append") ??
+          readMissingOptionValue(commandParsed.missingOptionValues, "description", "d") ??
+          readMissingOptionValue(commandParsed.missingOptionValues, "status", "s") ??
+          readMissingOptionValue(commandParsed.missingOptionValues, "owner");
         if (missingUpdateOption !== undefined) {
           return failMissingOptionValue("task.update", missingUpdateOption);
         }
 
-        const taskId: string = parsed.positional[1] ?? "";
-        const updateAll: boolean = hasFlag(parsed.flags, "all");
-        const rawIds: string | undefined = readOption(parsed.options, "ids");
+        const taskId: string = commandParsed.positional[1] ?? "";
+        const updateAll: boolean = hasFlag(commandParsed.flags, "all");
+        const rawIds: string | undefined = readOption(commandParsed.options, "ids");
         const ids = parseIdsOption(rawIds);
-        const title: string | undefined = readOption(parsed.options, "title", "t");
-        const description: string | undefined = readOption(parsed.options, "description", "d");
-        const append: string | undefined = readOption(parsed.options, "append");
-        const status: string | undefined = readOption(parsed.options, "status", "s");
-        const owner: string | undefined = readOption(parsed.options, "owner");
+        const title: string | undefined = readOption(commandParsed.options, "title", "t");
+        const description: string | undefined = readOption(commandParsed.options, "description", "d");
+        const append: string | undefined = readOption(commandParsed.options, "append");
+        const status: string | undefined = readOption(commandParsed.options, "status", "s");
+        const owner: string | undefined = readOption(commandParsed.options, "owner");
 
         if (updateAll && ids.length > 0) {
           return failResult({

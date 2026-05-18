@@ -1,6 +1,7 @@
 import {
   findUnknownOption,
   isValidCompactTempKey,
+  normalizeOptionAliases,
   parseArgs,
   parseCompactEntityRef,
   parseCompactFields,
@@ -31,6 +32,11 @@ function failFromError(error: unknown): CliResult {
 }
 
 const ADD_MANY_OPTIONS = ["dep"] as const;
+const DEPENDENCY_OPTION_ALIASES = [{
+  canonical: "dep",
+  aliases: ["deps", "dependency", "dependencies", "dependancy", "dependancies"],
+  multiple: true,
+}] as const;
 
 function unknownOption(command: string, option: string, allowedOptions: readonly string[]): CliResult {
   const suggestions = suggestOptions(option, allowedOptions).map((suggestion) => `--${suggestion}`);
@@ -185,22 +191,23 @@ export async function runDep(context: CliContext): Promise<CliResult> {
         });
       }
       case "add-many": {
-        const addManyUnknownOption = findUnknownOption(parsed, ADD_MANY_OPTIONS);
+        const commandParsed = normalizeOptionAliases(parsed, DEPENDENCY_OPTION_ALIASES).parsed;
+        const addManyUnknownOption = findUnknownOption(commandParsed, ADD_MANY_OPTIONS);
         if (addManyUnknownOption !== undefined) {
           return unknownOption("dep.add-many", addManyUnknownOption, ADD_MANY_OPTIONS);
         }
 
-        const missingAddManyOption = readMissingOptionValue(parsed.missingOptionValues, "dep");
+        const missingAddManyOption = readMissingOptionValue(commandParsed.missingOptionValues, "dep");
         if (missingAddManyOption !== undefined) {
           return failMissingOptionValue("dep.add-many", missingAddManyOption);
         }
 
-        const unexpectedPositionals = readUnexpectedPositionals(parsed, 1);
+        const unexpectedPositionals = readUnexpectedPositionals(commandParsed, 1);
         if (unexpectedPositionals.length > 0) {
           return failUnexpectedPositionals("dep.add-many", unexpectedPositionals);
         }
 
-        const rawSpecs = readOptions(parsed.optionEntries, "dep");
+        const rawSpecs = readOptions(commandParsed.optionEntries, "dep");
         if (rawSpecs.length === 0) {
           return failBatchSpec("dep.add-many", "Provide at least one --dep spec.", {
             option: "dep",

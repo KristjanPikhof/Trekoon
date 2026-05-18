@@ -5,6 +5,8 @@ import {
   findUnknownOption,
   hasFlag,
   isValidCompactTempKey,
+  normalizeOptionAliases,
+  type OptionAliasConflict,
   parseArgs,
   parseCompactEntityRef,
   parseCompactFields,
@@ -62,6 +64,15 @@ const EXPAND_OPTIONS = ["task", "subtask", "dep"] as const;
 const UPDATE_OPTIONS = ["all", "ids", "append", "description", "d", "status", "s", "title", "t"] as const;
 const EXPORT_OPTIONS = ["path", "overwrite"] as const;
 const STATUS_CASCADE_UPDATE_STATUSES = ["done", "todo"] as const;
+const DESCRIPTION_OPTION_ALIASES = [{ canonical: "description", aliases: ["desc"] }] as const;
+const DEPENDENCY_OPTION_ALIASES = [{
+  canonical: "dep",
+  aliases: ["deps", "dependency", "dependencies", "dependancy", "dependancies"],
+  multiple: true,
+}] as const;
+const CREATE_OPTION_ALIASES = [...DESCRIPTION_OPTION_ALIASES, ...DEPENDENCY_OPTION_ALIASES] as const;
+const EXPAND_OPTION_ALIASES = DEPENDENCY_OPTION_ALIASES;
+const UPDATE_OPTION_ALIASES = DESCRIPTION_OPTION_ALIASES;
 
 function parseStatusCsv(rawStatuses: string | undefined): string[] | undefined {
   if (rawStatuses === undefined) {
@@ -92,6 +103,23 @@ function unknownOption(command: string, option: string, allowedOptions: readonly
     error: {
       code: "unknown_option",
       message: `Unknown option --${option}`,
+    },
+  });
+}
+
+function optionAliasConflict(command: string, conflict: OptionAliasConflict): CliResult {
+  const options = conflict.keys.map((key) => `--${key}`);
+  return failResult({
+    command,
+    human: `Conflicting values for --${conflict.canonical}: ${options.join(" and ")}. Use only --${conflict.canonical}.`,
+    data: {
+      code: "invalid_input",
+      canonicalOption: `--${conflict.canonical}`,
+      conflictingOptions: options,
+    },
+    error: {
+      code: "invalid_input",
+      message: `Conflicting values for --${conflict.canonical}`,
     },
   });
 }
@@ -724,32 +752,37 @@ export async function runEpic(context: CliContext): Promise<CliResult> {
 
     switch (subcommand) {
       case "create": {
-      const missingCreateOption =
-          readMissingOptionValue(parsed.missingOptionValues, "title", "t") ??
-          readMissingOptionValue(parsed.missingOptionValues, "status", "s") ??
-          readMissingOptionValue(parsed.missingOptionValues, "description", "d") ??
-          readMissingOptionValue(parsed.missingOptionValues, "task", "subtask", "dep");
+        const normalized = normalizeOptionAliases(parsed, CREATE_OPTION_ALIASES);
+        if (normalized.conflict !== undefined) {
+          return optionAliasConflict("epic.create", normalized.conflict);
+        }
+        const commandParsed = normalized.parsed;
+        const missingCreateOption =
+          readMissingOptionValue(commandParsed.missingOptionValues, "title", "t") ??
+          readMissingOptionValue(commandParsed.missingOptionValues, "status", "s") ??
+          readMissingOptionValue(commandParsed.missingOptionValues, "description", "d") ??
+          readMissingOptionValue(commandParsed.missingOptionValues, "task", "subtask", "dep");
         if (missingCreateOption !== undefined) {
           return failMissingOptionValue("epic.create", missingCreateOption);
         }
 
-        const createUnknownOption = findUnknownOption(parsed, CREATE_OPTIONS);
+        const createUnknownOption = findUnknownOption(commandParsed, CREATE_OPTIONS);
         if (createUnknownOption !== undefined) {
           return unknownOption("epic.create", createUnknownOption, CREATE_OPTIONS);
         }
 
-        const unexpectedPositionals = readUnexpectedPositionals(parsed, 1);
+        const unexpectedPositionals = readUnexpectedPositionals(commandParsed, 1);
         if (unexpectedPositionals.length > 0) {
           return failUnexpectedPositionals("epic.create", unexpectedPositionals);
         }
 
-        const title: string | undefined = readOption(parsed.options, "title", "t");
-        const description: string | undefined = readOption(parsed.options, "description", "d");
-        const status: string | undefined = readOption(parsed.options, "status", "s");
+        const title: string | undefined = readOption(commandParsed.options, "title", "t");
+        const description: string | undefined = readOption(commandParsed.options, "description", "d");
+        const status: string | undefined = readOption(commandParsed.options, "status", "s");
 
-        const taskSpecs = readOptions(parsed.optionEntries, "task");
-        const subtaskSpecs = readOptions(parsed.optionEntries, "subtask");
-        const dependencySpecs = readOptions(parsed.optionEntries, "dep");
+        const taskSpecs = readOptions(commandParsed.optionEntries, "task");
+        const subtaskSpecs = readOptions(commandParsed.optionEntries, "subtask");
+        const dependencySpecs = readOptions(commandParsed.optionEntries, "dep");
 
         if (taskSpecs.length === 0 && subtaskSpecs.length === 0 && dependencySpecs.length === 0) {
           const epic = mutations.createEpic({
@@ -809,31 +842,33 @@ export async function runEpic(context: CliContext): Promise<CliResult> {
         });
       }
       case "expand": {
-        const expandUnknownOption = findUnknownOption(parsed, EXPAND_OPTIONS);
+        const normalized = normalizeOptionAliases(parsed, EXPAND_OPTION_ALIASES);
+        const commandParsed = normalized.parsed;
+        const expandUnknownOption = findUnknownOption(commandParsed, EXPAND_OPTIONS);
         if (expandUnknownOption !== undefined) {
           return unknownOption("epic.expand", expandUnknownOption, EXPAND_OPTIONS);
         }
 
-        const missingExpandOption = readMissingOptionValue(parsed.missingOptionValues, "task", "subtask", "dep");
+        const missingExpandOption = readMissingOptionValue(commandParsed.missingOptionValues, "task", "subtask", "dep");
         if (missingExpandOption !== undefined) {
           return failMissingOptionValue("epic.expand", missingExpandOption);
         }
 
-        const unexpectedPositionals = readUnexpectedPositionals(parsed, 2);
+        const unexpectedPositionals = readUnexpectedPositionals(commandParsed, 2);
         if (unexpectedPositionals.length > 0) {
           return failUnexpectedPositionals("epic.expand", unexpectedPositionals);
         }
 
-        const epicId: string = parsed.positional[1] ?? "";
+        const epicId: string = commandParsed.positional[1] ?? "";
         if (epicId.trim().length === 0) {
           return failBatchSpec("epic.expand", "Provide an epic id for epic expand.", {
             id: epicId,
           });
         }
 
-        const taskSpecs = readOptions(parsed.optionEntries, "task");
-        const subtaskSpecs = readOptions(parsed.optionEntries, "subtask");
-        const dependencySpecs = readOptions(parsed.optionEntries, "dep");
+        const taskSpecs = readOptions(commandParsed.optionEntries, "task");
+        const subtaskSpecs = readOptions(commandParsed.optionEntries, "subtask");
+        const dependencySpecs = readOptions(commandParsed.optionEntries, "dep");
         if (taskSpecs.length === 0 && subtaskSpecs.length === 0 && dependencySpecs.length === 0) {
           return failBatchSpec("epic.expand", "Provide at least one --task, --subtask, or --dep spec.", {});
         }
@@ -1243,33 +1278,38 @@ export async function runEpic(context: CliContext): Promise<CliResult> {
         });
       }
       case "update": {
-        const updateUnknownOption = findUnknownOption(parsed, UPDATE_OPTIONS);
+        const normalized = normalizeOptionAliases(parsed, UPDATE_OPTION_ALIASES);
+        if (normalized.conflict !== undefined) {
+          return optionAliasConflict("epic.update", normalized.conflict);
+        }
+        const commandParsed = normalized.parsed;
+        const updateUnknownOption = findUnknownOption(commandParsed, UPDATE_OPTIONS);
         if (updateUnknownOption !== undefined) {
           return unknownOption("epic.update", updateUnknownOption, UPDATE_OPTIONS);
         }
 
-        const unexpectedUpdatePositionals = readUnexpectedPositionals(parsed, 2);
+        const unexpectedUpdatePositionals = readUnexpectedPositionals(commandParsed, 2);
         if (unexpectedUpdatePositionals.length > 0) {
           return failUnexpectedPositionals("epic.update", unexpectedUpdatePositionals);
         }
 
         const missingUpdateOption =
-          readMissingOptionValue(parsed.missingOptionValues, "ids") ??
-          readMissingOptionValue(parsed.missingOptionValues, "append") ??
-          readMissingOptionValue(parsed.missingOptionValues, "description", "d") ??
-          readMissingOptionValue(parsed.missingOptionValues, "status", "s");
+          readMissingOptionValue(commandParsed.missingOptionValues, "ids") ??
+          readMissingOptionValue(commandParsed.missingOptionValues, "append") ??
+          readMissingOptionValue(commandParsed.missingOptionValues, "description", "d") ??
+          readMissingOptionValue(commandParsed.missingOptionValues, "status", "s");
         if (missingUpdateOption !== undefined) {
           return failMissingOptionValue("epic.update", missingUpdateOption);
         }
 
-        const epicId: string = parsed.positional[1] ?? "";
-        const updateAll: boolean = hasFlag(parsed.flags, "all");
-        const rawIds: string | undefined = readOption(parsed.options, "ids");
+        const epicId: string = commandParsed.positional[1] ?? "";
+        const updateAll: boolean = hasFlag(commandParsed.flags, "all");
+        const rawIds: string | undefined = readOption(commandParsed.options, "ids");
         const ids = parseIdsOption(rawIds);
-        const title: string | undefined = readOption(parsed.options, "title", "t");
-        const description: string | undefined = readOption(parsed.options, "description", "d");
-        const append: string | undefined = readOption(parsed.options, "append");
-        const status: string | undefined = readOption(parsed.options, "status", "s");
+        const title: string | undefined = readOption(commandParsed.options, "title", "t");
+        const description: string | undefined = readOption(commandParsed.options, "description", "d");
+        const append: string | undefined = readOption(commandParsed.options, "append");
+        const status: string | undefined = readOption(commandParsed.options, "status", "s");
 
         if (updateAll && ids.length > 0) {
           return failResult({

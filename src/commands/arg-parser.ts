@@ -20,6 +20,22 @@ export interface ParsedOptionEntry {
   readonly value: string;
 }
 
+export interface OptionAliasDefinition {
+  readonly canonical: string;
+  readonly aliases: readonly string[];
+  readonly multiple?: boolean;
+}
+
+export interface OptionAliasConflict {
+  readonly canonical: string;
+  readonly keys: readonly string[];
+}
+
+export interface NormalizedParsedArgsResult {
+  readonly parsed: ParsedArgs;
+  readonly conflict?: OptionAliasConflict;
+}
+
 export const SEARCH_REPLACE_FIELDS = ["title", "description"] as const;
 
 export type SearchReplaceField = (typeof SEARCH_REPLACE_FIELDS)[number];
@@ -114,6 +130,60 @@ export function hasFlag(flags: ReadonlySet<string>, ...keys: string[]): boolean 
 export function readOptions(optionEntries: readonly ParsedOptionEntry[], ...keys: string[]): string[] {
   const allowedKeys = new Set<string>(keys);
   return optionEntries.filter((entry) => allowedKeys.has(entry.key)).map((entry) => entry.value);
+}
+
+export function normalizeOptionAliases(
+  parsed: ParsedArgs,
+  definitions: readonly OptionAliasDefinition[],
+): NormalizedParsedArgsResult {
+  const aliases = new Map<string, OptionAliasDefinition>();
+  for (const definition of definitions) {
+    aliases.set(definition.canonical, definition);
+    for (const alias of definition.aliases) {
+      aliases.set(alias, definition);
+    }
+  }
+
+  const rewriteKey = (key: string): string => aliases.get(key)?.canonical ?? key;
+  for (const definition of definitions) {
+    if (definition.multiple === true) {
+      continue;
+    }
+
+    const keys = parsed.optionEntries
+      .filter((entry) => rewriteKey(entry.key) === definition.canonical)
+      .map((entry) => entry.key);
+    const usesAlias = keys.some((key) => key !== definition.canonical);
+    if (keys.length > 1 && usesAlias) {
+      return {
+        parsed,
+        conflict: {
+          canonical: definition.canonical,
+          keys,
+        },
+      };
+    }
+  }
+
+  const optionEntries = parsed.optionEntries.map((entry) => ({
+    key: rewriteKey(entry.key),
+    value: entry.value,
+  }));
+  const options = new Map<string, string>();
+  for (const entry of optionEntries) {
+    options.set(entry.key, entry.value);
+  }
+
+  return {
+    parsed: {
+      positional: parsed.positional,
+      options,
+      optionEntries,
+      flags: new Set([...parsed.flags].map(rewriteKey)),
+      missingOptionValues: new Set([...parsed.missingOptionValues].map(rewriteKey)),
+      providedOptions: parsed.providedOptions.map(rewriteKey),
+    },
+  };
 }
 
 export function readMissingOptionValue(

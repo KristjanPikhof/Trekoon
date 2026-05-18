@@ -5,6 +5,8 @@ import {
   findUnknownOption,
   hasFlag,
   isValidCompactTempKey,
+  normalizeOptionAliases,
+  type OptionAliasConflict,
   parseArgs,
   parseCompactFields,
   parseCsvEnumOption,
@@ -43,6 +45,7 @@ const CREATE_MANY_OPTIONS = ["task", "t", "subtask"] as const;
 const UPDATE_OPTIONS = ["all", "ids", "append", "description", "d", "status", "s", "title", "owner"] as const;
 const CLAIM_OPTIONS = ["owner"] as const;
 const STATUS_CASCADE_UPDATE_STATUSES = ["done", "todo"] as const;
+const DESCRIPTION_OPTION_ALIASES = [{ canonical: "description", aliases: ["desc"] }] as const;
 
 function parseIdsOption(rawIds: string | undefined): string[] {
   if (rawIds === undefined) {
@@ -73,6 +76,23 @@ function unknownOption(command: string, option: string, allowedOptions: readonly
     error: {
       code: "unknown_option",
       message: `Unknown option --${option}`,
+    },
+  });
+}
+
+function optionAliasConflict(command: string, conflict: OptionAliasConflict): CliResult {
+  const options = conflict.keys.map((key) => `--${key}`);
+  return failResult({
+    command,
+    human: `Conflicting values for --${conflict.canonical}: ${options.join(" and ")}. Use only --${conflict.canonical}.`,
+    data: {
+      code: "invalid_input",
+      canonicalOption: `--${conflict.canonical}`,
+      conflictingOptions: options,
+    },
+    error: {
+      code: "invalid_input",
+      message: `Conflicting values for --${conflict.canonical}`,
     },
   });
 }
@@ -389,28 +409,33 @@ export async function runSubtask(context: CliContext): Promise<CliResult> {
 
     switch (subcommand) {
       case "create": {
-        const createUnknownOption = findUnknownOption(parsed, CREATE_OPTIONS);
+        const normalized = normalizeOptionAliases(parsed, DESCRIPTION_OPTION_ALIASES);
+        if (normalized.conflict !== undefined) {
+          return optionAliasConflict("subtask.create", normalized.conflict);
+        }
+        const commandParsed = normalized.parsed;
+        const createUnknownOption = findUnknownOption(commandParsed, CREATE_OPTIONS);
         if (createUnknownOption !== undefined) {
           return unknownOption("subtask.create", createUnknownOption, CREATE_OPTIONS);
         }
 
-        const unexpectedCreatePositionals = readUnexpectedPositionals(parsed, 3);
+        const unexpectedCreatePositionals = readUnexpectedPositionals(commandParsed, 3);
         if (unexpectedCreatePositionals.length > 0) {
           return failUnexpectedPositionals("subtask.create", unexpectedCreatePositionals);
         }
 
         const missingCreateOption =
-          readMissingOptionValue(parsed.missingOptionValues, "task", "t") ??
-          readMissingOptionValue(parsed.missingOptionValues, "description", "d") ??
-          readMissingOptionValue(parsed.missingOptionValues, "status", "s");
+          readMissingOptionValue(commandParsed.missingOptionValues, "task", "t") ??
+          readMissingOptionValue(commandParsed.missingOptionValues, "description", "d") ??
+          readMissingOptionValue(commandParsed.missingOptionValues, "status", "s");
         if (missingCreateOption !== undefined) {
           return failMissingOptionValue("subtask.create", missingCreateOption);
         }
 
-        const taskId: string | undefined = readOption(parsed.options, "task", "t") ?? parsed.positional[1];
-        const title: string | undefined = readOption(parsed.options, "title") ?? parsed.positional[2];
-        const description: string | undefined = readOption(parsed.options, "description", "d");
-        const status: string | undefined = readOption(parsed.options, "status", "s");
+        const taskId: string | undefined = readOption(commandParsed.options, "task", "t") ?? commandParsed.positional[1];
+        const title: string | undefined = readOption(commandParsed.options, "title") ?? commandParsed.positional[2];
+        const description: string | undefined = readOption(commandParsed.options, "description", "d");
+        const status: string | undefined = readOption(commandParsed.options, "status", "s");
         const subtask = mutations.createSubtask({
           taskId: taskId ?? "",
           title: title ?? "",
@@ -781,35 +806,40 @@ export async function runSubtask(context: CliContext): Promise<CliResult> {
         });
       }
       case "update": {
-        const updateUnknownOption = findUnknownOption(parsed, UPDATE_OPTIONS);
+        const normalized = normalizeOptionAliases(parsed, DESCRIPTION_OPTION_ALIASES);
+        if (normalized.conflict !== undefined) {
+          return optionAliasConflict("subtask.update", normalized.conflict);
+        }
+        const commandParsed = normalized.parsed;
+        const updateUnknownOption = findUnknownOption(commandParsed, UPDATE_OPTIONS);
         if (updateUnknownOption !== undefined) {
           return unknownOption("subtask.update", updateUnknownOption, UPDATE_OPTIONS);
         }
 
-        const unexpectedUpdatePositionals = readUnexpectedPositionals(parsed, 2);
+        const unexpectedUpdatePositionals = readUnexpectedPositionals(commandParsed, 2);
         if (unexpectedUpdatePositionals.length > 0) {
           return failUnexpectedPositionals("subtask.update", unexpectedUpdatePositionals);
         }
 
         const missingUpdateOption =
-          readMissingOptionValue(parsed.missingOptionValues, "ids") ??
-          readMissingOptionValue(parsed.missingOptionValues, "append") ??
-          readMissingOptionValue(parsed.missingOptionValues, "description", "d") ??
-          readMissingOptionValue(parsed.missingOptionValues, "status", "s") ??
-          readMissingOptionValue(parsed.missingOptionValues, "owner");
+          readMissingOptionValue(commandParsed.missingOptionValues, "ids") ??
+          readMissingOptionValue(commandParsed.missingOptionValues, "append") ??
+          readMissingOptionValue(commandParsed.missingOptionValues, "description", "d") ??
+          readMissingOptionValue(commandParsed.missingOptionValues, "status", "s") ??
+          readMissingOptionValue(commandParsed.missingOptionValues, "owner");
         if (missingUpdateOption !== undefined) {
           return failMissingOptionValue("subtask.update", missingUpdateOption);
         }
 
-        const subtaskId: string = parsed.positional[1] ?? "";
-        const updateAll: boolean = hasFlag(parsed.flags, "all");
-        const rawIds: string | undefined = readOption(parsed.options, "ids");
+        const subtaskId: string = commandParsed.positional[1] ?? "";
+        const updateAll: boolean = hasFlag(commandParsed.flags, "all");
+        const rawIds: string | undefined = readOption(commandParsed.options, "ids");
         const ids = parseIdsOption(rawIds);
-        const title: string | undefined = readOption(parsed.options, "title");
-        const description: string | undefined = readOption(parsed.options, "description", "d");
-        const append: string | undefined = readOption(parsed.options, "append");
-        const status: string | undefined = readOption(parsed.options, "status", "s");
-        const owner: string | undefined = readOption(parsed.options, "owner");
+        const title: string | undefined = readOption(commandParsed.options, "title");
+        const description: string | undefined = readOption(commandParsed.options, "description", "d");
+        const append: string | undefined = readOption(commandParsed.options, "append");
+        const status: string | undefined = readOption(commandParsed.options, "status", "s");
+        const owner: string | undefined = readOption(commandParsed.options, "owner");
 
         if (updateAll && ids.length > 0) {
           return failResult({
