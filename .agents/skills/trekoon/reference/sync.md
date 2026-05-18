@@ -1,24 +1,11 @@
 # Sync Reference
 
-Trekoon uses one live SQLite database per repository at
-`<sharedStorageRoot>/.trekoon/trekoon.db`. Linked worktrees share it. `git
-checkout` and `git switch` do not roll back tracker state. Sync imports tracker
-events between branches; never copy or commit the `.db` file.
-
-Same-branch sync is a no-op. Cross-branch sync matters before merging a feature
-branch back.
+Trekoon uses one repo DB: `<sharedStorageRoot>/.trekoon/trekoon.db`; linked worktrees share it. `git checkout`/`switch` won't roll back tracker state. Sync imports cross-branch events before merge; same-branch no-ops. Never copy/commit DB.
 
 ## Before Merge
 
-Pull tracker events from the base branch:
-
 ```bash
 trekoon --toon sync pull --from main
-```
-
-If conflicts exist:
-
-```bash
 trekoon --toon sync conflicts list
 trekoon --toon sync conflicts show <conflict-id>
 trekoon --toon sync resolve <conflict-id> --use theirs --dry-run
@@ -27,56 +14,25 @@ trekoon --toon sync resolve <conflict-id> --use ours
 
 ## Conflict Rules
 
-Conflicts are field-level, not whole-record. Each conflict targets one field on
-one entity.
+Conflicts are field-level. Always inspect with `sync conflicts show`; `theirs` can overwrite in-progress work.
 
-- `--use ours`: keep the current shared DB field value; mark conflict resolved.
-- `--use theirs`: write the source-branch field value into the shared DB; mark
-  conflict resolved.
-- `--dry-run`: preview without mutation. Returns `oursValue`, `theirsValue`,
-  `wouldWrite`, and `dryRun: true`.
+- `--use ours`: keep current DB field; mark resolved.
+- `--use theirs`: write source-branch field; mark resolved.
+- `--dry-run`: preview (`oursValue`, `theirsValue`, `wouldWrite`, `dryRun: true`).
 
-Always inspect with `sync conflicts show` before resolving. Choosing `theirs`
-without inspection can overwrite in-progress shared DB work.
+Choose `ours` for completed work vs stale main/enriched desc; `theirs` for upstream/user reset. Unsure: ask.
 
-Typical choices:
-
-| Scenario | Usually use | Why |
-|---|---|---|
-| Completed work vs stale main | ours | Your branch has latest progress |
-| Enriched descriptions vs original | ours | Your descriptions are more detailed |
-| Upstream updates from another agent | theirs | Accept newer upstream state |
-| User-intentional reset | theirs | Respect explicit user action |
-
-When unsure, ask the user.
-
-## Batch Resolve
+Batch only uniform patterns; else inspect individually or narrow by `--entity`/`--field`:
 
 ```bash
 trekoon --toon sync resolve --all --use ours --dry-run
 trekoon --toon sync resolve --all --use ours
-trekoon --toon sync resolve --all --use ours --field status
 trekoon --toon sync resolve --all --use theirs --entity <id>
 trekoon --toon sync resolve --all --use ours --entity <id> --field description
 ```
 
-Use batch resolve only when the conflict pattern is uniform. Otherwise inspect
-and resolve individually or narrow by `--entity` / `--field`.
+## Worktrees And Destructive Recovery
 
-## Worktree Scope
+For worktree debugging inspect `storageMode`, `repoCommonDir`, `worktreeRoot`, `sharedStorageRoot`, `databaseFile`. Conflicts are per worktree/branch; resolving here leaves peer conflicts.
 
-Inspect machine-readable storage fields when debugging worktrees:
-`storageMode`, `repoCommonDir`, `worktreeRoot`, `sharedStorageRoot`, and
-`databaseFile`.
-
-Conflicts are scoped per worktree and branch. `sync conflicts list` and
-`sync resolve` only act on rows for the current worktree/branch, so resolving a
-conflict does not erase a peer worktree's conflict on the same entity.
-
-## Destructive Recovery
-
-`sharedStorageRoot` is the repo-scoped source of truth for `.trekoon` in git
-worktrees. If the user explicitly requests `trekoon wipe --yes --toon`, warn
-that it deletes shared storage for the whole repository and every linked
-worktree. Wipe is destructive recovery only; it is never the fix for a tracked
-DB or gitignore mistake.
+`sharedStorageRoot` is source of truth. If user explicitly requests `trekoon wipe --yes --toon`, warn it deletes shared storage for repo/linked worktrees. Wipe is destructive recovery only; never for DB/gitignore mistakes.
