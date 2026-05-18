@@ -14,7 +14,7 @@ All notable changes to Trekoon are documented in this file.
 
 - Compact the Trekoon skill guidance by roughly half, keeping the same routing
   behavior while reducing the context agents need to load.
-- Document the design-only brainstorming flow in the README, quickstart, and
+- Document the design-only brainstorm flow in the README, quickstart, and
   AI-agent guide.
 
 ## 0.4.8
