@@ -6,34 +6,15 @@ All notable changes to Trekoon are documented in this file.
 
 ### Fixed
 
-- Compact-spec field-count errors now identify the likely pipe footgun.
-  `Task specs must use ...` / `Subtask specs must use ...` from
-  `epic create`, `epic expand`, `task create-many`, and
-  `subtask create-many` append a hint when the raw spec contains bare `||`
-  (JS logical-OR / shell OR) or ends with a bare `|` (mis-used as a
-  terminator). The "missing a description" error gains the same
-  trailing-`|` hint. Catches the two recurring agent mistakes before the
-  next retry.
+- Compact-spec errors now explain common pipe mistakes (`||`, trailing `|`,
+  and unescaped `|`) so failed batch commands are easier to fix.
 
 ### Changed
 
-- `reference/harness-primitives.md` gains a "Compact Spec Hazards"
-  subsection — three footguns (`||`, single mid-value `|`, trailing `|`)
-  plus the pre-flight `grep -nE '(^|[^\\])\|\||\|$'` recipe. Loaded for
-  both plan and execute modes, so an executor running mid-execution
-  `epic expand` / `*-create-many` / `dep add-many` sees the rules without
-  hand-loading `planning.md`.
-- Planning reference explicitly names the trailing-`|` failure mode and
-  keeps the silent-vs-loud failure matrix as the deeper reference. Points
-  at `harness-primitives.md` for the quick-ref to avoid duplication.
-  `SKILL.md` Non-Negotiables one-liner stays so any Trekoon request sees
-  the rule before mode-specific loads.
-- `trekoon quickstart` CLI output (`src/commands/quickstart.ts`) gains a
-  new "Batch planning with compact specs" section: spec shapes, flat
-  temp-key namespace, three bare-pipe footguns, and pre-flight grep.
-  Previously the CLI quickstart had no compact-spec guidance at all.
-  `docs/quickstart.md` is extended from a single `\|` sentence to the
-  full three-failure-mode list with the same pre-flight recipe.
+- Added compact-spec hazard guidance to Trekoon agent docs and planning
+  references, including a quick pre-flight grep for risky pipe input.
+- Expanded `trekoon quickstart` and `docs/quickstart.md` with batch-planning
+  spec shapes, temp-key guidance, and pipe escaping rules.
 
 ## 0.4.7
 
