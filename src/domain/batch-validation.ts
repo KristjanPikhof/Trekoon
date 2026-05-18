@@ -146,16 +146,24 @@ function wouldCreateCycleInAdjacency(
   return false;
 }
 
+type EpicExpandMapping = { tempKey: string; id: string; kind: "task" | "subtask" };
+
+type EpicExpandMappingIndex = ReadonlyMap<string, EpicExpandMapping>;
+
+function indexEpicExpandMappings(mappings: readonly EpicExpandMapping[]): EpicExpandMappingIndex {
+  return new Map(mappings.map((mapping) => [mapping.tempKey, mapping]));
+}
+
 function resolveEpicExpandEntityRef(
   reference: CompactEntityRef,
-  mappings: readonly { tempKey: string; id: string; kind: "task" | "subtask" }[],
+  mappingIndex: EpicExpandMappingIndex,
   option: "subtask" | "dep",
   index: number,
   field: "parent" | "source" | "dependsOn",
   reader: BatchValidationReader,
 ): ResolvedCompactEntity {
   if (reference.kind === "temp_key") {
-    const mapping = mappings.find((candidate) => candidate.tempKey === reference.tempKey);
+    const mapping = mappingIndex.get(reference.tempKey);
     if (mapping === undefined) {
       throw new DomainError({
         code: "invalid_input",
@@ -167,7 +175,7 @@ function resolveEpicExpandEntityRef(
   }
 
   const id = assertNonEmptyLocal(field === "parent" ? "taskId" : `${field}Id`, reference.id);
-  const unprefixedTempKey = mappings.find((candidate) => candidate.tempKey === id);
+  const unprefixedTempKey = mappingIndex.get(id);
   if (unprefixedTempKey !== undefined) {
     throw new DomainError({
       code: "invalid_input",
@@ -233,11 +241,12 @@ export function resolveDependencyBatchSpec(
 
 export function resolveEpicExpandSubtaskSpecs(
   specs: readonly CompactSubtaskSpec[],
-  mappings: readonly { tempKey: string; id: string; kind: "task" | "subtask" }[],
+  mappings: readonly EpicExpandMapping[],
   reader: BatchValidationReader,
 ): CompactSubtaskSpec[] {
+  const mappingIndex = indexEpicExpandMappings(mappings);
   return specs.map((spec, index) => {
-    const parent = resolveEpicExpandEntityRef(spec.parent, mappings, "subtask", index, "parent", reader);
+    const parent = resolveEpicExpandEntityRef(spec.parent, mappingIndex, "subtask", index, "parent", reader);
     if (parent.kind !== "task") {
       throw new DomainError({
         code: "invalid_input",
@@ -251,17 +260,18 @@ export function resolveEpicExpandSubtaskSpecs(
 
 export function resolveEpicExpandDependencySpecs(
   specs: readonly CompactDependencySpec[],
-  mappings: readonly { tempKey: string; id: string; kind: "task" | "subtask" }[],
+  mappings: readonly EpicExpandMapping[],
   reader: BatchValidationReader,
 ): CompactDependencySpec[] {
+  const mappingIndex = indexEpicExpandMappings(mappings);
   return specs.map((spec, index) => ({
     source: {
       kind: "id",
-      id: resolveEpicExpandEntityRef(spec.source, mappings, "dep", index, "source", reader).id,
+      id: resolveEpicExpandEntityRef(spec.source, mappingIndex, "dep", index, "source", reader).id,
     },
     dependsOn: {
       kind: "id",
-      id: resolveEpicExpandEntityRef(spec.dependsOn, mappings, "dep", index, "dependsOn", reader).id,
+      id: resolveEpicExpandEntityRef(spec.dependsOn, mappingIndex, "dep", index, "dependsOn", reader).id,
     },
   }));
 }

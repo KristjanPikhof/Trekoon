@@ -9,6 +9,8 @@ All notable changes to Trekoon are documented in this file.
 - Compact-planning commands now accept common agent-written aliases, including
   `--desc` for `--description` and dependency aliases for `--dep`. Help and
   docs still teach the canonical option names.
+- `epic expand` now rejects unprefixed same-command temp-key references with
+  `Use @<temp-key> instead`, preventing accidental lookups of future IDs.
 
 ### Changed
 
