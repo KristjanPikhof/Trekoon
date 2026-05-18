@@ -6,11 +6,11 @@ Shortest path from zero to a working Trekoon workflow.
 
 If you are driving Trekoon with an AI agent, the usual path is:
 
-```bash
-trekoon brainstorm: <topic>   # optional, design only
-trekoon plan <goal>
-trekoon <epic-id>
-trekoon <epic-id> execute
+```text
+/trekoon brainstorm: <topic>   # optional, design only
+/trekoon plan <goal>
+/trekoon <epic-id>
+/trekoon <epic-id> execute
 ```
 
 - Use `brainstorm:` when the design is still fuzzy. The agent should explore
@@ -29,12 +29,11 @@ power users rely on.
 
 ## Brainstorm before planning
 
-Use the skill's brainstorming mode when you need design help before Trekoon
+Use the skill's brainstorm mode when you need design help before Trekoon
 creates tracked work:
 
-```bash
-trekoon brainstorm: <topic>
-trekoon brainstorming: <topic>
+```text
+/trekoon brainstorm: <topic>
 ```
 
 Brainstorming is intentionally not a planning command. The agent should inspect

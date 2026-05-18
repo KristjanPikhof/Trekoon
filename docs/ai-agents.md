@@ -10,8 +10,8 @@ agent to:
 
 - use `--toon` on Trekoon commands
 - prefer the smallest read that answers the question
-- treat explicit `brainstorm:` / `brainstorming:` requests as design-only until
-  the user accepts a direction
+- treat explicit `brainstorm:` requests as design-only until the user accepts a
+  direction
 - use batch planning commands when possible
 - append progress and blocker notes instead of rewriting descriptions
 - preview scoped replace before `--apply`
@@ -42,7 +42,6 @@ The command shape determines what the agent loads:
 | User command | Required references |
 | --- | --- |
 | `/trekoon brainstorm: <topic>` | `brainstorming.md`; after acceptance, `harness-primitives.md` and `planning.md` |
-| `/trekoon brainstorming: <topic>` | `brainstorming.md`; after acceptance, `harness-primitives.md` and `planning.md` |
 | `/trekoon plan <goal>` | `harness-primitives.md`, then `planning.md` |
 | `/trekoon <id>` | `SKILL.md` only, unless deeper analysis is needed |
 | `/trekoon <id> analyze` | `SKILL.md` plus targeted Trekoon reads |

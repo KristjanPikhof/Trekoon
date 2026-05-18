@@ -1,6 +1,6 @@
 # Trekoon Brainstorming Reference
 
-Use only for explicit Trekoon brainstorming requests: `trekoon brainstorm: <topic>`, `trekoon brainstorming: <topic>`, or `/trekoon brainstorming: <topic>`.
+Use only for explicit Trekoon brainstorm requests: `/trekoon brainstorm: <topic>`.
 
 Goal: turn a rough topic into an accepted lean design before any Trekoon planning entities are created.
 

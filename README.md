@@ -27,11 +27,11 @@ works through that graph.
 
 For a human driving the workflow, the recommended path is:
 
-```bash
-trekoon brainstorm: <topic>   # optional, design only
-trekoon plan <goal>
-trekoon <epic-id>
-trekoon <epic-id> execute
+```text
+/trekoon brainstorm: <topic>   # optional, design only
+/trekoon plan <goal>
+/trekoon <epic-id>
+/trekoon <epic-id> execute
 ```
 
 - Use `brainstorm:` when the shape of the work is still fuzzy. The agent should
@@ -45,11 +45,11 @@ trekoon <epic-id> execute
 
 ### Brainstorm
 
-Use brainstorming before planning when the architecture, UX, scope, or tradeoff
+Use brainstorm mode before planning when the architecture, UX, scope, or tradeoff
 is not clear yet.
 
-```bash
-trekoon brainstorm: <topic>
+```text
+/trekoon brainstorm: <topic>
 ```
 
 In brainstorming mode, the agent investigates the repo and docs, explores a few
