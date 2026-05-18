@@ -2,6 +2,21 @@
 
 All notable changes to Trekoon are documented in this file.
 
+## 0.4.9
+
+### Fixed
+
+- Compact-planning commands now accept common agent-written aliases, including
+  `--desc` for `--description` and dependency aliases for `--dep`. Help and
+  docs still teach the canonical option names.
+
+### Changed
+
+- Compact the Trekoon skill guidance by roughly half, keeping the same routing
+  behavior while reducing the context agents need to load.
+- Document the design-only brainstorming flow in the README, quickstart, and
+  AI-agent guide.
+
 ## 0.4.8
 
 ### Fixed
@@ -11,10 +26,9 @@ All notable changes to Trekoon are documented in this file.
 
 ### Changed
 
-- Added compact-spec hazard guidance to Trekoon agent docs and planning
-  references, including a quick pre-flight grep for risky pipe input.
-- Expanded `trekoon quickstart` and `docs/quickstart.md` with batch-planning
-  spec shapes, temp-key guidance, and pipe escaping rules.
+- Expanded the quickstart, command docs, and agent guidance with compact-spec
+  shapes, temp-key rules, pipe escaping, and a small pre-flight check for risky
+  pipe input.
 
 ## 0.4.7
 

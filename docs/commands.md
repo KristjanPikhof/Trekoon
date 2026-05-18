@@ -48,6 +48,24 @@ trekoon quickstart --toon
 Trekoon uses long-form flags for commands and subcommands. Root help and version
 also accept `-h` and `-v`.
 
+### Accepted aliases
+
+Trekoon accepts a few common agent-friendly aliases, but examples stay on the
+canonical spellings.
+
+| Accepted input | Canonical option |
+| --- | --- |
+| `--desc` | `--description` |
+| `--deps` | `--dep` |
+| `--dependency` | `--dep` |
+| `--dependencies` | `--dep` |
+| `--dependancy` | `--dep` |
+| `--dependancies` | `--dep` |
+
+Use `--description` and `--dep` in prompts, scripts, docs, and reusable
+examples. The aliases are there so agent-generated plans can self-correct
+without turning a typo into an unknown-option failure.
+
 ## Board commands
 
 `trekoon board open` starts a loopback-only server on `127.0.0.1` with a

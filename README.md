@@ -19,25 +19,44 @@ trekoon init          # set up .trekoon/ in your repo
 trekoon quickstart    # walkthrough of the basics
 ```
 
-## The two workflows
+## The three workflows
 
-Trekoon gives agents two modes: **plan** and **execute**. You can run them
-separately or back to back.
+Trekoon gives agents three modes: **brainstorm**, **plan**, and **execute**.
+Brainstorming is design-only. Planning writes the Trekoon graph. Execution
+works through that graph.
 
 For a human driving the workflow, the recommended path is:
 
 ```bash
+trekoon brainstorm: <topic>   # optional, design only
 trekoon plan <goal>
 trekoon <epic-id>
 trekoon <epic-id> execute
 ```
 
+- Use `brainstorm:` when the shape of the work is still fuzzy. The agent should
+  explore options and ask for acceptance before creating Trekoon items.
 - Use `plan` after you already have enough context from discussion,
   brainstorming, or research.
 - Use `trekoon <epic-id>` to inspect the created epic, review the next ready
   work, and decide whether anything needs refinement.
 - Use `execute` when you want the agent to keep working through the epic until
   it is done, all remaining work is blocked, or it needs your input.
+
+### Brainstorm
+
+Use brainstorming before planning when the architecture, UX, scope, or tradeoff
+is not clear yet.
+
+```bash
+trekoon brainstorm: <topic>
+```
+
+In brainstorming mode, the agent investigates the repo and docs, explores a few
+approaches, recommends the simplest viable design, and asks focused questions.
+It should not create or update epics, tasks, subtasks, dependencies, or status
+until you accept the design. After acceptance, it can switch to `plan` and turn
+the accepted design into a Trekoon graph.
 
 ### Plan
 
@@ -119,6 +138,7 @@ The skill bundles reference documents that agents load on demand:
 | Agent needs to... | Skill reads | What it covers |
 | --- | --- | --- |
 | Coordinate across harnesses | `reference/harness-primitives.md` | Universal subagent, question, local task display, review, and evidence-recording guidance |
+| Brainstorm before planning | `reference/brainstorming.md` | Design-only exploration, tradeoffs, focused questions, and acceptance before Trekoon items are created |
 | Plan a feature | `reference/planning.md` | Decomposition, writing standard, dependency modeling, validation |
 | Execute an epic | `reference/execution.md` | Graph building, lane grouping, sub-agent dispatch, verification (universal) |
 | Execute with Agent Teams | `reference/execution-with-team.md` | TeamCreate/SendMessage, parallel Claude Code instances in tmux |
@@ -127,6 +147,7 @@ The skill bundles reference documents that agents load on demand:
 
 ```
 /trekoon                     → load the skill
+/trekoon brainstorm: <topic> → explore design only; create no Trekoon items yet
 /trekoon plan                → decompose into tasks/subtasks/deps
 /trekoon <id>                → show status and next steps for an entity
 /trekoon <id> execute        → start the execution loop
@@ -265,6 +286,10 @@ shell, worktree, or browser tab show up live without a manual refresh.
 | Get help | `trekoon [command] -h` |
 
 Every command supports `--toon`, `--json`, `--compact` for structured output.
+
+Trekoon accepts a few forgiving aliases (`--desc` for `--description`, and
+common dependency aliases such as `--deps` for `--dep`). Prefer canonical
+`--description` and `--dep` in docs, prompts, and scripts.
 
 Full flag reference in [docs/commands.md](docs/commands.md).
 

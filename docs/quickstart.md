@@ -7,11 +7,15 @@ Shortest path from zero to a working Trekoon workflow.
 If you are driving Trekoon with an AI agent, the usual path is:
 
 ```bash
+trekoon brainstorm: <topic>   # optional, design only
 trekoon plan <goal>
 trekoon <epic-id>
 trekoon <epic-id> execute
 ```
 
+- Use `brainstorm:` when the design is still fuzzy. The agent should explore
+  options, recommend a lean path, and wait for acceptance before creating
+  Trekoon items.
 - Use `plan` after you already have enough context from discussion,
   brainstorming, or research. Trekoon should turn that context into an
   execution-ready epic.
@@ -22,6 +26,21 @@ trekoon <epic-id> execute
 
 The rest of this page is mostly the lower-level command surface that agents and
 power users rely on.
+
+## Brainstorm before planning
+
+Use the skill's brainstorming mode when you need design help before Trekoon
+creates tracked work:
+
+```bash
+trekoon brainstorm: <topic>
+trekoon brainstorming: <topic>
+```
+
+Brainstorming is intentionally not a planning command. The agent should inspect
+available context, compare a few approaches, ask focused questions, and preserve
+accepted decisions. It should create no epics, tasks, subtasks, dependencies, or
+status updates until you accept the design and ask it to plan.
 
 ## How storage works
 
@@ -99,6 +118,11 @@ trekoon --toon epic create \
 ```
 
 All temp keys (task and subtask) must be unique across the whole command — they share one flat namespace. Prefix subtask keys with the parent task key to stay unique.
+
+Trekoon accepts common aliases (`--desc` for `--description`, plus
+`--deps`, `--dependency`, `--dependencies`, `--dependancy`, and
+`--dependancies` for `--dep`). Treat them as recovery paths for agent input.
+Use canonical `--description` and `--dep` in reusable prompts and scripts.
 
 Escape any literal `|` inside field values as `\|`. Three recurring footguns:
 

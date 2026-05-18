@@ -10,6 +10,8 @@ agent to:
 
 - use `--toon` on Trekoon commands
 - prefer the smallest read that answers the question
+- treat explicit `brainstorm:` / `brainstorming:` requests as design-only until
+  the user accepts a direction
 - use batch planning commands when possible
 - append progress and blocker notes instead of rewriting descriptions
 - preview scoped replace before `--apply`
@@ -29,6 +31,7 @@ plan-to-completion workflow from one install:
   SKILL.md                      <- command router and operating contract
   reference/
     harness-primitives.md       <- universal agent/task/question/review primitives
+    brainstorming.md            <- design-only exploration before planning
     planning.md                 <- decomposition, writing standard, validation
     execution.md                <- graph building, lane dispatch, verification
     execution-with-team.md      <- Agent Teams pattern (Claude Code only)
@@ -38,15 +41,19 @@ The command shape determines what the agent loads:
 
 | User command | Required references |
 | --- | --- |
+| `/trekoon brainstorm: <topic>` | `brainstorming.md`; after acceptance, `harness-primitives.md` and `planning.md` |
+| `/trekoon brainstorming: <topic>` | `brainstorming.md`; after acceptance, `harness-primitives.md` and `planning.md` |
 | `/trekoon plan <goal>` | `harness-primitives.md`, then `planning.md` |
 | `/trekoon <id>` | `SKILL.md` only, unless deeper analysis is needed |
 | `/trekoon <id> analyze` | `SKILL.md` plus targeted Trekoon reads |
 | `/trekoon <id> execute` | `harness-primitives.md`, then `execution.md` |
 | `/trekoon <id> team execute` | `harness-primitives.md`, then `execution-with-team.md` |
 
-`harness-primitives.md` is loaded before planning or execution because those
-modes may need structured questions, local progress displays, subagent
-delegation, review agents, and runtime-specific orchestration.
+`brainstorming.md` keeps early design work out of the tracker until the user
+accepts a direction. `harness-primitives.md` is loaded before planning or
+execution because those modes may need structured questions, local progress
+displays, subagent delegation, review agents, and runtime-specific
+orchestration.
 
 ## Install the skill
 
@@ -81,6 +88,7 @@ The skill accepts an optional entity ID and action text:
 
 ```
 /trekoon                              -> loads the skill normally
+/trekoon brainstorm: <topic>          -> explores design only; creates no Trekoon items
 /trekoon <id>                         -> resolves the entity, shows status and next steps
 /trekoon <id> analyze                 -> runs epic progress + suggest, reports findings
 /trekoon <id> execute                 -> starts the execution loop for the entity's epic
@@ -103,10 +111,11 @@ These optional companions add value for specialized needs:
 Typical flow:
 
 1. `/trekoon` to load the skill
-2. Plan the work (reads `reference/planning.md` internally)
-3. Create the Trekoon graph
-4. Execute the plan (reads `reference/execution.md` internally)
-5. Update progress, blockers, and completion state as you go
+2. Brainstorm if the design is unclear (reads `reference/brainstorming.md`)
+3. Plan the accepted work (reads `reference/planning.md` internally)
+4. Create the Trekoon graph
+5. Execute the plan (reads `reference/execution.md` internally)
+6. Update progress, blockers, and completion state as you go
 
 > **Experimental — not for routine agent use:** `trekoon serve` and the
 > `--daemon` flag are experimental. Use the default one-shot CLI path for
@@ -273,6 +282,12 @@ trekoon --toon epic search <epic-id> "path/to/somewhere"
 trekoon --toon epic replace <epic-id> --search "path/to/somewhere" --replace "path/to/new-path"
 trekoon --toon epic replace <epic-id> --search "path/to/somewhere" --replace "path/to/new-path" --apply
 ```
+
+For planning commands, keep examples canonical: use `--description` and `--dep`.
+Trekoon accepts `--desc` and common dependency aliases (`--deps`,
+`--dependency`, `--dependencies`, `--dependancy`, `--dependancies`) as
+forgiving input, but agents should not teach those spellings in reusable
+prompts.
 
 For Claude Code and similar harnesses with parallel tool calls, keep parallel
 Trekoon `Bash` batches read-only. It is safe to fan out `session`, `progress`,
