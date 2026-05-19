@@ -73,6 +73,7 @@ Start with `session`; add `--epic <id>` when known. Keep moving while ready work
 - Claude Code: parallel `Bash` Trekoon batches are read-only except atomic `task claim`/`subtask claim`; serialize `task done`/status changes after reread.
 - Append progress/verification/blockers with `--append`; rewrite descriptions only to fix plans.
 - Compact specs are pipe-split. Before `--task`/`--subtask`/`--dep`, rephrase or escape bare `|` as `\|`, esp. `||`/trailing `|`.
+- Batch refs: same command = `@temp-key`; later command/`dep add-many` = UUID; bare refs are IDs.
 - Preview search/replace before `--apply`.
 - Never edit `.trekoon/trekoon.db`; keep `.trekoon` gitignored.
 - Never run `trekoon wipe --yes --toon` unless explicitly requested.

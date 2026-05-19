@@ -14,8 +14,10 @@ All notable changes to Trekoon are documented in this file.
 
 ### Changed
 
-- Compact the Trekoon skill guidance by roughly half, keeping the same routing
-  behavior while reducing the context agents need to load.
+- Heavily compact the Trekoon skill guidance so agents load less background
+  text, spend fewer tokens on setup, and keep the same routing behavior.
+- Clarify compact-spec reference rules in the skill guidance: same-command refs
+  use `@temp-key`, later commands use real UUIDs, and bare refs are IDs.
 - Document the design-only brainstorm flow in the README, quickstart, and
   AI-agent guide.
 

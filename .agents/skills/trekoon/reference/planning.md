@@ -75,7 +75,7 @@ Good compact spec:
 --task "task-docs|[Docs] verify token text|Search docs for currentUpdatedAt, updatedAt-ms, stream token query contract, and token parameter examples.|todo"
 ```
 
-Temp keys are flat/unique; prefix subtasks. Same-command refs use `@task-key`/`@sub-key`. `epic create` returns `result.mappings`; use real UUIDs later. `dep add-many` needs real IDs.
+Temp-key refs: same command = `@key`; later commands/`dep add-many` = real UUID. Bare refs are IDs. Prefix subtask keys; `epic create` returns `result.mappings`.
 
 ## Append, Validate, Handoff
 
