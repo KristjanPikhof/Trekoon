@@ -31,6 +31,7 @@ Goal: review current git changes or the named scope with a senior-engineer lens,
 | Security/reliability | Auth gaps, injection, path traversal, secret/PII leaks, missing transactions, race conditions, unbounded work |
 | Quality/performance | Swallowed errors, async failure gaps, N+1 work, hot-path CPU/memory costs, missing pagination/cache limits |
 | Boundaries | Null/undefined, empty collections, numeric limits, off-by-one, invalid user input, long strings/unicode |
+| Documentation | Relevant README/help/agent docs are updated when they exist, new commands or flags are documented, stale or obsolete docs/examples are removed or corrected, migration notes are present when contracts change |
 
 ## Output Format
 
@@ -63,7 +64,7 @@ Removal / Follow-Up
 | <item or None> | <safe delete now / defer with plan / no action> |
 
 Next step:
-Do you want me to fix all findings, only P0/P1, or specific items?
+Do you want me to fix all findings, only P0/P1, specific items, or create a Trekoon plan instead?
 ```
 
 If no issues are found, say so explicitly and still include what was checked,
