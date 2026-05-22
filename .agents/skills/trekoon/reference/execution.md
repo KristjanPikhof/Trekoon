@@ -72,20 +72,11 @@ Changed
 |---|---|
 | <area> | <paths> |
 
-Verification
-| Check | Result |
-|---|---|
-| <command/manual check> | <passed/failed/blocked + short evidence> |
+Do you want to run code-review?
+```bash
+trekoon code-review
+```
 
-Review
-| Scope | Result |
-|---|---|
-| <review scope or accepted gap> | <finding/fixed/clean/skipped reason> |
-
-Blockers
-| Blocker | Unblock condition |
-|---|---|
-| None | None |
 ```
 
 Keep the completion summary compact. Prefer tables when they improve scanning.

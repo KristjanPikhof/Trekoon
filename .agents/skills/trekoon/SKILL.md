@@ -11,6 +11,7 @@ Trekoon is source of truth for plans, readiness, owners, blockers, progress, ver
 
 - `trekoon plan <goal>`: create execution-ready epic.
 - `/trekoon brainstorm: <topic>`: design only; create no Trekoon items until user accepts.
+- `/trekoon code-review[: <scope>]` or `trekoon code-review`: review current changes/scope only; fix nothing until user asks.
 - `trekoon <id>`: orient on epic/task/subtask; report state, blockers, ready work, next.
 - `trekoon <id> execute`: execute until epic done, rest blocked with reasons, or real user input required; delegate independent work by default.
 - `trekoon <id> team execute`: same with Claude Agent Teams only when explicitly requested/supported.
@@ -23,6 +24,7 @@ Do not stop at analysis while ready work exists or invent non-Trekoon parallel p
 |---|---|
 | Any Trekoon request | this file |
 | Explicit `brainstorm:` | `reference/brainstorming.md`; after accepted design, `reference/harness-primitives.md` + `reference/planning.md` |
+| Explicit `code-review` | `reference/code-review.md` |
 | Plan/design tracked work | `reference/harness-primitives.md` + `reference/planning.md` |
 | Execute/implement/complete | `reference/harness-primitives.md` + `reference/execution.md` |
 | Sync gaps/conflicts/storage | `reference/sync.md` |
@@ -50,6 +52,7 @@ For task/subtask IDs, scope `suggest`/`epic progress` to `parentEpicId`; execute
 | ID only | Orient: `session --epic <epic-id>` or targeted show |
 | `status`, `progress`, `analyze`, `review`, `check` | Analyze: `epic progress`, targeted show, `suggest --epic` |
 | `/trekoon brainstorm:` | Brainstorm, then Plan only after accepted design |
+| `code-review` | Code review: review-only diff/scope, then ask before fixes |
 | `plan`, `break down`, `design`, `architect` | Plan |
 | `execute`, `implement`, `do`, `complete`, `start`, `run` | Execute |
 | `team execute`, `execute with team` | Team execute |
@@ -57,6 +60,7 @@ For task/subtask IDs, scope `suggest`/`epic progress` to `parentEpicId`; execute
 ## Done
 
 - Plan: epic/tasks/subtasks/deps recorded, graph validated, user has epic ID + first wave.
+- Code review: scoped findings by severity, reviewed files/checks stated, next-step confirmation.
 - Orient: state, blockers, ready work, next command.
 - Execute: epic `done`, remaining work `blocked` with reasons, or real user input required.
 
