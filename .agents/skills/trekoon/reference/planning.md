@@ -97,17 +97,34 @@ trekoon --toon task ready --epic <epic-id> --limit 50
 
 Confirm counts, new tasks `todo`, first-wave ready count, blocked tasks have expected deps, sensible `suggest`, no recovery/sync issue.
 
-Execution handoff template:
+User-facing execution handoff template:
 
-```text
-Epic: <full-uuid> — <title>
-Wave 1 (parallel): <task-uuid> <title> (<owner>); <task-uuid> <title> (<owner>)
-Wave 2: <task-uuid> <title> depends on <wave-1-uuid>
-First command: trekoon <epic-id> execute
-Final verification: <command/evidence>
+````text
+Title: <short plan title>
+Goal: <one-sentence user/system outcome>
+Epic: <full-uuid>
+Branch: <recommended-branch-name>
+
+Wave 1
+| Task title | Blocked by | Blocks |
+|---|---|---|
+| <task title> (<owner/lane>, <task-uuid>) | None | <task title/id or None> |
+
+Wave 2
+| Task title | Blocked by | Blocks |
+|---|---|---|
+| <task title> (<owner/lane>, <task-uuid>) | <task title/id> | <task title/id or None> |
+
+Command to run:
+```bash
+trekoon <epic-id> execute
 ```
+````
 
-Use full UUIDs, never temp keys, and include deps/owners/lanes plus the first wave.
+Keep the handoff compact. Use full UUIDs, never temp keys. Include each wave
+needed to show hard dependencies; omit empty later waves. Prefer Markdown tables
+for waves when there is more than one task. `Command to run` must be exactly one
+copyable command in a fenced code block: `trekoon <epic-id> execute`.
 
 ## Search And Replace
 
