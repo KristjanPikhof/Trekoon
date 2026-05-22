@@ -10,8 +10,8 @@ Trekoon is source of truth for plans, readiness, owners, blockers, progress, ver
 ## Modes
 
 - `trekoon plan <goal>`: create execution-ready epic.
-- `/trekoon brainstorm: <topic>`: design only; create no Trekoon items until user accepts.
-- `/trekoon code-review[: <scope>]` or `trekoon code-review`: review current changes/scope only; fix nothing until user asks.
+- `trekoon brainstorm[: <scope>]`: design only; create no Trekoon items until user accepts.
+- `trekoon code-review[: <scope>]` or `trekoon code-review`: review current changes/scope only; fix nothing until user asks.
 - `trekoon <id>`: orient on epic/task/subtask; report state, blockers, ready work, next.
 - `trekoon <id> execute`: execute until epic done, rest blocked with reasons, or real user input required; delegate independent work by default.
 - `trekoon <id> team execute`: same with Claude Agent Teams only when explicitly requested/supported.
@@ -51,7 +51,7 @@ For task/subtask IDs, scope `suggest`/`epic progress` to `parentEpicId`; execute
 |---|---|
 | ID only | Orient: `session --epic <epic-id>` or targeted show |
 | `status`, `progress`, `analyze`, `review`, `check` | Analyze: `epic progress`, targeted show, `suggest --epic` |
-| `/trekoon brainstorm:` | Brainstorm, then Plan only after accepted design |
+| `trekoon brainstorm:` | Brainstorm, then Plan only after accepted design |
 | `code-review` | Code review: review-only diff/scope, then ask before fixes |
 | `plan`, `break down`, `design`, `architect` | Plan |
 | `execute`, `implement`, `do`, `complete`, `start`, `run` | Execute |

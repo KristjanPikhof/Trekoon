@@ -121,8 +121,7 @@ trekoon <full-epic-id> execute
 ```
 ````
 
-Keep the handoff compact. Use full UUIDs, never temp keys. Include each wave
-needed to show hard dependencies; omit empty later waves.
+Keep the handoff compact. Include each wave needed to show hard dependencies; omit empty later waves.
 
 ## Search And Replace
 
