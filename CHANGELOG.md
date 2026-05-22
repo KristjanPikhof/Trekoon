@@ -20,6 +20,8 @@ All notable changes to Trekoon are documented in this file.
   use `@temp-key`, later commands use real UUIDs, and bare refs are IDs.
 - Document the design-only brainstorm flow in the README, quickstart, and
   AI-agent guide.
+- Add development-generic `trekoon code-review` guidance with branch-diff
+  scoping, confidence labels, reviewer agreement, and checks for stale docs.
 
 ## 0.4.8
 
