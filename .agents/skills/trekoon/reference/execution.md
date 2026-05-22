@@ -56,7 +56,42 @@ trekoon --toon suggest --epic <epic-id>
 trekoon --toon epic update <epic-id> --status done
 ```
 
-Return completed tasks, files changed, verification, review, blockers, deps.
+User-facing completion template:
+
+```text
+Epic: <full-epic-uuid>
+Status: done | blocked | needs input
+
+Completed
+| Task title | Result |
+|---|---|
+| <task title> | <short outcome> |
+
+Changed
+| Area | Files |
+|---|---|
+| <area> | <paths> |
+
+Verification
+| Check | Result |
+|---|---|
+| <command/manual check> | <passed/failed/blocked + short evidence> |
+
+Review
+| Scope | Result |
+|---|---|
+| <review scope or accepted gap> | <finding/fixed/clean/skipped reason> |
+
+Blockers
+| Blocker | Unblock condition |
+|---|---|
+| None | None |
+```
+
+Keep the completion summary compact. Prefer tables when they improve scanning.
+Include deps only when they changed, remain blocked, or explain why execution
+stopped. If user input is required, put the question after `Blockers` and do not
+mark the epic done.
 
 ## Read/Update Cheat Sheet
 

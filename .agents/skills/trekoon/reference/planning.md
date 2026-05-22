@@ -101,30 +101,28 @@ User-facing execution handoff template:
 
 ````text
 Title: <short plan title>
-Goal: <one-sentence user/system outcome>
-Epic: <full-uuid>
+Description: <one-sentence what problem is solved / goal>
+Epic: <full-epic-uuid>
 Branch: <recommended-branch-name>
 
 Wave 1
 | Task title | Blocked by | Blocks |
 |---|---|---|
-| <task title> (<owner/lane>, <task-uuid>) | None | <task title/id or None> |
+| <task title> (<owner/lane>) | None | <task title> or <None> |
 
 Wave 2
 | Task title | Blocked by | Blocks |
 |---|---|---|
-| <task title> (<owner/lane>, <task-uuid>) | <task title/id> | <task title/id or None> |
+| <task title> (<owner/lane>) | <task title> | <task title> / <None> |
 
 Command to run:
 ```bash
-trekoon <epic-id> execute
+trekoon <full-epic-id> execute
 ```
 ````
 
 Keep the handoff compact. Use full UUIDs, never temp keys. Include each wave
-needed to show hard dependencies; omit empty later waves. Prefer Markdown tables
-for waves when there is more than one task. `Command to run` must be exactly one
-copyable command in a fenced code block: `trekoon <epic-id> execute`.
+needed to show hard dependencies; omit empty later waves.
 
 ## Search And Replace
 
