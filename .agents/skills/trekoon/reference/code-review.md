@@ -1,6 +1,6 @@
 # Trekoon Code Review Reference
 
-Use only for explicit Trekoon code-review requests: `/trekoon code-review[: <scope>]` or `trekoon code-review`.
+Use only for explicit Trekoon code-review requests: `trekoon code-review[: <scope>]` or `trekoon code-review`.
 
 Goal: review current git changes or the named scope with a senior-engineer lens, then report actionable findings before any fixes are made.
 

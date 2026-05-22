@@ -58,7 +58,7 @@ trekoon --toon epic update <epic-id> --status done
 
 User-facing completion template:
 
-```text
+```markdown
 Epic: <full-epic-uuid>
 Status: done | blocked | needs input
 

@@ -99,7 +99,7 @@ Confirm counts, new tasks `todo`, first-wave ready count, blocked tasks have exp
 
 User-facing execution handoff template:
 
-````text
+````markdown
 Title: <short plan title>
 Description: <one-sentence what problem is solved / goal>
 Epic: <full-epic-uuid>
