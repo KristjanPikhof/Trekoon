@@ -120,7 +120,7 @@ const EPIC_HELP = [
   "  When the full tree is known, the second form creates everything in one shot",
   "  and returns mappings/counts. Same compact spec grammar as epic expand.",
   "  Declare temp keys bare, but reference same-command keys with @:",
-  "    --task \"gate|Gate task|...\" --subtask \"@gate|gate-help|...\" --dep \"@ai|@gate\"",
+  "    --task \"gate|Gate task|Gate description\" --subtask \"@gate|gate-help|Help title|Help description\" --dep \"@ai|@gate\"",
   "  Forgiving input accepted: --desc for --description; dependency aliases normalize to --dep.",
   "  Help examples stay canonical: prefer --description and --dep in scripts and docs.",
   "",

@@ -61,6 +61,10 @@ Shapes (status optional/default `todo`; omit unless deliberate):
 - `--subtask parent|key|title|desc[|status]` for `epic create/expand`
 - `--dep source|depends-on` = source blocked by prerequisite.
 
+Always provide separate title and description fields. For `epic create/expand`,
+`--subtask "@parent|key|long sentence"` is invalid because the long sentence is
+only the title; add a fourth description field.
+
 Pipe footguns: mid-value raw `|` shifts fields/status; `||`/multi-pipe shell fragments add fields/fail validation; trailing `|` empties desc. Preflight: `grep -nE '(^|[^\\])\|\||\|$' specs.txt`.
 
 Bad compact spec:
@@ -73,6 +77,18 @@ Good compact spec:
 
 ```text
 --task "task-docs|[Docs] verify token text|Search docs for currentUpdatedAt, updatedAt-ms, stream token query contract, and token parameter examples.|todo"
+```
+
+Bad subtask spec:
+
+```text
+--subtask "@task-docs|task-docs-search|Search docs for token examples and update stale wording."
+```
+
+Good subtask spec:
+
+```text
+--subtask "@task-docs|task-docs-search|Search token examples|Search docs for token examples and update stale wording."
 ```
 
 Temp-key refs: same command = `@key`; later commands/`dep add-many` = real UUID. Bare refs are IDs. Prefix subtask keys; `epic create` returns `result.mappings`.

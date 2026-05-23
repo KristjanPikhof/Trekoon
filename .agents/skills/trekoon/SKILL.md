@@ -76,8 +76,9 @@ Start with `session`; add `--epic <id>` when known. Keep moving while ready work
 - Planning: prefer transactional/bulk commands; narrow `--ids` for bulk updates.
 - Claude Code: parallel `Bash` Trekoon batches are read-only except atomic `task claim`/`subtask claim`; serialize `task done`/status changes after reread.
 - Append progress/verification/blockers with `--append`; rewrite descriptions only to fix plans.
-- Compact specs are pipe-split. Before `--task`/`--subtask`/`--dep`, rephrase or escape bare `|` as `\|`, esp. `||`/trailing `|`.
-- Batch refs: declare temp keys bare (`--task "gate|..."`), but reference same-command temp keys with `@` (`--subtask "@gate|gate-help|..."`, `--dep "@ai|@gate"`). Later command/`dep add-many` refs = UUID; bare refs are IDs. Never use a bare temp key as a parent/source/depends-on ref in the same command.
+- Compact specs are pipe-split. Shapes: `--task key|title|desc[|status]`; `epic create/expand --subtask parent|key|title|desc[|status]`; `subtask create-many --subtask key|title|desc[|status]`; `--dep source|depends-on`. Always provide both title and desc; never collapse a subtask into `parent|key|long title`.
+- Before `--task`/`--subtask`/`--dep`, rephrase or escape bare `|` as `\|`, esp. `||`/trailing `|`.
+- Batch refs: declare temp keys bare (`--task "gate|Gate title|Gate description"`), but reference same-command temp keys with `@` (`--subtask "@gate|gate-help|Help title|Help description"`, `--dep "@ai|@gate"`). Later command/`dep add-many` refs = UUID; bare refs are IDs. Never use a bare temp key as a parent/source/depends-on ref in the same command.
 - Preview search/replace before `--apply`.
 - Never edit `.trekoon/trekoon.db`; keep `.trekoon` gitignored.
 - Never run `trekoon wipe --yes --toon` unless explicitly requested.

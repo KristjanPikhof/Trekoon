@@ -160,8 +160,13 @@ Stable batch payloads for one-shot graph creation and sibling batch commands.
 ### `epic create` and `epic expand`
 
 ```bash
-trekoon --toon epic create --title "..." --description "..." --task "..."
-trekoon --toon epic expand <epic-id> --task "..."
+trekoon --toon epic create --title "..." --description "..." \
+  --task "task-a|Task title|Task description" \
+  --subtask "@task-a|task-a-sub-1|Subtask title|Subtask description" \
+  --dep "@task-a|@other-task"
+trekoon --toon epic expand <epic-id> \
+  --task "task-b|Task title|Task description" \
+  --subtask "@task-b|task-b-sub-1|Subtask title|Subtask description"
 ```
 
 ```text
@@ -181,7 +186,8 @@ data:
 ### `task create-many`
 
 ```bash
-trekoon --toon task create-many --epic <epic-id> --task "..."
+trekoon --toon task create-many --epic <epic-id> \
+  --task "task-a|Task title|Task description"
 ```
 
 ```text
@@ -197,7 +203,8 @@ data:
 ### `subtask create-many`
 
 ```bash
-trekoon --toon subtask create-many --task <task-id> --subtask "..."
+trekoon --toon subtask create-many --task <task-id> \
+  --subtask "sub-a|Subtask title|Subtask description"
 ```
 
 ```text
