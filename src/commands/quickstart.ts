@@ -94,6 +94,8 @@ const QUICKSTART_TEXT = [
   "                      --subtask \"@<task-temp-key>|<temp-key>|<title>|<description>\" \\",
   "                      --dep \"@<source>|@<depends-on>\"",
   "  Status is optional; append |<status> only when seeding non-todo.",
+  "  For epic create/expand subtasks, use @parent|key|title|description;",
+  "  never collapse title and description into @parent|key|long title.",
   "  Temp keys (--task and --subtask) share one flat namespace per command; prefix",
   "  subtask keys with the parent task key (e.g. sub-<task-key>-tests).",
   "  Accepted aliases are for recovery, not examples: --desc maps to --description;",

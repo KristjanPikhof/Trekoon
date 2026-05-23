@@ -188,6 +188,16 @@ Temp keys in `--task` and `--subtask` share one flat namespace per `epic create`
 
 `task create-many` and `subtask create-many` use their own scoped namespaces, independent of each other and of `epic create`.
 
+Compact shapes:
+
+- `--task <temp-key>|<title>|<description>[|<status>]`
+- `epic create/expand --subtask <parent-ref>|<temp-key>|<title>|<description>[|<status>]`
+- `subtask create-many --subtask <temp-key>|<title>|<description>[|<status>]`
+- `--dep <source-ref>|<depends-on-ref>`
+
+For `epic create` / `epic expand`, never collapse a subtask into
+`@parent|key|long title`. The fourth description field is required.
+
 Escape any literal `|` inside field values as `\|`. A single bare `|` in a spec without an explicit `|<status>` field silently pushes the trailing text into the status slot — creation succeeds and the record only breaks on the next status update. Multi-pipe constructs like `||` fail loudly on the field-count check. See the planning skill for the full pipe-escape rules.
 
 ```bash

@@ -116,7 +116,11 @@ trekoon --toon epic create \
   --dep "@sub-a-first|@task-a"
 ```
 
-All temp keys (task and subtask) must be unique across the whole command — they share one flat namespace. Declare temp keys bare in `--task` / `--subtask`, but reference same-command keys with `@` in parent and dependency fields. For example, `--task "task-a|..."` declares `task-a`, while `--subtask "@task-a|sub-a-first|..."` references it. Prefix subtask keys with the parent task key to stay unique.
+All temp keys (task and subtask) must be unique across the whole command — they share one flat namespace. Declare temp keys bare in `--task` / `--subtask`, but reference same-command keys with `@` in parent and dependency fields. For example, `--task "task-a|First task|First description"` declares `task-a`, while `--subtask "@task-a|sub-a-first|First subtask|Subtask description"` references it. Prefix subtask keys with the parent task key to stay unique.
+
+Subtasks in `epic create` / `epic expand` require both title and description:
+`@parent|key|title|description`. Do not collapse the subtask into
+`@parent|key|long title`.
 
 Trekoon accepts common aliases (`--desc` for `--description`, plus
 `--deps`, `--dependency`, `--dependencies`, `--dependancy`, and
