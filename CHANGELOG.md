@@ -2,6 +2,22 @@
 
 All notable changes to Trekoon are documented in this file.
 
+## 0.5.0
+
+### Added
+
+- Add `trekoon code-review` guidance for scoped branch reviews, severity and
+  confidence labels, reviewer agreement, stale-doc checks, and follow-up fixes.
+
+### Changed
+
+- Clarify compact task and subtask specs across help, docs, and skill guidance:
+  subtasks now keep separate title and description fields.
+- Tighten planning and execution handoffs with compact user-facing summaries,
+  dependency waves, changed-file tables, and the next command to run.
+- Expand machine-contract examples with explicit compact task, subtask, and
+  dependency shapes.
+
 ## 0.4.9
 
 ### Fixed
@@ -20,8 +36,6 @@ All notable changes to Trekoon are documented in this file.
   use `@temp-key`, later commands use real UUIDs, and bare refs are IDs.
 - Document the design-only brainstorm flow in the README, quickstart, and
   AI-agent guide.
-- Add development-generic `trekoon code-review` guidance with branch-diff
-  scoping, confidence labels, reviewer agreement, and checks for stale docs.
 
 ## 0.4.8
 

@@ -1,6 +1,6 @@
 {
   "name": "trekoon",
-  "version": "0.4.9",
+  "version": "0.5.0",
   "description": "AI-first task tracking that lives in your repo. You describe what to build, your agent plans it as a dependency graph, then executes it task by task",
   "keywords": [
     "ai",
